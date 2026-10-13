@@ -4,6 +4,8 @@ Newest first. Every decision that changes how we build goes here, through a pull
 
 | Date | Decision | Why | Status |
 | --- | --- | --- | --- |
+| 2026-10-13 | Until Roman joins the repo, setup changes (accounts, docs) go straight to `main` by Yurii and are listed in `docs/setup.md`. From Roman's first access, every change goes through a pull request | Roman reads the repo as it stands; nothing waits in an open pull request | Agreed |
+| 2026-10-13 | Cloudflare account `NewsApp` created by Yurii; workers.dev address `officialnews.workers.dev` | Agreed on our call that Yurii creates Cloudflare | Agreed |
 | 2026-10-13 | Repo `yuriityvodar-sudo/official-news`, public, no licence for now | Public makes branch protection and Actions minutes free; no licence keeps all rights while the business model is open. A licence can be added later | Agreed |
 | 2026-10-13 | Accounts: Yurii creates the GitHub repo and the Cloudflare account and invites Roman. Roman's Apple Developer account hosts App Store Connect and TestFlight, with Yurii added as Admin. Roman creates the App Store Connect API key for CI | Agreed on our call; Yurii as Admin can upload builds and manage TestFlight on his own | Agreed |
 | 2026-10-13 | Google Play: whose account hosts the Android app | Not discussed yet | Open |
