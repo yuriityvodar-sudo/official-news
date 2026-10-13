@@ -1,0 +1,42 @@
+# Secrets and local config
+.env
+.env.*
+!.env.example
+.dev.vars
+*.p8
+*.p12
+*.mobileprovision
+*.jks
+*.keystore
+key.properties
+
+# macOS and editors
+.DS_Store
+.idea/
+.vscode/
+*.iml
+
+# Flutter / Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+build/
+.fvm/flutter_sdk
+**/ios/Pods/
+**/ios/.symlinks/
+**/ios/Flutter/Flutter.framework
+**/ios/Flutter/Flutter.podspec
+**/ios/Runner/GeneratedPluginRegistrant.*
+**/android/.gradle/
+**/android/local.properties
+
+# Node / Cloudflare Worker
+node_modules/
+.wrangler/
+dist/
+
+# Generated documents
+docs/*.pdf

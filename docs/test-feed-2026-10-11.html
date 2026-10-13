@@ -1,0 +1,427 @@
+<title>Official News Test Feed</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,500;6..72,600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one phone-width news column, sticky filter bar, cards grouped by publish day */
+:root{
+  --bg:#f2f4f7; --surface:#ffffff; --ink:#131a24; --muted:#5b6676; --line:#dce1e8;
+  --accent:#2446b5; --accent-soft:#e6ebfa; --read:#8a94a3;
+  --f-display:"Newsreader", Georgia, "Times New Roman", serif;
+  --f-body:"IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono:"IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0e1218; --surface:#161c25; --ink:#e7ebf1; --muted:#9aa5b5; --line:#273142;
+  --accent:#8ea6ff; --accent-soft:#1e2945; --read:#6b7686; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0e1218; --surface:#161c25; --ink:#e7ebf1; --muted:#9aa5b5; --line:#273142;
+  --accent:#8ea6ff; --accent-soft:#1e2945; --read:#6b7686; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.5}
+.wrap{max-width:640px;margin:0 auto;padding-inline:16px;padding-block:20px 48px}
+header.top h1{font-family:var(--f-display);font-weight:600;font-size:clamp(26px,5vw,34px);line-height:1.15;margin:0 0 6px;text-wrap:balance}
+header.top p{margin:0;color:var(--muted);max-width:60ch}
+.stats{display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:12px;font-family:var(--f-mono);font-size:12.5px;color:var(--muted)}
+.stats b{color:var(--ink);font-weight:500}
+.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);padding-block:12px;margin-top:14px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:10px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--surface)}
+.seg button{font:500 13px var(--f-body);color:var(--muted);background:none;border:0;padding:7px 12px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--surface)}
+select,input[type="search"]{font:14px var(--f-body);color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:7px 10px;min-width:0}
+input[type="search"]{flex:1 1 160px}
+label.tog{display:inline-flex;gap:6px;align-items:center;font-size:13px;color:var(--muted);cursor:pointer}
+.topics{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;scrollbar-width:thin}
+.topics span.lab{font-family:var(--f-mono);font-size:11.5px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);align-self:center;white-space:nowrap;margin-right:2px}
+.chip{flex:0 0 auto;font:500 12.5px var(--f-body);border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:5px 10px;cursor:pointer;white-space:nowrap}
+.chip[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
+.chip .n{font-family:var(--f-mono);color:var(--muted);margin-left:4px}
+.day{margin-top:22px}
+.day h2{font:600 12px var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:0 0 8px;display:flex;justify-content:space-between}
+.list{display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.card{padding:14px 16px;border-top:1px solid var(--line);cursor:pointer;display:flex;flex-direction:column;gap:6px;min-width:0}
+.card:first-child{border-top:0}
+.card:hover{background:color-mix(in srgb,var(--accent-soft) 45%,var(--surface))}
+.card:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.meta{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center;font-size:12.5px;color:var(--muted)}
+.badge{font:500 11px var(--f-mono);letter-spacing:.03em;color:var(--accent);background:var(--accent-soft);border-radius:4px;padding:2px 6px}
+.cn{color:var(--ink);font-weight:500}
+.card h3{font-family:var(--f-display);font-weight:500;font-size:18.5px;line-height:1.3;margin:0;text-wrap:pretty}
+.card p{margin:0;color:var(--muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.card.open p{-webkit-line-clamp:unset;display:block}
+.foot{display:none;flex-wrap:wrap;gap:8px 14px;align-items:center;margin-top:4px}
+.card.open .foot{display:flex}
+.foot a{font-weight:500;color:var(--accent);text-decoration:none}
+.foot a:hover{text-decoration:underline}
+.tag{font-size:12px;color:var(--accent)}
+.noise{font:500 11px var(--f-mono);color:var(--muted);border:1px dashed var(--line);border-radius:4px;padding:1px 6px}
+.card.read h3,.card.read .cn{color:var(--read)}
+.empty{padding:28px 16px;text-align:center;color:var(--muted)}
+footer.note{margin-top:28px;font-size:13px;color:var(--muted)}
+@media (prefers-reduced-motion: reduce){*{transition:none!important}}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <h1>Official news, 4–11 October 2026</h1>
+    <p>A live test of the app idea: the latest items published on verified government and international-body websites, newest first. No media, no trending lists. Tap a card for the summary and the official source.</p>
+    <div class="stats" id="stats"></div>
+  </header>
+
+  <div class="bar">
+    <div class="row">
+      <div class="seg" role="group" aria-label="Phase">
+        <button type="button" data-phase="all" aria-pressed="true">All</button>
+        <button type="button" data-phase="1" aria-pressed="false">Phase 1</button>
+        <button type="button" data-phase="2" aria-pressed="false">Phase 2</button>
+      </div>
+      <select id="country" aria-label="Country"></select>
+      <label class="tog"><input type="checkbox" id="hideNoise" checked> Hide likely noise</label>
+    </div>
+    <div class="row"><input type="search" id="q" placeholder="Search headlines, e.g. ICC" aria-label="Search"></div>
+    <div class="topics" id="topics"><span class="lab">Same event, many governments</span></div>
+  </div>
+
+  <main id="feed"></main>
+
+  <footer class="note">Collected 11 Oct 2026 from official sites only (government-reserved domains, links from national portals, or Wikidata). Up to 5 latest items per source; items with no time are ordered by the source's own listing. Headlines and summaries were written in English for this test, translated where the source is in another language. “Likely noise” marks items the AI filter would hide in the app.</footer>
+</div>
+
+<script>
+const C={US:["United States","US",1],CA:["Canada","CA",1],MX:["Mexico","MX",1],BR:["Brazil","BR",1],AR:["Argentina","AR",1],GB:["United Kingdom","UK",1],DE:["Germany","DE",1],FR:["France","FR",1],IT:["Italy","IT",1],EU:["European Union","EU",1],RU:["Russia","RU",1],TR:["Türkiye","TR",1],SA:["Saudi Arabia","SA",1],ZA:["South Africa","ZA",1],AU:["Australia","AU",1],AFU:["African Union","AFU",1],CN:["China","CN",1],IN:["India","IN",1],JP:["Japan","JP",1],KR:["South Korea","KR",1],ID:["Indonesia","ID",1],
+UA:["Ukraine","UA",2],PL:["Poland","PL",2],ES:["Spain","ES",2],NL:["Netherlands","NL",2],CH:["Switzerland","CH",2],NO:["Norway","NO",2],SE:["Sweden","SE",2],IL:["Israel","IL",2],PS:["Palestine","PS",2],IR:["Iran","IR",2],IQ:["Iraq","IQ",2],AE:["United Arab Emirates","AE",2],QA:["Qatar","QA",2],TW:["Taiwan","TW",2],PK:["Pakistan","PK",2],BD:["Bangladesh","BD",2],VN:["Vietnam","VN",2],TH:["Thailand","TH",2],PH:["Philippines","PH",2],MY:["Malaysia","MY",2],SG:["Singapore","SG",2],EG:["Egypt","EG",2],NG:["Nigeria","NG",2],KE:["Kenya","KE",2],ET:["Ethiopia","ET",2],UN:["United Nations","UN",2],WHO:["World Health Organization","WHO",2],IMF:["IMF","IMF",2],WB:["World Bank","WB",2],NATO:["NATO","NATO",2],WTO:["WTO","WTO",2],OPEC:["OPEC","OPEC",2]};
+const T={riyadh:"Attacks on Saudi airports",icc:"US sanctions on the ICC",panama:"Panama earthquake",pillay:"Nobel Peace Prize for Navi Pillay",djibouti:"Djibouti shipwreck"};
+// [date, country, source, headline, summary, url, topic, likelyNoise]
+const D=[
+["2026-10-10","GB","Prime Minister's Office","PM speaks with Zelenskyy, pledges more Russia sanctions","The UK will keep strengthening sanctions on Russia. Both leaders called for an immediate energy ceasefire covering Ukrainian infrastructure and Black Sea shipping.","https://www.gov.uk/government/news/pm-call-with-president-volodymyr-zelenskyy-of-ukraine-10-october-2026"],
+["2026-10-10","GB","Prime Minister's Office","UK responds to US–Russia agreement","A spokesperson said the UK will keep supporting Ukraine militarily and financially and keep up sanctions pressure on Russia.","https://www.gov.uk/government/news/uk-government-response-to-agreement-between-us-and-russia-9-october"],
+["2026-10-09","GB","FCDO","At the UN, UK says Russia's attacks contradict its peace claims","The UK ambassador cited a glide bomb that killed at least 33 people on a bus in Kramatorsk and a missile strike in Chernihiv.","https://www.gov.uk/government/speeches/russias-intensifying-attacks-on-ukraine-speak-louder-than-its-claims-to-want-peace-uk-statement-at-the-un-security-council"],
+["2026-10-09","GB","FCDO","UK and seven partners back the ICC against US sanctions","Foreign ministers of Canada, Denmark, Germany, France, Italy, Japan, the Netherlands and the UK said they strongly disagree with the US sanctions on the Court.","https://www.gov.uk/government/news/joint-statement-on-support-for-the-international-criminal-court","icc"],
+["2026-10-09","GB","Prime Minister's Office","Regions get their own R&D funding","Local leaders get dedicated research funding for the first time, including £1bn over four years for industrial clusters.","https://www.gov.uk/government/news/prime-minister-to-hand-regions-innovation-funding-to-build-world-leading-industries"],
+["2026-10-10","DE","Federal Government","Merz: Irish EU budget proposal is “no basis for agreement”","The Chancellor said the proposed size of the next EU budget is no basis for a deal and must stay affordable for the main net payers.","https://www.bundesregierung.de/breg-de/aktuelles/bundeskanzler-friedrich-merz-erklaert-zu-dem-von-der-irischen-ratspraesidentschaft-vorgelegten-vorschlag-fuer-die-anstehenden-eu-haushaltsverhandlungen--2456522"],
+["2026-10-10","DE","Federal Foreign Office","Germany restates opposition to the death penalty","On the World Day Against the Death Penalty, the human rights commissioner called it incompatible with human dignity.","https://www.auswaertiges-amt.de/de/aussenpolitik/2805630-2805630"],
+["2026-10-09","DE","Federal Foreign Office","Germany co-signs statement backing the ICC","The eight-country statement says the signatories strongly disagree with the US sanctions on the Court.","https://www.auswaertiges-amt.de/de/newsroom/2805612-2805612","icc"],
+["2026-10-09","DE","Federal Foreign Office","Wadephul welcomes Nobel Peace Prize for Navi Pillay","The foreign minister called the prize a recognition of her life's work and of international criminal justice.","https://www.auswaertiges-amt.de/de/newsroom/2805592-2805592","pillay"],
+["2026-10-09","DE","Federal Government","German Publishers' Prize goes to 85 independent publishers","At the Frankfurt Book Fair the culture minister gave the top three winners €50,000 each.","https://www.bundesregierung.de/breg-de/aktuelles/staatsminister-weimer-verleiht-den-deutschen-verlagspreis-2026-staatsminister-weimer-unabhaengige-verlage-sorgen-fuer-eine-vie"],
+["2026-10-11","FR","Foreign Ministry","France regrets postponement of Palestinian elections","Legislative and presidential elections were moved to September 2027. France said Palestinians must be able to choose their representatives freely.","https://www.diplomatie.gouv.fr/fr/presse-et-ressources/decouvrir-et-informer/actualites/annonce-du-report-des-elections-legislatives-et-presidentielles-palestiniennes"],
+["2026-10-11","FR","Foreign Ministry","France condemns Houthi attack on Riyadh airport","A French national was among the injured. France expressed full solidarity with Saudi Arabia.","https://www.diplomatie.gouv.fr/fr/presse-et-ressources/decouvrir-et-informer/actualites/attaque-des-houthis-contre-l-aeroport-de-riyad","riyadh"],
+["2026-10-10","FR","Foreign Ministry","France stands with Panama after earthquake","France asked its citizens in Panama to follow local authorities' instructions.","https://www.diplomatie.gouv.fr/fr/presse-et-ressources/decouvrir-et-informer/actualites/seisme-au-panama","panama"],
+["2026-10-09","FR","Foreign Ministry","France condemns US sanctions on the ICC itself","France called on Washington to withdraw the sanctions and said it could use the EU blocking statute.","https://www.diplomatie.gouv.fr/fr/presse-et-ressources/decouvrir-et-informer/actualites/sanctions-visant-la-cour-penale-internationale","icc"],
+["2026-10-09","FR","Foreign Ministry","France condemns deadly Russian strikes on Ukrainian civilians","Strikes on a residential building in Pryluky and two buses in Kramatorsk killed more than 50 people, France said.","https://www.diplomatie.gouv.fr/fr/presse-et-ressources/decouvrir-et-informer/actualites/frappes-meurtrieres-de-la-russie-sur-la-population-ukrainienne"],
+["2026-10-11","IT","Government (PM Meloni)","Meloni sends support to the Pope ahead of a “trial” he faces","The statement follows today's Angelus. It does not say what the trial is.","https://www.governo.it/it/articolo/il-presidente-meloni-esprime-la-sua-vicinanza-al-santo-padre/32814"],
+["2026-10-11","IT","Government (PM Meloni)","Meloni condemns Houthi attacks on Riyadh airport","Italy will work with regional partners to reduce tensions and protect freedom of navigation.","https://www.governo.it/it/articolo/dichiarazione-del-presidente-del-consiglio-giorgia-meloni/32812","riyadh"],
+["2026-10-10","IT","Foreign Ministry","Tajani: abolishing the death penalty is an Italian priority","Italy will push for wider support for the UN moratorium at this year's General Assembly vote.","https://www.esteri.it/it/sala_stampa/archivionotizie/comunicati/2026/10/giornata-mondiale-ed-europea-contro-la-pena-di-morte-tajani-labolizione-della-pena-capitale-una-priorita-italiana/"],
+["2026-10-10","IT","Foreign Ministry","Tajani: Italy stands by the ICC","Italy signed the joint statement backing the Court and firmly opposes the US sanctions.","https://www.esteri.it/it/sala_stampa/archivionotizie/interviste/2026/10/tajani-litalia-sostiene-laia-il-messaggero/","icc"],
+["2026-10-09","IT","Foreign Ministry","Tajani condemns attacks on Saudi Arabia","He stressed freedom of navigation in the Red Sea and backed the UN envoy's Yemen peace effort.","https://www.esteri.it/it/sala_stampa/archivionotizie/comunicati/2026/10/ministro-tajani-solidarieta-allarabia-saudita-condanna-per-gli-attacchi-bisogna-rilanciare-il-processo-di-pace/","riyadh"],
+["2026-10-11","EU","European Commission","Von der Leyen backs Zelenskyy's ceasefire call","Ukraine's funding needs go to this week's European Council. The EU will fund more drones and missiles.","https://ec.europa.eu/commission/presscorner/detail/en/read_26_2131"],
+["2026-10-10","EU","Council of the EU","EU statement on US sanctions against the ICC","Statement by the High Representative on behalf of the EU. Only the title was readable.","https://www.consilium.europa.eu/en/press/press-releases/2026/10/10/international-criminal-court-statement-by-the-high-representative-on-behalf-of-the-eu-following-the-announcement-of-us-sanctions/","icc"],
+["2026-10-09","EU","European Council","Costa meets Dutch PM Rob Jetten in The Hague","Part of the European Council President's annual tour of capitals.","https://www.consilium.europa.eu/en/press/press-releases/2026/10/09/press-statement-by-president-costa-following-the-meeting-with-prime-minister-of-the-netherlands-rob-jetten/"],
+["2026-10-09","EU","European Commission","240 million people depend on aid, Commissioner says","Development ministers discussed reform of the humanitarian system amid more than 130 active conflicts.","https://ec.europa.eu/commission/presscorner/detail/en/speech_26_2129"],
+["2026-10-09","EU","European Commission","Commission calls US sanctions on the ICC “deeply regrettable”","The measures take effect after six months. The EU is ready to protect the Court and EU businesses.","https://ec.europa.eu/commission/presscorner/detail/en/statement_26_2127","icc"],
+["2026-10-10","US","White House","White House economists report on US manufacturing","The Council of Economic Advisers says the data show strong growth and jobs returning.","https://www.whitehouse.gov/research/2026/10/the-state-of-american-manufacturing/"],
+["2026-10-10","US","State Department","US sends search-and-rescue teams to Panama","A disaster response team with two urban search-and-rescue teams went at Panama's request after the magnitude 7.7 quake.","https://www.state.gov/releases/office-of-the-spokesman/2026/10/the-united-states-mobilizes-immediate-response-to-the-panama-earthquakes/","panama"],
+["2026-10-10","US","State Department","Rubio and Japan's Motegi speak by phone","They reaffirmed the alliance and discussed an Okinawa death investigation and US sanctions on the ICC.","https://www.state.gov/releases/office-of-the-spokesman/2026/10/secretary-rubios-call-with-japanese-foreign-minister-motegi/","icc"],
+["2026-10-09","US","State Department","Rubio: US stands with Panama","A 24/7 consular hotline is open for affected Americans.","https://www.state.gov/releases/office-of-the-spokesman/2026/10/earthquake-in-panama/","panama"],
+["2026-10-09","US","White House","Presidential message on Leif Erikson Day","A ceremonial message linking the day to Nordic partners.","https://www.whitehouse.gov/briefings-statements/2026/10/presidential-message-on-leif-erikson-day/","",1],
+["2026-10-11","CA","Prime Minister","Carney criticises US–Russia diesel deal in call with Zelenskyy","Carney said a deal for Russia to supply diesel to the US works against peace and helps finance the war.","https://www.pm.gc.ca/en/news/readouts/2026/10/11/prime-minister-carney-speaks-president-ukraine-volodymyr-zelenskyy"],
+["2026-10-09","CA","Global Affairs Canada","Canada and seven countries back the ICC","Joint statement reaffirming the Court's independence and integrity.","https://www.canada.ca/en/global-affairs/news/2026/10/joint-statement-of-the-foreign-ministers-of-canada-denmark-germany-france-italy-japan-the-netherlands-and-the-united-kingdom.html","icc"],
+["2026-10-09","CA","Department of Finance","Canada raises $2 billion with its seventh green bond","A new 10-year green bond drew strong investor demand.","https://www.canada.ca/en/department-finance/news/2026/10/canada-successfully-prices-seventh-green-bond-issuance-raising-2-billion.html"],
+["2026-10-09","CA","Global Affairs Canada","Trade minister to lead mission to India","Team Canada goes to Mumbai and Bengaluru, its largest commercial engagement in India in years.","https://www.canada.ca/en/global-affairs/news/2026/10/minister-sidhu-to-lead-team-canada-trade-mission-to-india-to-unlock-new-bilateral-trade-opportunities.html"],
+["2026-10-08","CA","Department of Finance","Consultations open on modernising charity rules","Canada has more than 86,000 registered charities.","https://www.canada.ca/en/department-finance/news/2026/10/government-launches-consultations-on-the-modernization-of-the-federal-framework-for-the-charitable-sector.html"],
+["2026-10-10","MX","Presidency","Four states pause activities ahead of Hurricane Simon","Non-essential activities stop in Jalisco, Colima, Michoacán and Nayarit. The Category 4 storm was expected to land early on 11 Oct.","https://www.gob.mx/presidencia/prensa/presidenta-informa-suspension-de-actividades-no-esenciales-en-jalisco-colima-michoacan-y-nayarit-por-huracan-simon-categoria-4"],
+["2026-10-10","MX","Presidency","Sheinbaum opens a “safe path” walkway in Ecatepec","The 1.6 km lit walkway has 1,220 lamps and 455 new trees.","https://www.gob.mx/presidencia/prensa/en-ecatepec-presidenta-inaugura-sendero-seguro-pichardo-pagaza-como-parte-del-plan-integral-de-la-zona-oriente-del-edomex"],
+["2026-10-10","MX","Foreign Ministry","Mexico pushes climate finance at Pre-COP31 in Fiji","Mexico stressed finance to keep the 1.5°C goal alive ahead of COP31 in Antalya, 9–20 Nov.","https://www.gob.mx/sre/prensa/prioriza-mexico-ciencia-y-accion-climatica-en-la-precop31-en-fiji-y-fortalece-dialogo-con-paises-del-pacifico"],
+["2026-10-09","MX","Presidency","Decree requires platforms to remove content harmful to minors","Covers hate speech, extremism, abuse, self-harm, eating disorders and bullying. It takes effect once published in the official gazette.","https://www.gob.mx/presidencia/prensa/presidenta-presenta-decreto-para-garantizar-que-plataformas-digitales-sean-espacios-seguros-para-ninas-ninos-y-adolescentes"],
+["2026-10-09","MX","Banco de México","Wellbeing Pension Fund reports approved","The fund's committee approved its April–June 2026 financial reports.","https://www.banxico.org.mx/publicaciones-y-prensa/miscelaneos/%7B8BA4E681-1A99-245A-FE2E-8BA4DF561D7C%7D.pdf"],
+["2026-10-11","BR","Foreign Ministry","Brazil condemns Houthi attack on Riyadh airport","Brazil says at least 12 were killed and over 300 injured. No Brazilians are known to be affected.","https://www.gov.br/mre/pt-br/canais_atendimento/imprensa/notas-a-imprensa/ataques-a-infraestrutura-civil-da-arabia-saudita","riyadh"],
+["2026-10-10","BR","Foreign Ministry","Guidance for Brazilians stranded in Panama","Aftershocks near Tocumen airport are disrupting flights. The embassy is in contact with COPA Airlines.","https://www.gov.br/mre/pt-br/canais_atendimento/imprensa/notas-a-imprensa/orientacao-aos-brasileiros-retidos-no-panama","panama"],
+["2026-10-09","BR","Foreign Ministry","Brazil stands with Panama after magnitude 7.6 quake","No Brazilians were reported affected.","https://www.gov.br/mre/pt-br/canais_atendimento/imprensa/notas-a-imprensa/terremoto-no-panama","panama"],
+["2026-10-09","BR","Ministry of Finance","Fuel tax exemption on gasoline and ethanol extended","The cut on gasoline rises from R$0.63 to R$0.89 per litre, citing high oil prices.","https://www.gov.br/fazenda/pt-br/assuntos/noticias/2026/outubro/governo-federal-prorroga-desoneracao-da-gasolina-e-do-etanol"],
+["2026-10-09","BR","Ministry of Finance","86% of required invoices already show the new CBS tax","3.7 billion invoices carried it in the last 30 days.","https://www.gov.br/fazenda/pt-br/assuntos/noticias/2026/outubro/reforma-tributaria-86-dos-documentos-fiscais-de-empresas-obrigadas-ja-trazem-destaque-da-cbs"],
+["2026-10-08","AR","Central Bank","Central bank made a US$2.5bn net gain on gold in 2025","The figure combines the gold price rise with the cost of hedging all its gold.","https://www.bcra.gob.ar/noticias/resultado-neto-positivo-oro-2025/"],
+["2026-10-08","AR","Ministry of Economy","AySA water privatisation advances as bids open","Top bid US$340.2m. 90% of shares go private, and the operator must invest over US$2bn.","https://www.argentina.gob.ar/noticias/avanza-la-privatizacion-de-aysa-se-realizo-la-apertura-de-ofertas-economicas-y-el-nuevo"],
+["2026-10-07","AR","Presidency","Presidential military household marks 117 years","The Casa Militar protects and assists the President.","https://www.casarosada.gob.ar/informacion/actividad-oficial/9-noticias/51394-casa-militar-celebra-su-117-aniversario","",1],
+["2026-10-07","AR","Presidency","Three years since the Hamas attack on Israel","The Casa Rosada remembered the victims of 7 October 2023.","https://www.casarosada.gob.ar/informacion/actividad-oficial/9-noticias/51392-a-tres-anos-del-ataque-terrorista-contra-el-pueblo-judio-en-israel"],
+["2026-10-06","AR","Presidency","POSCO lithium plant opens, deal signed on next phases","Phases III and IV aim for 100,000 tonnes of lithium products a year.","https://www.casarosada.gob.ar/informacion/actividad-oficial/9-noticias/51391-la-secretaria-general-de-la-presidencia-karina-milei-participo-de-la-inauguracion-de-la-planta-ii-del-proyecto-sal-de-oro"],
+["2026-10-11","RU","Kremlin","Putin thanks farm workers on their holiday","He said the sector keeps Russia among the world's leading farm producers.","http://kremlin.ru/events/president/news/80964"],
+["2026-10-11","RU","Government","Mishustin congratulates agricultural workers","He said the sector is coping with sanctions and expanding exports.","http://government.ru/news/60139/"],
+["2026-10-11","RU","Government","Deputy PM: Russia feeds itself and helps feed 160 countries","6.4 million people work in the agro-industrial sector.","http://government.ru/news/60147/"],
+["2026-10-11","RU","Government","New eco-trail opens in Buryatia","Part of the Trails of the Far East project.","http://government.ru/news/60157/"],
+["2026-10-11","RU","Government","Army shooting tournament closes in Yakutsk","A youth competition was held for the first time.","http://government.ru/news/60158/"],
+["2026-10-11","TR","Foreign Ministry","R4 Group condemns Houthi attacks on Saudi Arabia","Türkiye, Egypt, Pakistan and Saudi Arabia held the Houthis fully accountable.","http://www.mfa.gov.tr/joint-statement-by-the-r4-group-11-october-2026.en.mfa","riyadh"],
+["2026-10-11","TR","Foreign Ministry","Türkiye condemns repeated strikes on Riyadh airport","It called the attacks a clear violation of international humanitarian law.","http://www.mfa.gov.tr/no_-195_-husilerin-suudi-arabistan-daki-kral-halid-uluslararasi-havalimani-na-yonelik-saldirisi-hk.en.mfa","riyadh"],
+["2026-10-10","TR","Foreign Ministry","Türkiye offers sympathy to Panama","No Turkish citizens are known to be affected.","http://www.mfa.gov.tr/no_-194_-panama-da-meydana-gelen-deprem-hk.en.mfa","panama"],
+["2026-10-10","TR","Presidency","Erdoğan: “Our greatest treasure is people”","Speech at the İlim Yayma Society's 75th anniversary in Istanbul.","https://www.tccb.gov.tr/haberler/410/166501/-bizim-en-buyuk-hazinemiz-insandir-"],
+["2026-10-10","TR","Foreign Ministry","Türkiye condemns attacks on Abha and Riyadh airports","It called for an immediate halt.","http://www.mfa.gov.tr/no_-193_-husilerin-suudi-arabistan-daki-havalimanlarina-yonelik-saldirilari-hk.en.mfa","riyadh"],
+["2026-10-11","SA","Saudi Press Agency (state agency)","Dammam airport attacked, aviation authority says","King Fahd International Airport was attacked on the evening of 11 Oct. Inspections are under way.","https://www.spa.gov.sa/en/N2698805","riyadh"],
+["2026-10-11","SA","Saudi Press Agency (state agency)","Malaysia condemns deadly attacks in Saudi Arabia","Reported by the Saudi state agency.","https://www.spa.gov.sa/en/N2698811","riyadh"],
+["2026-10-11","SA","Saudi Press Agency (state agency)","Bulgaria condemns attacks on Abha and Riyadh airports","Reported by the Saudi state agency.","https://www.spa.gov.sa/en/N2698810","riyadh"],
+["2026-10-11","SA","Saudi Press Agency (state agency)","Energy minister opens International Energy Forum in Riyadh","He cited the East–West Pipeline to Yanbu as an alternative export route.","https://www.spa.gov.sa/en/N2698776"],
+["2026-10-11","SA","Saudi Press Agency (state agency)","Quran competition finals begin in Nairobi","40 finalists chosen from 280 entrants.","https://www.spa.gov.sa/en/N2698796"],
+["2026-10-09","ZA","The Presidency","Over R120 billion of investment launched in Free State","Includes a planned R100bn renewable energy project with potential for 6,500 jobs.","https://www.thepresidency.gov.za/address-president-cyril-ramaphosa-occasion-free-state-catalytic-investment-and-industrialisation"],
+["2026-10-09","ZA","The Presidency","Ramaphosa congratulates Navi Pillay on Nobel Peace Prize","He recalled her work at the Rwanda tribunal and for anti-apartheid activists.","https://www.thepresidency.gov.za/president-ramaphosa-congratulates-justice-navy-pillay-laureate-2026-nobel-peace-prize","pillay"],
+["2026-10-09","ZA","The Presidency","Ramaphosa encourages Free State matric class","He urged the province to win back first place in matric pass rates.","https://www.thepresidency.gov.za/message-president-cyril-ramaphosa-matric-class-2026-free-state-nsc-pledge-signing-ceremony"],
+["2026-10-09","ZA","The Presidency","Stats SA marks 30 years of democratic census","The deputy minister honoured fieldworkers and staff.","https://www.thepresidency.gov.za/keynotes-address-deputy-minister-presidency-nonceba-mhlauli-occasion-celebrating-stats-sa-census"],
+["2026-10-09","ZA","Reserve Bank","Reserve Bank launches public register for FX Global Code","Wholesale FX participants publish their commitments to the code.","https://www.resbank.co.za/en/home/publications/publication-detail-pages/media-releases/2026/fx-global-code"],
+["2026-10-09","AU","Treasurer","Fitch reaffirms Australia's AAA rating","Australia is one of nine countries rated AAA by all three major agencies.","https://ministers.treasury.gov.au/ministers/jim-chalmers-2022/media-releases/another-ratings-agency-affirms-australias-aaa-credit"],
+["2026-10-09","AU","Treasurer","Disaster recovery funding reforms revised","The Commonwealth will keep paying up to 75% of recovery costs when criteria are met.","https://ministers.treasury.gov.au/ministers/jim-chalmers-2022/media-releases/changes-disaster-recovery-funding-arrangement-reforms"],
+["2026-10-09","AU","Treasurer","Tax office keeps accepting credit cards until June 2027","Gives small businesses longer to adjust.","https://ministers.treasury.gov.au/ministers/jim-chalmers-2022/media-releases/ato-continue-accepting-credit-cards-until-30-june-2027"],
+["2026-10-09","AU","Foreign Minister","New tool helps school-leavers travel safely","Smartraveller launched TravelSmarts for young travellers.","https://www.foreignminister.gov.au/minister/penny-wong/media-release/schoolies-celebrating-overseas-safely"],
+["2026-10-08","AU","Foreign Minister","Extra $15 million for Nepal's flood recovery","Adds to $11 million already provided.","https://www.foreignminister.gov.au/minister/penny-wong/media-release/recovery-and-resilience-package-nepal"],
+["2026-10-11","AFU","AU Commission","AU chair mourns 109 migrants lost off Djibouti","He called for stronger action against smuggling and trafficking.","https://au.int/en/pressreleases/20261011/auc-chairperson-statement-tragic-loss-migrant-lives-coast-djibouti","djibouti"],
+["2026-10-11","AFU","AU Commission","AU condemns attack on Riyadh airport","It called for an immediate halt to attacks and de-escalation.","https://au.int/en/pressreleases/20261011/auc-statement-attack-against-king-khalid-international-airport-riyadh","riyadh"],
+["2026-10-10","AFU","AU Commission","AU chair congratulates Navi Pillay on Nobel Peace Prize","From the anti-apartheid struggle to the Rwanda tribunal, the ICC and the UN.","https://au.int/en/pressreleases/20261010/au-commission-chairperson-congratulates-navi-pillay-2026-nobel-peace-prize","pillay"],
+["2026-10-07","AFU","African Court","African Court unveils 2026–2028 strategic plan","Focus on access to justice and digitalisation. Finalised cases rose 27% under the last plan.","https://au.int/en/pressreleases/20261007/african-court-human-and-peoples-rights-unveils-2026-2028-strategic-plan"],
+["2026-10-07","AFU","AU Commission","Africa's first Seed Summit calls for stronger seed systems","Held in Eswatini, 5–7 Oct.","https://au.int/en/pressreleases/20261007/africas-ability-feed-itself-begins-seed"],
+["2026-10-11","CN","State Council","China and France hold 28th Strategic Dialogue","Wang Yi and Macron's adviser Emmanuel Bonne reached “broad consensus” in Datong.","https://english.www.gov.cn/news/202610/11/content_WS6acae67fc6d00ca5f9a0d9b8.html"],
+["2026-10-10","CN","State Council","China and EU reaffirm stable, balanced trade ties","Second trade and investment consultation in Beijing, 8–9 Oct.","https://english.www.gov.cn/news/202610/10/content_WS6aca3ea8c6d00ca5f9a0d9a7.html"],
+["2026-10-10","CN","People's Bank of China","Central bank governor meets French envoy","They discussed China–France financial cooperation.","https://www.pbc.gov.cn/en/3688110/3688172/2026/2026101011314694047/index.html"],
+["2026-10-10","CN","Ministry of Finance","Vice finance minister meets Goldman Sachs president","They discussed China–US economic and trade relations.","https://www.mof.gov.cn/en/news/mn/202610/t20261010_4002524.htm"],
+["2026-10-10","CN","Foreign Ministry","Peng Liyuan addresses UNESCO prize for girls' education","This year's winners came from Morocco and Peru.","https://www.fmprc.gov.cn/eng/xw/zyxw/202610/t20261010_12038075.html"],
+["2026-10-11","IN","PIB / Ministry of Finance","4.2 tonnes of poppy straw seized in Madhya Pradesh","Hidden under 100 bags of wheat. Three people arrested.","https://pib.gov.in/PressReleasePage.aspx?PRID=2322060"],
+["2026-10-11","IN","PIB / Ministry of Finance","5.8 kg of smuggled gold found in hidden car compartment","Worth about Rs 9 crore. Two arrested in Visakhapatnam.","https://pib.gov.in/PressReleasePage.aspx?PRID=2322059"],
+["2026-10-11","IN","PIB / Prime Minister's Office","Modi attends Chennai school's golden jubilee","He spoke about young people's role in the Viksit Bharat vision.","https://pib.gov.in/PressReleasePage.aspx?PRID=2322003"],
+["2026-10-11","IN","PIB / Prime Minister's Office","Modi launches projects worth over ₹13,000 crore in Chennai","Foundation stones and inaugurations across Tamil Nadu.","https://pib.gov.in/PressReleasePage.aspx?PRID=2321985"],
+["2026-10-11","IN","Ministry of External Affairs","Jaishankar wraps up Ghana, Côte d'Ivoire and Ethiopia visit","Two agreements were signed in Ghana.","https://www.mea.gov.in/press-releases.htm?dtl/41866/Visit_of_EAM_to_Ghana_Cte_dIvoire_and_Ethiopia_October_0610_2026"],
+["2026-10-10","JP","Foreign Ministry","Motegi and Rubio discuss Okinawa case and ICC sanctions","They agreed to consult on preventing such incidents.","https://www.mofa.go.jp/press/release/pressite_000001_02725.html","icc"],
+["2026-10-10","JP","Foreign Ministry","Motegi speaks with ICC President Akane","The call followed the US sanctions on the Court.","https://www.mofa.go.jp/press/release/pressite_000001_02724.html","icc"],
+["2026-10-10","JP","Foreign Ministry","Japan joins seven-country statement on the ICC","With Canada, Denmark, Germany, France, Italy, the Netherlands and the UK.","https://www.mofa.go.jp/press/release/pressite_000001_02722.html","icc"],
+["2026-10-09","JP","Prime Minister's Office","Takaichi asks for scenario-based fiscal planning","Spending and revenue would adjust if the economy diverges from forecasts.","https://www.kantei.go.jp/jp/105/actions/202610/09keizai.html"],
+["2026-10-09","JP","Bank of Japan","Financial stability council meets","The 25th meeting of the FSA and the Bank of Japan on the financial system and markets.","http://www.boj.or.jp/en/finsys/macpru/mac261009a.pdf"],
+["2026-10-11","KR","Foreign Ministry","Korea raises Saudi Arabia travel alert to Level 3","Koreans are told to leave from 22:00 on 11 Oct as attacks hit airports.","https://www.korea.kr/briefing/pressReleaseView.do?newsId=156784784","riyadh"],
+["2026-10-11","KR","Ministry of Employment and Labor","Social-insurance enrolment straight from accounting software","Replaces fax filing from 12 Oct, for about 70,000 filings a year.","https://www.korea.kr/briefing/pressReleaseView.do?newsId=156784756"],
+["2026-10-11","KR","Ministry of Climate, Energy and Environment","Nuclear waste committee outlines site-selection steps","A call for candidate sites is planned from next year.","https://www.korea.kr/briefing/pressReleaseView.do?newsId=156784751"],
+["2026-10-11","KR","Ministry of Oceans and Fisheries","Mobile ocean classroom expands inland","Runs in Daejeon, Sejong and North Chungcheong from 27 Oct.","https://www.korea.kr/briefing/pressReleaseView.do?newsId=156784750"],
+["2026-10-11","KR","Ministry of Oceans and Fisheries","Yeosu Law of the Sea Academy opens","31 trainees from 22 countries, 12–23 Oct.","https://www.korea.kr/briefing/pressReleaseView.do?newsId=156784749"],
+["2026-10-11","ID","State Secretariat","Prabowo seeks concrete cooperation with Egypt","Economy, maritime affairs and defence, after bilateral talks.","https://www.setneg.go.id/baca/index/presiden_prabowo_perkuat_kerja_sama_indonesia_mesir_di_bidang_ekonomi_kelautan_hingga_pertahanan"],
+["2026-10-11","ID","State Secretariat","Indonesia and Egypt reaffirm support for Palestine","They urged de-escalation in the Middle East.","https://www.setneg.go.id/baca/index/indonesia_mesir_tegaskan_dukungan_bagi_palestina_dan_dorong_deeskalasi_di_timur_tengah"],
+["2026-10-11","ID","State Secretariat","Indonesia and Egypt expand education ties","Building on links with Al-Azhar University.","https://www.setneg.go.id/baca/index/indonesia_mesir_perluas_kerja_sama_pendidikan_dari_al_azhar_hingga_riset_bersama"],
+["2026-10-11","ID","State Secretariat","El-Sisi: strategic partnership opens wider cooperation","Joint press statement at Merdeka Palace.","https://www.setneg.go.id/baca/index/presiden_el_sisi_kemitraan_strategis_indonesia_mesir_buka_peluang_kerja_sama_lebih_luas"],
+["2026-10-11","ID","State Secretariat","Prabowo personally sees off El-Sisi","He rode with the Egyptian president to the air base.","https://www.setneg.go.id/baca/index/presiden_prabowo_antar_langsung_kepulangan_presiden_el_sisi_cerminkan_eratnya_persahabatan_indonesia_mesir"],
+["2026-10-11","UA","President of Ukraine","Zelensky calls von der Leyen, Carney, Stubb and Rutte","Phone calls with EU, Canadian, Finnish and NATO leaders.","https://www.president.gov.ua/news/prezident-proviv-rozmovi-z-ursuloyu-fon-der-lyayen-markom-ka-106849"],
+["2026-10-11","UA","President of Ukraine","Ukraine sanctions Russian ballistic-missile makers","The decrees also target sanctions-evasion networks and people acting for Russia in occupied areas.","https://www.president.gov.ua/news/ukrayina-zaprovadila-sankciyi-proti-virobnikiv-rosijskoyi-ba-106841"],
+["2026-10-11","UA","President of Ukraine","Zelensky: ready to stop hitting Russian energy if Russia does too","He noted the US President's statement that an energy ceasefire has been reached.","https://www.president.gov.ua/news/ukrayina-gotova-ne-zavdavati-udariv-po-rosijskij-energetici-106845"],
+["2026-10-11","UA","President of Ukraine","Zelensky speaks with Polish PM Tusk","He thanked Poland for its support.","https://www.president.gov.ua/news/polski-poziciyi-silni-i-principovo-sho-mi-razom-pracyuyemo-z-106837"],
+["2026-10-10","UA","Foreign Ministry","Honorary consulate opens in Cluj-Napoca, Romania","It is headed by a Romanian citizen of Ukrainian origin.","https://mfa.gov.ua/news/ukrayina-rozshiryuye-diplomatichnu-prisutnist-u-rumuniyi-u-kluzh-napoci-vidkrili-pochesne-konsulstvo-ukrayini"],
+["2026-10-11","PL","Prime Minister","Tusk: the state will act without compromise on school violence","Services monitor the internet and inspect schools. An internet-safety bill goes to the President this week.","https://www.gov.pl/web/premier/przeciwdzialanie-przemocy-wymaga-wspolpracy-panstwa-szkol-i-rodzicow"],
+["2026-10-11","PL","Foreign Ministry","Poland condemns attack on Riyadh airport","12 killed and over 300 injured, the ministry said.","https://www.gov.pl/web/dyplomacja/oswiadczenie-msz-ws-ataku-w-rijadzie","riyadh"],
+["2026-10-09","PL","Ministry of Finance","Savings bond sales reach PLN 7.9bn in September","Nearly PLN 65bn since the start of the year.","https://www.gov.pl/web/finanse/wyniki-sprzedazy-obligacji-oszczednosciowych-we-wrzesniu-2026-roku"],
+["2026-10-08","PL","Prime Minister","More police patrols around schools after violence","Helpline numbers 112 and 116 111 to be displayed in every school.","https://www.gov.pl/web/premier/szybka-reakcja-rzadu-na-przemoc-w-szkolach-wiecej-patroli-policji-i-ochrona-mlodziezy-przed-nielegalnymi-tresciami-w-internecie"],
+["2026-10-08","PL","Foreign Ministry","Sikorski speaks at GZERO Summit in London","Transatlantic relations, peace in Ukraine and the EU's future.","https://www.gov.pl/web/dyplomacja/wicepremier-radoslaw-sikorski-na-gzero-summit-w-londynie"],
+["2026-10-11","ES","Foreign Ministry","Spain condemns Houthi attack on Riyadh airport","Condolences to the families of those killed.","https://www.exteriores.gob.es/es/Comunicacion/Comunicados/Paginas/2026_COMUNICADOS/Espana-condena-el-brutal-ataque-terrorista-huti-contra-el-aeropuerto-internacional-de-Riad.aspx","riyadh"],
+["2026-10-09","ES","Foreign Ministry","Spain deplores new US sanctions on the ICC","It reaffirmed firm support for the Court.","https://www.exteriores.gob.es/es/Comunicacion/Comunicados/Paginas/2026_COMUNICADOS/Comunicado-sobre-la-imposicion-de-nuevas-sanciones-contra-la-Corte-Penal-Internacional.aspx","icc"],
+["2026-10-09","ES","Foreign Ministry","Spain condemns attacks on Saudi airports","Riyadh and Abha airports were hit.","https://www.exteriores.gob.es/es/Comunicacion/Comunicados/Paginas/2026_COMUNICADOS/Espana-condena-los-ataques-huties-contra-Arabia-Saudi.aspx","riyadh"],
+["2026-10-09","ES","Banco de España","Bank of Spain publishes Q3 macroeconomic projections","Published as a PDF. The figures are not on the news page.","https://www.bde.es/wbe/es/noticias-eventos/actualidad-banco-espana/dg-economia-proyecciones-macroeconomicas-de-la-economicas-de-espana-tercer-trimestre-de-2026.html"],
+["2026-10-09","ES","La Moncloa","Ibero-American transport ministers agree closer cooperation","The conference was held in Valladolid.","https://www.lamoncloa.gob.es/serviciosdeprensa/notasprensa/transportes-movilidad-sostenible/Paginas/2026/091026-puente-cumbre-ministros-transportes.aspx"],
+["2026-10-09","NL","Government","Netherlands returns 20 colonial-era objects to Indonesia","At Indonesia's request. 18 are held by the Wereldmuseum.","https://www.rijksoverheid.nl/actueel/nieuws/2026/10/09/collectiestukken-uit-rijksmuseum-en-wereldmuseum-terug-naar-indonesie"],
+["2026-10-09","NL","Government","Four Dutch projects named strategic for critical raw materials","Designated by the European Commission.","https://www.rijksoverheid.nl/actueel/nieuws/2026/10/09/eu-wijst-4-nederlandse-projecten-aan-als-strategisch-voor-kritieke-grondstoffen"],
+["2026-10-09","NL","Government","Bill targets Russia's shadow fleet","Sent to the House of Representatives.","https://www.rijksoverheid.nl/actueel/nieuws/2026/10/09/wetsvoorstel-voor-hardere-aanpak-schaduwvloot-naar-tweede-kamer"],
+["2026-10-09","NL","Government","Plan to support 5.5 million informal carers","The cabinet presented a broad approach.","https://www.rijksoverheid.nl/actueel/nieuws/2026/10/09/kabinet-presenteert-brede-aanpak-voor-ondersteuning-mantelzorgers"],
+["2026-10-09","NL","Government","Next step in reforming the culture system","Announced by the cabinet.","https://www.rijksoverheid.nl/actueel/nieuws/2026/10/09/kabinet-zet-volgende-stap-op-weg-naar-beter-cultuurbestel"],
+["2026-10-09","CH","Economic Affairs (EAER)","Ukraine reconstruction agreement enters into force","A legal basis for Swiss companies to help rebuild Ukraine.","https://www.admin.ch/en/newnsb/Ef89hHZk5zK-"],
+["2026-10-09","CH","Civil Protection (FOCP)","Switzerland hosts its first EU earthquake exercise","About 500 participants trained in Geneva and Payerne.","https://www.admin.ch/de/newnsb/VyVFp0CwiA-b"],
+["2026-10-09","CH","Foreign Affairs (FDFA)","Switzerland backs the Geneva Peace Forum","Runs 12–15 Oct under the motto “Choose Peace”.","https://www.admin.ch/en/newnsb/uvv6kJqSCuIV"],
+["2026-10-09","CH","Swiss Armed Forces","Soldier injured as military truck leaves the road","Near Sedrun. Military justice is investigating.","https://www.admin.ch/de/newnsb/sa8NfaVTLTNa"],
+["2026-10-09","CH","Metrology (METAS)","Swiss delegation to world metrology conference","69 Metre Convention states meet in Versailles, 13–15 Oct.","https://www.admin.ch/de/newnsb/791INg54sjBz"],
+["2026-10-08","NO","Royal House","King Haakon receives Finnish President Stubb","Audience at the Royal Palace.","https://www.kongehuset.no/nyheter/finlands-president-i-audiens"],
+["2026-10-08","NO","Norges Bank","Governor: why the last mile of disinflation is slow","Annual autumn lecture at BI.","https://www.norges-bank.no/en/news-events/news/Speeches/2026/2026-10-08-autumn-lecture/"],
+["2026-10-07","NO","Royal House","King Haakon to visit Narvik and Finnmark","His first official visits around the country as king.","https://www.kongehuset.no/nyheter/kongen-til-narvik-og-forsvaret-i-finnmark"],
+["2026-10-09","SE","Government Offices","Inquiry proposes tighter oversight of healthcare providers","Aims to improve patient safety and stop welfare crime.","https://www.regeringen.se/pressmeddelanden/2026/10/utredning-foreslar-hardare-krav-pa-privata-vardgivare/"],
+["2026-10-09","SE","Government Offices","Sweden joins NATO exercise Steadfast Noon","With JAS 39 Gripen fighters, from 13 Oct.","https://www.regeringen.se/pressmeddelanden/2026/10/sverige-deltar-i-steadfast-noon/"],
+["2026-10-08","SE","Ministry of Finance","Forecast: strong recovery despite global uncertainty","New forecast from the finance minister.","https://www.regeringen.se/pressmeddelanden/2026/10/stark-aterhamtning-i-svensk-ekonomi-trots-global-osakerhet/"],
+["2026-10-08","SE","Government Offices","Sweden moves to join the high-seas treaty","A bill to accede to the BBNJ agreement was adopted.","https://www.regeringen.se/pressmeddelanden/2026/10/sverige-tar-nasta-steg-mot-att-bli-part-i-nytt-globalt-havsavtal/"],
+["2026-10-08","SE","Riksbank","Old invalid banknotes can't be redeemed after July 2027","Applies to notes invalid for more than ten years.","https://www.riksbank.se/sv/press-och-publicerat/nyheter-och-pressmeddelanden/pressmeddelanden/2026/mojligheten-att-losa-in-ogiltiga-sedlar-upphor-1-juli-2027/"],
+["2026-10-08","IL","President of Israel","Herzog thanks flydubai captain and invites him to Jerusalem","He will receive the Presidential Award for Civilian Heroism.","https://www.president.gov.il/en/president-herzog-sends-letter-of-appreciation-to-captain-smit-machchhar-and-invites-him-to-jerusalem/"],
+["2026-10-08","IL","President of Israel","Heroism awards for six flydubai passengers","From the 30 Sept Dubai–Tel Aviv flight.","https://www.president.gov.il/en/president-herzog-presents-six-heroes-of-the-flydubai-flight-with-the-presidential-award-for-civilian-heroism/"],
+["2026-10-07","IL","Bank of Israel","Foreign exchange reserves for September published","Monthly release. The article itself is behind a CAPTCHA.","https://www.boi.org.il/en/communication-and-publications/press-releases/07-10b/"],
+["2026-10-07","IL","President of Israel","Herzog speaks at Nova festival memorial","Third anniversary of 7 October.","https://www.president.gov.il/en/president-herzog-addresses-memorial-ceremony-at-the-site-of-the-nova-festival/"],
+["2026-10-07","IL","President of Israel","President lights memorial candle three years after October 7","At 6:29 a.m. at the President's Residence.","https://www.president.gov.il/en/three-years-since-the-october-7th-massacre-president-herzog-and-first-lady-michal-herzog-light-a-memorial-candle-at-the-presidents-residence-at-629-a-m/"],
+["2026-10-09","PS","Foreign Ministry","Palestine congratulates Navi Pillay on Nobel Peace Prize","For advancing peace and international law.","https://www.mofa.pna.ps/en-us/mediaoffice/judge-navi-pillays-nobel-peace-prize-amplifies-the-voice-of-truth-and-the-oppressed","pillay"],
+["2026-10-08","PS","Foreign Ministry","Statement on three years of the Gaza war","The ministry condemned Israel's campaign across the occupied territory.","https://www.mofa.pna.ps/en-us/mediaoffice/three-years-of-genocidal-war-the-palestinian-people-remain-steadfast-in-their-struggle-for-life-freedom-and-dignity"],
+["2026-10-11","IR","President's Office","Supreme Council of Standards meets","Photo item with no text beyond the title.","https://president.ir/fa/166340","",1],
+["2026-10-11","IR","President's Office","Pezeshkian: no enemy can defeat a united nation","At a National Children's Week event.","https://president.ir/fa/166331"],
+["2026-10-11","IR","President's Office","President attends Children's Week celebration","With the education minister and students.","https://president.ir/fa/166327"],
+["2026-10-11","IR","President's Office","Pezeshkian meets leading figures from Tehran province","Including olympiad winners and top exam scorers.","https://president.ir/fa/166325"],
+["2026-10-10","IR","President's Office","President tours rural and nomadic products exhibition","Provincial stands from rural communities.","https://president.ir/fa/166330"],
+["2026-10-11","IQ","Prime Minister's Office","PM meets TotalEnergies and ConocoPhillips on gas output","He said Iraq should end gas imports within a few years.","https://pmo.iq/?article=4728"],
+["2026-10-11","IQ","Prime Minister's Office","Governorates told to finish land plot programme by year-end","Funds also approved against Crimean-Congo fever and for border hospitals.","https://pmo.iq/?article=4727"],
+["2026-10-10","IQ","Central Bank of Iraq","Importers told to check overdue transfers were paid","Foreign-trade cards for small traders are coming.","https://cbi.iq/news/view/3356"],
+["2026-10-10","IQ","Prime Minister's Office","Land plot initiative launched in Najaf","35,000 plots allocated.","https://pmo.iq/?article=4726"],
+["2026-10-10","IQ","Prime Minister's Office","Land plot initiative launched in Karbala","60,000 plots allocated.","https://pmo.iq/?article=4725"],
+["2026-10-11","AE","Foreign Ministry","UAE condemns Houthi attacks on Riyadh airport","12 killed of several nationalities, hundreds injured.","https://www.mofa.gov.ae/en/MediaHub/News/2026/10/11/UAE-Condemns-Houthi-Attack-Saudi-Arabia","riyadh"],
+["2026-10-10","AE","Foreign Ministry","UAE leaders congratulate Fiji on Independence Day","Messages from the President and Vice Presidents.","https://www.mofa.gov.ae/en/MediaHub/News/2026/10/10/UAE-Fiji-Independence-Day","",1],
+["2026-10-10","AE","Foreign Ministry","UAE stands with Panama after earthquake","Buildings collapsed and wide evacuations followed.","https://www.mofa.gov.ae/en/MediaHub/News/2026/10/10/UAE-Panama","panama"],
+["2026-10-10","AE","Foreign Ministry","UAE–UK Business Council meets in London","Trade, investment and the UK–GCC Free Trade Agreement.","https://www.mofa.gov.ae/en/MediaHub/News/2026/10/10/UAE-UK-Business-Council"],
+["2026-10-09","AE","Foreign Ministry","UAE condemns attacks on Riyadh airport and a Saudia aircraft","Three Saudi nationals were killed, the ministry said.","https://www.mofa.gov.ae/en/MediaHub/News/2026/10/9/UAE-Saudi-Arabia","riyadh"],
+["2026-10-11","QA","Foreign Ministry","Minister bids farewell to Ukraine's ambassador","End of the ambassador's posting.","https://www.mofa.gov.qa/en/qatar/latest-articles/latest-news/details/2026/10/11/minister-of-state-for-foreign-affairs-bids-farewell-to-ukrainian-ambassador","",1],
+["2026-10-11","QA","Foreign Ministry","Prime Minister bids farewell to Libya's ambassador","End of the ambassador's term.","https://www.mofa.gov.qa/en/qatar/latest-articles/latest-news/details/2026/10/11/prime-minister-and-minister-of-foreign-affairs-bids-farewell-to-libyan-ambassador","",1],
+["2026-10-10","QA","Foreign Ministry","Qatar urges compliance with disarmament treaties at the UN","It regretted that the NPT Review Conference ended without an outcome document.","https://www.mofa.gov.qa/en/qatar/latest-articles/latest-news/details/2026/10/10/qatar-underscores-importance-of-complying-with-disarmament-obligations-and-halting-nuclear-tests"],
+["2026-10-10","QA","Foreign Ministry","Qatar condemns Houthi attacks on Riyadh airport","Saudi security is part of the GCC's collective security, Qatar said.","https://mofa.gov.qa/en/latest-articles/statements/qatar-condemns-in-the-strongest-terms-houthi-attacks-on-king-khalid-international-airport-in-riyadh","riyadh"],
+["2026-10-10","QA","Foreign Ministry","Qatar stands with Panama after earthquake","Buildings and roads were damaged.","https://mofa.gov.qa/en/latest-articles/statements/qatar-stands-in-solidarity-with-panama-following-earthquake","panama"],
+["2026-10-11","TW","Office of the President","Lai takes Eswatini's King to Army aviation command","Marking 58 years of diplomatic ties.","https://www.president.gov.tw/NEWS/40418"],
+["2026-10-10","TW","Office of the President","Lai's National Day address: “A City upon a Hill”","He said defence spending aims to deter war. Per-capita GDP is projected at US$45,332.","https://english.president.gov.tw/News/7226"],
+["2026-10-10","TW","Office of the President","Lai attends National Day fireworks in Taitung","He thanked the county government and organisers.","https://www.president.gov.tw/NEWS/40417"],
+["2026-10-10","TW","Office of the President","National Day reception at the Taipei Guest House","With domestic and foreign guests.","https://www.president.gov.tw/NEWS/40416"],
+["2026-10-10","TW","Office of the President","Lai meets Japanese parliamentarians' delegation","The delegation is led by Furuya Keiji.","https://www.president.gov.tw/NEWS/40415"],
+["2026-10-09","PK","Foreign Ministry","Pakistan backs Saudi Arabia after Houthi attacks","The weekly briefing cited the Makkah Joint Defence Agreement.","https://mofa.gov.pk/press-releases/transcript-of-the-press-briefing-by-the-spokesperson-on-friday-09th-october-2026","riyadh"],
+["2026-10-09","PK","Foreign Ministry","IAEA nuclear security mission to Pakistan ends","It reviewed Pakistan's nuclear security framework.","https://mofa.gov.pk/press-releases/conclusion-of-the-iaea-international-physical-protection-advisory-service-ippas-mission-to-pakistan"],
+["2026-10-08","PK","Foreign Ministry","UN Secretary-General ends Pakistan visit","Dar raised Kashmir and the Indus Waters Treaty.","https://mofa.gov.pk/press-releases/un-secretary-general-concludes-visit-to-pakistan"],
+["2026-10-08","PK","Prime Minister's Office","PM marks National Resilience Day","Tribute to victims of the 2005 earthquake.","https://www.pmo.gov.pk/press_release_detailes.php?pr_id=7442"],
+["2026-10-08","PK","Finance Division","Cabinet economic committee approves financing measures","Risk coverage for small enterprises and farmers.","https://www.finance.gov.pk/press_releases.html"],
+["2026-10-08","BD","Foreign Ministry","Bangladesh puts AI at the heart of its diplomacy","Title only. The page has no text.","https://mofa.gov.bd/pages/press-releases/press-release-bangladesh-puts-ai-at-the-heart-of-its-diplomacy-xy7pjj-6ac7bb4c734da992ba70d2a7"],
+["2026-10-08","BD","Foreign Ministry","Bangladesh and Lithuania strengthen bilateral mechanisms","Title only. The page has no text.","https://mofa.gov.bd/pages/press-releases/bangladesh-and-lithuania-vow-to-strengthen-institutional-mechanisms-for-stronger-bilateral-relations-vlekw0-6ac7a002582bde01e1ab2ad2"],
+["2026-10-11","VN","Government Portal","National Assembly Chair begins five-day China visit","At the invitation of Zhao Leji.","https://en.baochinhphu.vn/top-legisator-starts-five-day-official-visit-to-china-11126101116173809.htm"],
+["2026-10-10","VN","Government Portal","MSC plans to expand investment in Vietnam","Aims to make Vietnam a regional transshipment hub.","https://en.baochinhphu.vn/leading-container-shipping-company-to-help-develop-viet-nam-into-regional-cargo-transshipment-hub-111261010085420637.htm"],
+["2026-10-10","VN","Government Portal","Pharmaceutical chemicals programme to 2030 approved","Target: 20% of domestic raw-material demand.","https://en.baochinhphu.vn/govt-approves-chemical-pharmaceutical-industry-development-program-through-2030-111261010102018036.htm"],
+["2026-10-10","VN","Government Portal","PM meets Hun Sen in Phnom Penh","Meeting with the Cambodian Senate President.","https://en.baochinhphu.vn/prime-minister-meets-cambodian-peoples-party-senate-leader-hun-sen-111261010083222913.htm"],
+["2026-10-10","VN","Government Portal","Vietnam and Cambodia aim for US$20bn in trade","A business forum co-chaired by both prime ministers.","https://en.baochinhphu.vn/viet-nam-cambodia-work-towards-us20-bln-in-bilateral-trade-111261010091946628.htm"],
+["2026-10-11","TH","Foreign Ministry","Foreign minister at Bloomberg Invest Bangkok","A side event of the IMF–World Bank meetings Thailand hosts on 12–16 Oct.","https://www.mfa.go.th/en/content/dpmfm-bloomberg-invest-bangkok-en?page=5d5bd3da15e39c306002aaf9"],
+["2026-10-10","TH","Foreign Ministry","Keynote at Bali Process border forum","Border officers from over 30 countries attended.","https://www.mfa.go.th/en/content/dg-io-5th-rso-border-forum-7-oct-2026-en?page=5d5bd3da15e39c306002aaf9"],
+["2026-10-10","TH","Foreign Ministry","Review of human rights treaty obligations","Preparing Thailand's UN Universal Periodic Review report.","https://www.mfa.go.th/en/content/sub-com-meeting-hr-obligations-implementation-en?page=5d5bd3da15e39c306002aaf9"],
+["2026-10-10","TH","Foreign Ministry","Logo unveiled for 140 years of Thailand–Japan ties","For the 2027 anniversary.","https://www.mfa.go.th/en/content/logo-launch-140-thai-japan-2027-en?page=5d5bd3da15e39c306002aaf9"],
+["2026-10-09","TH","Foreign Ministry","Thailand–Cambodia maritime conciliation meeting set","In The Hague, 14–18 Oct.","https://www.mfa.go.th/en/content/cc-4-eng?page=5d5bd3da15e39c306002aaf9"],
+["2026-10-11","PH","Department of Finance","Mitsubishi adds PHP44.5bn investment in Ayala Corp.","Announced as President Marcos met executives in Singapore.","https://www.dof.gov.ph/mitsubishis-additional-php44-5-billion-in-ayala-corp-to-strengthen-ph-industries-boost-opportunities/"],
+["2026-10-09","PH","Department of Finance","World Bank lends EUR212.7m for water","For water supply and sanitation in underserved areas.","https://www.dof.gov.ph/clean-and-accessible-water-for-filipinos-in-underserved-areas-with-eur212-7-million-world-bank-financing/"],
+["2026-10-08","PH","Department of Finance","Credit Information Corporation pays first dividend","PHP169.64m to the National Government.","https://www.dof.gov.ph/credit-information-corporation-remits-first-ever-dividend-generating-resources-for-national-development/"],
+["2026-10-05","PH","Department of Finance","Toshiba to expand production in the Philippines","About 3,000 jobs over three years.","https://www.dof.gov.ph/toshiba-to-invest-billions-in-ph-expand-electronics-production-capacity/"],
+["2026-10-05","PH","Department of Finance","DOF and ADB partner against financial crime","Anti-money-laundering technical assistance.","https://www.dof.gov.ph/dof-adb-boost-financial-protections-for-filipinos-businesses-from-financial-crime/"],
+["2026-10-11","MY","Foreign Ministry","Jordan's King Abdullah II on state visit, 11–12 Oct","Title only. The text is a PDF.","https://www.kln.gov.my/web/guest/post/state-visit-of-his-majesty-king-abdullah-ii-ibn-al-hussein-of-the-hashemite-kingdom-of-jordan-to-malaysia-11-12-october-2026"],
+["2026-10-11","MY","Foreign Ministry","Malaysia strongly condemns attacks on Saudi Arabia","Title only. The text is a PDF.","https://www.kln.gov.my/web/guest/post/malaysia-strongly-condemns-the-attacks-against-the-kingdom-of-saudi-arabia","riyadh"],
+["2026-10-11","MY","Prime Minister's Office","Anwar opens young leaders summit","He told young people to lead now.","https://www.pmo.gov.my/ms/ucapanterkini/verbatim-text-yab-pm-officiating-address-opening-dinner-international-young-future-leaders-ifuture-2026/"],
+["2026-10-10","MY","Prime Minister's Office","Anwar and Egypt's Sisi hold joint press conference","Transcript. The page timed out.","https://www.pmo.gov.my/ms/ucapanterkini/verbatim-text-yab-pm-at-a-joint-press-conference-with-his-excellency-abdul-fattah-al-sisi-the-president-of-the-arab-republic-of-egypt/"],
+["2026-10-10","MY","Foreign Ministry","Malaysia–Egypt joint statement on Sisi's visit","Title only.","https://www.kln.gov.my/web/guest/post/joint-statement-between-malaysia-and-the-arab-republic-of-egypt-on-the-occasion-of-the-state-visit-by-his-excellency-abdel-fattah-al-sisi-president-of-the-arab-republic-of-egypt-to-malaysia-9-10-october-2026"],
+["2026-10-11","SG","Prime Minister's Office","Deputy PM at PCF's 40th anniversary Family Day","He praised the preschool network's volunteers.","https://www.pmo.gov.sg/newsroom/dpm-gan-kim-yong-at-pcf40-family-day-2026/"],
+["2026-10-10","SG","Foreign Ministry","Minister of State at the Arctic Circle Assembly","Arctic changes affect Singapore's climate and maritime interests.","https://www.mfa.gov.sg/newsroom/press-statements-transcripts-and-photos/working-visit-of-minister-of-state-in-the-ministry-of-foreign-affairs-and-the-ministry-of-energy--trade-and-industry-gan-siow-huang-to-iceland--8-to-10-october-2026-2/"],
+["2026-10-09","SG","Foreign Ministry","Singapore condemns attacks on Saudi aviation","It called the attacks “unacceptable”.","https://www.mfa.gov.sg/newsroom/press-statements-transcripts-and-photos/mfa-spokesperson-s-comments-on-the-situation-in-the-middle-east--9-october-2026/","riyadh"],
+["2026-10-08","SG","Prime Minister's Office","PM Wong at the Forbes Global CEO Conference","Topics included ministerial pay and leadership renewal.","https://www.pmo.gov.sg/newsroom/pm-lawrence-wong-at-the-24th-forbes-global-ceo-conference-grand-finale-dinner/"],
+["2026-10-08","SG","Prime Minister's Office","PM Wong to visit Brunei, 9–10 Oct","Visit announcement.","https://www.pmo.gov.sg/newsroom/pm-lawrence-wong-to-visit-brunei-darussalam-oct-2026/"],
+["2026-10-11","EG","Foreign Ministry","Egypt, Saudi Arabia, Pakistan and Türkiye condemn Houthi attacks","The R4 Group held the Houthis fully responsible.","https://www.mfa.gov.eg/ar/Ministers/Details/StatementsAndWordsOfTheMinisterOfForeignAffairs/7358","riyadh"],
+["2026-10-11","EG","Foreign Ministry","Egypt's foreign minister calls Yemen's counterpart","Both condemned the attacks on Saudi Arabia.","https://www.mfa.gov.eg/ar/Ministers/Details/MinisterActivities/7361","riyadh"],
+["2026-10-11","EG","State Information Service","PM reviews urban development ahead of Egypt Forum 2026","Forum sessions will set development priorities.","https://sis.gov.eg/en/media-center/news/pm-reviews-impact-of-urban-development-projects-ahead-of-egypt-forum-2026/"],
+["2026-10-11","EG","State Information Service","Egypt and Belgium discuss research cooperation","Talks with Belgium's science policy office.","https://sis.gov.eg/en/media-center/news/egypt-belgium-discuss-expanding-scientific-research-cooperation/"],
+["2026-10-11","EG","State Information Service","PM reviews Digital Egypt plans","Expanding digital government services.","https://sis.gov.eg/en/media-center/news/pm-reviews-digital-egypt-plans-ahead-of-egypt-forum-2026/"],
+["2026-10-11","NG","State House","Tinubu pays tribute to late Ebonyi traditional ruler","A presidential tribute.","https://statehouse.gov.ng/a-tribute-from-his-excellency-president-bola-ahmed-tinubu-for-royal-highness-francis-eze-igwe-agom-ugbala-ii-of-ndu-alike-autonomous-community/","",1],
+["2026-10-11","NG","State House","Tinubu congratulates diaspora commission chief on her birthday","A birthday message.","https://statehouse.gov.ng/65707-2/","",1],
+["2026-10-09","NG","State House","Campaign council rejects Obi's 2023 election claim","A statement by the APC Presidential Campaign Council.","https://statehouse.gov.ng/peter-obis-election-claims-troubling-display-of-delusion/","",1],
+["2026-10-09","NG","State House","700 graduate from vocational training in Oyo","Under the national poverty reduction strategy.","https://statehouse.gov.ng/president-tinubu-reaffirms-skills-development-drive-as-nprgs-empowers-700-in-oyo/"],
+["2026-10-09","NG","Foreign Ministry","Message for International Day of the Girl Child","From the foreign affairs minister.","https://foreignaffairs.gov.ng/news/amb-bainca-odumegwu-ojukwu-celebrates-girls-on-the-occasion-of-the-celebration-of-the-international-day-of-the-girl-child/","",1],
+["2026-10-08","KE","Foreign Ministry","Kenya briefs diplomats on imported Ebola case","Surveillance and contact tracing are being stepped up.","https://www.mfa.go.ke/kenya-assures-diplomatic-community-ebola-response-intensifies"],
+["2026-10-07","KE","Central Bank of Kenya","Central bank holds key rate at 8.75%","Monetary Policy Committee decision of 7 Oct.","https://www.centralbank.go.ke/2026/10/07/mpc-retains-the-cbr-at-8-75-percent-3/"],
+["2026-10-06","KE","Foreign Ministry","Kenya and Rwanda sign 11 cooperation agreements","Diaspora, immigration, water, housing and more.","https://www.mfa.go.ke/kenya-rwanda-sign-11-agreements-deepen-bilateral-cooperation"],
+["2026-10-05","KE","Foreign Ministry","Kenya hosts Kenya–Rwanda Joint Permanent Commission","A three-day session in Nairobi.","https://www.mfa.go.ke/kenya-and-rwanda-deepen-cooperation-10th-joint-permanent-commission-cooperation"],
+["2026-10-05","KE","Foreign Ministry","Kenya and Yemen talk trade and regional security","Maritime security and trade ties.","https://www.mfa.go.ke/kenya-yemen-deepen-dialogue-bilateral-cooperation-regional-security"],
+["2026-10-10","ET","Prime Minister's Office","Abiy appoints 61 state ministers","For the new “Medemer Government”.","https://www.pmo.gov.et/news/detail/c425690f-80ba-400a-b232-d28aa8a8ebdb"],
+["2026-10-10","ET","Prime Minister's Office","National precious-metals refinery launched","At the Bole Lemi Special Economic Zone.","https://www.pmo.gov.et/news/detail/6a5335b4-2683-41b1-a23a-ec8441d53232"],
+["2026-10-10","ET","Prime Minister's Office","Getachew Reda reappointed East Africa adviser","With the rank of minister.","https://www.pmo.gov.et/news/detail/ef614b43-6efe-438e-ae8b-8a315a0f7bf8"],
+["2026-10-09","ET","Prime Minister's Office","Abiy meets India's foreign minister Jaishankar","They discussed closer cooperation.","https://www.pmo.gov.et/news/detail/b9db483a-c387-4876-89ed-ee7e364d0e8c"],
+["2026-10-09","ET","Prime Minister's Office","More appointments in the Medemer Government","Further officials at minister rank.","https://www.pmo.gov.et/news/detail/ab468bef-ca64-44e0-9694-97c2f87da271"],
+["2026-10-11","UN","UN News","Djibouti shipwreck death toll rises to 139","A boat carrying 305 people capsized near Obock. 84 are missing.","https://news.un.org/en/story/2026/10/1168573","djibouti"],
+["2026-10-11","UN","UN News","Guterres condemns Houthi strike on Riyadh airport","He said the attacks “must cease immediately”.","https://news.un.org/en/story/2026/10/1168572","riyadh"],
+["2026-10-11","UN","UN News","Gaza residents work to keep livelihoods going","A feature from UNDP.","https://news.un.org/en/story/2026/10/1168569"],
+["2026-10-10","UN","UN News","UN rights office urges India to release detained protesters","After large Delhi protests on electoral reform.","https://news.un.org/en/story/2026/10/1168571"],
+["2026-10-10","UN","UN News","Herders and farmers share a dam in Côte d'Ivoire","A feature from IOM.","https://news.un.org/en/story/2026/10/1168568"],
+["2026-10-10","WHO","Disease Outbreak News","Fatal pneumonia at Russian anti-plague lab","Plague was ruled out. No travel restrictions are advised.","https://www.who.int/emergencies/disease-outbreak-news/item/2026-DON620"],
+["2026-10-09","WHO","WHO","WHO urges a shift to community mental health care","Only 9% of reporting countries have fully made the shift.","https://www.who.int/news/item/09-10-2026-who-urges-shift-from-institutional-to-community-based-mental-health-care"],
+["2026-10-09","WHO","WHO","New WHO Youth Council meets in Berlin","25 organisations, 11 of them new.","https://www.who.int/news/item/09-10-2026-who-youth-council-welcomes-2026-2028-members-in-berlin"],
+["2026-10-08","WHO","Disease Outbreak News","DR Congo Ebola outbreak passes 8,700 cases","4,205 deaths, with about 72 new cases a day recently.","https://www.who.int/emergencies/disease-outbreak-news/item/2026-DON619"],
+["2026-10-08","WHO","WHO","Global roadmap on hypertension in pregnancy","Linked to about 42,000 maternal deaths a year.","https://www.who.int/news/item/08-10-2026-new-global-roadmap-launched-to-tackle-hypertension-in-pregnancy-a-leading-cause-of-maternal-and-newborn-deaths"],
+["2026-10-08","IMF","IMF","Guyana's economy grew more than 19% last year","Staff project 22.3% growth in 2026.","https://www.imf.org/en/news/articles/2026/10/08/pr26330-guyana-article-iv"],
+["2026-10-08","IMF","IMF","IMF warns Mongolia as inflation hits 12.9%","It urges reconsidering tax cuts and tighter monetary policy.","https://www.imf.org/en/news/articles/2026/10/08/pr26329-imf-staff-team-concludes-staff-visit-to-mongolia"],
+["2026-10-08","IMF","IMF","IMF and Niger agree a new ~$203m loan programme","A Board decision is expected in early December.","https://www.imf.org/en/news/articles/2026/10/08/pr26328-imf-staff-completes-the-2026-iv-consultation-and-reaches-staff-level-agreement-with-niger"],
+["2026-10-07","IMF","IMF","Pakistan reaches deal with IMF staff to unlock about $1.2bn","Pending Executive Board approval.","https://www.imf.org/en/news/articles/2026/10/07/pr26326-pakistan-imf-complete-2026-aiv-consultation-reaches-sla-on-4th-review-eff-3rd-review-for-rsf"],
+["2026-10-07","IMF","IMF","Georgieva: AI, $100 oil and record debt reshape the economy","She called for a “prudently hawkish” stance in many countries.","https://www.imf.org/en/news/articles/2026/10/07/sp100726-2026-annual-meetings-curtain-raiser"],
+["2026-10-06","WB","World Bank","Latin America growth to hold at 2.2% in 2026","El Salvador and Paraguay beat the regional average.","https://www.worldbank.org/en/news/press-release/2026/10/06/latin-america-caribbean-economic-update"],
+["2026-10-06","WB","World Bank","Middle East war pushes region into contraction","Output projected to shrink 2.1%. The Strait of Hormuz closure hits Gulf exporters hardest.","https://www.worldbank.org/en/news/press-release/2026/10/06/middle-east-conflict-further-weakens-regional-outlook-with-gulf-oil-exporters-hit"],
+["2026-10-06","WB","World Bank","India projected to grow 7.1% in FY27","Driven by domestic demand and exports.","https://worldbank.org/en/news/press-release/2026/10/06/india-development-update-oct-2026"],
+["2026-10-06","WB","World Bank","Sub-Saharan Africa growth edges up to 4.3%","The report argues for an AI-ready economy.","https://www.worldbank.org/en/news/press-release/2026/10/06/economic-growth-in-sub-saharan-africa-gains-momentum-despite-global-uncertainty"],
+["2026-10-06","WB","World Bank","South Asia growth to rise to 6.9%","On strong domestic demand.","https://www.worldbank.org/en/news/press-release/2026/10/06/south-asia-s-strong-growth-defies-global-headwinds"],
+["2026-10-09","NATO","NATO","Deputy Secretary General visits Moldova","She met President Maia Sandu and ministers.","https://www.nato.int/en/news-and-events/articles/news/2026/10/09/natos-deputy-secretary-general-visits-moldova"],
+["2026-10-09","NATO","NATO","NATO and Morocco co-host small-arms conference","The first such regional conference with partners, in Rabat.","https://www.nato.int/en/news-and-events/articles/news/2026/10/09/natos-special-representative-for-the-southern-neighbourhood-participates-in-international-conference-on-small-arms-and-light-weapons-control-in-rabat"],
+["2026-10-08","NATO","NATO","Annual nuclear exercise Steadfast Noon starts 13 Oct","17 nations take part. No live weapons are used.","https://www.nato.int/en/news-and-events/articles/news/2026/10/08/nato-holds-annual-nuclear-exercise-steadfast-noon"],
+["2026-10-08","NATO","NATO","Allies test uncrewed maritime systems in Portugal","300 unmanned systems and 36 navies.","https://www.nato.int/en/news-and-events/articles/news/2026/10/08/repmus-2026-in-portugal-brings-together-nato-allies-to-test-uncrewed-maritime-systems"],
+["2026-10-08","NATO","NATO","NATO envoy's third visit to Morocco","Relations and regional security.","https://www.nato.int/en/news-and-events/articles/news/2026/10/08/natos-special-representative-for-the-southern-neighbourhood-visits-morocco"],
+["2026-10-08","WTO","WTO","WTO doubles 2026 goods-trade forecast to 3.9%","Lifted by AI-related goods. The services forecast is cut to 3.3%.","https://www.wto.org/english/news_e/news26_e/stat_08oct26_510_e.htm"],
+["2026-10-05","WTO","WTO","General Council takes up WTO reform","Also e-commerce and agricultural trade.","https://www.wto.org/english/news_e/news26_e/gc_05oct26_508_e.htm"],
+["2026-10-06","OPEC","OPEC","OPEC publishes its first climate and sustainability report","Launched in Vienna.","https://www.opec.org/pr-detail/618-6-october-2026.html"],
+["2026-10-04","OPEC","OPEC","Seven OPEC+ producers keep November output unchanged","They meet next on 1 November.","https://www.opec.org/pr-detail/616-4-october-2026.html"],
+["2026-10-04","OPEC","OPEC","OPEC+ committee raises alarm over attacks on energy infrastructure","It stressed keeping shipping routes open.","https://www.opec.org/pr-detail/617-4-october-2026.html"]
+];
+
+const items=D.map((r,i)=>({i,d:r[0],c:r[1],s:r[2],h:r[3],m:r[4],u:r[5],t:r[6]||"",n:!!r[7]}));
+const order=Object.keys(C);
+let READ=new Set();
+try{READ=new Set(JSON.parse(localStorage.getItem("ont-read")||"[]"))}catch(e){}
+function saveRead(){try{localStorage.setItem("ont-read",JSON.stringify([...READ]))}catch(e){}}
+const state={phase:"all",country:"",q:"",topic:"",hideNoise:true};
+
+const $=s=>document.querySelector(s);
+const esc=s=>s.replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const fmtDay=d=>new Date(d+"T12:00:00Z").toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long",timeZone:"UTC"});
+
+// stats
+const nCountries=new Set(items.map(x=>x.c)).size;
+$("#stats").innerHTML=`<span><b>${items.length}</b> items</span><span><b>${nCountries}</b> countries and bodies</span><span><b>${items.filter(x=>x.t).length}</b> on shared events</span><span>Collected <b>11 Oct 2026</b></span>`;
+
+// country select
+const sel=$("#country");
+sel.innerHTML=`<option value="">All countries</option>`+order.slice().sort((a,b)=>C[a][0].localeCompare(C[b][0])).map(k=>`<option value="${k}">${esc(C[k][0])}</option>`).join("");
+
+// topic chips
+const tWrap=$("#topics");
+Object.keys(T).forEach(k=>{
+  const n=new Set(items.filter(x=>x.t===k).map(x=>x.c)).size;
+  const b=document.createElement("button");b.type="button";b.className="chip";b.dataset.topic=k;b.setAttribute("aria-pressed","false");
+  b.innerHTML=`${esc(T[k])}<span class="n">${n}</span>`;b.title=`${n} governments and bodies published on this`;
+  tWrap.appendChild(b);
+});
+
+function visible(x){
+  if(state.phase!=="all"&&String(C[x.c][2])!==state.phase)return false;
+  if(state.country&&x.c!==state.country)return false;
+  if(state.topic&&x.t!==state.topic)return false;
+  if(state.hideNoise&&x.n)return false;
+  if(state.q){const q=state.q.toLowerCase();if(!(x.h+" "+x.m+" "+C[x.c][0]+" "+x.s).toLowerCase().includes(q))return false}
+  return true;
+}
+// within a day, interleave countries round-robin so no single country floods the list
+function interleave(list){
+  const by=new Map();list.forEach(x=>{if(!by.has(x.c))by.set(x.c,[]);by.get(x.c).push(x)});
+  const keys=order.filter(k=>by.has(k));const out=[];let more=true,r=0;
+  while(more){more=false;for(const k of keys){const a=by.get(k);if(r<a.length){out.push(a[r]);more=true}}r++}
+  return out;
+}
+function render(){
+  const v=items.filter(visible);
+  const days=[...new Set(v.map(x=>x.d))].sort().reverse();
+  const feed=$("#feed");
+  if(!v.length){feed.innerHTML=`<div class="empty">No items match these filters. Clear the search or pick another country.</div>`;return}
+  feed.innerHTML=days.map(d=>{
+    const list=interleave(v.filter(x=>x.d===d));
+    return `<section class="day"><h2><span>${fmtDay(d)}</span><span>${list.length}</span></h2><div class="list">${list.map(card).join("")}</div></section>`;
+  }).join("");
+}
+function card(x){
+  const [name,badge]=C[x.c];
+  return `<article class="card${READ.has(x.i)?" read":""}" tabindex="0" data-i="${x.i}">
+  <div class="meta"><span class="badge">${badge}</span><span class="cn">${esc(name)}</span><span>${esc(x.s)}</span>${x.n?'<span class="noise">likely noise</span>':""}</div>
+  <h3>${esc(x.h)}</h3><p>${esc(x.m||"No summary: the page had no text.")}</p>
+  <div class="foot"><a href="${esc(x.u)}" target="_blank" rel="noopener">Read the official source ↗</a>${x.t?`<span class="tag">Also covered by others: ${esc(T[x.t])}</span>`:""}</div></article>`;
+}
+$("#feed").addEventListener("click",e=>{
+  const c=e.target.closest(".card");if(!c)return;
+  const i=+c.dataset.i;
+  if(e.target.closest("a")){READ.add(i);saveRead();c.classList.add("read");return}
+  c.classList.toggle("open");READ.add(i);saveRead();c.classList.add("read");
+});
+$("#feed").addEventListener("keydown",e=>{if((e.key==="Enter"||e.key===" ")&&e.target.classList.contains("card")){e.preventDefault();e.target.click()}});
+document.querySelectorAll(".seg button").forEach(b=>b.addEventListener("click",()=>{
+  state.phase=b.dataset.phase;document.querySelectorAll(".seg button").forEach(x=>x.setAttribute("aria-pressed",String(x===b)));render()}));
+sel.addEventListener("change",()=>{state.country=sel.value;render()});
+$("#q").addEventListener("input",e=>{state.q=e.target.value.trim();render()});
+$("#hideNoise").addEventListener("change",e=>{state.hideNoise=e.target.checked;render()});
+tWrap.addEventListener("click",e=>{const b=e.target.closest(".chip");if(!b)return;
+  state.topic=state.topic===b.dataset.topic?"":b.dataset.topic;
+  tWrap.querySelectorAll(".chip").forEach(x=>x.setAttribute("aria-pressed",String(x.dataset.topic===state.topic)));render()});
+render();
+</script>
