@@ -8,23 +8,23 @@ A cross-platform app that shows what governments officially publish, summarized 
 
 **In the MVP**
 
-- A feed of the latest official news, newest first
-- Onboarding: the user picks at least 3 topics (saved on the phone, no registration), and the feed is filtered by them
+- A feed of the latest official news, newest first, the same for everyone
 - An article detail screen with the news-style AI summary, the ministry as publisher with an "Official source" mark, and a link to the official source
 - Images on cards, taken from the official page's preview image
 - News collected automatically from verified official sites, summarized once by AI
 - A fast app: it opens instantly from the last feed saved on the phone
 
-**Not in the MVP:** favorites, choosing a country and the Local / Global switch, the Countries tab, login and Sign in with Apple, country filter, search, push notifications, sharing to social networks and reposting, personalized feed, store release and Play upload (Android runs in the emulator until then). The data model is built so each of these can be added later without rework.
+**Not in the MVP:** onboarding, picking topics and a topic-filtered feed, topic summaries, favorites, choosing a country and the Local / Global switch, the Countries tab, login and Sign in with Apple, country filter, search, push notifications, sharing to social networks and reposting, personalized feed, store release and Play upload (Android runs in the emulator until then). The data model is built so each of these can be added later without rework.
 
 ## Agreed changes, 14 Oct 2026
 
 After Roman's review (issues #3 to #11), these replace anything older further down where they differ.
 
 - **Owners to start with, swaps as we go.** We start with the Work plan's owners (Yurii 2, 3, 5, 6; Roman 1, 4, 7, 8). Either of us can take over an item by agreeing in its issue first, then reassigning it. One person per issue at a time, so we never build the same thing. The Kickoff is done together.
-- **The MVP adds:** onboarding where the user picks at least 3 topics (saved on the phone, no registration); a "For you" feed filtered by those topics; images on cards (the official page's preview image); the ministry shown as publisher with an "Official source" mark. Screens: [docs/design/onboarding.png](design/onboarding.png) and [docs/design/app.png](design/app.png) (the Local / Global switch, Countries, Saved and Sign in with Apple in those screens are Phase 2).
-- **Phase 2:** registration and Sign in with Apple; Saved (favourites); choosing a country and the Local / Global switch; the Countries tab.
-- **The AI summary reads like news**, not two fixed blocks, and covers new laws, amendments and proposals. Still one AI call per article: it returns the news-style summary plus a short angle (1 to 2 sentences) for each of the article's 2 to 3 topics; the app shows the angle for the user's topics.
+- **The MVP is the feed and the article detail screen,** the same for every user, with images on cards (the official page's preview image) and the ministry shown as publisher with an "Official source" mark. Screen: the feed and article in [docs/design/app.png](design/app.png).
+- **After the MVP (Phase 2 or later):** onboarding with topics and a topic-filtered "For you" feed; a full summary per topic, then topic analysis; choosing a country and the Local / Global switch; registration and Sign in with Apple; Saved (favourites); the Countries tab. Screens: [docs/design/onboarding.png](design/onboarding.png) and the rest of [docs/design/app.png](design/app.png).
+- **Sources publish official decisions only:** laws, amendments, proposals, government and ministry meeting agendas, minutes and meeting outcomes. Opinion pieces, interviews and commentary are hidden (the AI's `isNews` flag).
+- **The AI summary reads like news**, not two fixed blocks, facts from the article only. One AI call per article returns one news-style summary, the same for everyone, and tags the article with 1 to 3 topics from the fixed list, so the topic features have data when they come.
 - **Countries:** G20 only in the MVP. Labels for disputed territories wait until after the MVP.
 - **Secrets:** shared keys go through **Bitwarden**.
 - **Google Play:** Yurii's account, Roman as Admin.
@@ -149,7 +149,6 @@ official-news/
   "headline": "Poland condemns attack on Riyadh airport",
   "shortSummary": "Poland condemned the attack, which killed 12 people and injured more than 300.",
   "summary": "Poland's foreign ministry condemned the 10 October attack on King Khalid International Airport in Riyadh… (news-style, 2 to 4 short paragraphs)",
-  "angles": { "foreign-affairs": "Poland joins Spain, France, Italy and the UN in condemning the attack.", "security-defence": "…" },
   "imageUrl": "https://www.gov.pl/photo/… (or null)",
   "originalTitle": "Oświadczenie MSZ ws. ataku w Rijadzie",
   "originalLanguage": "pl",
@@ -160,12 +159,11 @@ official-news/
 }
 ```
 
-The feed card reads `headline`, `shortSummary` and `imageUrl`; the detail screen reads `summary` and the `angles` for the user's topics. `topics` holds 1 to 3 values from the fixed topic list. Before item 7 is live, `headline` falls back to `originalTitle` and the summary fields are empty.
+The feed card reads `headline`, `shortSummary` and `imageUrl`; the detail screen reads `summary`. `topics` holds 1 to 3 values from the fixed topic list; the MVP app does not use it yet. Before item 7 is live, `headline` falls back to `originalTitle` and the summary fields are empty.
 
 **API**
 
 - `GET /articles?limit=20&cursor=<c>` → `{ "items": [Article], "nextCursor": "…" | null, "top": [Article] }`: news from the last 7 days where `is_news = 1`, newest first; `cursor` is an opaque string; `top` only on the first page (last 24 hours, highest importance, at most 2 per country, up to 5) and may be an empty array, so the app must not depend on it
-- `GET /articles?topics=economy,health` → only articles with at least one of those topics (the app sends the user's topics)
 - `GET /articles?since=<ISO time>` → only articles newer than that time, used for the "new updates" check
 - `GET /articles/:id` → `Article`
 - `GET /health` → sources per status, time of the last fetcher run
@@ -173,7 +171,7 @@ The feed card reads `headline`, `shortSummary` and `imageUrl`; the detail screen
 **Database (D1)**
 
 - `sources`: id, country, name, kind (`rss` | `page` | `api`), url, config (JSON: selectors for pages), language, verified\_by (`domain` | `portal` | `wikidata`), verified\_at, licence, status (`active` | `stale` | `moved` | `broken` | `blocked`), last\_checked\_at, last\_item\_at
-- `articles`: id, source\_id, url (unique), original\_title, published\_at, date\_only, fetched\_at, text, text\_expires\_at, headline, short\_summary, summary, angles (JSON), image\_url, original\_language, topics (JSON), tags (JSON), importance, is\_news, summarized\_at, model
+- `articles`: id, source\_id, url (unique), original\_title, published\_at, date\_only, fetched\_at, text, text\_expires\_at, headline, short\_summary, summary, image\_url, original\_language, topics (JSON), tags (JSON), importance, is\_news, summarized\_at, model
 
 **Fetcher rule (keeps us on the free plan)**
 
@@ -205,25 +203,25 @@ Each item becomes one GitHub issue owned by one person. **Must** is what the ite
 
 ### 2. Design of the feed and the article detail (Yurii)
 
-- **Must:** feed card (country, source, time, headline, short summary) and onboarding (pick at least 3 topics) and the detail layout (headline, ministry as publisher with "Official source" mark, date, news-style summary with the angle for the user's topics, AI label, "Read the official source").
+- **Must:** feed card (country, source, time, headline, short summary, image) and the detail layout (headline, ministry as publisher with "Official source" mark, date, news-style summary, AI label, "Read the official source").
 - **Suggested:** Top today, Today / Yesterday groups, "new updates" pill, dimmed read items, share button.
 - **Done when:** the designs are linked in the issue and approved by Roman.
 
 ### 3. Feed screen (Yurii)
 
-- **Must:** reads `API_URL` (passed with `--dart-define`); topic onboarding saved on the phone; cards with images from `GET /articles?topics=…`, scrolling for more; pull to refresh; loading, error and empty states.
+- **Must:** reads `API_URL` (passed with `--dart-define`); cards with images from `GET /articles`, scrolling for more; pull to refresh; loading, error and empty states.
 - **Suggested:** the speed rules (saved last feed, `since` checks); Top today; day groups; "new updates" pill; dimmed read items; a cap per source per day or interleaving by country, so prolific sources do not flood the list.
 - **Done when:** on the iOS Simulator and Android emulator the feed shows articles from the deployed API.
 
 ### 4. Article detail screen (Roman)
 
-- **Must:** opens from a feed card using the Article already in the list; shows headline, the ministry as publisher with an "Official source" mark, date, image, the news-style summary and the angle for the user's topics, the AI label with original language, and "Read the official source"; shows the original title when no summary exists yet.
+- **Must:** opens from a feed card using the Article already in the list; shows headline, the ministry as publisher with an "Official source" mark, date, image, the news-style summary, the AI label with original language, and "Read the official source"; shows the original title when no summary exists yet.
 - **Suggested:** share button (the system share sheet); layout details beyond the approved design.
 - **Done when:** every article from the API opens and its source link works on both simulators.
 
 ### 5. Source list (Yurii)
 
-- **Must:** `docs/sources.csv` with 20 sources, one per G20 country, chosen from those that read cleanly in the 11 Oct test, each with kind, URL, language, `verified_by` and licence; loaded into `sources`.
+- **Must:** `docs/sources.csv` with 20 sources, one per G20 country, chosen from those that read cleanly in the 11 Oct test, each with kind, URL, language, `verified_by` and licence, preferring pages that publish official decisions (laws, proposals, meeting agendas, minutes and outcomes); loaded into `sources`.
 - **Suggested:** grow to about 85 Phase 1 sources once the fetcher is stable.
 - **Done when:** 20 verified sources are in D1.
 
@@ -235,7 +233,7 @@ Each item becomes one GitHub issue owned by one person. **Must** is what the ite
 
 ### 7. AI summaries (Roman)
 
-- **Must:** `docs/style-guide.md` and the prompt; one call per article returning headline, shortSummary, summary (news-style), angles per topic, topics (from the fixed list), tags, importance and isNews; `summarizer.run()`, called by the scheduled handler every minute, summarizes up to 5 articles that have text and no summary; noise is hidden from the feed.
+- **Must:** `docs/style-guide.md` and the prompt; one call per article returning headline, shortSummary, summary (news-style, facts from the article only), topics (from the fixed list), tags, importance and isNews (an official decision, not opinion, interview or commentary); `summarizer.run()`, called by the scheduled handler every minute, summarizes up to 5 articles that have text and no summary; anything that is not news is hidden from the feed.
 - **Suggested:** a 25-article test set with `npm run eval`; comparing Workers AI and Claude Haiku and recording the choice and cost in `docs/decisions.md`.
 - **Done when:** new articles get all summary fields within an hour of being fetched.
 
@@ -385,7 +383,7 @@ The feed shows official news from the last 7 days, newest first, with a short "T
 
 **What is shown**
 
-- Only items the AI marks as news; job adverts, tenders and routine notices are hidden
+- Only official decisions, as marked by the AI: laws, amendments, proposals, government and ministry meeting agendas, minutes and outcomes; opinion pieces, interviews, commentary, job adverts, tenders and routine notices are hidden
 - The 7-day window is a query on publish date, not a stored list: it slides by itself, and nothing is deleted
 - Loaded 20 items at a time as the user scrolls
 
@@ -405,7 +403,7 @@ The feed shows official news from the last 7 days, newest first, with a short "T
 
 - Plain-language headline written by the AI
 - Country, source, publish date
-- AI summary written as news, plus the angle for the user's topics, labelled as AI and showing the original language
+- AI summary written as news, the same for everyone, labelled as AI and showing the original language
 - "Read the official source" button
 - Share button
 
@@ -418,7 +416,7 @@ The summary is the product: one AI call per article, run once on the server and 
 **What each call returns**
 
 - Plain-language headline
-- A short summary for the feed and a news-style summary for the detail screen, plus a short angle for each of the article's topics, in English
+- A short summary for the feed and a news-style summary for the detail screen, in English
 - Translation note (original language)
 - Category, topics, people and organisations mentioned, country
 - Importance score 1–5
