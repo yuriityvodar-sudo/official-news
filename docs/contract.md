@@ -1,6 +1,6 @@
 # Contract
 
-The shared definitions both the app and the backend build against. Changed only by agreement, in a pull request that also updates `docs/decisions.md`. The code that implements it: `app/lib/core/article.dart`, `app/lib/core/topics.dart`, `server/src/api/index.ts`, `server/migrations/`.
+The shared definitions both the app and the backend build against. Changed only by agreement, in a pull request that also updates `docs/decisions.md`. The code that implements it: `app/lib/core/article.dart`, `app/lib/core/decision_types.dart`, `app/lib/core/topics.dart`, `server/src/api/index.ts`, `server/migrations/`.
 
 ## Article
 
@@ -16,6 +16,7 @@ What the API returns and both screens read.
   "headline": "Poland condemns attack on Riyadh airport",
   "shortSummary": "Poland condemned the attack, which killed 12 people and injured more than 300.",
   "summary": "Poland's foreign ministry condemned … (news-style, 2 to 4 short paragraphs)",
+  "decisionType": "decision",
   "originalTitle": "Oświadczenie MSZ ws. ataku w Rijadzie",
   "originalLanguage": "pl",
   "topics": ["foreign-affairs", "security-defence"],
@@ -26,9 +27,15 @@ What the API returns and both screens read.
 }
 ```
 
-- The feed card reads `headline`, `shortSummary` and `imageUrl`; the detail screen reads `summary`. `topics` is set by the AI; the MVP app does not use it yet.
-- Before the AI step has run, `headline`, `shortSummary`, `summary` and `importance` are `null` and `topics` is `[]`; the app shows `originalTitle` instead.
+- The feed card reads `headline`, `shortSummary` and `imageUrl`; both show `decisionType` as a red label above the headline ("DECISION"); the detail screen reads `summary`. `topics` is set by the AI; the MVP app does not use it yet.
+- Before the AI step has run, `headline`, `shortSummary`, `summary`, `decisionType` and `importance` are `null` and `topics` is `[]`; the app shows `originalTitle` instead.
 - `publishedAt` is UTC. `dateOnly: true` means the source gave no time.
+
+## Decision types
+
+A fixed list. The AI gives each news article one of them; the app shows its label above the headline. Code: `app/lib/core/decision_types.dart`.
+
+`law` (Law), `bill` (Bill), `amendment` (Amendment), `proposal` (Proposal), `cabinet-decision` (Cabinet decision), `decision` (Decision), `meeting-agenda` (Meeting agenda), `meeting-outcome` (Meeting outcome)
 
 ## Topics
 
@@ -52,7 +59,7 @@ Kickoff state: `/articles` returns the newest 20 news articles and ignores the p
 Defined in `server/migrations/0001_init.sql`.
 
 - `sources`: id, country, name, kind (`rss` | `page` | `api`), url, config (JSON: selectors for pages), language, verified_by (`domain` | `portal` | `wikidata`), verified_at, licence, status (`active` | `stale` | `moved` | `broken` | `blocked`), last_checked_at, last_item_at
-- `articles`: id, source_id, url (unique), original_title, published_at, date_only, fetched_at, text, text_expires_at, headline, short_summary, summary, image_url, original_language, topics (JSON), tags (JSON), importance, is_news (NULL until the AI decides, 1 = official decision shown in the feed, 0 = hidden), summarized_at, model
+- `articles`: id, source_id, url (unique), original_title, published_at, date_only, fetched_at, text, text_expires_at, headline, short_summary, summary, image_url, original_language, topics (JSON), tags (JSON), importance, decision_type, is_news (NULL until the AI decides, 1 = official decision shown in the feed, 0 = hidden), summarized_at, model
 
 ## Scheduled job
 

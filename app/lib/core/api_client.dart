@@ -18,25 +18,25 @@ class ApiException implements Exception {
 /// Client for the endpoints in docs/contract.md.
 class ApiClient {
   ApiClient({http.Client? client, String? baseUrl})
-      : _client = client ?? http.Client(),
-        _baseUrl = baseUrl ?? apiUrl;
+    : _client = client ?? http.Client(),
+      _baseUrl = baseUrl ?? apiUrl;
 
   final http.Client _client;
   final String _baseUrl;
 
   /// `GET /articles`: news from the last 7 days, newest first, 20 per page.
   Future<ArticlesPage> fetchArticles({
-    List<String> topics = const [],
     String? cursor,
     DateTime? since,
     int limit = 20,
   }) async {
-    final uri = Uri.parse('$_baseUrl/articles').replace(queryParameters: {
-      'limit': '$limit',
-      if (topics.isNotEmpty) 'topics': topics.join(','),
-      'cursor': ?cursor,
-      if (since != null) 'since': since.toUtc().toIso8601String(),
-    });
+    final uri = Uri.parse('$_baseUrl/articles').replace(
+      queryParameters: {
+        'limit': '$limit',
+        'cursor': ?cursor,
+        if (since != null) 'since': since.toUtc().toIso8601String(),
+      },
+    );
     return ArticlesPage.fromJson(await _getJson(uri));
   }
 

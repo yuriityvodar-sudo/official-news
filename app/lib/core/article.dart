@@ -3,10 +3,10 @@ class Source {
   const Source({required this.id, required this.name, required this.url});
 
   factory Source.fromJson(Map<String, dynamic> json) => Source(
-        id: json['id'] as String,
-        name: json['name'] as String,
-        url: json['url'] as String,
-      );
+    id: json['id'] as String,
+    name: json['name'] as String,
+    url: json['url'] as String,
+  );
 
   final String id;
   final String name;
@@ -23,6 +23,7 @@ class Article {
     required this.headline,
     required this.shortSummary,
     required this.summary,
+    required this.decisionType,
     required this.originalTitle,
     required this.originalLanguage,
     required this.topics,
@@ -44,6 +45,7 @@ class Article {
       headline: (json['headline'] as String?) ?? originalTitle,
       shortSummary: json['shortSummary'] as String?,
       summary: json['summary'] as String?,
+      decisionType: json['decisionType'] as String?,
       originalTitle: originalTitle,
       originalLanguage: json['originalLanguage'] as String? ?? 'en',
       topics: List<String>.from(json['topics'] as List? ?? const []),
@@ -62,6 +64,9 @@ class Article {
   final String headline;
   final String? shortSummary;
   final String? summary;
+
+  /// One id from the fixed list in decision_types.dart, or null before the AI step.
+  final String? decisionType;
   final String originalTitle;
   final String originalLanguage;
   final List<String> topics;
@@ -72,18 +77,24 @@ class Article {
 }
 
 class ArticlesPage {
-  const ArticlesPage({required this.items, required this.nextCursor, required this.top});
+  const ArticlesPage({
+    required this.items,
+    required this.nextCursor,
+    required this.top,
+  });
 
   factory ArticlesPage.fromJson(Map<String, dynamic> json) => ArticlesPage(
-        items: [
-          for (final item in json['items'] as List) Article.fromJson(item as Map<String, dynamic>),
-        ],
-        nextCursor: json['nextCursor'] as String?,
-        // `top` may be missing or empty; the app must not depend on it.
-        top: [
-          for (final item in json['top'] as List? ?? const []) Article.fromJson(item as Map<String, dynamic>),
-        ],
-      );
+    items: [
+      for (final item in json['items'] as List)
+        Article.fromJson(item as Map<String, dynamic>),
+    ],
+    nextCursor: json['nextCursor'] as String?,
+    // `top` may be missing or empty; the app must not depend on it.
+    top: [
+      for (final item in json['top'] as List? ?? const [])
+        Article.fromJson(item as Map<String, dynamic>),
+    ],
+  );
 
   final List<Article> items;
   final String? nextCursor;

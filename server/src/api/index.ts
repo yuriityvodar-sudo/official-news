@@ -15,6 +15,7 @@ interface ArticleRow {
   headline: string | null;
   short_summary: string | null;
   summary: string | null;
+  decision_type: string | null;
   image_url: string | null;
   original_language: string | null;
   topics: string | null;
@@ -25,7 +26,7 @@ interface ArticleRow {
 const SELECT_ARTICLE = `
   SELECT a.id, s.country, a.source_id, s.name AS source_name, s.url AS source_url,
          a.url, a.original_title, a.published_at, a.date_only, a.headline, a.short_summary,
-         a.summary, a.image_url, a.original_language, a.topics, a.tags, a.importance
+         a.summary, a.decision_type, a.image_url, a.original_language, a.topics, a.tags, a.importance
   FROM articles a JOIN sources s ON s.id = a.source_id`;
 
 /** Converts a row to the article format in docs/contract.md. */
@@ -39,6 +40,7 @@ export function toArticle(row: ArticleRow) {
     headline: row.headline,
     shortSummary: row.short_summary,
     summary: row.summary,
+    decisionType: row.decision_type,
     originalTitle: row.original_title,
     originalLanguage: row.original_language,
     topics: row.topics ? JSON.parse(row.topics) : [],

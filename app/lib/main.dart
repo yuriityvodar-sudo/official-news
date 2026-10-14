@@ -14,7 +14,10 @@ class OfficialNewsApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Official News',
-      theme: buildTheme(),
+      debugShowCheckedModeBanner: false,
+      theme: buildTheme(Brightness.light),
+      darkTheme: buildTheme(Brightness.dark),
+      themeMode: ThemeMode.system,
       onGenerateRoute: onGenerateRoute,
       initialRoute: Routes.feed,
     );

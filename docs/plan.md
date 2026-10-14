@@ -25,6 +25,7 @@ After Roman's review (issues #3 to #11), these replace anything older further do
 - **After the MVP (Phase 2 or later):** onboarding with topics and a topic-filtered "For you" feed; a full summary per topic, then topic analysis; choosing a country and the Local / Global switch; registration and Sign in with Apple; Saved (favourites); the Countries tab. Screens: [docs/design/onboarding.png](design/onboarding.png) and the rest of [docs/design/app.png](design/app.png).
 - **Sources publish official decisions only:** laws, amendments, proposals, government and ministry meeting agendas, minutes and meeting outcomes. Opinion pieces, interviews, commentary, statements and call readouts are hidden (the AI's `isNews` flag).
 - **The AI summary reads like news**, not two fixed blocks, facts from the article only. One AI call per article returns one news-style summary, the same for everyone, and tags the article with 1 to 3 topics from the fixed list, so the topic features have data when they come.
+- **The app looks and feels like Apple News** on iOS and Android, light and dark: large bold titles, red accent, serif headlines, publisher line above each headline, big images, iOS navigation and gestures. Each headline has a red decision-type label (Law, Bill, Cabinet decision…). Screens: [docs/design/mvp.png](design/mvp.png).
 - **Countries:** G20 only in the MVP. Labels for disputed territories wait until after the MVP.
 - **Secrets:** shared keys go through **Bitwarden**.
 - **Google Play:** Yurii's account, Roman as Admin.
@@ -149,6 +150,7 @@ official-news/
   "headline": "Poland condemns attack on Riyadh airport",
   "shortSummary": "Poland condemned the attack, which killed 12 people and injured more than 300.",
   "summary": "Poland's foreign ministry condemned the 10 October attack on King Khalid International Airport in Riyadh… (news-style, 2 to 4 short paragraphs)",
+  "decisionType": "decision",
   "imageUrl": "https://www.gov.pl/photo/… (or null)",
   "originalTitle": "Oświadczenie MSZ ws. ataku w Rijadzie",
   "originalLanguage": "pl",
@@ -171,7 +173,7 @@ The feed card reads `headline`, `shortSummary` and `imageUrl`; the detail screen
 **Database (D1)**
 
 - `sources`: id, country, name, kind (`rss` | `page` | `api`), url, config (JSON: selectors for pages), language, verified\_by (`domain` | `portal` | `wikidata`), verified\_at, licence, status (`active` | `stale` | `moved` | `broken` | `blocked`), last\_checked\_at, last\_item\_at
-- `articles`: id, source\_id, url (unique), original\_title, published\_at, date\_only, fetched\_at, text, text\_expires\_at, headline, short\_summary, summary, image\_url, original\_language, topics (JSON), tags (JSON), importance, is\_news, summarized\_at, model
+- `articles`: id, source\_id, url (unique), original\_title, published\_at, date\_only, fetched\_at, text, text\_expires\_at, headline, short\_summary, summary, decision\_type, image\_url, original\_language, topics (JSON), tags (JSON), importance, is\_news, summarized\_at, model
 
 **Fetcher rule (keeps us on the free plan)**
 
@@ -203,7 +205,7 @@ Each item becomes one GitHub issue owned by one person. **Must** is what the ite
 
 ### 2. Design of the feed and the article detail (Yurii)
 
-- **Must:** feed card (country, source, time, headline, short summary, image) and the detail layout (headline, ministry as publisher with "Official source" mark, date, news-style summary, AI label, "Read the official source").
+- **Must:** in the Apple News look set in the Kickoff (light and dark): feed card (decision-type label, country, source, time, headline, short summary, image) and the detail layout (headline, ministry as publisher with "Official source" mark, date, news-style summary, AI label, "Read the official source").
 - **Suggested:** Top today, Today / Yesterday groups, "new updates" pill, dimmed read items, share button.
 - **Done when:** the designs are linked in the issue and approved by Roman.
 
@@ -233,7 +235,7 @@ Each item becomes one GitHub issue owned by one person. **Must** is what the ite
 
 ### 7. AI summaries (Roman)
 
-- **Must:** `docs/style-guide.md` and the prompt; one call per article returning headline, shortSummary, summary (news-style, facts from the article only), topics (from the fixed list), tags, importance and isNews (an official decision, not opinion, interview or commentary); `summarizer.run()`, called by the scheduled handler every minute, summarizes up to 5 articles that have text and no summary; anything that is not news is hidden from the feed.
+- **Must:** `docs/style-guide.md` and the prompt; one call per article returning headline, shortSummary, summary (news-style, facts from the article only), decisionType (from the fixed list), topics (from the fixed list), tags, importance and isNews (an official decision, not opinion, interview or commentary); `summarizer.run()`, called by the scheduled handler every minute, summarizes up to 5 articles that have text and no summary; anything that is not news is hidden from the feed.
 - **Suggested:** a 25-article test set with `npm run eval`; comparing Workers AI and Claude Haiku and recording the choice and cost in `docs/decisions.md`.
 - **Done when:** new articles get all summary fields within an hour of being fetched.
 
