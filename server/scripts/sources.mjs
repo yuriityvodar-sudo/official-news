@@ -47,8 +47,13 @@ export function parseCsv(text) {
   return rows;
 }
 
+/** Source ids of the Kickoff seed (server/migrations/0002_seed.sql); a CSV row may not reuse one. */
+export function seedIds(seedSql) {
+  return new Set([...seedSql.matchAll(/INSERT INTO sources \([^)]*\) VALUES \('([^']+)'/g)].map((m) => m[1]));
+}
+
 /** Reads and checks every row; throws one error listing all problems. */
-export function toSources(text) {
+export function toSources(text, { reserved = new Set() } = {}) {
   const [header, ...rows] = parseCsv(text);
   if (header?.join(",") !== COLUMNS.join(",")) {
     throw new Error(`sources.csv header must be: ${COLUMNS.join(",")}`);
@@ -65,10 +70,12 @@ export function toSources(text) {
       fail("id must look like <country>-<short-name>, lower case");
     }
     if (seen.has(s.id)) fail("id is used twice");
+    if (reserved.has(s.id)) fail("id belongs to a Kickoff seed source; choose another");
     seen.add(s.id);
     if (!s.name) fail("name is empty");
     if (!KINDS.has(s.kind)) fail(`kind must be one of ${[...KINDS].join(", ")}`);
-    if (!/^https?:\/\/[^\s]+$/.test(s.url)) fail("url must start with http:// or https://");
+    // Plain http can be altered on the way, and we show the text as official.
+    if (!/^https:\/\/[^\s]+$/.test(s.url)) fail("url must start with https://");
     if (!/^[a-z]{2}$/.test(s.language)) fail("language must be a 2-letter code such as en");
     if (!VERIFIED_BY.has(s.verified_by)) fail(`verified_by must be one of ${[...VERIFIED_BY].join(", ")}`);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(s.verified_at)) fail("verified_at must be a date such as 2026-10-14");
@@ -89,9 +96,14 @@ export function toSources(text) {
 
 const sqlValue = (v) => (v === "" ? "NULL" : `'${v.replaceAll("'", "''")}'`);
 
-/** One upsert per source, so running it again is safe. Seed rows are never overwritten. */
+/**
+ * One upsert per source, so running it again is safe. Seed rows are never
+ * overwritten. Sources no longer in the CSV are set to `blocked`, so the
+ * fetcher stops reading them (rows stay, because articles point to them).
+ */
 export function toSql(sources) {
-  return sources
+  const ids = sources.map((s) => sqlValue(s.id)).join(", ");
+  const upserts = sources
     .map(
       (s) =>
         "INSERT INTO sources (id, country, name, kind, url, config, language, verified_by, verified_at, licence) VALUES (" +
@@ -102,13 +114,20 @@ export function toSql(sources) {
         "WHERE json_extract(sources.config, '$.seed') IS NOT 1;\n",
     )
     .join("");
+  return (
+    upserts +
+    `UPDATE sources SET status = 'blocked' WHERE id NOT IN (${ids || "''"}) AND status != 'blocked' ` +
+    "AND (config IS NULL OR json_extract(config, '$.seed') IS NOT 1);\n"
+  );
 }
 
 export const csvPath = fileURLToPath(new URL("../../docs/sources.csv", import.meta.url));
+export const seedPath = fileURLToPath(new URL("../migrations/0002_seed.sql", import.meta.url));
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   try {
-    process.stdout.write(toSql(toSources(readFileSync(csvPath, "utf8"))));
+    const reserved = seedIds(readFileSync(seedPath, "utf8"));
+    process.stdout.write(toSql(toSources(readFileSync(csvPath, "utf8"), { reserved })));
   } catch (error) {
     console.error(error.message);
     process.exit(1);

@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, test } from "node:test";
 
-import { COLUMNS, csvPath, parseCsv, toSources, toSql } from "./sources.mjs";
+import { COLUMNS, csvPath, parseCsv, seedIds, seedPath, toSources, toSql } from "./sources.mjs";
 
 const header = COLUMNS.join(",");
 const row = (overrides = {}) => {
@@ -50,6 +50,17 @@ describe("toSources", () => {
     assert.throws(() => toSources(`${header}\n${row({ id: "fr-cabinet" })}\n`), /id must look like/);
   });
 
+  test("requires https", () => {
+    assert.throws(() => toSources(`${header}\n${row({ url: "http://kremlin.ru/feed" })}\n`), /url must start with https:\/\//);
+  });
+
+  test("rejects an id that belongs to a seed source", () => {
+    const reserved = seedIds(readFileSync(seedPath, "utf8"));
+    assert.ok(reserved.has("de-federal-government"));
+    assert.equal(reserved.size, 20);
+    assert.throws(() => toSources(`${header}\n${row({ id: "de-federal-government" })}\n`, { reserved }), /belongs to a Kickoff seed source/);
+  });
+
   test("rejects config that is not a JSON object", () => {
     assert.throws(() => toSources(`${header}\n${row({ config: "[1]" })}\n`), /config must be a JSON object/);
   });
@@ -61,11 +72,13 @@ describe("toSql", () => {
     assert.match(sql, /'Prime Minister''s Office'/);
     assert.match(sql, /'de', 'domain', '2026-10-14', NULL\)/);
     assert.match(sql, /ON CONFLICT \(id\) DO UPDATE/);
-    assert.doesNotMatch(sql, /status/);
+    assert.doesNotMatch(sql.split("\n")[0], /status/); // the upsert never changes status
     assert.match(sql, /WHERE json_extract\(sources.config, '\$.seed'\) IS NOT 1;/);
+    assert.match(sql, /UPDATE sources SET status = 'blocked' WHERE id NOT IN \('de-cabinet'\) AND status != 'blocked'/);
   });
 });
 
 test("docs/sources.csv is valid", () => {
-  assert.ok(toSources(readFileSync(csvPath, "utf8")).length > 0);
+  const reserved = seedIds(readFileSync(seedPath, "utf8"));
+  assert.ok(toSources(readFileSync(csvPath, "utf8"), { reserved }).length > 0);
 });
