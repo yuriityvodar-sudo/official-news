@@ -44,6 +44,7 @@ jobs:
           xcodebuild archive \
             -workspace Runner.xcworkspace -scheme Runner -configuration Release \
             -archivePath "$RUNNER_TEMP/Runner.xcarchive" \
+            -destination "generic/platform=iOS" \
             -allowProvisioningUpdates \
             -authenticationKeyPath "$RUNNER_TEMP/asc_key.p8" \
             -authenticationKeyID "${{ secrets.ASC_KEY_ID }}" \
