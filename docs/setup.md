@@ -2,7 +2,7 @@
 
 What exists right now, outside the code. Update this file whenever an account, service or resource is created or changed, in the same commit or pull request. Secrets never go here, only names and where they live.
 
-Last updated: 2026-10-14 (Kickoff skeleton)
+Last updated: 2026-10-14 (item 1)
 
 ## Accounts and services
 
@@ -13,8 +13,9 @@ Last updated: 2026-10-14 (Kickoff skeleton)
 | Cloudflare account | Created 2026-10-13 | Yurii (Super Administrator) | Name `NewsApp`, account ID `8dc93578877d397a693094f3e2b01029` (not a secret; it goes in the Worker config) |
 | Roman's access to Cloudflare | Active since 2026-10-14 | Yurii | Role Administrator, scope NewsApp account only (cannot manage members or billing) |
 | workers.dev address | Created 2026-10-13 | Yurii | `officialnews.workers.dev`; a Worker named `api` would be served at `api.officialnews.workers.dev` |
-| Cloudflare Worker | Code ready, not deployed | Item 1 | Worker `api` in `server/`; first deploy and deploy-on-merge come with item 1 (needs a Cloudflare API token as a GitHub Secret) |
-| D1 database | Created 2026-10-14 | Kickoff | Name `official-news`, ID `67052e61-5544-4c6d-a182-1321192f3d0a`, region Western Europe. Migrations not applied to it yet (local only so far) |
+| Cloudflare Worker | Code ready, not deployed yet | Roman (item 1) | Worker `api` in `server/`, to be served at `https://api.officialnews.workers.dev`. `.github/workflows/deploy.yml` applies D1 migrations and deploys on every merge to `main` that touches `server/`; until `CLOUDFLARE_API_TOKEN` exists it ends with a warning and deploys nothing |
+| Cloudflare API token for deploys | Not yet | Yurii | An account API token limited to NewsApp: start from the "Edit Cloudflare Workers" template and add D1: Edit. Stored only as the GitHub Secret `CLOUDFLARE_API_TOKEN` (Yurii adds it: as repo owner only he can manage secrets) |
+| D1 database | Created 2026-10-14 | Kickoff | Name `official-news`, ID `67052e61-5544-4c6d-a182-1321192f3d0a`, region Western Europe. Migrations not applied to it yet; the deploy workflow applies them on its first run |
 | Apple Developer team | Yurii joined 2026-10-14 | Roman (Account Holder) | Team "RS Elite Pro s.r.o." (Roman's). Yurii's role: Admin, all apps (checked in App Store Connect, Users and Access, 2026-10-14) |
 | App Store Connect app and TestFlight | Not yet | Roman | Roman picks the bundle ID and creates the app on the RS Elite Pro team, plus an internal testing group with both of us |
 | App Store Connect API key (for CI uploads) | Not yet | Roman | GitHub Secrets `APPLE_TEAM_ID`, `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8_BASE64`, used by `.github/workflows/testflight.yml`; the key file goes to Yurii through Bitwarden, Yurii adds the secrets |
@@ -25,10 +26,10 @@ Last updated: 2026-10-14 (Kickoff skeleton)
 
 | Tool | Yurii's Mac | Roman's Mac |
 | --- | --- | --- |
-| Flutter | 3.44.6 (stable) | to check |
-| Xcode | 26.3 | to check |
-| Node | 24 | to check |
-| GitHub CLI | installed | to check |
-| CocoaPods | installed | to check |
-| Android SDK | installed | to check |
-| Java | 8 (Android builds need 17; install at Kickoff) | to check |
+| Flutter | 3.44.6 (stable) | not installed yet |
+| Xcode | 26.3 | 27.0 |
+| Node | 24 | 22.16 |
+| GitHub CLI | installed | installed |
+| CocoaPods | installed | installed |
+| Android SDK | installed | not installed yet |
+| Java | 8 (Android builds need 17; install at Kickoff) | not installed yet |

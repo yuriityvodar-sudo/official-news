@@ -47,12 +47,11 @@ A fixed list. The AI gives each article 1 to 3 of them; topic features (onboardi
 
 Base URL: `https://api.officialnews.workers.dev` (deployed), `http://localhost:8787` (local, `npm run dev` in `server/`).
 
-- `GET /articles?limit=20&cursor=<c>` → `{ "items": [Article], "nextCursor": "…" | null, "top": [Article] }`: news from the last 7 days where `is_news = 1`, newest first. `cursor` is an opaque string. `top` only on the first page (last 24 hours, highest importance, at most 2 per country, up to 5) and may be empty, so the app must not depend on it.
-- `GET /articles?since=<ISO time>` → only articles newer than that time, for the "new updates" check.
-- `GET /articles/:id` → `Article`, or 404.
+- `GET /articles?limit=20&cursor=<c>` → `{ "items": [Article], "nextCursor": "…" | null, "top": [Article] }`: news from the last 7 days where `is_news = 1`, newest first (same time: by `id`). `limit` is 1 to 50, default 20. `nextCursor` is an opaque string to send back as `cursor` for the next page, `null` on the last page. `top` is filled only on the first page (no `cursor`, no `since`): last 24 hours, highest importance, at most 2 per country, up to 5; otherwise `[]`. It may be empty, so the app must not depend on it. Top articles also appear in `items`.
+- `GET /articles?since=<ISO time>` → only articles published after that time, for the "new updates" check; pages with `cursor` like the feed.
+- `GET /articles/:id` → `Article` shown in the feed, or 404 (hidden articles too).
 - `GET /health` → `{ "sources": { "<status>": <count> }, "lastFetcherRun": "<ISO time>" | null }`.
-
-Kickoff state: `/articles` returns the newest 20 news articles and ignores the parameters; item 1 adds the 7-day window, paging, `since` and `top`.
+- Errors are JSON `{ "error": "<message>" }`: 400 for a bad `limit`, `cursor` or `since`, 404, 405 for any method other than GET, 500.
 
 ## Database (D1)
 
@@ -60,6 +59,8 @@ Defined in `server/migrations/0001_init.sql`.
 
 - `sources`: id, country, name, kind (`rss` | `page` | `api`), url, config (JSON: selectors for pages), language, verified_by (`domain` | `portal` | `wikidata`), verified_at, licence, status (`active` | `stale` | `moved` | `broken` | `blocked`), last_checked_at, last_item_at
 - `articles`: id, source_id, url (unique), original_title, published_at, date_only, fetched_at, text, text_expires_at, headline, short_summary, summary, image_url, original_language, topics (JSON), tags (JSON), importance, decision_type, is_news (NULL until the AI decides, 1 = official decision shown in the feed, 0 = hidden), summarized_at, model
+
+Times (`published_at`, `fetched_at`, `summarized_at`, `text_expires_at`) are stored in UTC as `YYYY-MM-DDTHH:MM:SSZ`, without milliseconds, so they sort and compare as text.
 
 ## Scheduled job
 

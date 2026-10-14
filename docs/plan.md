@@ -99,7 +99,7 @@ The MVP is a Kickoff plus 8 items, 4 each. This is our suggested split: Yurii ow
 | # | Item | Owner | Evenings | Done when |
 | --- | --- | --- | --- | --- |
 | 0 | Kickoff: repo, Cloudflare, TestFlight, first commit, shared definitions | Together | 2, one call | Both run the app and the backend locally and install it from TestFlight; `main` is protected |
-| 1 | API on Cloudflare, pre-filled with 20 real articles | Roman | 3 | The deployed API returns the 20 articles in the agreed format |
+| 1 | API on Cloudflare, pre-filled with 20 real articles | Roman | 3 | The deployed API returns the seed articles shown in the feed in the agreed format |
 | 2 | Design of the feed and the article detail | Yurii | 2 | Designs approved by Roman in the issue |
 | 3 | Feed screen | Yurii | 4 | The feed shows articles from the deployed API on both simulators |
 | 4 | Article detail screen | Roman | 2 | Every article opens with its summary and source link |
@@ -201,7 +201,7 @@ Each item becomes one GitHub issue owned by one person. **Must** is what the ite
 
 - **Must:** load the Kickoff seed migration into the local and deployed D1; `GET /articles` (7 days, newest first, 20 per page, cursor, `since`); `GET /articles/:id`; deploy from GitHub on merge to `main`.
 - **Suggested:** `top` on the first page; 5-minute cache; `GET /health` (used by item 8).
-- **Done when:** the deployed API returns the 20 articles in the agreed format and tests pass in CI.
+- **Done when:** the deployed API returns the seed articles shown in the feed (3 of the 20 since the decisions-only rule) in the agreed format and tests pass in CI.
 
 ### 2. Design of the feed and the article detail (Yurii)
 
