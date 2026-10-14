@@ -37,7 +37,7 @@ CREATE TABLE articles (
   topics            TEXT,               -- JSON: 1-3 ids from the fixed topic list
   tags              TEXT,               -- JSON
   importance        INTEGER,
-  is_news           INTEGER NOT NULL DEFAULT 1,
+  is_news           INTEGER,            -- NULL until the AI decides; 1 = official decision (shown), 0 = hidden
   summarized_at     TEXT,
   model             TEXT
 );
