@@ -21,7 +21,10 @@ jobs:
           cache: true
       - run: flutter pub get
       - run: flutter analyze
+      # A time zone with clock changes, so the day-label tests mean something (UTC has none).
       - run: flutter test
+        env:
+          TZ: Europe/Berlin
 
   server:
     name: Server (Worker)

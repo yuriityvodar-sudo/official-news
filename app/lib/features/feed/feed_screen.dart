@@ -53,7 +53,14 @@ class _FeedScreenState extends State<FeedScreen> {
     super.dispose();
   }
 
-  void _changed() => setState(() {});
+  void _changed() {
+    setState(() {});
+    // A page dropped because a refresh replaced the feed leaves the list at its end:
+    // look again once the new feed is drawn.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _scroll.hasClients) _nearEnd();
+    });
+  }
 
   void _nearEnd() {
     if (_scroll.position.pixels > _scroll.position.maxScrollExtent - 600) {
@@ -225,11 +232,12 @@ class _FeedScreenState extends State<FeedScreen> {
         sliver: SliverToBoxAdapter(
           child: Center(
             child: _feed.loadMoreFailed
-                ? GestureDetector(
-                    onTap: () => unawaited(_feed.loadMore(retry: true)),
+                ? CupertinoButton(
+                    // A 44-pt target and a button role for VoiceOver.
+                    onPressed: () => unawaited(_feed.loadMore(retry: true)),
                     child: Text(
                       "Couldn't load more. Tap to try again.",
-                      style: text.meta,
+                      style: text.meta.copyWith(color: AppColors.accent),
                     ),
                   )
                 : _feed.loadingMore || _feed.hasMore
@@ -397,12 +405,21 @@ class _Picture extends StatelessWidget {
       child: Container(
         width: width,
         height: height,
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        // A read picture fades together with its placeholder, so it looks faded, not grey.
+        color: dim(
+          TextStyle(
+            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+          ),
+          dimmed,
+        ).color,
         child: LayoutBuilder(
           builder: (context, constraints) {
-            // Official pages often serve 2,000+ px images; decode at the size shown,
-            // so a long feed does not hold hundreds of MB of pictures.
-            final shown = width ?? constraints.maxWidth;
+            // Official pages often serve 2,000+ px images; decode near the size shown,
+            // so a long feed does not hold hundreds of MB of pictures. A square
+            // thumbnail with BoxFit.cover crops a landscape picture to its height,
+            // so it is decoded twice as wide as the box to stay sharp.
+            final square = width != null && height != null && width == height;
+            final shown = (width ?? constraints.maxWidth) * (square ? 2 : 1);
             return Image.network(
               url,
               fit: BoxFit.cover,

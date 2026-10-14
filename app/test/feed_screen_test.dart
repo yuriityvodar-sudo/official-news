@@ -414,10 +414,12 @@ void main() {
     },
   );
 
+  // Meaningful in a time zone with a clock change: CI runs the app tests with
+  // TZ=Europe/Berlin, where 29 March 2026 has 23 hours.
   test('day labels count calendar days, not 24-hour blocks', () {
-    final now = DateTime(2026, 3, 29, 9);
-    expect(dayLabel(DateTime(2026, 3, 28, 23, 30), now: now), 'Yesterday');
-    expect(dayLabel(DateTime(2026, 3, 29, 0, 10), now: now), 'Today');
-    expect(dayLabel(DateTime(2026, 3, 27, 12), now: now), 'Friday 27 March');
+    final now = DateTime(2026, 3, 30, 9);
+    expect(dayLabel(DateTime(2026, 3, 29, 12), now: now), 'Yesterday');
+    expect(dayLabel(DateTime(2026, 3, 30, 0, 10), now: now), 'Today');
+    expect(dayLabel(DateTime(2026, 3, 28, 12), now: now), 'Saturday 28 March');
   });
 }
