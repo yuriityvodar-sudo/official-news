@@ -21,7 +21,7 @@ A cross-platform app that shows what governments officially publish, summarized 
 
 After Roman's review (issues #3 to #11), these replace anything older further down where they differ.
 
-- **Work is shared, not owned.** No fixed owners per item. Whoever starts an issue assigns themselves to it first; the other reviews the pull request. The names in the Work plan are only a suggested first split. The Kickoff is done together.
+- **Owners to start with, swaps as we go.** We start with the Work plan's owners (Yurii 2, 3, 5, 6; Roman 1, 4, 7, 8). Either of us can take over an item by agreeing in its issue first, then reassigning it. One person per issue at a time, so we never build the same thing. The Kickoff is done together.
 - **The MVP adds:** onboarding where the user picks at least 3 topics (saved on the phone, no registration); a "For you" feed filtered by those topics; images on cards (the official page's preview image); the ministry shown as publisher with an "Official source" mark. Screens: [docs/design/onboarding.png](design/onboarding.png) and [docs/design/app.png](design/app.png) (the Local / Global switch, Countries, Saved and Sign in with Apple in those screens are Phase 2).
 - **Phase 2:** registration and Sign in with Apple; Saved (favourites); choosing a country and the Local / Global switch; the Countries tab.
 - **The AI summary reads like news**, not two fixed blocks, and covers new laws, amendments and proposals. Still one AI call per article: it returns the news-style summary plus a short angle (1 to 2 sentences) for each of the article's 2 to 3 topics; the app shows the angle for the user's topics.
@@ -91,7 +91,7 @@ These are settled before any code, so neither of us ever waits for access. Agree
 
 ## Work plan: who builds what
 
-**Agreed 14 Oct:** work is shared. The Owner column below is only a suggested first split; whoever starts an issue assigns themselves to it.
+**Agreed 14 Oct:** these are the starting owners. An item can move to the other person by agreeing in its issue first, then reassigning it; one person per issue at a time.
 
 The MVP is a Kickoff plus 8 items, 4 each. This is our suggested split: Yurii owns how the news comes in and how the list looks; Roman owns the API, what the summary says and how the article detail looks.
 
