@@ -1,0 +1,22 @@
+{
+  // Official News backend: one Worker serves the API and runs the scheduled job.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "api",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  // NewsApp account (see docs/setup.md). Not a secret.
+  "account_id": "8dc93578877d397a693094f3e2b01029",
+  "workers_dev": true,
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "official-news",
+      "database_id": "67052e61-5544-4c6d-a182-1321192f3d0a",
+      "migrations_dir": "migrations"
+    }
+  ],
+  // Every minute: the fetcher checks the next 2 sources, then the summarizer
+  // handles up to 5 articles (the fetcher rule in docs/contract.md).
+  "triggers": { "crons": ["* * * * *"] },
+  "observability": { "enabled": true }
+}
