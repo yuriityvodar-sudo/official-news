@@ -17,6 +17,8 @@
   ],
   // Every minute: the fetcher checks the next 2 sources, then the summarizer
   // handles up to 5 articles (the fetcher rule in docs/contract.md).
+  // Workers AI writes the article summaries (item 7, docs/style-guide.md).
+  "ai": { "binding": "AI" },
   "triggers": { "crons": ["* * * * *"] },
   "observability": { "enabled": true }
 }

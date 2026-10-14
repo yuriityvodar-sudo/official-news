@@ -58,10 +58,15 @@ Base URL: `https://api.officialnews.workers.dev` (deployed), `http://localhost:8
 Defined in `server/migrations/0001_init.sql`.
 
 - `sources`: id, country, name, kind (`rss` | `page` | `api`), url, config (JSON: selectors for pages), language, verified_by (`domain` | `portal` | `wikidata`), verified_at, licence, status (`active` | `stale` | `moved` | `broken` | `blocked`), last_checked_at, last_item_at
-- `articles`: id, source_id, url (unique), original_title, published_at, date_only, fetched_at, text, text_expires_at, headline, short_summary, summary, image_url, original_language, topics (JSON), tags (JSON), importance, decision_type, is_news (NULL until the AI decides, 1 = official decision shown in the feed, 0 = hidden), summarized_at, model
+- `articles`: id, source_id, url (unique), original_title, published_at, date_only, fetched_at, text, text_expires_at, headline, short_summary, summary, image_url, original_language, topics (JSON), tags (JSON), importance, decision_type, is_news (NULL until the AI decides, 1 = official decision shown in the feed, 0 = hidden), summarized_at, model, summary_attempts
 
 Times (`published_at`, `fetched_at`, `summarized_at`, `text_expires_at`) are stored in UTC as `YYYY-MM-DDTHH:MM:SSZ`, without milliseconds, so they sort and compare as text.
 
 ## Scheduled job
 
 `server/src/index.ts` runs every minute: `runFetcher(env)` (item 6) takes the 2 sources with the oldest `last_checked_at`; then `runSummarizer(env, { maxArticles: 5 })` (item 7) makes one AI call per article. One run stays within the free plan: at most 50 outside requests and 10 ms of CPU.
+
+What the summarizer writes (`server/src/summarizer/`, rules in `docs/style-guide.md`):
+- It takes articles with no `summarized_at`, newest `fetched_at` first, also those with only a title.
+- One call to Workers AI (`@cf/zai-org/glm-4.7-flash`) fills `headline`, `short_summary`, `summary`, `decision_type`, `topics`, `tags`, `importance`, `is_news`, `summarized_at` and `model`. `is_news` 1 puts the article in the feed.
+- An unusable answer adds 1 to `summary_attempts`; after 3 the article stays hidden. An error from Workers AI itself (an outage, or the day's free allocation used up) costs no attempt and ends the run.
