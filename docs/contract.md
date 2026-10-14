@@ -60,7 +60,7 @@ Defined in `server/migrations/0001_init.sql`.
 - `sources`: id, country, name, kind (`rss` | `page` | `api`), url, config (JSON: selectors for pages), language, verified_by (`domain` | `portal` | `wikidata`), verified_at, licence, status (`active` | `stale` | `moved` | `broken` | `blocked`), last_checked_at, last_item_at, list_etag, list_last_modified (the list's validators, kept by the fetcher for sources with `conditionalGet`; migration `0003`)
   - The source list lives in `docs/sources.csv` (one row per source, with how it was verified as official). The deploy loads it into the live database on every change (`npm run sources:local` for a laptop). Loading adds or updates rows and never changes `status` or the check times, which the fetcher and health checks own.
   - Rows with `config` `{"seed": true}` come from the Kickoff seed so the app has data; the fetcher and the health checks skip them.
-- `articles`: id, source_id, url (unique), original_title, published_at, date_only, fetched_at, text, text_expires_at, headline, short_summary, summary, image_url, original_language, topics (JSON), tags (JSON), importance, decision_type, is_news (NULL until the AI decides, 1 = official decision shown in the feed, 0 = hidden), summarized_at, model
+- `articles`: id, source_id, url (unique), original_title, published_at, date_only, fetched_at, text, text_expires_at, headline, short_summary, summary, image_url, original_language, topics (JSON), tags (JSON), importance, decision_type, is_news (NULL until the AI decides, 1 = official decision shown in the feed, 0 = hidden), summarized_at, model, summary_attempts (migration `0004`), summary_claimed_at (migration `0005`)
 
 Times (`published_at`, `fetched_at`, `summarized_at`, `text_expires_at`) are stored in UTC as `YYYY-MM-DDTHH:MM:SSZ`, without milliseconds, so they sort and compare as text.
 
@@ -76,3 +76,9 @@ What the fetcher writes (`server/src/fetcher/`):
 - A date without a time is stored at 12:00 UTC (or the fetch time if that is earlier) with `date_only = 1`.
 - `url` may end in `#…` when one link holds several items (bill stages); the part before `#` is the page.
 - Every check sets `last_checked_at`; `last_item_at` is the newest item seen. `runFetcher` returns one `SourceCheck` per source (`ok`, `httpStatus`, `found`, `saved`, `waiting`, `undated`, `offSite`, `error`), which source health (item 8) can use, and logs it as JSON.
+
+What the summarizer writes (`server/src/summarizer/`, rules in `docs/style-guide.md`):
+- It takes articles with no `summarized_at`, newest `fetched_at` first, also those with only a title.
+- One call to Workers AI (`@cf/zai-org/glm-4.7-flash`) fills `headline`, `short_summary`, `summary`, `decision_type`, `topics`, `tags`, `importance`, `is_news`, `summarized_at` and `model`. `is_news` 1 puts the article in the feed.
+- An unusable answer adds 1 to `summary_attempts`; after 3 the article stays hidden. An error from Workers AI itself (an outage, or the day's free allocation used up) costs no attempt and ends the run.
+- A run claims its articles first (sets `summary_claimed_at` in the same statement that picks them), so an overlapping run takes other ones. A claim older than 10 minutes is from a run that was cut off and no longer counts; an error from Workers AI frees the claims at once.

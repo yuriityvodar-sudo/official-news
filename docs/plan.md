@@ -585,7 +585,7 @@ We read the latest official news (4–11 Oct) from all Phase 2 sources and the P
 - [ ] Google Play: Yurii's account or Roman's (GitHub and Cloudflare by Yurii, App Store Connect and TestFlight by Roman: agreed on our call)
 - [ ] Confirm the split in the Work plan
 - [ ] Secrets: confirm the five rules. Nothing secret in the repo (secret scanning and push protection on); each secret has one home (CI keys in GitHub Secrets, runtime keys as Cloudflare Worker secrets, local keys in .dev.vars or .env); Cloudflare, GitHub and Apple are each person's own login, and Workers AI and D1 need no key; the two shared keys (Claude API if chosen, App Store Connect upload) go through a shared password-manager vault, never chat; every key has a spending limit and a leaked key is rotated at once
-- [ ] AI model: Workers AI or Claude Haiku (item 7 decides; a Claude API key is needed only if Claude wins)
+- [x] AI model: Workers AI, `@cf/zai-org/glm-4.7-flash` (decided in item 7, 14 Oct; see `docs/decisions.md`)
 - [ ] Home countries in Phase 1: move Kenya, and Roman's country, up from Phase 2?
 - [ ] Labels for territories with disputed status (Taiwan, Palestine, Kosovo)
 - [ ] Later: app name

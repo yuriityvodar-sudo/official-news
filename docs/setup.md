@@ -2,7 +2,7 @@
 
 What exists right now, outside the code. Update this file whenever an account, service or resource is created or changed, in the same commit or pull request. Secrets never go here, only names and where they live.
 
-Last updated: 2026-10-14 (item 1)
+Last updated: 2026-10-14 (item 7)
 
 ## Accounts and services
 
@@ -14,6 +14,7 @@ Last updated: 2026-10-14 (item 1)
 | Roman's access to Cloudflare | Active since 2026-10-14 | Yurii | Role Administrator, scope NewsApp account only (cannot manage members or billing) |
 | workers.dev address | Created 2026-10-13 | Yurii | `officialnews.workers.dev`; a Worker named `api` would be served at `api.officialnews.workers.dev` |
 | Cloudflare Worker | Deployed 2026-10-14 | Roman (item 1) | Worker `api` in `server/`, live at `https://api.officialnews.workers.dev`. `.github/workflows/deploy.yml` applies D1 migrations and deploys on every merge to `main` that touches `server/` |
+| Workers AI | In use from item 7 | Roman | Binding `AI` in `server/wrangler.jsonc`, model `@cf/zai-org/glm-4.7-flash`. No key; it runs on the NewsApp account's free 10,000 Neurons a day (usage under AI, Workers AI in the dashboard). More than that needs the Workers Paid plan |
 | Cloudflare API token for deploys | Created 2026-10-14 | Yurii | Account API token `github-deploy` on NewsApp ("Edit Cloudflare Workers" template plus D1: Edit). Stored only as the GitHub Secret `CLOUDFLARE_API_TOKEN` (as repo owner, only Yurii can manage secrets) |
 | D1 database | Created 2026-10-14 | Kickoff | Name `official-news`, ID `67052e61-5544-4c6d-a182-1321192f3d0a`, region Western Europe. Migrations `0001_init` and `0002_seed` applied 2026-10-14 by the deploy workflow |
 | Apple Developer team | Yurii joined 2026-10-14 | Roman (Account Holder) | Team "RS Elite Pro s.r.o." (Roman's), team ID `YSF2FQGT86`. Yurii's role: Admin, all apps (checked in App Store Connect, Users and Access, 2026-10-14). Roman accepted the updated Program License Agreement on 2026-10-14. The Paid Applications Schedule still waits in App Store Connect, Business: needed before an App Store submission, not for TestFlight |
