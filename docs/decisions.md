@@ -4,6 +4,11 @@ Newest first. Every decision that changes how we build goes here, through a pull
 
 | Date | Decision | Why | Status |
 | --- | --- | --- | --- |
+| 2026-10-14 | Work is shared, not owned: whoever starts an issue assigns themselves; the other reviews. The plan's split is only a suggestion | Roman's proposal (#3) | Agreed |
+| 2026-10-14 | MVP adds topic onboarding (no registration), a topic-filtered "For you" feed, images on cards, ministry as publisher with an "Official source" mark. Phase 2: registration / Sign in with Apple, Saved, country choice and Local / Global, Countries tab | Roman's screens (#11); Yurii: no registration and no favourites in the MVP; Local is empty with G20 only | Agreed |
+| 2026-10-14 | AI summary written as news, covering laws, amendments and proposals, plus a short angle per topic; still one AI call per article | Roman (#8): the summary is the most valuable part | Agreed |
+| 2026-10-14 | Article format: `summary` becomes news-style text, new `angles`, `topics` (fixed list of 12) and `imageUrl`; `GET /articles` gets a `topics` filter | Follows from #8 and #11 | Agreed |
+| 2026-10-14 | G20 only in the MVP; disputed-territory labels after the MVP | #9, #10 | Agreed |
 | 2026-10-14 | `docs/plan.md` is accepted by both of us as the starting point for the MVP; remaining open questions are tracked as issues labelled `decision` | Approved by Roman in this pull request | Agreed |
 | 2026-10-14 | Roman chooses the bundle ID and creates the app in App Store Connect (RS Elite Pro team), with a TestFlight internal group for both of us | His Apple account hosts the app; Yurii asked Roman to own this step | Agreed |
 | 2026-10-13 | Until Roman joins the repo, setup changes (accounts, docs) go straight to `main` by Yurii and are listed in `docs/setup.md`. From Roman's first access, every change goes through a pull request | Roman reads the repo as it stands; nothing waits in an open pull request | Agreed |
@@ -14,10 +19,10 @@ Newest first. Every decision that changes how we build goes here, through a pull
 | 2026-10-13 | The plan is a proposal, not a constraint; documentation lives in the repo and is updated in the same pull request as the change | Roman asked that decisions stay documented and current | Agreed |
 | 2026-10-12 | TestFlight builds on demand (manual GitHub Actions run, any branch); CI checks run automatically on every pull request | Avoid a new build on every merge; we build when we want to test | Agreed |
 | 2026-10-12 | Shared Flutter core (`app/lib/core/`) and the scheduled handler stubs are built in the Kickoff | Both screens and both scheduled jobs depend on them | Agreed |
-| 2026-10-12 | Secrets: five rules (nothing in the repo; one home per secret; own logins; shared keys via a password-manager vault; spending limits and rotation) | Public repo | Agreed |
+| 2026-10-12 | Secrets: five rules (nothing in the repo; one home per secret; own logins; shared keys via a Bitwarden vault; spending limits and rotation) | Public repo; Bitwarden chosen by Roman (#6) | Agreed |
 | 2026-10-11 | Stack: Flutter app; Cloudflare Workers, Cron Triggers and D1; AI via Workers AI or Claude Haiku, chosen by the summary test in item 7 | One place for the backend, free tier covers the MVP, existing Cloudflare experience | Agreed |
 | 2026-10-11 | Fetcher runs every minute and checks 2 sources per run | Stays within the free plan's per-run limits (50 requests, 10 ms CPU) | Agreed |
-| 2026-10-11 | MVP = Kickoff + 8 items; Yurii owns 2, 3, 5, 6; Roman owns 1, 4, 7, 8 | Balanced split; each owner builds a whole story | Agreed |
+| 2026-10-11 | MVP = Kickoff + 8 items (split changed on 2026-10-14, see above) | Keep the MVP to the core loop | Agreed |
 | 2026-10-11 | Favorites, country filter, search, accounts and push notifications move after the MVP | Keep the MVP to the core loop: news in, summarized, shown | Agreed |
 | 2026-10-11 | Official sources only; show the latest published items by date; never trending or media sites | The product is what governments officially say | Agreed |
 | 2026-10-11 | GitHub flow: one repo, protected `main`, every pull request approved by the other person | First team project for both; every change seen by both | Agreed |

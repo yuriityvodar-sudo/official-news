@@ -9,11 +9,27 @@ A cross-platform app that shows what governments officially publish, summarized 
 **In the MVP**
 
 - A feed of the latest official news, newest first
-- An article detail screen with the AI summary ("What happened / Why it matters") and a link to the official source
+- Onboarding: the user picks at least 3 topics (saved on the phone, no registration), and the feed is filtered by them
+- An article detail screen with the news-style AI summary, the ministry as publisher with an "Official source" mark, and a link to the official source
+- Images on cards, taken from the official page's preview image
 - News collected automatically from verified official sites, summarized once by AI
 - A fast app: it opens instantly from the last feed saved on the phone
 
-**Not in the MVP:** favorites, country filter, login and profiles, search, push notifications, sharing to social networks and reposting, personalized feed, store release and Play upload (Android runs in the emulator until then). The data model is built so each of these can be added later without rework.
+**Not in the MVP:** favorites, choosing a country and the Local / Global switch, the Countries tab, login and Sign in with Apple, country filter, search, push notifications, sharing to social networks and reposting, personalized feed, store release and Play upload (Android runs in the emulator until then). The data model is built so each of these can be added later without rework.
+
+## Agreed changes, 14 Oct 2026
+
+After Roman's review (issues #3 to #11), these replace anything older further down where they differ.
+
+- **Work is shared, not owned.** No fixed owners per item. Whoever starts an issue assigns themselves to it first; the other reviews the pull request. The names in the Work plan are only a suggested first split. The Kickoff is done together.
+- **The MVP adds:** onboarding where the user picks at least 3 topics (saved on the phone, no registration); a "For you" feed filtered by those topics; images on cards (the official page's preview image); the ministry shown as publisher with an "Official source" mark. Screens: [docs/design/onboarding.png](design/onboarding.png) and [docs/design/app.png](design/app.png) (the Local / Global switch, Countries, Saved and Sign in with Apple in those screens are Phase 2).
+- **Phase 2:** registration and Sign in with Apple; Saved (favourites); choosing a country and the Local / Global switch; the Countries tab.
+- **The AI summary reads like news**, not two fixed blocks, and covers new laws, amendments and proposals. Still one AI call per article: it returns the news-style summary plus a short angle (1 to 2 sentences) for each of the article's 2 to 3 topics; the app shows the angle for the user's topics.
+- **Countries:** G20 only in the MVP. Labels for disputed territories wait until after the MVP.
+- **Secrets:** shared keys go through **Bitwarden**.
+- **Google Play:** Yurii's account, Roman as Admin.
+
+**Topic list (fixed, in the contract; the AI picks from it):** foreign-affairs, economy, security-defence, health, climate, trade, technology, energy, migration, elections, human-rights, science.
 
 ## Reviewing this plan (for Roman and his Claude)
 
@@ -75,6 +91,8 @@ These are settled before any code, so neither of us ever waits for access. Agree
 
 ## Work plan: who builds what
 
+**Agreed 14 Oct:** work is shared. The Owner column below is only a suggested first split; whoever starts an issue assigns themselves to it.
+
 The MVP is a Kickoff plus 8 items, 4 each. This is our suggested split: Yurii owns how the news comes in and how the list looks; Roman owns the API, what the summary says and how the article detail looks.
 
 | # | Item | Owner | Evenings | Done when |
@@ -130,21 +148,24 @@ official-news/
   "dateOnly": false,
   "headline": "Poland condemns attack on Riyadh airport",
   "shortSummary": "Poland condemned the attack, which killed 12 people and injured more than 300.",
-  "summary": { "whatHappened": "…", "whyItMatters": "…" },
+  "summary": "Poland's foreign ministry condemned the 10 October attack on King Khalid International Airport in Riyadh… (news-style, 2 to 4 short paragraphs)",
+  "angles": { "foreign-affairs": "Poland joins Spain, France, Italy and the UN in condemning the attack.", "security-defence": "…" },
+  "imageUrl": "https://www.gov.pl/photo/… (or null)",
   "originalTitle": "Oświadczenie MSZ ws. ataku w Rijadzie",
   "originalLanguage": "pl",
-  "category": "foreign-affairs",
+  "topics": ["foreign-affairs", "security-defence"],
   "tags": ["Saudi Arabia", "Houthis", "aviation"],
   "importance": 4,
   "originalUrl": "https://www.gov.pl/web/dyplomacja/oswiadczenie-msz-ws-ataku-w-rijadzie"
 }
 ```
 
-The feed card reads `headline` and `shortSummary`; the detail screen reads `summary`. Before item 7 is live, `headline` falls back to `originalTitle` and the summary fields are empty.
+The feed card reads `headline`, `shortSummary` and `imageUrl`; the detail screen reads `summary` and the `angles` for the user's topics. `topics` holds 1 to 3 values from the fixed topic list. Before item 7 is live, `headline` falls back to `originalTitle` and the summary fields are empty.
 
 **API**
 
 - `GET /articles?limit=20&cursor=<c>` → `{ "items": [Article], "nextCursor": "…" | null, "top": [Article] }`: news from the last 7 days where `is_news = 1`, newest first; `cursor` is an opaque string; `top` only on the first page (last 24 hours, highest importance, at most 2 per country, up to 5) and may be an empty array, so the app must not depend on it
+- `GET /articles?topics=economy,health` → only articles with at least one of those topics (the app sends the user's topics)
 - `GET /articles?since=<ISO time>` → only articles newer than that time, used for the "new updates" check
 - `GET /articles/:id` → `Article`
 - `GET /health` → sources per status, time of the last fetcher run
@@ -152,7 +173,7 @@ The feed card reads `headline` and `shortSummary`; the detail screen reads `summ
 **Database (D1)**
 
 - `sources`: id, country, name, kind (`rss` | `page` | `api`), url, config (JSON: selectors for pages), language, verified\_by (`domain` | `portal` | `wikidata`), verified\_at, licence, status (`active` | `stale` | `moved` | `broken` | `blocked`), last\_checked\_at, last\_item\_at
-- `articles`: id, source\_id, url (unique), original\_title, published\_at, date\_only, fetched\_at, text, text\_expires\_at, headline, short\_summary, what\_happened, why\_it\_matters, original\_language, category, tags (JSON), importance, is\_news, summarized\_at, model
+- `articles`: id, source\_id, url (unique), original\_title, published\_at, date\_only, fetched\_at, text, text\_expires\_at, headline, short\_summary, summary, angles (JSON), image\_url, original\_language, topics (JSON), tags (JSON), importance, is\_news, summarized\_at, model
 
 **Fetcher rule (keeps us on the free plan)**
 
@@ -184,19 +205,19 @@ Each item becomes one GitHub issue owned by one person. **Must** is what the ite
 
 ### 2. Design of the feed and the article detail (Yurii)
 
-- **Must:** feed card (country, source, time, headline, short summary) and the detail layout (headline, source, date, What happened / Why it matters, AI label, "Read the official source").
+- **Must:** feed card (country, source, time, headline, short summary) and onboarding (pick at least 3 topics) and the detail layout (headline, ministry as publisher with "Official source" mark, date, news-style summary with the angle for the user's topics, AI label, "Read the official source").
 - **Suggested:** Top today, Today / Yesterday groups, "new updates" pill, dimmed read items, share button.
 - **Done when:** the designs are linked in the issue and approved by Roman.
 
 ### 3. Feed screen (Yurii)
 
-- **Must:** reads `API_URL` (passed with `--dart-define`); cards from `GET /articles`, scrolling for more; pull to refresh; loading, error and empty states.
+- **Must:** reads `API_URL` (passed with `--dart-define`); topic onboarding saved on the phone; cards with images from `GET /articles?topics=…`, scrolling for more; pull to refresh; loading, error and empty states.
 - **Suggested:** the speed rules (saved last feed, `since` checks); Top today; day groups; "new updates" pill; dimmed read items; a cap per source per day or interleaving by country, so prolific sources do not flood the list.
 - **Done when:** on the iOS Simulator and Android emulator the feed shows articles from the deployed API.
 
 ### 4. Article detail screen (Roman)
 
-- **Must:** opens from a feed card using the Article already in the list; shows headline, country, source, date, What happened / Why it matters, the AI label with original language, and "Read the official source"; shows the original title when no summary exists yet.
+- **Must:** opens from a feed card using the Article already in the list; shows headline, the ministry as publisher with an "Official source" mark, date, image, the news-style summary and the angle for the user's topics, the AI label with original language, and "Read the official source"; shows the original title when no summary exists yet.
 - **Suggested:** share button (the system share sheet); layout details beyond the approved design.
 - **Done when:** every article from the API opens and its source link works on both simulators.
 
@@ -214,7 +235,7 @@ Each item becomes one GitHub issue owned by one person. **Must** is what the ite
 
 ### 7. AI summaries (Roman)
 
-- **Must:** `docs/style-guide.md` and the prompt; one call per article returning headline, shortSummary, whatHappened, whyItMatters, category, tags, importance and isNews; `summarizer.run()`, called by the scheduled handler every minute, summarizes up to 5 articles that have text and no summary; noise is hidden from the feed.
+- **Must:** `docs/style-guide.md` and the prompt; one call per article returning headline, shortSummary, summary (news-style), angles per topic, topics (from the fixed list), tags, importance and isNews; `summarizer.run()`, called by the scheduled handler every minute, summarizes up to 5 articles that have text and no summary; noise is hidden from the feed.
 - **Suggested:** a 25-article test set with `npm run eval`; comparing Workers AI and Claude Haiku and recording the choice and cost in `docs/decisions.md`.
 - **Done when:** new articles get all summary fields within an hour of being fetched.
 
@@ -384,7 +405,7 @@ The feed shows official news from the last 7 days, newest first, with a short "T
 
 - Plain-language headline written by the AI
 - Country, source, publish date
-- AI summary: What happened / Why it matters, labelled as AI and showing the original language
+- AI summary written as news, plus the angle for the user's topics, labelled as AI and showing the original language
 - "Read the official source" button
 - Share button
 
@@ -397,7 +418,7 @@ The summary is the product: one AI call per article, run once on the server and 
 **What each call returns**
 
 - Plain-language headline
-- A short summary for the feed and a full summary for the detail screen (What happened / Why it matters), in English
+- A short summary for the feed and a news-style summary for the detail screen, plus a short angle for each of the article's topics, in English
 - Translation note (original language)
 - Category, topics, people and organisations mentioned, country
 - Importance score 1–5
@@ -564,7 +585,6 @@ We read the latest official news (4–11 Oct) from all Phase 2 sources and the P
 - [ ] Google Play: Yurii's account or Roman's (GitHub and Cloudflare by Yurii, App Store Connect and TestFlight by Roman: agreed on our call)
 - [ ] Confirm the split in the Work plan
 - [ ] Secrets: confirm the five rules. Nothing secret in the repo (secret scanning and push protection on); each secret has one home (CI keys in GitHub Secrets, runtime keys as Cloudflare Worker secrets, local keys in .dev.vars or .env); Cloudflare, GitHub and Apple are each person's own login, and Workers AI and D1 need no key; the two shared keys (Claude API if chosen, App Store Connect upload) go through a shared password-manager vault, never chat; every key has a spending limit and a leaked key is rotated at once
-- [ ] Summary style: "What happened / Why it matters" bullets, or a short paragraph
 - [ ] AI model: Workers AI or Claude Haiku (item 7 decides; a Claude API key is needed only if Claude wins)
 - [ ] Home countries in Phase 1: move Kenya, and Roman's country, up from Phase 2?
 - [ ] Labels for territories with disputed status (Taiwan, Palestine, Kosovo)
