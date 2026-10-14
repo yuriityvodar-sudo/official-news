@@ -1,15 +1,144 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/article.dart';
+import '../../core/countries.dart';
+import '../../core/languages.dart';
 import '../../core/news_widgets.dart';
 import '../../core/theme.dart';
 
-/// Kickoff placeholder in the agreed look: publisher, decision type, serif
-/// headline and summary. Item 4 replaces it with the real article screen
-/// (image, share, "Read the official decision").
+/// Opens the official page; tests pass their own.
+typedef OpenLink = Future<void> Function(Uri uri);
+
+/// Opens the system share sheet; `origin` anchors it on iPad. Tests pass their own.
+typedef ShareArticle = Future<void> Function(Article article, Rect? origin);
+
+/// The official page in the in-app browser (Safari view on iOS, custom tab on Android).
+Future<void> openOfficialPage(Uri uri) async {
+  await launchUrl(uri, mode: LaunchMode.inAppBrowserView);
+}
+
+/// Shares the headline, the short summary and the official link.
+Future<void> shareArticle(Article article, Rect? origin) async {
+  final summary = article.shortSummary;
+  await SharePlus.instance.share(
+    ShareParams(
+      subject: article.headline,
+      text: [
+        article.headline,
+        if (summary != null && summary.isNotEmpty) summary,
+        'Official source: ${article.originalUrl}',
+      ].join('\n\n'),
+      sharePositionOrigin: origin,
+    ),
+  );
+}
+
+/// Item 4: one official decision (docs/design/mvp.png). The ministry as
+/// publisher, the decision type, the headline, the AI summary and the way to
+/// the official page. It shows the Article the feed already has; no API call.
 class DetailScreen extends StatelessWidget {
-  const DetailScreen({super.key, required this.article});
+  const DetailScreen({
+    super.key,
+    required this.article,
+    this.openLink = openOfficialPage,
+    this.share = shareArticle,
+  });
+
+  final Article article;
+  final OpenLink openLink;
+  final ShareArticle share;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = NewsText.from(context);
+    final scheme = Theme.of(context).colorScheme;
+    final summary = article.summary?.trim();
+    final hasSummary = summary != null && summary.isNotEmpty;
+
+    return Scaffold(
+      appBar: CupertinoNavigationBar(
+        backgroundColor: scheme.surface,
+        border: null,
+        trailing: Builder(
+          builder: (buttonContext) => CupertinoButton(
+            padding: EdgeInsets.zero,
+            onPressed: () => share(article, _originOf(buttonContext)),
+            child: const Icon(
+              CupertinoIcons.share,
+              color: AppColors.accent,
+              semanticLabel: 'Share',
+            ),
+          ),
+        ),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 48),
+        children: [
+          _Publisher(article),
+          const SizedBox(height: 18),
+          KindLabel(article),
+          Text(article.headline, style: text.articleHeadline),
+          const SizedBox(height: 10),
+          Text(_published(article), style: text.meta),
+          if (article.imageUrl != null) _Picture(article.imageUrl!),
+          const SizedBox(height: 22),
+          if (hasSummary) ...[
+            _AiLabel(article),
+            const SizedBox(height: 10),
+            for (final paragraph in _paragraphs(summary)) ...[
+              Text(paragraph, style: text.body),
+              const SizedBox(height: 14),
+            ],
+          ] else
+            const _SummaryComing(),
+          const SizedBox(height: 14),
+          _OfficialLink(
+            article: article,
+            onTap: () {
+              final uri = Uri.tryParse(article.originalUrl);
+              // Only web pages: the link comes from a source site, not from us.
+              if (uri != null && (uri.scheme == 'https' || uri.scheme == 'http')) {
+                openLink(uri);
+              }
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+Rect? _originOf(BuildContext context) {
+  final box = context.findRenderObject();
+  return box is RenderBox ? box.localToGlobal(Offset.zero) & box.size : null;
+}
+
+/// "14 October 2026, 11:30", or only the day when the source gave no time.
+String _published(Article article) {
+  if (article.dateOnly) return fullDate(article.publishedAt);
+  final local = article.publishedAt.toLocal();
+  final time =
+      '${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
+  return '${fullDate(article.publishedAt)}, $time';
+}
+
+/// The summary's paragraphs: the AI separates them with a blank line.
+List<String> _paragraphs(String summary) => summary
+    .split(RegExp(r'\n\s*\n'))
+    .map((p) => p.trim())
+    .where((p) => p.isNotEmpty)
+    .toList();
+
+/// The site's name for captions and the link card: "gov.pl".
+String _site(String url) =>
+    (Uri.tryParse(url)?.host ?? '').replaceFirst(RegExp(r'^www\.'), '');
+
+/// The ministry as the publisher, with the official-source mark.
+class _Publisher extends StatelessWidget {
+  const _Publisher(this.article);
 
   final Article article;
 
@@ -17,35 +146,202 @@ class DetailScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final text = NewsText.from(context);
     final scheme = Theme.of(context).colorScheme;
-    return Scaffold(
-      appBar: CupertinoNavigationBar(
-        backgroundColor: scheme.surface,
-        border: null,
-      ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 40),
+    return Row(
+      children: [
+        Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: scheme.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(
+            Icons.account_balance_outlined,
+            size: 22,
+            color: scheme.onSurface,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                article.source.name,
+                style: text.publisher,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 2),
+              Row(
+                children: [
+                  Flexible(
+                    child: Text(
+                      '${countryName(article.country)} · ',
+                      style: text.meta,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const Icon(
+                    CupertinoIcons.checkmark_seal,
+                    size: 15,
+                    color: AppColors.verified,
+                  ),
+                  const SizedBox(width: 3),
+                  Text('Official source', style: text.meta),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// The preview image of the official page, with where it comes from.
+class _Picture extends StatelessWidget {
+  const _Picture(this.url);
+
+  final String url;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = NewsText.from(context);
+    final media = MediaQuery.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(top: 18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          PublisherLine(article),
-          const SizedBox(height: 16),
-          KindLabel(article),
-          Text(article.headline, style: text.articleHeadline),
-          const SizedBox(height: 10),
-          Text(fullDate(article.publishedAt), style: text.meta),
-          const SizedBox(height: 20),
-          Text(
-            article.originalLanguage == 'en'
-                ? 'Summary by AI'
-                : 'Summary by AI · original in ${article.originalLanguage.toUpperCase()}',
-            style: text.meta,
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: AspectRatio(
+              aspectRatio: 16 / 9,
+              child: Image.network(
+                url,
+                fit: BoxFit.cover,
+                // Decoded at screen size: official preview images can be several MB.
+                cacheWidth: (media.size.width * media.devicePixelRatio).round(),
+                errorBuilder: (_, _, _) => const SizedBox.shrink(),
+              ),
+            ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
           Text(
-            article.summary ?? article.shortSummary ?? 'No summary yet.',
-            style: text.body,
+            'Image: ${_site(url)}',
+            style: text.meta.copyWith(fontSize: 12),
           ),
-          const SizedBox(height: 24),
-          SelectableText(article.originalUrl, style: text.meta),
         ],
+      ),
+    );
+  }
+}
+
+/// "Summary by AI · translated from German".
+class _AiLabel extends StatelessWidget {
+  const _AiLabel(this.article);
+
+  final Article article;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = NewsText.from(context);
+    final language = article.originalLanguage;
+    final label = language == 'en'
+        ? 'Summary by AI'
+        : 'Summary by AI · translated from ${languageName(language)}';
+    return Row(
+      children: [
+        Icon(Icons.auto_awesome_outlined, size: 15, color: text.meta.color),
+        const SizedBox(width: 5),
+        Flexible(child: Text(label, style: text.meta)),
+      ],
+    );
+  }
+}
+
+/// Shown until the AI has written the summary; the headline is then the original title.
+class _SummaryComing extends StatelessWidget {
+  const _SummaryComing();
+
+  @override
+  Widget build(BuildContext context) {
+    final text = NewsText.from(context);
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(CupertinoIcons.clock, size: 18, color: text.meta.color),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'The AI summary is on its way. Until then, the headline is the '
+              'original title, and the official page has the full text.',
+              style: text.meta,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// "Read the official decision": the site and the original title, opening the page.
+class _OfficialLink extends StatelessWidget {
+  const _OfficialLink({required this.article, required this.onTap});
+
+  final Article article;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = NewsText.from(context);
+    final scheme = Theme.of(context).colorScheme;
+    return Semantics(
+      button: true,
+      label: 'Read the official decision on ${_site(article.originalUrl)}',
+      excludeSemantics: true,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(16, 14, 14, 14),
+          decoration: BoxDecoration(
+            border: Border.all(color: scheme.outlineVariant),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Read the official decision', style: text.publisher),
+                    const SizedBox(height: 3),
+                    Text(
+                      '${_site(article.originalUrl)} · ${article.originalTitle}',
+                      style: text.meta,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              const Icon(
+                CupertinoIcons.arrow_up_right_square,
+                color: AppColors.accent,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
