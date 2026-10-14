@@ -4,10 +4,11 @@ Newest first. Every decision that changes how we build goes here, through a pull
 
 | Date | Decision | Why | Status |
 | --- | --- | --- | --- |
-| 2026-10-14 | Work is shared, not owned: whoever starts an issue assigns themselves; the other reviews. The plan's split is only a suggestion | Roman's proposal (#3) | Agreed |
-| 2026-10-14 | MVP adds topic onboarding (no registration), a topic-filtered "For you" feed, images on cards, ministry as publisher with an "Official source" mark. Phase 2: registration / Sign in with Apple, Saved, country choice and Local / Global, Countries tab | Roman's screens (#11); Yurii: no registration and no favourites in the MVP; Local is empty with G20 only | Agreed |
-| 2026-10-14 | AI summary written as news, covering laws, amendments and proposals, plus a short angle per topic; still one AI call per article | Roman (#8): the summary is the most valuable part | Agreed |
-| 2026-10-14 | Article format: `summary` becomes news-style text, new `angles`, `topics` (fixed list of 12) and `imageUrl`; `GET /articles` gets a `topics` filter | Follows from #8 and #11 | Agreed |
+| 2026-10-14 | Start with the plan's owners (Yurii 2, 3, 5, 6; Roman 1, 4, 7, 8) and share as we go: an item moves to the other person by agreeing in its issue, then reassigning; one person per issue at a time | Roman wants to share the work as we go (#3); Yurii wants it clear who builds what, so we never build the same thing | Agreed |
+| 2026-10-14 | The MVP is the feed and the article detail screen, the same for every user, with images on cards and the ministry as publisher with an "Official source" mark. After the MVP: onboarding with topics and a "For you" feed, a full summary per topic and topic analysis, country choice and Local / Global, registration / Sign in with Apple, Saved, Countries tab | Yurii (review of PR #12): topics and countries are a separate feature; keep the MVP small and improve later | Proposed |
+| 2026-10-14 | Sources publish official decisions only: laws, amendments, proposals, government and ministry meeting agendas, minutes and outcomes; opinion pieces, interviews and commentary are hidden | Roman (review of PR #12) | Agreed |
+| 2026-10-14 | AI summary written as news, facts from the article only, one summary for everyone; the same single call tags 1 to 3 topics from the fixed list of 12 | Roman (#8): the summary is the most valuable part; topic summaries wait for the topic feature | Proposed |
+| 2026-10-14 | Article format: `summary` becomes news-style text, new `topics` (fixed list of 12) and `imageUrl` | Follows from #8 and #11 | Proposed |
 | 2026-10-14 | G20 only in the MVP; disputed-territory labels after the MVP | #9, #10 | Agreed |
 | 2026-10-14 | `docs/plan.md` is accepted by both of us as the starting point for the MVP; remaining open questions are tracked as issues labelled `decision` | Approved by Roman in this pull request | Agreed |
 | 2026-10-14 | Roman chooses the bundle ID and creates the app in App Store Connect (RS Elite Pro team), with a TestFlight internal group for both of us | His Apple account hosts the app; Yurii asked Roman to own this step | Agreed |

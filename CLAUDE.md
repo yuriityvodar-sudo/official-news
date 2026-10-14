@@ -21,7 +21,7 @@ Two people build this app, Yurii and Roman, each with their own Claude Code. The
 
 ## Who builds what
 
-Work is shared, not owned (agreed 14 Oct 2026). Before starting an issue, assign yourself to it so the other person does not start the same one; the other person reviews the pull request. The table below is only a suggested first split from the plan.
+We start with these owners and can change them as we go (agreed 14 Oct 2026). To take over an item owned by the other person, agree in its issue first, then reassign it. One person per issue at a time: the assignee is the only one building it, and the other person reviews the pull request.
 
 | Item | Owner |
 | --- | --- |
