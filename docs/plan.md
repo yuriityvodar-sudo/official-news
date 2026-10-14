@@ -27,7 +27,7 @@ After Roman's review (issues #3 to #11), these replace anything older further do
 - **The AI summary reads like news**, not two fixed blocks, facts from the article only. One AI call per article returns one news-style summary, the same for everyone, and tags the article with 1 to 3 topics from the fixed list, so the topic features have data when they come.
 - **The app looks and feels like Apple News** on iOS and Android, light and dark: large bold titles, red accent, serif headlines, publisher line above each headline, big images, iOS navigation and gestures. Each headline has a red decision-type label (Law, Bill, Cabinet decision…). Screens: [docs/design/mvp.png](design/mvp.png).
 - **Countries:** G20 only in the MVP. Labels for disputed territories wait until after the MVP.
-- **Secrets:** shared keys go through **Bitwarden**.
+- **Secrets:** no shared password vault. A key never travels between us: whoever creates it puts it straight into its one home. Yurii creates the keys that live in GitHub Secrets, the App Store Connect API key included (replaces Bitwarden, 14 Oct).
 - **Google Play:** Yurii's account, Roman as Admin.
 
 **Topic list (fixed, in the contract; the AI picks from it):** foreign-affairs, economy, security-defence, health, climate, trade, technology, energy, migration, elections, human-rights, science.
