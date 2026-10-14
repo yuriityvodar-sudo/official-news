@@ -17,9 +17,11 @@ Two people build this app, Yurii and Roman, each with their own Claude Code. The
 - Small pull requests, each ending with a visible result. Reviewed within a day.
 - The reviewer's Claude Code leaves review comments on GitHub; the author's Claude Code works through them and flags anything that needs a human decision; the reviewer approves.
 - CI checks run on every pull request. TestFlight builds are on demand only (manual GitHub Actions run).
-- Each item in the work plan has one owner. Changes inside someone else's item: open an issue, or a small pull request the owner reviews. Never push to someone else's branch.
+- One person per issue at a time: assign yourself before starting. Never push to someone else's branch; comment on their pull request instead.
 
-## Ownership (work plan in docs/plan.md)
+## Who builds what
+
+We start with these owners and can change them as we go (agreed 14 Oct 2026). To take over an item owned by the other person, agree in its issue first, then reassign it. One person per issue at a time: the assignee is the only one building it, and the other person reviews the pull request.
 
 | Item | Owner |
 | --- | --- |
