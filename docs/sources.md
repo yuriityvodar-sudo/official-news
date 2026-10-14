@@ -11,14 +11,25 @@ Never add media, aggregators or trending lists, and never a site that needs a bo
 
 ## `config`
 
-Hints for the fetcher (item 6), as JSON. A draft from the research; item 6 settles the final keys.
+How the fetcher (item 6) reads a source, as JSON. Types: `server/src/fetcher/types.ts`.
 
-- `match` / `exclude`: keep or drop items by `title` or `category` (regular expressions).
-- Pages (`kind: page`): CSS selectors for `item`, `link`, `title`, `date`, `category`, `summary`, `image`; `@attr` reads an attribute.
-- APIs (`kind: api`): where the list is (`items`) and which fields hold `title`, `date` and `link`.
-- `date`: a field, selector or format when the date is not a standard feed date.
-- `itemPages: false`: do not open item pages (robots.txt forbids it); summarize from the list text.
-- `note`: anything else the fetcher needs to know.
+**Any kind**
+- `match` / `exclude`: keep or drop items whose `title` or `category` matches a regular expression; `(?i)` at the start ignores case.
+- `itemPages`: `false` never opens item pages (robots.txt forbids it, or they are built by JavaScript); the list text is used.
+- `textSelector`: CSS selector of the main text on item pages (default `main`, then `article`, then `body`).
+- `encoding`: character set when the server does not send one, e.g. `iso-8859-1`.
+- `newStageIsNewItem`: a new date on the same link is a new item (bill stages); the stored URL gets `#YYYY-MM-DD`.
+- `crawlDelaySeconds`: wait between our requests to the site (from its robots.txt).
+- `textDays`: days to keep the extracted text (default 30).
+- `note`: anything else people should know.
+
+**Feeds (`kind: rss`)**: RSS 2.0, RSS 1.0 and Atom are read without settings. `title`: another element holds the title (e.g. `description`). `date.field`: another element holds the date (e.g. `valueDate`).
+
+**Pages (`kind: page`)**: `item` selects one list entry; inside it `link` (default `a`, reads `href`), `title` (default: the link's text), `summary`, `image`, `category` are CSS selectors. `selector@attr` reads an attribute; `@attr` reads the item element itself.
+
+**APIs (`kind: api`)**: `items` is the dotted path to the list (empty for a top-level list); `itemRoot` a path inside each entry; `title`, `link`, `text` and `key` are paths or `{path}` templates. A string holding JSON is parsed when a path goes through it. `keep`: `{ "path": "regex" }`, entries that do not match are skipped. `key` is added to the stored URL so one link can hold several items.
+
+**Dates (`date`)**: without settings, ISO 8601, feed dates and day-first `dd/mm/yyyy` are understood. `selector` + `attr` (pages), `field` (feeds; APIs accept a list, first non-empty wins), `format` (`fr` for "14 octobre 2026", or a pattern with `yyyy mm dd HH MM`), `utcOffset` for local times without a zone (e.g. `+03:00`), `dateOnly` to ignore a meaningless time, `fromLink` (a regular expression whose group is `yyyymmdd` in the item link).
 
 ## Open points
 
