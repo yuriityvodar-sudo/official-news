@@ -37,6 +37,10 @@ export interface SourceCheck {
   saved: number;
   /** New items left for the next check (no page budget left to read their text). */
   waiting: number;
+  /** Items skipped because they had no date (a broken date selector would otherwise flood the feed as today's news). */
+  undated: number;
+  /** Items skipped because their link leaves the source's site. */
+  offSite: number;
   error: string | null;
 }
 
@@ -60,13 +64,14 @@ interface Run {
 
 async function request(run: Run, url: string, accept: string, crawlDelaySeconds = 0, extraHeaders: Record<string, string> = {}): Promise<Response> {
   if (run.requests >= LIMITS.requestsPerRun) throw new Error("request budget for this run used up");
+  // Counted before the first await, so two checks running side by side cannot both pass the limit.
+  run.requests++;
   const host = new URL(url).host;
   const last = run.lastRequest.get(host);
   if (crawlDelaySeconds && last !== undefined) {
     const wait = last + crawlDelaySeconds * 1000 - Date.now();
     if (wait > 0) await run.sleep(wait);
   }
-  run.requests++;
   run.lastRequest.set(host, Date.now());
   return run.fetch(url, {
     headers: { "user-agent": USER_AGENT, accept, ...extraHeaders },
@@ -100,6 +105,27 @@ function charsetOf(res: Response, config: SourceConfig, bytes: ArrayBuffer): str
   if (config.encoding) return config.encoding;
   const head = new TextDecoder().decode(bytes.slice(0, 200));
   return head.match(/encoding=["']([^"']+)["']/i)?.[1] ?? null;
+}
+
+/**
+ * Keeps an item only when its link stays on the source's own site (same host, or
+ * a subdomain of it without "www."), or on a host the config allows, and only over
+ * https: we show the text with the "Official source" mark. http links on those
+ * hosts are upgraded, since every source is read over https.
+ */
+function onSourceSite(item: FoundItem, sourceUrl: string, config: SourceConfig): FoundItem | null {
+  let url: URL;
+  try {
+    url = new URL(item.url);
+  } catch {
+    return null;
+  }
+  const site = new URL(sourceUrl).host.replace(/^www\./, "");
+  const host = url.host;
+  const allowed = host === site || host.endsWith(`.${site}`) || (config.allowedHosts ?? []).includes(host);
+  if (!allowed || (url.protocol !== "https:" && url.protocol !== "http:")) return null;
+  if (url.protocol === "http:") url.protocol = "https:";
+  return { ...item, url: url.toString() };
 }
 
 function passesFilters(item: FoundItem, config: SourceConfig): boolean {
@@ -160,7 +186,7 @@ async function readItemPage(run: Run, item: FoundItem, config: SourceConfig): Pr
 }
 
 async function checkSource(run: Run, source: SourceRow): Promise<SourceCheck> {
-  const check: SourceCheck = { sourceId: source.id, ok: false, httpStatus: null, found: 0, saved: 0, waiting: 0, error: null };
+  const check: SourceCheck = { sourceId: source.id, ok: false, httpStatus: null, found: 0, saved: 0, waiting: 0, undated: 0, offSite: 0, error: null };
   const config = readConfig(source);
   try {
     const blocked = await blockedBy(run, source.url);
@@ -176,12 +202,21 @@ async function checkSource(run: Run, source: SourceRow): Promise<SourceCheck> {
     }
 
     const cutoff = toStoredTime(new Date(run.now.getTime() - LIMITS.maxAgeDays * 86_400_000));
+    const fetchedAt = toStoredTime(run.now);
     const seen = new Set<string>();
-    const sourceHost = new URL(source.url).host;
     const listed = items
       .filter((item) => passesFilters(item, config))
-      // Sources are read over https only; links a feed still writes as http on the same site are upgraded.
-      .map((item) => (item.url.startsWith("http://") && new URL(item.url).host === sourceHost ? { ...item, url: `https://${item.url.slice(7)}` } : item))
+      .map((item) => onSourceSite(item, source.url, config))
+      .filter((item): item is FoundItem => {
+        if (item === null) check.offSite++;
+        return item !== null;
+      })
+      .filter((item) => {
+        if (item.publishedAt === null) check.undated++;
+        return item.publishedAt !== null;
+      })
+      // A time in the future (a missing or wrong zone) would sit on top of the feed: never later than now.
+      .map((item) => (item.publishedAt! > fetchedAt ? { ...item, publishedAt: fetchedAt } : item))
       .map((item) =>
         config.newStageIsNewItem && item.publishedAt ? { ...item, url: `${item.url}#${item.publishedAt.slice(0, 10)}` } : item,
       )
@@ -190,8 +225,8 @@ async function checkSource(run: Run, source: SourceRow): Promise<SourceCheck> {
     check.ok = true;
 
     const recent = listed
-      .filter((item) => item.publishedAt === null || item.publishedAt >= cutoff)
-      .sort((a, b) => (b.publishedAt ?? "").localeCompare(a.publishedAt ?? ""))
+      .filter((item) => item.publishedAt! >= cutoff)
+      .sort((a, b) => b.publishedAt!.localeCompare(a.publishedAt!))
       .slice(0, LIMITS.itemsPerSource);
     const newest = listed.reduce<string | null>((max, i) => (i.publishedAt && (!max || i.publishedAt > max) ? i.publishedAt : max), null);
 
@@ -205,7 +240,6 @@ async function checkSource(run: Run, source: SourceRow): Promise<SourceCheck> {
       for (const r of results) known.add(r.url);
     }
 
-    const fetchedAt = toStoredTime(run.now);
     const expires = toStoredTime(new Date(run.now.getTime() + (config.textDays ?? LIMITS.textDays) * 86_400_000));
     const inserts: D1PreparedStatement[] = [];
     for (const found of recent.filter((i) => !known.has(i.url)).slice(0, LIMITS.newPerSource)) {
@@ -229,8 +263,8 @@ async function checkSource(run: Run, source: SourceRow): Promise<SourceCheck> {
           source.id,
           item.url,
           item.title.slice(0, 500),
-          item.publishedAt ?? fetchedAt,
-          item.publishedAt === null || item.dateOnly ? 1 : 0,
+          item.publishedAt,
+          item.dateOnly ? 1 : 0,
           fetchedAt,
           item.text ? item.text.slice(0, LIMITS.maxText) : null,
           item.text ? expires : null,
@@ -285,28 +319,29 @@ export async function runFetcher(env: Env, options: FetcherOptions = {}): Promis
     lastRequest: new Map(),
   };
 
+  // Claim the sources before reading them, in one statement: a run that is cut off
+  // (CPU or time limit) still moves them to the back of the line, and an overlapping
+  // run cannot pick the same sites.
   const { results: sources } = await env.DB.prepare(
-    `SELECT id, country, name, kind, url, config, language, last_checked_at, list_etag, list_last_modified FROM sources
-     WHERE status != 'blocked' AND (config IS NULL OR json_extract(config, '$.seed') IS NOT 1)
-     ORDER BY last_checked_at IS NOT NULL, last_checked_at, id
-     LIMIT ?`,
+    `UPDATE sources SET last_checked_at = ?1
+     WHERE id IN (
+       SELECT id FROM sources
+       WHERE status != 'blocked' AND (config IS NULL OR json_extract(config, '$.seed') IS NOT 1)
+       ORDER BY last_checked_at IS NOT NULL, last_checked_at, id
+       LIMIT ?2
+     )
+     RETURNING id, country, name, kind, url, config, language, last_checked_at, list_etag, list_last_modified`,
   )
-    .bind(LIMITS.sourcesPerRun)
+    .bind(toStoredTime(run.now), LIMITS.sourcesPerRun)
     .all<SourceRow>();
 
   const checks = await Promise.all(sources.map((source) => checkSource(run, source)));
 
-  const checkedAt = toStoredTime(run.now);
-  if (sources.length) {
-    await env.DB.batch(
-      sources.map((s) => env.DB.prepare("UPDATE sources SET last_checked_at = ? WHERE id = ?").bind(checkedAt, s.id)),
-    );
-  }
-
   console.log(
     JSON.stringify({
       message: "fetcher run",
-      ms: Date.now() - started,
+      // Wall time; Date.now() does not move during CPU work in Workers. CPU time per run is in Workers Observability.
+      wallMs: Date.now() - started,
       requests: run.requests,
       pages: run.pages,
       checks,

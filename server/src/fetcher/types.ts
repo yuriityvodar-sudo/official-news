@@ -50,6 +50,8 @@ export interface SourceConfig {
   crawlDelaySeconds?: number;
   /** Send back the list's ETag / Last-Modified; a 304 answer means nothing new (saves big downloads). */
   conditionalGet?: boolean;
+  /** Other hosts whose links count as this source's own (e.g. the Chamber's site for its open-data API). */
+  allowedHosts?: string[];
   /** Days to keep the extracted text (default 30). */
   textDays?: number;
 

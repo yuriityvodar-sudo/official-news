@@ -69,8 +69,10 @@ Times (`published_at`, `fetched_at`, `summarized_at`, `text_expires_at`) are sto
 `server/src/index.ts` runs every minute: `runFetcher(env)` (item 6) takes the 2 sources with the oldest `last_checked_at`; then `runSummarizer(env, { maxArticles: 5 })` (item 7) makes one AI call per article. One run stays within the free plan: at most 50 outside requests and 10 ms of CPU.
 
 What the fetcher writes (`server/src/fetcher/`):
-- Only items published in the last 7 days; an item already stored (same `url`) is never saved again.
+- Only items published in the last 7 days; an item already stored (same `url`) is never saved again. Items without a date are skipped, and a time later than the fetch is stored as the fetch time.
+- Only links on the source's own site (its host or a subdomain, or a host in `config.allowedHosts`), always as `https`.
+- A run claims its sources first (sets `last_checked_at` in the same statement that picks them), so a run cut off by a limit never blocks the others.
 - New articles: `is_news` `NULL` (the AI decides), `original_language` from the source, `text` up to 20,000 characters with `text_expires_at` 30 days after `fetched_at`, `image_url` from the list or the item page's preview image.
-- A date without a time is stored at 12:00 UTC (or the fetch time if that is earlier) with `date_only = 1`; an item without any date gets the fetch time and `date_only = 1`.
+- A date without a time is stored at 12:00 UTC (or the fetch time if that is earlier) with `date_only = 1`.
 - `url` may end in `#…` when one link holds several items (bill stages); the part before `#` is the page.
-- Every check sets `last_checked_at`; `last_item_at` is the newest item seen. `runFetcher` returns one `SourceCheck` per source (`ok`, `httpStatus`, `found`, `saved`, `waiting`, `error`), which source health (item 8) can use, and logs it as JSON.
+- Every check sets `last_checked_at`; `last_item_at` is the newest item seen. `runFetcher` returns one `SourceCheck` per source (`ok`, `httpStatus`, `found`, `saved`, `waiting`, `undated`, `offSite`, `error`), which source health (item 8) can use, and logs it as JSON.

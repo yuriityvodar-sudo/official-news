@@ -95,7 +95,7 @@ describe("runFetcher", () => {
     await addSource("xx-c", "https://c.test/feed.xml", "rss", null, null);
     const { fetch } = fakeFetch({});
     const checks = await runFetcher(env, { fetch, now: NOW });
-    expect(checks.map((c) => c.sourceId)).toEqual(["xx-c", "xx-b"]);
+    expect(checks.map((c) => c.sourceId).sort()).toEqual(["xx-b", "xx-c"]);
     expect(LIMITS.sourcesPerRun).toBe(2);
   });
 
@@ -107,7 +107,7 @@ describe("runFetcher", () => {
       "https://down.test/robots.txt": { status: 503, body: "" },
     });
     const checks = await runFetcher(env, { fetch, now: NOW });
-    expect(checks.map((c) => [c.sourceId, c.ok, c.error])).toEqual([
+    expect(checks.map((c) => [c.sourceId, c.ok, c.error]).sort()).toEqual([
       ["xx-down", false, "robots.txt answered HTTP 503"],
       ["xx-robots", false, "robots.txt does not allow this path"],
     ]);
@@ -189,5 +189,63 @@ describe("runFetcher", () => {
     });
     await runFetcher(env, { fetch, now: NOW });
     expect((await articlesOf("xx-kremlin")).map((a) => a.url)).toEqual(["https://kremlin.test/acts/80977"]);
+  });
+
+  it("claims its sources before reading them, so a cut-off run cannot stall the line", async () => {
+    await addSource("xx-claim", "https://claim.test/feed.xml", "rss", null, "2026-10-01T00:00:00Z");
+    let seenWhileFetching: unknown = null;
+    const { fetch } = fakeFetch({
+      "https://claim.test/robots.txt": () => new Response("", { status: 404 }),
+      "https://claim.test/feed.xml": () => {
+        throw new Error("the run is killed here");
+      },
+    });
+    const watching = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      seenWhileFetching ??= (await env.DB.prepare("SELECT last_checked_at FROM sources WHERE id = 'xx-claim'").first())?.last_checked_at;
+      return fetch(input, init);
+    }) as typeof globalThis.fetch;
+    const [check] = await runFetcher(env, { fetch: watching, now: NOW });
+    expect(seenWhileFetching).toBe("2026-10-14T15:00:00Z");
+    expect(check).toMatchObject({ ok: false, error: "the run is killed here" });
+  });
+
+  it("keeps only links on the source's own site, or hosts the config allows", async () => {
+    await addSource("xx-links", "https://www.gov.test/feed.xml", "rss", { itemPages: false, allowedHosts: ["portal.partner.test"] });
+    const { fetch } = fakeFetch({
+      "https://www.gov.test/robots.txt": { status: 404, body: "" },
+      "https://www.gov.test/feed.xml": {
+        body: rss([
+          { title: "Own page", link: "https://www.gov.test/news/1", date: "Wed, 14 Oct 2026 09:00:00 GMT" },
+          { title: "Subdomain", link: "http://press.gov.test/news/2", date: "Wed, 14 Oct 2026 09:00:00 GMT" },
+          { title: "Allowed partner", link: "https://portal.partner.test/3", date: "Wed, 14 Oct 2026 09:00:00 GMT" },
+          { title: "Video", link: "https://www.youtube.com/watch?v=x", date: "Wed, 14 Oct 2026 09:00:00 GMT" },
+          { title: "Lookalike", link: "https://gov.test.evil.example/4", date: "Wed, 14 Oct 2026 09:00:00 GMT" },
+        ]),
+      },
+    });
+    const [check] = await runFetcher(env, { fetch, now: NOW });
+    expect(check).toMatchObject({ found: 3, saved: 3, offSite: 2 });
+    expect((await articlesOf("xx-links")).map((a) => a.url).sort()).toEqual([
+      "https://portal.partner.test/3",
+      "https://press.gov.test/news/2",
+      "https://www.gov.test/news/1",
+    ]);
+  });
+
+  it("never stores a time later than the fetch, and skips items without a date", async () => {
+    await addSource("xx-times", "https://times.test/list.json", "api", { items: "", title: "t", link: "u", date: { field: "d" }, itemPages: false });
+    const { fetch } = fakeFetch({
+      "https://times.test/robots.txt": { status: 404, body: "" },
+      "https://times.test/list.json": {
+        type: "application/json",
+        body: JSON.stringify([
+          { t: "Beijing time read as UTC", u: "https://times.test/1", d: "2026-10-14T20:00:00" },
+          { t: "No date at all", u: "https://times.test/2", d: null },
+        ]),
+      },
+    });
+    const [check] = await runFetcher(env, { fetch, now: NOW });
+    expect(check).toMatchObject({ saved: 1, undated: 1 });
+    expect((await articlesOf("xx-times"))[0]).toMatchObject({ original_title: "Beijing time read as UTC", published_at: "2026-10-14T15:00:00Z" });
   });
 });
