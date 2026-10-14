@@ -20,16 +20,28 @@ Future<void> openOfficialPage(Uri uri) async {
   await launchUrl(uri, mode: LaunchMode.inAppBrowserView);
 }
 
+/// The official page without its `#fragment` (the fetcher adds one to tell
+/// stages of one bill apart), or null when it is not an http/https page: the
+/// link comes from a source site, not from us.
+Uri? officialPage(String url) {
+  final uri = Uri.tryParse(url);
+  if (uri == null || (uri.scheme != 'https' && uri.scheme != 'http')) {
+    return null;
+  }
+  return uri.removeFragment();
+}
+
 /// Shares the headline, the short summary and the official link.
 Future<void> shareArticle(Article article, Rect? origin) async {
   final summary = article.shortSummary;
+  final page = officialPage(article.originalUrl);
   await SharePlus.instance.share(
     ShareParams(
       subject: article.headline,
       text: [
         article.headline,
         if (summary != null && summary.isNotEmpty) summary,
-        'Official source: ${article.originalUrl}',
+        if (page != null) 'Official source: $page',
       ].join('\n\n'),
       sharePositionOrigin: origin,
     ),
@@ -98,11 +110,8 @@ class DetailScreen extends StatelessWidget {
           _OfficialLink(
             article: article,
             onTap: () {
-              final uri = Uri.tryParse(article.originalUrl);
-              // Only web pages: the link comes from a source site, not from us.
-              if (uri != null && (uri.scheme == 'https' || uri.scheme == 'http')) {
-                openLink(uri);
-              }
+              final page = officialPage(article.originalUrl);
+              if (page != null) openLink(page);
             },
           ),
         ],

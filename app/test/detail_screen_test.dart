@@ -108,6 +108,27 @@ void main() {
     ]);
   });
 
+  testWidgets('opens the page without the bill-stage fragment', (tester) async {
+    final opened = <Uri>[];
+    await _pump(
+      tester,
+      _article(originalUrl: 'https://www.parl.ca/legisinfo/en/bill/45-1/C-37#2026-10-09'),
+      openLink: (uri) async => opened.add(uri),
+    );
+
+    await tester.tap(find.text('Read the official decision'));
+    expect(opened, [Uri.parse('https://www.parl.ca/legisinfo/en/bill/45-1/C-37')]);
+  });
+
+  test('officialPage keeps only web pages and drops the fragment', () {
+    expect(
+      officialPage('https://sansad.in/ls/bill#Lok%20Sabha-153-Passed'),
+      Uri.parse('https://sansad.in/ls/bill'),
+    );
+    expect(officialPage('javascript:alert(1)'), isNull);
+    expect(officialPage('mailto:press@gov.example'), isNull);
+  });
+
   testWidgets('never opens a link that is not a web page', (tester) async {
     final opened = <Uri>[];
     await _pump(
