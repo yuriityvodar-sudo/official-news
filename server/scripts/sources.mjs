@@ -89,7 +89,7 @@ export function toSources(text) {
 
 const sqlValue = (v) => (v === "" ? "NULL" : `'${v.replaceAll("'", "''")}'`);
 
-/** One upsert per source, so running it again is safe. */
+/** One upsert per source, so running it again is safe. Seed rows are never overwritten. */
 export function toSql(sources) {
   return sources
     .map(
@@ -97,7 +97,9 @@ export function toSql(sources) {
         "INSERT INTO sources (id, country, name, kind, url, config, language, verified_by, verified_at, licence) VALUES (" +
         [s.id, s.country, s.name, s.kind, s.url, s.config, s.language, s.verified_by, s.verified_at, s.licence].map(sqlValue).join(", ") +
         ") ON CONFLICT (id) DO UPDATE SET country = excluded.country, name = excluded.name, kind = excluded.kind, url = excluded.url, " +
-        "config = excluded.config, language = excluded.language, verified_by = excluded.verified_by, verified_at = excluded.verified_at, licence = excluded.licence;\n",
+        "config = excluded.config, language = excluded.language, verified_by = excluded.verified_by, verified_at = excluded.verified_at, licence = excluded.licence " +
+        // Kickoff seed rows keep their data even if a CSV row reuses their id.
+        "WHERE json_extract(sources.config, '$.seed') IS NOT 1;\n",
     )
     .join("");
 }

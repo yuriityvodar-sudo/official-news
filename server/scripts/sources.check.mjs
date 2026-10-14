@@ -56,12 +56,13 @@ describe("toSources", () => {
 });
 
 describe("toSql", () => {
-  test("escapes quotes, writes NULL for empty values and leaves status alone", () => {
+  test("escapes quotes, writes NULL for empty values, leaves status and seed rows alone", () => {
     const sql = toSql(toSources(`${header}\n${row({ name: "Prime Minister's Office" })}\n`));
     assert.match(sql, /'Prime Minister''s Office'/);
     assert.match(sql, /'de', 'domain', '2026-10-14', NULL\)/);
     assert.match(sql, /ON CONFLICT \(id\) DO UPDATE/);
     assert.doesNotMatch(sql, /status/);
+    assert.match(sql, /WHERE json_extract\(sources.config, '\$.seed'\) IS NOT 1;/);
   });
 });
 

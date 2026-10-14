@@ -47,7 +47,7 @@ If a source breaks, the research found these second choices (same country, also 
 | RU | Government documents | `http://government.ru/docs/rss/` |
 | TR | Parliament committee news | `https://www.tbmm.gov.tr/meclis-haber/komisyon` |
 | ZA | Cabinet statements | `https://www.gov.za/news/cabinet-statements` |
-| AU | Treasurer media releases | `https://ministers.treasury.gov.au/ministers/jim-chalmers-2022/media-releases/feed` |
+| AU | Treasury consultations (proposals; item pages are JavaScript-only, so list titles only) | `https://treasury.gov.au/consultation` |
 | CN | Ministry of Commerce policies | `https://www.mofcom.gov.cn/zwgk/zcfb/index.html` (data call in the research notes) |
 | IN | Directorate General of Foreign Trade notifications | `https://www.dgft.gov.in/CP/?opt=notification` |
 | JP | e-Gov new laws (API) | `https://laws.e-gov.go.jp/api/2/laws?promulgation_date_from={date}&limit=100` |
