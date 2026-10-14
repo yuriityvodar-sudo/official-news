@@ -9,7 +9,7 @@ Last updated: 2026-10-14
 | What | Status | Owner | Details |
 | --- | --- | --- | --- |
 | GitHub repo | Created 2026-10-13 | Yurii | `yuriityvodar-sudo/official-news`, public, no licence. Secret scanning and push protection on. Branch protection: not yet, switched on right after the Kickoff skeleton |
-| Roman's access to the repo | Invited 2026-10-14 | Yurii | GitHub user `RomanSurynets`, write access; waiting for him to accept |
+| Roman's access to the repo | Not yet | Yurii | Waiting for Roman's GitHub username (an invite sent to a wrong guess was cancelled on 2026-10-14) |
 | Cloudflare account | Created 2026-10-13 | Yurii (Super Administrator) | Name `NewsApp`, account ID `8dc93578877d397a693094f3e2b01029` (not a secret; it goes in the Worker config) |
 | Roman's access to Cloudflare | Not yet | Yurii | Invite as Administrator once Roman shares his email |
 | workers.dev address | Created 2026-10-13 | Yurii | `officialnews.workers.dev`; a Worker named `api` would be served at `api.officialnews.workers.dev` |
