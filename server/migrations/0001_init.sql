@@ -32,7 +32,6 @@ CREATE TABLE articles (
   headline          TEXT,
   short_summary     TEXT,
   summary           TEXT,               -- news-style
-  angles            TEXT,               -- JSON: { "<topic>": "1-2 sentences" }
   image_url         TEXT,
   original_language TEXT,
   topics            TEXT,               -- JSON: 1-3 ids from the fixed topic list

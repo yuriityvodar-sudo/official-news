@@ -1,5 +1,5 @@
 /// The fixed topic list from docs/contract.md. The AI picks 1 to 3 of these
-/// per article; the user picks at least 3 during onboarding.
+/// per article; topic features for the user come after the MVP.
 class Topic {
   const Topic(this.id, this.label);
 

@@ -16,7 +16,6 @@ What the API returns and both screens read.
   "headline": "Poland condemns attack on Riyadh airport",
   "shortSummary": "Poland condemned the attack, which killed 12 people and injured more than 300.",
   "summary": "Poland's foreign ministry condemned … (news-style, 2 to 4 short paragraphs)",
-  "angles": { "foreign-affairs": "Poland joins Spain, France, Italy and the UN in condemning the attack." },
   "originalTitle": "Oświadczenie MSZ ws. ataku w Rijadzie",
   "originalLanguage": "pl",
   "topics": ["foreign-affairs", "security-defence"],
@@ -27,13 +26,13 @@ What the API returns and both screens read.
 }
 ```
 
-- The feed card reads `headline`, `shortSummary` and `imageUrl`; the detail screen reads `summary` and the `angles` for the user's topics.
-- Before the AI step has run, `headline`, `shortSummary`, `summary` and `importance` are `null`, `angles` is `{}` and `topics` is `[]`; the app shows `originalTitle` instead.
+- The feed card reads `headline`, `shortSummary` and `imageUrl`; the detail screen reads `summary`. `topics` is set by the AI; the MVP app does not use it yet.
+- Before the AI step has run, `headline`, `shortSummary`, `summary` and `importance` are `null` and `topics` is `[]`; the app shows `originalTitle` instead.
 - `publishedAt` is UTC. `dateOnly: true` means the source gave no time.
 
 ## Topics
 
-A fixed list. The AI gives each article 1 to 3 of them; the user picks at least 3 in onboarding.
+A fixed list. The AI gives each article 1 to 3 of them; topic features (onboarding, a topic feed) come after the MVP.
 
 `foreign-affairs`, `economy`, `security-defence`, `health`, `climate`, `trade`, `technology`, `energy`, `migration`, `elections`, `human-rights`, `science`
 
@@ -41,19 +40,19 @@ A fixed list. The AI gives each article 1 to 3 of them; the user picks at least 
 
 Base URL: `https://api.officialnews.workers.dev` (deployed), `http://localhost:8787` (local, `npm run dev` in `server/`).
 
-- `GET /articles?limit=20&cursor=<c>&topics=economy,health` → `{ "items": [Article], "nextCursor": "…" | null, "top": [Article] }`: news from the last 7 days where `is_news = 1`, newest first. `cursor` is an opaque string. `topics` returns articles with at least one of those topics. `top` only on the first page (last 24 hours, highest importance, at most 2 per country, up to 5) and may be empty, so the app must not depend on it.
+- `GET /articles?limit=20&cursor=<c>` → `{ "items": [Article], "nextCursor": "…" | null, "top": [Article] }`: news from the last 7 days where `is_news = 1`, newest first. `cursor` is an opaque string. `top` only on the first page (last 24 hours, highest importance, at most 2 per country, up to 5) and may be empty, so the app must not depend on it.
 - `GET /articles?since=<ISO time>` → only articles newer than that time, for the "new updates" check.
 - `GET /articles/:id` → `Article`, or 404.
 - `GET /health` → `{ "sources": { "<status>": <count> }, "lastFetcherRun": "<ISO time>" | null }`.
 
-Kickoff state: `/articles` returns the newest 20 news articles and ignores the parameters; item 1 adds the 7-day window, paging, `since`, `topics` and `top`.
+Kickoff state: `/articles` returns the newest 20 news articles and ignores the parameters; item 1 adds the 7-day window, paging, `since` and `top`.
 
 ## Database (D1)
 
 Defined in `server/migrations/0001_init.sql`.
 
 - `sources`: id, country, name, kind (`rss` | `page` | `api`), url, config (JSON: selectors for pages), language, verified_by (`domain` | `portal` | `wikidata`), verified_at, licence, status (`active` | `stale` | `moved` | `broken` | `blocked`), last_checked_at, last_item_at
-- `articles`: id, source_id, url (unique), original_title, published_at, date_only, fetched_at, text, text_expires_at, headline, short_summary, summary, angles (JSON), image_url, original_language, topics (JSON), tags (JSON), importance, is_news, summarized_at, model
+- `articles`: id, source_id, url (unique), original_title, published_at, date_only, fetched_at, text, text_expires_at, headline, short_summary, summary, image_url, original_language, topics (JSON), tags (JSON), importance, is_news, summarized_at, model
 
 ## Scheduled job
 

@@ -11,7 +11,6 @@ void main() {
     'headline': 'Poland condemns attack on Riyadh airport',
     'shortSummary': 'Poland condemned the attack.',
     'summary': 'Poland condemned the attack.',
-    'angles': {'foreign-affairs': 'Poland joins other governments.'},
     'originalTitle': 'Oświadczenie MSZ ws. ataku w Rijadzie',
     'originalLanguage': 'pl',
     'topics': ['foreign-affairs', 'security-defence'],
@@ -25,7 +24,6 @@ void main() {
     final article = Article.fromJson(full);
     expect(article.headline, 'Poland condemns attack on Riyadh airport');
     expect(article.topics, ['foreign-affairs', 'security-defence']);
-    expect(article.angles['foreign-affairs'], isNotNull);
     expect(article.publishedAt.isUtc, isTrue);
   });
 
@@ -35,7 +33,6 @@ void main() {
       'headline': null,
       'shortSummary': null,
       'summary': null,
-      'angles': null,
       'topics': null,
     });
     expect(article.headline, 'Oświadczenie MSZ ws. ataku w Rijadzie');

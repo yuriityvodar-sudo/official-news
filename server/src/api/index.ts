@@ -15,7 +15,6 @@ interface ArticleRow {
   headline: string | null;
   short_summary: string | null;
   summary: string | null;
-  angles: string | null;
   image_url: string | null;
   original_language: string | null;
   topics: string | null;
@@ -26,7 +25,7 @@ interface ArticleRow {
 const SELECT_ARTICLE = `
   SELECT a.id, s.country, a.source_id, s.name AS source_name, s.url AS source_url,
          a.url, a.original_title, a.published_at, a.date_only, a.headline, a.short_summary,
-         a.summary, a.angles, a.image_url, a.original_language, a.topics, a.tags, a.importance
+         a.summary, a.image_url, a.original_language, a.topics, a.tags, a.importance
   FROM articles a JOIN sources s ON s.id = a.source_id`;
 
 /** Converts a row to the article format in docs/contract.md. */
@@ -40,7 +39,6 @@ export function toArticle(row: ArticleRow) {
     headline: row.headline,
     shortSummary: row.short_summary,
     summary: row.summary,
-    angles: row.angles ? JSON.parse(row.angles) : {},
     originalTitle: row.original_title,
     originalLanguage: row.original_language,
     topics: row.topics ? JSON.parse(row.topics) : [],
@@ -58,8 +56,8 @@ const json = (body: unknown, status = 200) =>
   });
 
 /**
- * Item 1 completes this: the 7-day window, cursor paging, `since`, the
- * `topics` filter and `top`. Kickoff version: the newest 20 news articles,
+ * Item 1 completes this: the 7-day window, cursor paging, `since` and
+ * `top`. Kickoff version: the newest 20 news articles,
  * so the app and backend can talk to each other from day one.
  */
 export async function handleApi(request: Request, env: Env): Promise<Response> {

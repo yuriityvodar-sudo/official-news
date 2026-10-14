@@ -23,7 +23,6 @@ class Article {
     required this.headline,
     required this.shortSummary,
     required this.summary,
-    required this.angles,
     required this.originalTitle,
     required this.originalLanguage,
     required this.topics,
@@ -45,7 +44,6 @@ class Article {
       headline: (json['headline'] as String?) ?? originalTitle,
       shortSummary: json['shortSummary'] as String?,
       summary: json['summary'] as String?,
-      angles: Map<String, String>.from(json['angles'] as Map? ?? const {}),
       originalTitle: originalTitle,
       originalLanguage: json['originalLanguage'] as String? ?? 'en',
       topics: List<String>.from(json['topics'] as List? ?? const []),
@@ -64,7 +62,6 @@ class Article {
   final String headline;
   final String? shortSummary;
   final String? summary;
-  final Map<String, String> angles;
   final String originalTitle;
   final String originalLanguage;
   final List<String> topics;
