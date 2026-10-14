@@ -8,7 +8,7 @@ Last updated: 2026-10-14 (Kickoff skeleton)
 
 | What | Status | Owner | Details |
 | --- | --- | --- | --- |
-| GitHub repo | Created 2026-10-13 | Yurii | `yuriityvodar-sudo/official-news`, public, no licence. Secret scanning and push protection on. Branch protection: not yet, switched on right after the Kickoff skeleton |
+| GitHub repo | Created 2026-10-13 | Yurii | `yuriityvodar-sudo/official-news`, public, no licence. Secret scanning and push protection on. Branch protection on `main` since 2026-10-14 (after #13): pull request with 1 approval, checks `App (Flutter)` and `Server (Worker)` must pass on an up-to-date branch, new commits dismiss the approval, conversations resolved, applies to admins, no force pushes or deletion |
 | Roman's access to the repo | Active since 2026-10-14 | Yurii | GitHub user `surynets-git`, write access |
 | Cloudflare account | Created 2026-10-13 | Yurii (Super Administrator) | Name `NewsApp`, account ID `8dc93578877d397a693094f3e2b01029` (not a secret; it goes in the Worker config) |
 | Roman's access to Cloudflare | Active since 2026-10-14 | Yurii | Role Administrator, scope NewsApp account only (cannot manage members or billing) |
