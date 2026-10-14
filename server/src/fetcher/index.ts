@@ -58,7 +58,7 @@ interface Run {
   lastRequest: Map<string, number>;
 }
 
-async function request(run: Run, url: string, accept: string, crawlDelaySeconds = 0): Promise<Response> {
+async function request(run: Run, url: string, accept: string, crawlDelaySeconds = 0, extraHeaders: Record<string, string> = {}): Promise<Response> {
   if (run.requests >= LIMITS.requestsPerRun) throw new Error("request budget for this run used up");
   const host = new URL(url).host;
   const last = run.lastRequest.get(host);
@@ -69,7 +69,7 @@ async function request(run: Run, url: string, accept: string, crawlDelaySeconds 
   run.requests++;
   run.lastRequest.set(host, Date.now());
   return run.fetch(url, {
-    headers: { "user-agent": USER_AGENT, accept },
+    headers: { "user-agent": USER_AGENT, accept, ...extraHeaders },
     redirect: "follow",
     signal: AbortSignal.timeout(LIMITS.timeoutMs),
   });
@@ -112,9 +112,25 @@ function passesFilters(item: FoundItem, config: SourceConfig): boolean {
   return true;
 }
 
-async function readList(run: Run, source: SourceRow, config: SourceConfig): Promise<{ items: FoundItem[]; status: number }> {
-  const res = await request(run, source.url, source.kind === "api" ? "application/json" : "*/*", config.crawlDelaySeconds);
-  if (!res.ok) return { items: [], status: res.status };
+interface ListResult {
+  items: FoundItem[];
+  status: number;
+  /** The list's validators, to send back next time (conditionalGet sources). */
+  etag: string | null;
+  lastModified: string | null;
+}
+
+async function readList(run: Run, source: SourceRow, config: SourceConfig): Promise<ListResult> {
+  // Servers often match these exactly, so we send back what they sent, never a time of our own.
+  const conditional: Record<string, string> = {};
+  if (config.conditionalGet && source.list_etag) conditional["if-none-match"] = source.list_etag;
+  if (config.conditionalGet && source.list_last_modified) conditional["if-modified-since"] = source.list_last_modified;
+  const res = await request(run, source.url, source.kind === "api" ? "application/json" : "*/*", config.crawlDelaySeconds, conditional);
+  const etag = res.headers.get("etag");
+  const lastModified = res.headers.get("last-modified");
+  // 304: nothing changed since the last check.
+  if (res.status === 304) return { items: [], status: 304, etag: source.list_etag, lastModified: source.list_last_modified };
+  if (!res.ok) return { items: [], status: res.status, etag: null, lastModified: null };
   const bytes = await res.arrayBuffer();
   const body = decodeBody(bytes, charsetOf(res, config, bytes));
   const items =
@@ -123,7 +139,7 @@ async function readList(run: Run, source: SourceRow, config: SourceConfig): Prom
       : source.kind === "page"
         ? await parsePage(body, res.url || source.url, config, run.now)
         : parseApi(JSON.parse(body), res.url || source.url, config, run.now);
-  return { items, status: res.status };
+  return { items, status: res.status, etag, lastModified };
 }
 
 /** Opens an item page for its main text and preview image, if robots.txt and the budget allow. */
@@ -152,17 +168,20 @@ async function checkSource(run: Run, source: SourceRow): Promise<SourceCheck> {
       check.error = blocked;
       return check;
     }
-    const { items, status } = await readList(run, source, config);
+    const { items, status, etag, lastModified } = await readList(run, source, config);
     check.httpStatus = status;
-    if (status < 200 || status >= 300) {
+    if (status !== 304 && (status < 200 || status >= 300)) {
       check.error = `HTTP ${status}`;
       return check;
     }
 
     const cutoff = toStoredTime(new Date(run.now.getTime() - LIMITS.maxAgeDays * 86_400_000));
     const seen = new Set<string>();
+    const sourceHost = new URL(source.url).host;
     const listed = items
       .filter((item) => passesFilters(item, config))
+      // Sources are read over https only; links a feed still writes as http on the same site are upgraded.
+      .map((item) => (item.url.startsWith("http://") && new URL(item.url).host === sourceHost ? { ...item, url: `https://${item.url.slice(7)}` } : item))
       .map((item) =>
         config.newStageIsNewItem && item.publishedAt ? { ...item, url: `${item.url}#${item.publishedAt.slice(0, 10)}` } : item,
       )
@@ -230,6 +249,15 @@ async function checkSource(run: Run, source: SourceRow): Promise<SourceCheck> {
     )
       .bind(newest, source.id)
       .run();
+
+    if (config.conditionalGet) {
+      // Remember the validators only once every new item is saved; with items still waiting,
+      // a 304 next time would hide them until the list changes again.
+      const keep = check.waiting === 0;
+      await run.env.DB.prepare("UPDATE sources SET list_etag = ?, list_last_modified = ? WHERE id = ?")
+        .bind(keep ? etag : null, keep ? lastModified : null, source.id)
+        .run();
+    }
   } catch (error) {
     check.ok = false;
     check.error = error instanceof Error ? error.message : String(error);
@@ -258,7 +286,7 @@ export async function runFetcher(env: Env, options: FetcherOptions = {}): Promis
   };
 
   const { results: sources } = await env.DB.prepare(
-    `SELECT id, country, name, kind, url, config, language FROM sources
+    `SELECT id, country, name, kind, url, config, language, last_checked_at, list_etag, list_last_modified FROM sources
      WHERE status != 'blocked' AND (config IS NULL OR json_extract(config, '$.seed') IS NOT 1)
      ORDER BY last_checked_at IS NOT NULL, last_checked_at, id
      LIMIT ?`,

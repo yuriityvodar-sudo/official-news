@@ -5,16 +5,18 @@ import { LIMITS, USER_AGENT, runFetcher } from "../src/fetcher";
 
 const NOW = new Date("2026-10-14T15:00:00Z");
 
-type Site = Record<string, { status?: number; body: string; type?: string }>;
+type Site = Record<string, { status?: number; body: string; type?: string } | ((headers: Headers) => Response)>;
 
 /** A fake internet: answers only the URLs in `site`, records every request. */
 function fakeFetch(site: Site) {
-  const requests: { url: string; userAgent: string | null }[] = [];
+  const requests: { url: string; userAgent: string | null; headers: Headers }[] = [];
   const fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
-    requests.push({ url, userAgent: new Headers(init?.headers).get("user-agent") });
+    const headers = new Headers(init?.headers);
+    requests.push({ url, userAgent: headers.get("user-agent"), headers });
     const page = site[url];
     if (!page) return new Response("not found", { status: 404 });
+    if (typeof page === "function") return page(headers);
     return new Response(page.body, { status: page.status ?? 200, headers: { "content-type": page.type ?? "text/html; charset=utf-8" } });
   }) as typeof globalThis.fetch;
   return { fetch, requests };
@@ -153,5 +155,39 @@ describe("runFetcher", () => {
     site["https://parl.test/bills.xml"] = { body: bill("Wed, 14 Oct 2026 10:00:00 GMT") };
     await runFetcher(env, { fetch, now: new Date("2026-10-14T15:10:00Z") });
     expect((await articlesOf("xx-bills")).map((a) => a.url)).toEqual(["https://parl.test/bill/C-37#2026-10-14", "https://parl.test/bill/C-37#2026-10-09"]);
+  });
+
+  it("asks only for changes when the source supports it, with the server's own validators", async () => {
+    await addSource("xx-archive", "https://archive.test/list.json", "api", { items: "", title: "TITLE", link: "URL", date: { field: "DOCRELPUBTIME" }, conditionalGet: true, itemPages: false });
+    const list = JSON.stringify([{ TITLE: "Opinions on new productive forces", URL: "https://archive.test/p/1.htm", DOCRELPUBTIME: "2026-10-13" }]);
+    const { fetch, requests } = fakeFetch({
+      "https://archive.test/robots.txt": { status: 404, body: "" },
+      "https://archive.test/list.json": (headers) =>
+        headers.get("if-none-match") === '"v1"'
+          ? new Response(null, { status: 304 })
+          : new Response(list, { headers: { "content-type": "application/json", etag: '"v1"', "last-modified": "Fri, 09 Oct 2026 10:19:05 GMT" } }),
+    });
+
+    const [first] = await runFetcher(env, { fetch, now: NOW });
+    expect(first).toMatchObject({ ok: true, httpStatus: 200, saved: 1 });
+    expect(await env.DB.prepare("SELECT list_etag, list_last_modified FROM sources WHERE id = 'xx-archive'").first()).toEqual({
+      list_etag: '"v1"',
+      list_last_modified: "Fri, 09 Oct 2026 10:19:05 GMT",
+    });
+
+    const [second] = await runFetcher(env, { fetch, now: new Date("2026-10-14T15:10:00Z") });
+    expect(second).toMatchObject({ ok: true, httpStatus: 304, found: 0, saved: 0, error: null });
+    const sent = requests.filter((r) => r.url.endsWith("list.json")).at(-1)?.headers;
+    expect([sent?.get("if-none-match"), sent?.get("if-modified-since")]).toEqual(['"v1"', "Fri, 09 Oct 2026 10:19:05 GMT"]);
+  });
+
+  it("stores http links of an https source as https", async () => {
+    await addSource("xx-kremlin", "https://kremlin.test/acts/feed", "rss", { itemPages: false });
+    const { fetch } = fakeFetch({
+      "https://kremlin.test/robots.txt": { status: 404, body: "" },
+      "https://kremlin.test/acts/feed": { body: rss([{ title: "Decree signed", link: "http://kremlin.test/acts/80977", date: "Mon, 12 Oct 2026 15:06:00 +0300" }]) },
+    });
+    await runFetcher(env, { fetch, now: NOW });
+    expect((await articlesOf("xx-kremlin")).map((a) => a.url)).toEqual(["https://kremlin.test/acts/80977"]);
   });
 });

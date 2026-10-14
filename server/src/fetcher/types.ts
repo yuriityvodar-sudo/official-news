@@ -9,6 +9,9 @@ export interface SourceRow {
   url: string;
   config: string | null;
   language: string | null;
+  last_checked_at: string | null;
+  list_etag: string | null;
+  list_last_modified: string | null;
 }
 
 /**
@@ -45,6 +48,8 @@ export interface SourceConfig {
   newStageIsNewItem?: boolean;
   /** Seconds between our requests to this site (from its robots.txt). */
   crawlDelaySeconds?: number;
+  /** Send back the list's ETag / Last-Modified; a 304 answer means nothing new (saves big downloads). */
+  conditionalGet?: boolean;
   /** Days to keep the extracted text (default 30). */
   textDays?: number;
 

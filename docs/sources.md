@@ -24,6 +24,7 @@ How the fetcher (item 6) reads a source, as JSON. Types: `server/src/fetcher/typ
 - `encoding`: character set when the server does not send one, e.g. `iso-8859-1`.
 - `newStageIsNewItem`: a new date on the same link is a new item (bill stages); the stored URL gets `#YYYY-MM-DD`.
 - `crawlDelaySeconds`: wait between our requests to the site (from its robots.txt).
+- `conditionalGet`: send `If-Modified-Since` with the last check time; the site answers 304 when nothing changed, so a big list is not downloaded again (China's 266 KB archive).
 - `textDays`: days to keep the extracted text (default 30).
 - `note`: anything else people should know.
 
