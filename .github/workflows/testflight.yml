@@ -1,8 +1,8 @@
 name: TestFlight
 
 # On demand only: Actions tab → TestFlight → Run workflow → pick a branch.
-# Needs these repository secrets (see docs/setup.md), created from Roman's
-# App Store Connect account:
+# Needs these repository secrets (see docs/setup.md). Yurii creates the API key
+# with his Admin role on Roman's App Store Connect team and adds them himself:
 #   APPLE_TEAM_ID      the RS Elite Pro team ID (10 characters)
 #   ASC_KEY_ID         App Store Connect API key ID
 #   ASC_ISSUER_ID      App Store Connect API issuer ID

@@ -1,4 +1,5 @@
 import type { Env } from "../env";
+import { toStoredTime } from "../fetcher/text";
 import { type ArticleInput, SYSTEM_PROMPT, userMessage } from "./prompt";
 import { SUMMARY_SCHEMA, type Summary, parseJson, toSummary } from "./schema";
 
@@ -9,6 +10,9 @@ export const MODEL = "@cf/zai-org/glm-4.7-flash";
 export const MAX_ATTEMPTS = 3;
 
 const MAX_COMPLETION_TOKENS = 1500;
+
+/** A claim older than this is from a run that was cut off, so its articles are free again. */
+export const CLAIM_MINUTES = 10;
 
 interface ArticleRow {
   id: string;
@@ -82,24 +86,43 @@ function store(env: Env, id: string, s: Summary, now: string): D1PreparedStateme
  * An unusable answer counts as an attempt; after MAX_ATTEMPTS the article
  * stays hidden. An error from Workers AI itself (an outage, or the daily free
  * allocation used up) costs no attempt and ends the run, to try again later.
+ *
+ * The run claims its articles first, so a run that starts while this one is
+ * still going takes other ones and the free allocation is not spent twice.
  */
 export async function runSummarizer(
   env: Env,
   options: { maxArticles: number },
   summarize: Summarize = workersAi(env),
 ): Promise<SummaryResult[]> {
+  const now = new Date();
+  // Claim before calling the model, in one statement (as the fetcher claims its sources).
+  const { results: claimed } = await env.DB.prepare(
+    `UPDATE articles SET summary_claimed_at = ?1
+     WHERE id IN (
+       SELECT id FROM articles
+       WHERE summarized_at IS NULL AND summary_attempts < ?2
+         AND (summary_claimed_at IS NULL OR summary_claimed_at < ?3)
+       ORDER BY fetched_at DESC, id DESC
+       LIMIT ?4
+     )
+     RETURNING id`,
+  )
+    .bind(toStoredTime(now), MAX_ATTEMPTS, toStoredTime(new Date(now.getTime() - CLAIM_MINUTES * 60_000)), options.maxArticles)
+    .all<{ id: string }>();
+  if (!claimed.length) return [];
+
   const { results: rows } = await env.DB.prepare(
     `SELECT a.id, a.original_title, a.text, a.original_language, s.name AS source_name, s.country
      FROM articles a JOIN sources s ON s.id = a.source_id
-     WHERE a.summarized_at IS NULL AND a.summary_attempts < ?
-     ORDER BY a.fetched_at DESC, a.id DESC
-     LIMIT ?`,
+     WHERE a.id IN (SELECT value FROM json_each(?))
+     ORDER BY a.fetched_at DESC, a.id DESC`,
   )
-    .bind(MAX_ATTEMPTS, options.maxArticles)
+    .bind(JSON.stringify(claimed.map((c) => c.id)))
     .all<ArticleRow>();
 
   const results: SummaryResult[] = [];
-  for (const row of rows) {
+  for (const [index, row] of rows.entries()) {
     const article: ArticleInput = {
       sourceName: row.source_name,
       country: row.country,
@@ -117,13 +140,21 @@ export async function runSummarizer(
       }
       const checked = toSummary(parsed);
       if ("problems" in checked) throw new UnusableAnswer(checked.problems.join("; "));
-      await store(env, row.id, checked.summary, `${new Date().toISOString().slice(0, 19)}Z`).run();
+      await store(env, row.id, checked.summary, toStoredTime(new Date())).run();
       results.push({ articleId: row.id, ok: true, isNews: checked.summary.isNews });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       results.push({ articleId: row.id, ok: false, error: message });
-      if (!(error instanceof UnusableAnswer)) break;
-      await env.DB.prepare("UPDATE articles SET summary_attempts = summary_attempts + 1 WHERE id = ?").bind(row.id).run();
+      if (!(error instanceof UnusableAnswer)) {
+        // Not the article's fault: free it and the ones not tried yet for the next run.
+        await env.DB.prepare("UPDATE articles SET summary_claimed_at = NULL WHERE id IN (SELECT value FROM json_each(?))")
+          .bind(JSON.stringify(rows.slice(index).map((r) => r.id)))
+          .run();
+        break;
+      }
+      await env.DB.prepare("UPDATE articles SET summary_attempts = summary_attempts + 1, summary_claimed_at = NULL WHERE id = ?")
+        .bind(row.id)
+        .run();
     }
   }
 

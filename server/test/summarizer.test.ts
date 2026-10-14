@@ -1,6 +1,6 @@
 import { env, exports } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
-import { MAX_ATTEMPTS, MODEL, runSummarizer, type Summarize } from "../src/summarizer";
+import { CLAIM_MINUTES, MAX_ATTEMPTS, MODEL, runSummarizer, type Summarize } from "../src/summarizer";
 import { type ArticleInput, userMessage } from "../src/summarizer/prompt";
 import { LIMITS, toSummary } from "../src/summarizer/schema";
 
@@ -101,6 +101,53 @@ describe("runSummarizer", () => {
     expect(results).toEqual([{ articleId: "first", ok: false, error: "3036: daily free allocation used up" }]);
     expect(calls).toHaveLength(1);
     expect(await row("first")).toMatchObject({ summary_attempts: 0, summarized_at: null });
+  });
+
+  it("frees the claims after a Workers AI error, so the next run tries the same articles", async () => {
+    await insertUnsummarized("first", now());
+    await insertUnsummarized("second", "2026-10-14T08:00:00Z");
+    await runSummarizer(env, { maxArticles: 5 }, fakeModel(new Error("3040: capacity")).summarize);
+
+    expect(await row("first")).toMatchObject({ summary_claimed_at: null });
+    expect(await row("second")).toMatchObject({ summary_claimed_at: null });
+    const results = await runSummarizer(env, { maxArticles: 5 }, fakeModel().summarize);
+    expect(results.map((r) => r.articleId)).toEqual(["first", "second"]);
+  });
+
+  it("an overlapping run takes other articles than the one still going", async () => {
+    for (const id of ["a1", "a2", "a3", "a4"]) await insertUnsummarized(id, now());
+    let overlapping: string[] = [];
+    let first = true;
+    const summarize: Summarize = async () => {
+      if (first) {
+        first = false;
+        // The next minute's run starts while this one waits for the model.
+        const results = await runSummarizer(env, { maxArticles: 2 }, fakeModel().summarize);
+        overlapping = results.map((r) => r.articleId);
+      }
+      return answer();
+    };
+
+    const results = await runSummarizer(env, { maxArticles: 2 }, summarize);
+
+    const mine = results.map((r) => r.articleId);
+    expect(mine).toHaveLength(2);
+    expect(overlapping).toHaveLength(2);
+    expect(mine.filter((id) => overlapping.includes(id))).toEqual([]);
+  });
+
+  it("takes an article again when its claim is from a run that was cut off", async () => {
+    const minutesAgo = (m: number) => `${new Date(Date.now() - m * 60_000).toISOString().slice(0, 19)}Z`;
+    await insertUnsummarized("running", now());
+    await insertUnsummarized("cut-off", now());
+    await env.DB.prepare("UPDATE articles SET summary_claimed_at = ? WHERE id = 'running'").bind(minutesAgo(1)).run();
+    await env.DB.prepare("UPDATE articles SET summary_claimed_at = ? WHERE id = 'cut-off'")
+      .bind(minutesAgo(CLAIM_MINUTES + 1))
+      .run();
+
+    const results = await runSummarizer(env, { maxArticles: 5 }, fakeModel().summarize);
+
+    expect(results.map((r) => r.articleId)).toEqual(["cut-off"]);
   });
 
   it("accepts an answer wrapped in a ```json fence", async () => {
