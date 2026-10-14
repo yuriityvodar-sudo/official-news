@@ -8,7 +8,7 @@ name: TestFlight
 #   ASC_ISSUER_ID      App Store Connect API issuer ID
 #   ASC_KEY_P8_BASE64  the .p8 key file, base64-encoded
 # The app must already exist in App Store Connect with the bundle ID set in
-# app/ios/Runner.xcodeproj. Not run yet: first run happens once the key exists.
+# app/ios/Runner.xcodeproj. Builds use the live API at api.officialnews.workers.dev.
 
 on:
   workflow_dispatch:
@@ -35,7 +35,8 @@ jobs:
         run: echo "$ASC_KEY_P8_BASE64" | base64 --decode > "$RUNNER_TEMP/asc_key.p8"
 
       - name: Build the iOS app without signing
-        run: flutter build ios --release --no-codesign --build-number=${{ github.run_number }}
+        # The live API, not the laptop default (app/lib/core/config.dart).
+        run: flutter build ios --release --no-codesign --build-number=${{ github.run_number }} --dart-define=API_URL=https://api.officialnews.workers.dev
 
       - name: Archive with automatic signing
         working-directory: app/ios
