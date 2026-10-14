@@ -16,10 +16,10 @@ Last updated: 2026-10-14
 | Cloudflare Worker | Not yet | Kickoff | Created with the backend skeleton |
 | D1 database | Not yet | Kickoff | Created with the first migration |
 | Apple Developer team | Yurii joined 2026-10-14 | Roman (Account Holder) | Team "RS Elite Pro s.r.o." (Roman's). Yurii's role: Admin, all apps (checked in App Store Connect, Users and Access, 2026-10-14) |
-| App Store Connect app and TestFlight | Not yet | Roman or Yurii (both Admin) | Created on the RS Elite Pro team once the bundle ID is agreed; internal testing group with both of us |
+| App Store Connect app and TestFlight | Not yet | Roman | Roman picks the bundle ID and creates the app on the RS Elite Pro team, plus an internal testing group with both of us |
 | App Store Connect API key (for CI uploads) | Not yet | Roman | Stored only as GitHub Secrets |
 | Google Play app | Not yet | Open decision | Whose account is still to decide |
-| Bundle ID and package name | Not yet | Kickoff | Permanent once created; to agree before creating the app |
+| Bundle ID and package name | Not yet | Roman | Permanent once created; Roman chooses it (neutral, not tied to either of us) and records it here |
 
 ## Developer machines
 
