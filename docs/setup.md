@@ -11,7 +11,7 @@ Last updated: 2026-10-14
 | GitHub repo | Created 2026-10-13 | Yurii | `yuriityvodar-sudo/official-news`, public, no licence. Secret scanning and push protection on. Branch protection: not yet, switched on right after the Kickoff skeleton |
 | Roman's access to the repo | Active since 2026-10-14 | Yurii | GitHub user `surynets-git`, write access |
 | Cloudflare account | Created 2026-10-13 | Yurii (Super Administrator) | Name `NewsApp`, account ID `8dc93578877d397a693094f3e2b01029` (not a secret; it goes in the Worker config) |
-| Roman's access to Cloudflare | Invited 2026-10-14 | Yurii | Role Administrator, scope NewsApp account only (cannot manage members or billing); status Pending until Roman accepts |
+| Roman's access to Cloudflare | Active since 2026-10-14 | Yurii | Role Administrator, scope NewsApp account only (cannot manage members or billing) |
 | workers.dev address | Created 2026-10-13 | Yurii | `officialnews.workers.dev`; a Worker named `api` would be served at `api.officialnews.workers.dev` |
 | Cloudflare Worker | Not yet | Kickoff | Created with the backend skeleton |
 | D1 database | Not yet | Kickoff | Created with the first migration |
