@@ -223,7 +223,7 @@ Each item becomes one GitHub issue owned by one person. **Must** is what the ite
 
 ### 5. Source list (Yurii)
 
-- **Must:** `docs/sources.csv` with 20 sources, one per G20 member, each with kind, URL, language, `verified_by` and licence, preferring pages that publish official decisions (laws, proposals, meeting agendas, minutes and outcomes); loaded into `sources`.
+- **Must:** `docs/sources.csv` with one source per G20 member (19 since 14 Oct: Saudi Arabia waits for consent), each with kind, URL, language, `verified_by` and licence, preferring pages that publish official decisions (laws, proposals, meeting agendas, minutes and outcomes); loaded into `sources`.
 - **Suggested:** grow to about 85 Phase 1 sources once the fetcher is stable.
 - **Done when:** the verified sources are in D1 (19 since 14 Oct: Saudi Arabia waits for the gazette's written consent, see `docs/sources.md`).
 
