@@ -1,0 +1,6 @@
+# Local secrets for `npm run dev`: copy to .dev.vars (git ignores it) and fill in.
+# The deployed Worker gets them with `npx wrangler secret put <NAME>` (docs/setup.md).
+# Never commit a value.
+
+# Groq, for the translations (#46). Empty: the translator skips its runs.
+GROQ_API_KEY=

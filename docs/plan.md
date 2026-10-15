@@ -52,7 +52,7 @@ The plan has three levels. Only the first is fixed; everything else is a startin
 
 | Level | What it covers | Can it change? |
 | --- | --- | --- |
-| Fixed | Official sources only, never media or trending lists; GitHub flow with every pull request approved by the other person; the shared definitions (article format, API, database); one AI call per article; the fetcher's small-runs rule | Only if we both agree, in a pull request |
+| Fixed | Official sources only, never media or trending lists; GitHub flow with every pull request approved by the other person; the shared definitions (article format, API, database); one AI call per article (for the summary; translations add one per language, agreed 15 Oct, #46); the fetcher's small-runs rule | Only if we both agree, in a pull request |
 | Must for the MVP | The "Done when" check of each of the 8 items: news comes in, gets summarized, and shows in the feed and the detail screen | The goal stays; how we reach it is up to the owner |
 | Suggestion | Details such as Top today, the 7-day window, the "new updates" pill, dimmed read items, filters, layout and wording, cache times and other numbers | Yes. The owner decides; the app still works without them |
 
@@ -107,6 +107,7 @@ The MVP is a Kickoff plus 8 items, 4 each. This is our suggested split: Yurii ow
 | 6 | Fetcher: small run every minute, 1 source at a time | Yurii | 4 | All sources checked at least hourly, new articles saved without duplicates |
 | 7 | AI summaries, noise filter and tags | Roman | 4 | New articles get all summary fields within an hour |
 | 8 | Source health and cleanup of old texts | Roman | 2 | Each source shows its status; expired texts are cleared |
+| 9 | Translations, after the MVP: Ukrainian and Russian | Yurii | 2 | News in the feed gets its Ukrainian and Russian text, and the API returns it with `lang` |
 
 **Order:** Kickoff first, then item 1 (it gives everyone real data from Cloudflare). Items 2, 5 and 7 start at the same time; 3 and 4 follow the design; 6 follows 5; 8 comes last.
 
@@ -244,6 +245,14 @@ Each item becomes one GitHub issue owned by one person. **Must** is what the ite
 - **Must:** each source gets a status (active, stale, moved, broken, blocked) after every check; a daily job clears `text` once `text_expires_at` has passed and keeps the summary.
 - **Suggested:** `GET /health` summary; a GitHub issue opened automatically for a broken source.
 - **Done when:** a broken test source shows "broken", and a row with a past expiry loses its text but keeps its summary.
+
+### 9. Translations, after the MVP (Yurii)
+
+Agreed on #46 (15 Oct): a second AI call per article, one per language; the summarizer (item 7) stays as it is.
+
+- **Must:** `article_translations` (migration `0007`); a translator step on its own cron trigger that translates the headline, short summary and summary of news in the feed into Ukrainian and Russian, claims its work first and stores which model wrote each one; providers per language in one constant (`TRANSLATORS`), Groq only for now (Ukrainian Qwen then GPT-OSS, Russian GPT-OSS then Qwen), the Worker secret `GROQ_API_KEY`; `lang=uk` and `lang=ru` on `GET /articles` and `GET /articles/:id`, English where there is no translation yet.
+- **Suggested:** the app's language setting: a small language icon next to the date at the top of the feed opens a native language menu (a local iOS Simulator run shown to Yurii before it is built); more languages; Workers AI as a provider if Groq's free limits are not enough.
+- **Done when:** with the secret set, new news articles get their Ukrainian and Russian text within an hour, and `GET /articles?lang=uk` returns it.
 
 ## How we work together
 
