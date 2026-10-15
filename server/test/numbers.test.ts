@@ -4,6 +4,8 @@ import { missingNumbers } from "../src/translator/numbers";
 
 const UK = LANGUAGES.uk.numbers;
 const RU = LANGUAGES.ru.numbers;
+const ES = LANGUAGES.es.numbers;
+const DE = LANGUAGES.de.numbers;
 
 describe("missingNumbers", () => {
   it.each([
@@ -89,5 +91,54 @@ describe("missingNumbers", () => {
 
   it("reports English thousands copied into Russian", () => {
     expect(missingNumbers("$1,500 per family", "1,500 долларов на семью", RU)).toEqual(["1,500"]);
+  });
+
+  // Spanish and German: a comma is the decimal mark, a full stop or a space groups thousands.
+  it.each([
+    ["3.5% of GDP", "3,5 % del PIB"],
+    ["$1,250,000", "1.250.000 dólares"],
+    ["$1,250,000", "1 250 000 dólares"],
+    ["$1,500 per family", "1500 dólares por familia"],
+    ["1.2 billion euros", "1,2 mil millones de euros"],
+    ["$1,234.5 million", "1.234,5 millones de dólares"],
+    ["Law 14.133/2021", "Ley 14.133/2021"],
+    ["Law No. 9,394", "Ley n.º 9,394"],
+    ["Law No. 9,394", "Ley núm. 9.394"],
+    ["on 19 November 2026", "el 19 de noviembre de 2026"],
+    ["dated 15.10.2026", "del 15 de octubre de 2026"],
+    ["presented a bill on 14/10/2026", "presentó un proyecto de ley el 14/10/2026"],
+    ["closes at 11:59pm on 5 November 2026", "cierra a las 23:59 del 5 de noviembre de 2026"],
+    ["at 5 p.m.", "a las 17:00"],
+    ["at 5 p.m.", "a las 5 de la tarde"],
+  ])("finds every number of %j in the Spanish %j", (english, translation) => {
+    expect(missingNumbers(english, translation, ES)).toEqual([]);
+  });
+
+  it.each([
+    ["3.5% of GDP", "3,5 % des BIP"],
+    ["$1,500 per family", "1.500 Dollar pro Familie"],
+    ["$1,250,000", "1 250 000 Dollar"],
+    ["closes at 5pm on 23 December 2026", "endet am 23. Dezember 2026 um 17.00 Uhr"],
+    ["closes at 5pm on 23 December 2026", "endet am 23. Dezember 2026 um 17 Uhr"],
+    ["closes at 11:59pm", "endet um 23.59 Uhr"],
+    ["Law No. 9,394", "Gesetz Nr. 9,394"],
+    ["Law No. 9,394", "Gesetz Nr. 9.394"],
+    ["dated 15.10.2026", "vom 15.10.2026"],
+    ["dated 01.03.2027", "vom 1. März 2027"],
+    ["published 2026-10-14", "veröffentlicht am 14. Oktober 2026"],
+  ])("finds every number of %j in the German %j", (english, translation) => {
+    expect(missingNumbers(english, translation, DE)).toEqual([]);
+  });
+
+  it.each([
+    ["English thousands copied", "$1,500 per family", "1,500 Dollar pro Familie", DE, ["1,500"]],
+    ["an English decimal point copied", "3.5% of GDP", "3.5 % des BIP", DE, ["3.5"]],
+    ["an English decimal point copied", "3.5% of GDP", "3.5 % del PIB", ES, ["3.5"]],
+    ["a thousands point read as a decimal", "1.5 million euros", "1.500 Millionen Euro", DE, ["1.5"]],
+    ["a dropped amount", "1.2 billion euros for 300 schools", "1,2 mil millones de euros para escuelas", ES, ["300"]],
+    ["a changed month", "dated 15.10.2026", "del 15 de noviembre de 2026", ES, ["15.10.2026"]],
+    ["a wrong time", "at 5 p.m.", "um 15.00 Uhr", DE, ["5 p.m."]],
+  ])("reports %s", (_, english, translation, style, missing) => {
+    expect(missingNumbers(english, translation, style)).toEqual(missing);
   });
 });

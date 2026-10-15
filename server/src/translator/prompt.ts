@@ -19,11 +19,12 @@ export interface Language {
   /** Its English name, for the prompt. */
   name: string;
   /**
-   * A letter of its script. Every paragraph of a translation must have some,
-   * and in every sentence they must outnumber the letters of untranslated
-   * English (Latin words in lower case). Latin names such as "Emmanuel Macron",
-   * acronyms such as "NATO", brands such as "iPhone", and quoted titles are
-   * allowed next to them.
+   * A letter of its script. Every paragraph of a translation must have some.
+   * For a language in another script than Latin (Ukrainian, Russian), in every
+   * sentence they must outnumber the letters of untranslated English (Latin
+   * words in lower case). Latin names such as "Emmanuel Macron", acronyms such
+   * as "NATO", brands such as "iPhone", and quoted titles are allowed next to
+   * them. Spanish and German use `stopWords` instead.
    */
   letters: RegExp;
   /**
@@ -39,13 +40,27 @@ export interface Language {
    * Moïse) is not one.
    */
   foreign?: RegExp;
+  /**
+   * For a language in Latin letters (Spanish, German), where `letters` cannot
+   * tell it from English: its own function words and those of the languages it
+   * may be confused with (words.ts). In no sentence may one of the foreign
+   * languages have more of them than the language's own, and a field of at
+   * least OWN_WORDS_FROM words must have one of its own.
+   */
+  stopWords?: StopWords;
   /** How it writes numbers and dates, for the prompt and the number check. */
   numbers: NumberStyle;
 }
 
+export interface StopWords {
+  own: ReadonlySet<string>;
+  foreign: readonly ReadonlySet<string>[];
+}
+
 export function systemPrompt(language: Language): string {
   const name = language.name;
-  const numbers = language.numbers.decimalComma ? "1 250 000; 3,5 %" : "1,250,000; 3.5%";
+  const style = language.numbers;
+  const numbers = !style.decimalComma ? "1,250,000; 3.5%" : style.thousandsDot ? "1.250.000; 3,5 %" : "1 250 000; 3,5 %";
   return `You translate short news summaries of official government decisions from English into ${name} for a news app.
 Return one JSON object with the fields headline, shortSummary and summary, each the ${name} translation of the same English field.
 Rules:
@@ -75,8 +90,8 @@ const LENGTH_ROOM = 20;
  */
 export const OWN_LETTERS_FROM = 100;
 
-/** Where a sentence ends: after . ! ? or … and spaces, before a capital letter or an opening quote. */
-const SENTENCE_END = /(?<=[.!?…])\s+(?=[\p{Lu}«"„“‘(])/u;
+/** Where a sentence ends: after . ! ? or … and spaces, before a capital letter, an opening quote or ¿ ¡. */
+const SENTENCE_END = /(?<=[.!?…])\s+(?=[\p{Lu}«"„“‘(¿¡])/u;
 
 /** Quoted titles and names, and parentheses, which a translation may keep in their own language. */
 const QUOTED = /«[^»]*»|„[^“”]*[“”]|“[^”]*”|"[^"]*"|‘[^’]*’|(?<!\p{L})'[^']*'(?!\p{L})|\([^)]*\)/gu;
@@ -97,26 +112,72 @@ const englishLetters = (text: string) =>
   (text.match(LATIN_WORD) ?? []).filter((w) => w === w.toLowerCase()).reduce((n, w) => n + w.replace(/['’-]/g, "").length, 0);
 
 /**
+ * A Spanish or German field of at least this many words must have one of the
+ * language's own function words: a sentence in Title Case English has none of
+ * the English ones in lower case to count.
+ */
+export const OWN_WORDS_FROM = 8;
+
+const WORD = /\p{L}+/gu;
+const isCapital = (word: string | undefined) => !!word && /^\p{Lu}/u.test(word);
+
+/**
+ * The function words of a sentence (words.ts): the language's own, and each
+ * foreign language's. A foreign one inside a name does not count: in lower
+ * case between two capitalised words ("Bank of England", "Ministerio de
+ * Sanidad"), or capitalised before one, other than at the start of the
+ * sentence ("Die Linke", "The Guardian").
+ */
+function functionWords(sentence: string, stopWords: StopWords) {
+  const tokens = sentence.match(WORD) ?? [];
+  let own = 0;
+  const foreign = stopWords.foreign.map(() => 0);
+  tokens.forEach((token, i) => {
+    const word = token.toLowerCase();
+    if (stopWords.own.has(word)) {
+      own++;
+      return;
+    }
+    const j = stopWords.foreign.findIndex((set) => set.has(word));
+    const inName = i > 0 && isCapital(tokens[i + 1]) && (isCapital(token) || isCapital(tokens[i - 1]));
+    if (j >= 0 && !inName) foreign[j]++;
+  });
+  return { own, foreign, words: tokens.length };
+}
+
+/** Lower case, single spaces, no full stop at the end: to see whether a field is the English unchanged. */
+const plain = (text: string) => text.toLowerCase().replace(/\s+/g, " ").trim().replace(/\.$/, "");
+
+/**
  * Whether a translated field is in the language. Field by field, so one field
  * in a neighbouring language is caught; paragraph by paragraph and sentence by
  * sentence, so a paragraph, a sentence or most of a headline left in English is
- * caught. Each test was run on the 120 Ukrainian answers of the translation
- * test (#43) and rejects none of them.
+ * caught. For Ukrainian and Russian, each test was run on the 120 Ukrainian
+ * answers of the translation test (#43) and rejects none of them. For Spanish
+ * and German (`stopWords`), a sentence is not in the language when English or
+ * the other language has more function words in it, and a field is not when
+ * it is the English unchanged.
  */
-function inLanguage(text: string, language: Language): boolean {
+function inLanguage(text: string, english: string, language: Language): boolean {
   if (language.foreign?.test(text)) return false;
   if (language.own && count(text, language.letters) >= OWN_LETTERS_FROM && !language.own.test(text)) return false;
-  return text
-    .split("\n")
-    .filter((paragraph) => paragraph.trim())
-    .every(
-      (paragraph) =>
-        language.letters.test(paragraph) &&
-        paragraph.split(SENTENCE_END).every((sentence) => {
-          const open = sentence.replace(QUOTED, " ").replace(LINK, " ");
-          return englishLetters(open) <= count(open, language.letters);
-        }),
-    );
+  const parts = text.split("\n").filter((paragraph) => paragraph.trim());
+  if (!parts.every((paragraph) => language.letters.test(paragraph))) return false;
+  // Quoted titles, parentheses and links may stay in their own language.
+  const sentences = parts.flatMap((paragraph) => paragraph.split(SENTENCE_END)).map((s) => s.replace(QUOTED, " ").replace(LINK, " "));
+  const stopWords = language.stopWords;
+  if (!stopWords) return sentences.every((open) => englishLetters(open) <= count(open, language.letters));
+
+  if ((text.match(WORD) ?? []).length >= 3 && plain(text) === plain(english)) return false;
+  let own = 0;
+  let words = 0;
+  for (const sentence of sentences) {
+    const found = functionWords(sentence, stopWords);
+    if (found.foreign.some((n) => n > found.own)) return false;
+    own += found.own;
+    words += found.words;
+  }
+  return words < OWN_WORDS_FROM || own > 0;
 }
 
 const FIELDS = ["headline", "shortSummary", "summary"] as const;
@@ -173,7 +234,7 @@ export function toTranslation(
     if (field === "headline") text = text.replace(/\.$/, "");
     const max = english[field].length * MAX_LENGTH_RATIO + LENGTH_ROOM;
     if (text.length > max) problems.push(`${field} is too long (${text.length} characters, at most ${max})`);
-    else if (!inLanguage(text, language)) problems.push(`${field} is not in ${language.name}`);
+    else if (!inLanguage(text, english[field], language)) problems.push(`${field} is not in ${language.name}`);
     else {
       // No missing information: every number of the English field is in its translation.
       const missing = missingNumbers(english[field], text, language.numbers);

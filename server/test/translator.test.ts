@@ -1,4 +1,4 @@
-import { env, exports } from "cloudflare:workers";
+import { env } from "cloudflare:workers";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { LANG_PAGE_CONDITIONS } from "../src/api";
 import {
@@ -6,193 +6,57 @@ import {
   CLAIM_MINUTES,
   ENQUEUE,
   FREE_CLAIM,
-  LANGS,
   LANGUAGES,
   MAX_ATTEMPTS,
   NEXT_LANG_SEQ,
+  RELEASE_STALE,
   TRANSLATORS,
   runTranslator,
 } from "../src/translator";
 import { toTranslation, userMessage } from "../src/translator/prompt";
 import { GROQ_URL } from "../src/translator/providers";
+import {
+  ENGLISH,
+  stored,
+  GEMMA,
+  GLM_45,
+  GLM_47,
+  GPT_OSS,
+  QWEN,
+  type ArticlesPage,
+  type Reply,
+  answer,
+  chat,
+  claimRow,
+  fakeAi,
+  fakeApis,
+  get,
+  hideSeed,
+  hoursAgo,
+  ids,
+  inMinutes,
+  insertNews,
+  langOrder,
+  minutesAgo,
+  only,
+  outcome,
+  rowsRead,
+  testEnv,
+  translation,
+  translationRows,
+  uk,
+} from "./helpers";
 
-const QWEN = "groq:qwen/qwen3.8-27b";
-const GPT_OSS = "groq:openai/gpt-oss-120b";
-const GEMMA = "workers-ai:@cf/google/gemma-4-26b-a4b-it";
+/** These tests are about Groq and the Ukrainian and Russian pair. */
+const fakeGroq = fakeApis;
+type GroqReply = Reply;
 
-const stored = (date: Date) => `${date.toISOString().slice(0, 19)}Z`;
-const hoursAgo = (hours: number) => stored(new Date(Date.now() - hours * 3_600_000));
-const minutesAgo = (minutes: number) => stored(new Date(Date.now() - minutes * 60_000));
-/** A run's `now`, this many minutes from now. */
-const inMinutes = (minutes: number) => new Date(Date.now() + minutes * 60_000);
-/** After an unusable answer, the next try waits until the claim runs out. */
-const AFTER_BACKOFF = CLAIM_MINUTES + 1;
-
-const ENGLISH = {
-  headline: "Germany's cabinet approves the 2027 draft budget",
-  shortSummary: "The federal cabinet approved the draft budget for 2027.",
-  summary: "The federal cabinet approved the draft budget for 2027.\nThe Bundestag now debates it.",
-};
-
-/** A model's answer: the translation of ENGLISH into `lang`, with fields replaced. */
-const answer = (lang: "uk" | "ru", overrides: Record<string, unknown> = {}) =>
-  JSON.stringify({
-    ...(lang === "uk"
-      ? {
-          headline: "Уряд Німеччини схвалив проєкт бюджету на 2027 рік",
-          shortSummary: "Федеральний уряд схвалив проєкт бюджету на 2027 рік.",
-          summary: "Федеральний уряд схвалив проєкт бюджету на 2027 рік.\n\nТепер його обговорює Бундестаг.",
-        }
-      : {
-          headline: "Правительство Германии одобрило проект бюджета на 2027 год",
-          shortSummary: "Федеральное правительство одобрило проект бюджета на 2027 год.",
-          summary: "Федеральное правительство одобрило проект бюджета на 2027 год.\n\nТеперь его обсуждает бундестаг.",
-        }),
-    ...overrides,
-  });
-const uk = (overrides: Record<string, unknown> = {}) => answer("uk", overrides);
-
-/** A news article in the feed with its English summary (seed articles are hidden in these tests). */
-async function insertNews(id: string, publishedAt: string, isNews: number | null = 1) {
-  await env.DB.prepare(
-    `INSERT INTO articles (id, source_id, url, original_title, published_at, fetched_at, headline, short_summary,
-                           summary, is_news, importance, decision_type, summarized_at, topics, tags)
-     VALUES (?, 'de-federal-government', ?, ?, ?, ?, ?, ?, ?, ?, 4, 'cabinet-decision', ?, '["economy"]', '[]')`,
-  )
-    .bind(id, `https://example.gov/${id}`, `Kabinett ${id}`, publishedAt, publishedAt, ENGLISH.headline, ENGLISH.shortSummary, ENGLISH.summary, isNews, publishedAt)
-    .run();
-}
-
-async function translation(id: string, lang: "uk" | "ru" = "uk") {
-  return env.DB.prepare("SELECT * FROM article_translations WHERE article_id = ? AND lang = ?")
-    .bind(id, lang)
-    .first<Record<string, unknown>>();
-}
-
-const translationRows = async () =>
-  (await env.DB.prepare("SELECT COUNT(*) AS n FROM article_translations").first<{ n: number }>())?.n;
-
-/** Each language's articles in lang_seq order. */
-async function langOrder() {
-  const { results } = await env.DB.prepare(
-    "SELECT lang, article_id, lang_seq FROM article_translations WHERE lang_seq IS NOT NULL ORDER BY lang DESC, lang_seq",
-  ).all<{ lang: string; article_id: string; lang_seq: number }>();
-  return results.map((r) => `${r.lang} ${r.lang_seq} ${r.article_id}`);
-}
-
-const chat = (content: unknown, finishReason = "stop") => ({
-  choices: [{ message: { role: "assistant", content }, finish_reason: finishReason }],
-});
-
-type GroqReply = string | { status: number; body?: unknown } | Error;
-
-interface GroqRequest {
-  url: string;
-  authorization: string | null;
-  model: string;
-  lang: "uk" | "ru";
-  body: Record<string, unknown>;
-}
-
-/**
- * A fake Groq. `replies` lists, per model, what it answers to its next
- * requests; once a model's list is empty it answers with a good translation
- * into the language the prompt asks for. Records every request.
- */
-function fakeGroq(replies: Record<string, GroqReply[]> = {}) {
-  const requests: GroqRequest[] = [];
-  const fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
-    const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
-    const model = String(body.model);
-    const [system] = body.messages as { content: string }[];
-    const lang = system.content.includes("into Russian") ? "ru" : "uk";
-    requests.push({ url: String(input), authorization: new Headers(init?.headers).get("authorization"), model, lang, body });
-    const reply = replies[`groq:${model}`]?.shift() ?? answer(lang);
-    if (reply instanceof Error) throw reply;
-    const { status, body: out } = typeof reply === "string" ? { status: 200, body: chat(reply) } : reply;
-    return new Response(JSON.stringify(out ?? {}), { status, headers: { "content-type": "application/json" } });
-  }) as typeof globalThis.fetch;
-  return { fetch, requests };
-}
-
-/** A fake Workers AI binding: answers from a list (a Ukrainian translation once it is empty) and records the calls. */
-function fakeAi(...replies: (unknown | Error)[]) {
-  const calls: { model: string; inputs: Record<string, unknown> }[] = [];
-  const ai = {
-    run: async (model: string, inputs: Record<string, unknown>) => {
-      calls.push({ model, inputs });
-      const reply = replies.length ? replies.shift() : chat(uk());
-      if (reply instanceof Error) throw reply;
-      return reply;
-    },
-  } as unknown as Ai;
-  return { ai, calls };
-}
-
-/** The Worker's env with a fake AI binding and, unless `groqKey` is null, a Groq key. */
-function testEnv(groqKey: string | null = "test-key", ai: Ai = fakeAi().ai) {
-  return { ...env, AI: ai, GROQ_API_KEY: groqKey ?? undefined };
-}
-
-const outcome = (results: { articleId: string; lang: string; ok: boolean; provider?: string }[]) =>
-  results.map((r) => `${r.articleId} ${r.lang} ${r.ok ? r.provider : "failed"}`);
-
-interface Article {
-  id: string;
-  headline: string;
-  shortSummary: string;
-  summary: string;
-  lang?: string;
-  feedSeq?: number;
-  addedAt?: string;
-}
-
-interface ArticlesPage {
-  items: Article[];
-  nextCursor: string | null;
-  top: Article[];
-}
-
-async function get(path: string) {
-  const response = await exports.default.fetch(`https://api.test${path}`);
-  return { status: response.status, body: (await response.json()) as unknown };
-}
-
-const ids = async (path: string) => ((await get(path)).body as ArticlesPage).items.map((a) => a.id);
-
-/** The D1 rows `work` reads (`meta.rows_read` of every statement it runs), what D1's free plan counts. */
-async function rowsRead(work: () => Promise<unknown>): Promise<number> {
-  type Meta = { meta?: { rows_read?: number } };
-  const statement = Object.getPrototypeOf(env.DB.prepare("SELECT 1"));
-  const database = Object.getPrototypeOf(env.DB);
-  let read = 0;
-  const count = (result: Meta) => {
-    read += result?.meta?.rows_read ?? 0;
-    return result;
-  };
-  for (const method of ["all", "run"] as const) {
-    const original = statement[method];
-    vi.spyOn(statement, method).mockImplementation(async function (this: unknown, ...args: unknown[]) {
-      return count(await original.apply(this, args));
-    });
-  }
-  const batch = database.batch;
-  vi.spyOn(database, "batch").mockImplementation(async function (this: unknown, ...args: unknown[]) {
-    const results = await batch.apply(this, args);
-    for (const result of results) count(result);
-    return results;
-  });
-  try {
-    await work();
-  } finally {
-    vi.restoreAllMocks();
-  }
-  return read;
-}
+/** After the first unusable answer, the next try waits 10 minutes; after the second, 20. */
+const AFTER_BACKOFF = 11;
+const AFTER_SECOND_BACKOFF = AFTER_BACKOFF + 21;
 
 beforeEach(async () => {
-  // Only the articles each test adds are news, so the runs below pick exactly those.
-  await env.DB.prepare("UPDATE articles SET is_news = 0 WHERE model = 'seed'").run();
+  await hideSeed();
 });
 
 afterEach(() => {
@@ -200,6 +64,11 @@ afterEach(() => {
 });
 
 describe("runTranslator", () => {
+  // Spanish and German (Z.ai) are off in these tests; queue.test.ts covers all four languages.
+  beforeEach(async () => {
+    await only("uk", "ru");
+  });
+
   it("translates news articles into Ukrainian with Qwen and Russian with GPT-OSS, oldest English first, once each", async () => {
     await insertNews("old", hoursAgo(5));
     await insertNews("new", hoursAgo(1));
@@ -224,11 +93,15 @@ describe("runTranslator", () => {
       // The English it was made from, and the first place in the Ukrainian feed.
       source_summarized_at: (await env.DB.prepare("SELECT summarized_at FROM articles WHERE id = 'old'").first<string>("summarized_at")),
       lang_seq: 1,
+      state: "published",
       claimed_at: null,
       queued_at: null,
+      next_attempt_at: null,
+      last_error: null,
       attempts: 0,
     });
     expect(row?.translated_at).toMatch(/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/);
+    expect(row?.published_at).toBe(row?.translated_at);
     // Each language has its own numbers.
     expect(await translation("old", "ru")).toMatchObject({
       headline: "Правительство Германии одобрило проект бюджета на 2027 год",
@@ -294,16 +167,20 @@ describe("runTranslator", () => {
     expect(await translation("a1", "ru")).toMatchObject({ model: QWEN, headline: "Правительство Германии одобрило проект бюджета на 2027 год" });
   });
 
-  it("when every Groq model answers 429, frees the claims at once without counting an attempt", async () => {
+  it("when every Groq model answers 429, puts them in retrying without counting an attempt, and tries again after the wait", async () => {
     await insertNews("a1", hoursAgo(1));
     await insertNews("a2", hoursAgo(2));
     // Another run's live claim, which this run must leave alone.
     await insertNews("busy", hoursAgo(0.5));
-    await env.DB.prepare("INSERT INTO article_translations (article_id, lang, claimed_at) VALUES ('busy', 'uk', ?)").bind(minutesAgo(1)).run();
+    await env.DB.batch(["uk", "ru"].map((lang) => env.DB.prepare(ENQUEUE).bind(lang, minutesAgo(2), hoursAgo(8 * 24), hoursAgo(7 * 24))));
+    await env.DB.prepare("UPDATE article_translations SET state = 'translating', claimed_at = ?1, state_at = ?1 WHERE article_id = 'busy' AND lang = 'uk'")
+      .bind(minutesAgo(1))
+      .run();
     const groq = fakeGroq({ [QWEN]: [{ status: 429 }], [GPT_OSS]: [{ status: 429 }] });
     const ai = fakeAi();
+    const now = new Date();
 
-    const results = await runTranslator(testEnv("test-key", ai.ai), { maxTranslations: 4, fetch: groq.fetch });
+    const results = await runTranslator(testEnv("test-key", ai.ai), { maxTranslations: 4, fetch: groq.fetch, now });
 
     expect(results.map((r) => `${r.articleId} ${r.lang} ${r.error}`)).toEqual([
       "a2 uk no translator answered",
@@ -316,54 +193,77 @@ describe("runTranslator", () => {
     expect(ai.calls).toHaveLength(0);
     for (const id of ["a1", "a2"]) {
       for (const lang of ["uk", "ru"] as const) {
-        // Still in the queue: it just waits.
-        expect(await translation(id, lang)).toMatchObject({ claimed_at: null, attempts: 0, translated_at: null, headline: null });
+        // Still in the queue: it waits for the next run, without an attempt.
+        expect(await translation(id, lang)).toMatchObject({
+          state: "retrying",
+          claimed_at: null,
+          attempts: 0,
+          outage_retries: 1,
+          next_attempt_at: stored(new Date(now.getTime() + 2 * 60_000)),
+          translated_at: null,
+          headline: null,
+        });
         expect((await translation(id, lang))?.queued_at).not.toBeNull();
+        expect((await translation(id, lang))?.last_error).toContain("HTTP 429");
       }
     }
-    expect((await translation("busy", "uk"))?.claimed_at).not.toBeNull();
+    expect(await translation("busy", "uk")).toMatchObject({ state: "translating", claimed_at: minutesAgo(1) });
 
-    // The next run, at once and with quota back, takes the same ones.
-    const again = await runTranslator(testEnv(), { maxTranslations: 4, fetch: fakeGroq().fetch });
+    // A run at once leaves them waiting and takes the one still queued; the next run, two minutes later
+    // and with quota back, takes the same ones.
+    expect(outcome(await runTranslator(testEnv(), { maxTranslations: 4, fetch: fakeGroq().fetch, now }))).toEqual([`busy ru ${GPT_OSS}`]);
+    const again = await runTranslator(testEnv(), { maxTranslations: 4, fetch: fakeGroq().fetch, now: new Date(now.getTime() + 2 * 60_000) });
     expect(outcome(again)).toEqual([`a2 uk ${QWEN}`, `a2 ru ${GPT_OSS}`, `a1 uk ${QWEN}`, `a1 ru ${GPT_OSS}`]);
+    expect(await translation("a1", "uk")).toMatchObject({ state: "published", outage_retries: 0, last_error: null });
   });
 
-  it("queues, claims, frees a claim and finds a language's next number through indexes, not by reading the tables", async () => {
+  it("queues, claims, frees a claim, releases a stale one and finds a language's next number through indexes", async () => {
     const plan = async (sql: string, ...binds: (string | number)[]) =>
       (await env.DB.prepare(`EXPLAIN QUERY PLAN ${sql}`).bind(...binds).all<{ detail: string }>()).results
         .map((r) => r.detail)
         .join("; ");
-    // New English since the newest queued; the queue's waiting rows, oldest first.
+    // New English since the newest queued, for an enabled language.
     const enqueue = await plan(ENQUEUE, "uk", minutesAgo(0), hoursAgo(8 * 24), hoursAgo(7 * 24));
-    expect(enqueue).toMatch(/^SEARCH a USING INDEX articles_news_summarized \(summarized_at>\?\)/);
+    expect(enqueue).toContain("SEARCH l EXISTS USING INDEX sqlite_autoindex_translation_langs_1 (lang=?)");
+    expect(enqueue).toContain("SEARCH a USING INDEX articles_news_summarized (summarized_at>?)");
     expect(enqueue).toContain("SEARCH w USING COVERING INDEX article_translations_source (lang=?");
-    const claim = await plan(CLAIM, minutesAgo(0), hoursAgo(7 * 24), '["uk","ru"]', minutesAgo(CLAIM_MINUTES), 2);
-    expect(claim).toContain("SCAN q USING INDEX article_translations_queue");
+    // Per language, the waiting rows in order and the due retries, each through its own partial index.
+    const claim = await plan(CLAIM, minutesAgo(0), hoursAgo(7 * 24), 2, '["uk","ru"]');
+    expect(claim).toContain("SEARCH x USING INDEX article_translations_ready (lang=?)");
+    expect(claim).toContain("SEARCH x USING COVERING INDEX article_translations_retry (lang=? AND next_attempt_at<?)");
+    expect(claim).toContain("SEARCH r USING INTEGER PRIMARY KEY (rowid=?)");
     expect(claim).toContain("SEARCH a USING INDEX sqlite_autoindex_articles_1 (id=?)");
-    expect(await plan(FREE_CLAIM, "a1", "uk", minutesAgo(0))).toMatch(/SEARCH article_translations USING INDEX sqlite_autoindex_article_translations_1 \(article_id=\? AND lang=\?\)/);
+    expect(claim).not.toMatch(/SCAN (r|x|t|a)\b/);
+    expect(await plan(RELEASE_STALE, minutesAgo(0), minutesAgo(CLAIM_MINUTES))).toMatch(/SEARCH article_translations USING (COVERING )?INDEX article_translations_claims \(claimed_at<\?\)/);
+    expect(await plan(FREE_CLAIM, "a1", "uk", minutesAgo(0), minutesAgo(0))).toMatch(/SEARCH article_translations USING INDEX sqlite_autoindex_article_translations_1 \(article_id=\? AND lang=\?\)/);
     const nextSeq = NEXT_LANG_SEQ.replace("?7", "?");
     expect(await plan(nextSeq, "uk")).toMatch(/SEARCH n USING COVERING INDEX article_translations_lang_seq \(lang=\?/);
   });
 
-  it("without the GROQ_API_KEY secret, claims nothing and logs why", async () => {
+  it("without the GROQ_API_KEY secret, queues but claims nothing, and logs why", async () => {
     await insertNews("a1", hoursAgo(1));
     const groq = fakeGroq();
     const ai = fakeAi();
     const log = vi.spyOn(console, "log");
 
-    const results = await runTranslator(testEnv(null, ai.ai), { maxTranslations: 6, fetch: groq.fetch });
+    const results = await runTranslator(testEnv(null, ai.ai, null), { maxTranslations: 6, fetch: groq.fetch });
 
     expect(results).toEqual([]);
     expect(groq.requests).toHaveLength(0);
     expect(ai.calls).toHaveLength(0);
-    expect(await translationRows()).toBe(0);
+    // Nothing is lost: both languages wait in the queue for the key.
+    expect(await translationRows()).toBe(2);
+    for (const lang of ["uk", "ru"] as const) expect(await translation("a1", lang)).toMatchObject({ state: "queued", claimed_at: null });
     expect(log).toHaveBeenCalledWith(expect.stringContaining('"message":"translator skipped"'));
+    expect(log).toHaveBeenCalledWith(expect.stringContaining('"queued":2,"waiting":["uk","ru","es","de"]'));
   });
 
-  it("counts an unusable answer as an attempt, waits before the next try, and gives up after the last one", async () => {
+  it("counts an unusable answer as an attempt, waits longer before each next try, and fails after the last one", async () => {
     await insertNews("bad", hoursAgo(1));
-    for (let i = 0; i < MAX_ATTEMPTS; i++) {
-      const now = inMinutes(i * AFTER_BACKOFF);
+    // The tries: at once, after the first wait (10 minutes), after the second (20 more).
+    const tries = [0, AFTER_BACKOFF, AFTER_SECOND_BACKOFF];
+    for (const [i, minutes] of tries.entries()) {
+      const now = inMinutes(minutes);
       const groq = fakeGroq({ [QWEN]: ["not json at all"], [GPT_OSS]: ["not json at all"] });
       const results = await runTranslator(testEnv(), { maxTranslations: 6, fetch: groq.fetch, now });
       expect(results).toEqual([
@@ -372,12 +272,25 @@ describe("runTranslator", () => {
       ]);
       // An unusable answer is the article's problem, not the provider's: no fallback for it.
       expect(groq.requests).toHaveLength(2);
-      // The claim stays, so a run a minute later does not try again yet.
-      const soon = new Date(now.getTime() + 60_000);
-      expect(await runTranslator(testEnv(), { maxTranslations: 6, fetch: fakeGroq().fetch, now: soon })).toEqual([]);
+      const row = await translation("bad", "uk");
+      if (i < MAX_ATTEMPTS - 1) {
+        const wait = 10 * 2 ** i;
+        expect(row).toMatchObject({ state: "retrying", attempts: i + 1, next_attempt_at: stored(new Date(now.getTime() + wait * 60_000)) });
+        // A run just before the wait is over does not try again yet.
+        const soon = new Date(now.getTime() + (wait - 1) * 60_000);
+        expect(await runTranslator(testEnv(), { maxTranslations: 6, fetch: fakeGroq().fetch, now: soon })).toEqual([]);
+      }
+      expect(row?.last_error).toBe(`${QWEN}: the answer is not valid JSON`);
     }
-    expect(await translation("bad", "uk")).toMatchObject({ attempts: MAX_ATTEMPTS, translated_at: null, headline: null });
-    const after = inMinutes(MAX_ATTEMPTS * AFTER_BACKOFF);
+    expect(await translation("bad", "uk")).toMatchObject({
+      state: "failed",
+      attempts: MAX_ATTEMPTS,
+      queued_at: null,
+      next_attempt_at: null,
+      translated_at: null,
+      headline: null,
+    });
+    const after = inMinutes(10 * 60);
     expect(await runTranslator(testEnv(), { maxTranslations: 6, fetch: fakeGroq().fetch, now: after })).toEqual([]);
     // It never shows in that language.
     expect((await get("/articles/bad?lang=uk")).status).toBe(404);
@@ -401,6 +314,7 @@ describe("runTranslator", () => {
     expect(ukResult?.error).toContain(problem);
     // All or nothing: the fields that passed are not stored either.
     expect(await translation("a1", "uk")).toMatchObject({
+      state: "retrying",
       attempts: 1,
       headline: null,
       short_summary: null,
@@ -408,8 +322,9 @@ describe("runTranslator", () => {
       lang_seq: null,
       translated_at: null,
     });
+    expect((await translation("a1", "uk"))?.last_error).toContain(problem);
     // The other language is not affected.
-    expect(await translation("a1", "ru")).toMatchObject({ attempts: 0, model: GPT_OSS, lang_seq: 1 });
+    expect(await translation("a1", "ru")).toMatchObject({ state: "published", attempts: 0, model: GPT_OSS, lang_seq: 1 });
   });
 
   it.each([
@@ -478,8 +393,8 @@ describe("runTranslator", () => {
     for (let i = 0; i < 40; i++) await insertNews(`new-${i}`, hoursAgo(50 - i));
     await translateAll();
     const idleAt80 = await rowsRead(idleRun);
-    // A run with nothing to do reads a handful of rows (13 here), not ~5 per article in the 7-day window.
-    expect(idleAt40).toBeLessThanOrEqual(15);
+    // A run with nothing to do reads a few dozen rows (45 here: 4 languages queued, 2 claimed), not ~5 per article in the 7-day window.
+    expect(idleAt40).toBeLessThanOrEqual(50);
     expect(idleAt80).toBe(idleAt40);
 
     // One new article: what it needs, still not the window.
@@ -487,7 +402,8 @@ describe("runTranslator", () => {
     const busy = await rowsRead(async () => {
       expect(outcome(await idleRun())).toEqual([`latest uk ${QWEN}`, `latest ru ${GPT_OSS}`]);
     });
-    expect(busy).toBeLessThanOrEqual(60);
+    // 99 here, with the state log and the counts the triggers keep.
+    expect(busy).toBeLessThanOrEqual(110);
   });
 
   it("does not store a translation of an English that changed meanwhile, and keeps the new English queued", async () => {
@@ -508,7 +424,7 @@ describe("runTranslator", () => {
     const [result] = await runTranslator(testEnv(), { maxTranslations: 1, fetch: slowFetch });
 
     expect(result).toMatchObject({ lang: "uk", ok: false, error: "not stored: a newer English is queued or translated" });
-    expect(await translation("a1", "uk")).toMatchObject({ headline: null, attempts_source: resummarized, attempts: 0 });
+    expect(await translation("a1", "uk")).toMatchObject({ state: "queued", headline: null, attempts_source: resummarized, attempts: 0 });
     expect((await translation("a1", "uk"))?.queued_at).not.toBeNull();
     // Once the claim runs out, the new English is translated.
     const later = await runTranslator(testEnv(), { maxTranslations: 1, fetch: fakeGroq().fetch, now: inMinutes(AFTER_BACKOFF) });
@@ -520,16 +436,24 @@ describe("runTranslator", () => {
     await insertNews("hidden-later", hoursAgo(2));
     await insertNews("a1", hoursAgo(1));
     // Queued while it was news, then hidden.
-    await env.DB.batch(LANGS.map((lang) => env.DB.prepare(ENQUEUE).bind(lang, minutesAgo(0), hoursAgo(8 * 24), hoursAgo(7 * 24))));
+    await env.DB.batch(["uk", "ru"].map((lang) => env.DB.prepare(ENQUEUE).bind(lang, minutesAgo(0), hoursAgo(8 * 24), hoursAgo(7 * 24))));
     await env.DB.prepare("UPDATE articles SET is_news = 0 WHERE id = 'hidden-later'").run();
     const groq = fakeGroq();
 
     const results = await runTranslator(testEnv(), { maxTranslations: 2, fetch: groq.fetch });
 
-    // Its two queue places are taken and dropped; the next run moves on.
+    // Its two queue places are taken and skipped, with why; the next run moves on.
     expect(results).toEqual([]);
     expect(groq.requests).toHaveLength(0);
-    for (const lang of LANGS) expect(await translation("hidden-later", lang)).toMatchObject({ queued_at: null, claimed_at: null, headline: null });
+    for (const lang of ["uk", "ru"] as const) {
+      expect(await translation("hidden-later", lang)).toMatchObject({
+        state: "skipped",
+        last_error: "the article is hidden",
+        queued_at: null,
+        claimed_at: null,
+        headline: null,
+      });
+    }
     const next = await runTranslator(testEnv(), { maxTranslations: 2, fetch: groq.fetch });
     expect(outcome(next)).toEqual([`a1 uk ${QWEN}`, `a1 ru ${GPT_OSS}`]);
   });
@@ -537,10 +461,10 @@ describe("runTranslator", () => {
   it("frees only its own claim, not a later run's", async () => {
     await insertNews("a1", hoursAgo(1));
     const current = minutesAgo(1);
-    await env.DB.prepare("INSERT INTO article_translations (article_id, lang, claimed_at) VALUES ('a1', 'uk', ?)").bind(current).run();
+    await claimRow("a1", "uk", current).run();
     // A run whose claim ran out and was taken over gives it back late.
-    await env.DB.prepare(FREE_CLAIM).bind("a1", "uk", minutesAgo(CLAIM_MINUTES + 1)).run();
-    expect((await translation("a1", "uk"))?.claimed_at).toBe(current);
+    await env.DB.prepare(FREE_CLAIM).bind("a1", "uk", minutesAgo(CLAIM_MINUTES + 1), minutesAgo(0)).run();
+    expect(await translation("a1", "uk")).toMatchObject({ state: "translating", claimed_at: current });
   });
 
   it("translates again when the English changes, and serves the old translation until the new one is stored", async () => {
@@ -586,29 +510,33 @@ describe("runTranslator", () => {
     const resummarize = (at: string) =>
       env.DB.prepare("UPDATE articles SET summarized_at = ? WHERE id = 'a1'").bind(at).run();
     await resummarize(minutesAgo(10));
-    for (let i = 0; i < MAX_ATTEMPTS; i++) {
+    // Queued again as updating: the old text stays until the new one is published.
+    await env.DB.prepare(ENQUEUE).bind("uk", minutesAgo(0), hoursAgo(8 * 24), hoursAgo(7 * 24)).run();
+    expect(await translation("a1", "uk")).toMatchObject({ state: "updating", headline: old?.headline });
+    for (const [i, minutes] of [0, AFTER_BACKOFF, AFTER_SECOND_BACKOFF].entries()) {
       // Until the last try fails, the old translation is served.
       expect((await get("/articles/a1?lang=uk")).body).toMatchObject({ headline: old?.headline });
       expect(await ids("/articles?lang=uk")).toEqual(["a1"]);
       const groq = fakeGroq({ [QWEN]: ["not json at all"] });
-      const results = await runTranslator(testEnv(), { maxTranslations: 6, fetch: groq.fetch, now: inMinutes(i * AFTER_BACKOFF) });
+      const results = await runTranslator(testEnv(), { maxTranslations: 6, fetch: groq.fetch, now: inMinutes(minutes) });
       expect(outcome(results)).toEqual(i === 0 ? ["a1 uk failed", `a1 ru ${GPT_OSS}`] : ["a1 uk failed"]);
+      if (i === 0) expect((await translation("a1", "uk"))?.state).toBe("retrying");
     }
-    expect(await translation("a1", "uk")).toMatchObject({ attempts: MAX_ATTEMPTS, headline: old?.headline, lang_seq: 1 });
+    expect(await translation("a1", "uk")).toMatchObject({ state: "failed", attempts: MAX_ATTEMPTS, headline: old?.headline, lang_seq: 1 });
     // It no longer matches the English and nothing will replace it: the article leaves the Ukrainian feed.
     expect((await get("/articles/a1?lang=uk")).status).toBe(404);
     expect(await ids("/articles?lang=uk")).toEqual([]);
     expect((await get("/articles?lang=uk")).body).toMatchObject({ top: [] });
     // Russian has the new English and stays.
     expect(await ids("/articles?lang=ru")).toEqual(["a1"]);
-    expect(await runTranslator(testEnv(), { maxTranslations: 6, fetch: fakeGroq().fetch, now: inMinutes(4 * AFTER_BACKOFF) })).toEqual([]);
+    expect(await runTranslator(testEnv(), { maxTranslations: 6, fetch: fakeGroq().fetch, now: inMinutes(2 * AFTER_SECOND_BACKOFF) })).toEqual([]);
 
     // The English changes again: its translation gets tries of its own, and the article is back.
     const latest = minutesAgo(1);
     await resummarize(latest);
-    const results = await runTranslator(testEnv(), { maxTranslations: 6, fetch: fakeGroq().fetch, now: inMinutes(5 * AFTER_BACKOFF) });
+    const results = await runTranslator(testEnv(), { maxTranslations: 6, fetch: fakeGroq().fetch, now: inMinutes(3 * AFTER_SECOND_BACKOFF) });
     expect(outcome(results)).toEqual([`a1 uk ${QWEN}`, `a1 ru ${GPT_OSS}`]);
-    expect(await translation("a1", "uk")).toMatchObject({ attempts: 0, attempts_source: latest, source_summarized_at: latest, lang_seq: 1 });
+    expect(await translation("a1", "uk")).toMatchObject({ state: "published", attempts: 0, attempts_source: latest, source_summarized_at: latest, lang_seq: 1 });
     expect(await ids("/articles?lang=uk")).toEqual(["a1"]);
   });
 
@@ -707,22 +635,28 @@ describe("runTranslator", () => {
   it("takes a translation again when its claim is from a run that was cut off", async () => {
     await insertNews("running", hoursAgo(1));
     await insertNews("cut-off", hoursAgo(2));
-    const claim = (id: string, lang: string, at: string) =>
-      env.DB.prepare("INSERT INTO article_translations (article_id, lang, claimed_at) VALUES (?, ?, ?)").bind(id, lang, at);
     await env.DB.batch([
-      claim("running", "uk", minutesAgo(1)),
-      claim("running", "ru", minutesAgo(1)),
-      claim("cut-off", "uk", minutesAgo(CLAIM_MINUTES + 1)),
-      claim("cut-off", "ru", minutesAgo(1)),
+      claimRow("running", "uk", minutesAgo(1)),
+      claimRow("running", "ru", minutesAgo(1)),
+      claimRow("cut-off", "uk", minutesAgo(CLAIM_MINUTES + 1)),
+      claimRow("cut-off", "ru", minutesAgo(1)),
     ]);
 
     const results = await runTranslator(testEnv(), { maxTranslations: 6, fetch: fakeGroq().fetch });
 
     expect(results.map((r) => `${r.articleId} ${r.lang}`)).toEqual(["cut-off uk"]);
+    // It went back to queued first, with why, then this run took it: both changes are in the log.
+    const log = await env.DB.prepare("SELECT state, detail FROM translation_events WHERE article_id = 'cut-off' AND lang = 'uk' ORDER BY rowid").all();
+    expect(log.results).toEqual([
+      { state: "translating", detail: null },
+      { state: "queued", detail: "claim ran out: the run that took it did not finish within 10 minutes" },
+      { state: "translating", detail: null },
+      { state: "published", detail: QWEN },
+    ]);
   });
 
-  it("by default uses only Groq: Qwen first for Ukrainian, GPT-OSS first for Russian", () => {
-    expect(TRANSLATORS).toEqual({ uk: [QWEN, GPT_OSS], ru: [GPT_OSS, QWEN] });
+  it("by default uses Groq for Ukrainian (Qwen first) and Russian (GPT-OSS first), Z.ai for Spanish and German", () => {
+    expect(TRANSLATORS).toEqual({ uk: [QWEN, GPT_OSS], ru: [GPT_OSS, QWEN], es: [GLM_45, GLM_47], de: [GLM_45, GLM_47] });
   });
 
   it("can use Workers AI when it is put in TRANSLATORS", async () => {
@@ -733,10 +667,10 @@ describe("runTranslator", () => {
     const results = await runTranslator(testEnv(null, ai), {
       maxTranslations: 6,
       fetch: groq.fetch,
-      providers: { uk: [QWEN, GEMMA], ru: [] },
+      providers: { uk: [QWEN, GEMMA], ru: [], es: [], de: [] },
     });
 
-    // No Groq key, so Ukrainian goes to Workers AI; Russian has no provider and is not claimed.
+    // No Groq key, so Ukrainian goes to Workers AI; Russian has no provider and waits in the queue.
     expect(outcome(results)).toEqual([`a1 uk ${GEMMA}`]);
     expect(groq.requests).toHaveLength(0);
     expect(calls[0]).toMatchObject({
@@ -748,7 +682,7 @@ describe("runTranslator", () => {
         temperature: 0.2,
       },
     });
-    expect(await translation("a1", "ru")).toBeNull();
+    expect(await translation("a1", "ru")).toMatchObject({ state: "queued", claimed_at: null });
   });
 });
 
@@ -881,8 +815,8 @@ describe("GET /articles with lang", () => {
   const finished = (id: string, lang: string, langSeq: number, headline: string) =>
     env.DB.prepare(
       `INSERT INTO article_translations (article_id, lang, headline, short_summary, summary, model, source_summarized_at,
-                                         lang_seq, translated_at)
-       VALUES (?, ?, ?, 'Коротко.', 'Підсумок.', ?, ?, ?, ?)`,
+                                         lang_seq, translated_at, published_at, state)
+       VALUES (?1, ?2, ?3, 'Коротко.', 'Підсумок.', ?4, ?5, ?6, ?7, ?7, 'published')`,
     ).bind(id, lang, headline, QWEN, hoursAgo(1), langSeq, minutesAgo(10 - langSeq));
 
   beforeEach(async () => {
@@ -893,9 +827,7 @@ describe("GET /articles with lang", () => {
       finished("translated", "uk", 1, "Заголовок"),
       finished("translated", "ru", 1, "Заголовок по-русски"),
       // Claimed but not finished: not in the Ukrainian feed.
-      env.DB.prepare("INSERT INTO article_translations (article_id, lang, claimed_at) VALUES ('english-only', 'uk', ?)").bind(
-        minutesAgo(1),
-      ),
+      claimRow("english-only", "uk", minutesAgo(1)),
     ]);
   });
 
@@ -1013,12 +945,12 @@ describe("GET /articles with lang", () => {
     },
   );
 
-  it.each([["/articles?lang=de"], ["/articles?lang=UK"], ["/articles?lang="], ["/articles/translated?lang=xx"]])(
+  it.each([["/articles?lang=pl"], ["/articles?lang=UK"], ["/articles?lang="], ["/articles/translated?lang=xx"]])(
     "rejects %s with a JSON error",
     async (path) => {
       const { status, body } = await get(path);
       expect(status).toBe(400);
-      expect(body).toEqual({ error: "lang must be one of: en, uk, ru" });
+      expect(body).toEqual({ error: "lang must be one of: en, uk, ru, es, de" });
     },
   );
 });

@@ -1,6 +1,6 @@
 import type { Env } from "../env";
 import { sourceHealth } from "../health";
-import { LANGS, type Lang, SHOWN, isLang } from "../translator";
+import { LANGS, type Lang, SHOWN, isLang, queueStatus } from "../translator";
 
 /** A row of `articles` joined with its source, as stored in D1. */
 interface ArticleRow {
@@ -231,7 +231,7 @@ const FROM_TRANSLATIONS = `FROM article_translations t
 /**
  * A finished translation (into the language bound to `?`) of an article shown
  * in the feed, and not one of an older English whose new English used up its
- * tries (SHOWN).
+ * tries (SHOWN: not `failed`).
  */
 const TRANSLATED = `t.lang = ? AND t.lang_seq IS NOT NULL AND a.is_news = 1 AND ${SHOWN}`;
 
@@ -397,6 +397,11 @@ async function route(request: Request, env: Env): Promise<Response> {
 
   if (url.pathname === "/health") {
     return json({ sources: await sourceHealth(env), lastFetcherRun: null });
+  }
+
+  // The translation queue per language (#46): read-only counts and times, no secrets.
+  if (url.pathname === "/queue") {
+    return json({ languages: await queueStatus(env) }, 200, { "cache-control": "no-store" });
   }
 
   return json({ error: "Not found" }, 404);

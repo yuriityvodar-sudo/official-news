@@ -1,6 +1,11 @@
 # Local secrets: copy to .dev.vars (git ignores it) and fill in. Never commit a value.
 # The deployed Worker gets its own with `npx wrangler secret put <NAME>` (docs/setup.md).
 
-# Groq, for the translations (#46). Read by the local Worker (`npm run dev`: the
-# translator, empty means it skips its runs) and by scripts/translate-test.mjs (SET=groq).
+# Groq, for the Ukrainian and Russian translations (#46). Read by the local Worker
+# (`npm run dev`: empty means those languages wait in the queue) and by
+# scripts/translate-test.mjs (SET=groq).
 GROQ_API_KEY=
+
+# Z.ai, for the Spanish and German translations (#46). Read by the local Worker;
+# empty means those languages wait in the queue.
+ZAI_API_KEY=

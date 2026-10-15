@@ -17,8 +17,9 @@
   ],
   // Workers AI writes the article summaries (item 7, docs/style-guide.md).
   "ai": { "binding": "AI" },
-  // The fetcher every minute, the summarizer every odd minute in its own run
-  // (CRONS in src/index.ts; a test checks the two match).
-  "triggers": { "crons": ["* * * * *", "1-59/2 * * * *"] },
+  // The fetcher every minute, the summarizer every odd minute and the translator
+  // every even minute, each in its own run (CRONS in src/index.ts; a test checks
+  // they match). A new schedule can take about an hour to start firing (#50).
+  "triggers": { "crons": ["* * * * *", "1-59/2 * * * *", "0-58/2 * * * *"] },
   "observability": { "enabled": true }
 }

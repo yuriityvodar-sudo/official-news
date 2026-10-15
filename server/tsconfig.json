@@ -6,6 +6,8 @@
     "lib": ["es2022"],
     "types": ["@cloudflare/workers-types", "@cloudflare/vitest-plugin/types"],
     "strict": true,
+    // test/queue-script.test.ts imports scripts/queue-sql.mjs, plain JavaScript.
+    "allowJs": true,
     "noEmit": true,
     "skipLibCheck": true,
     "isolatedModules": true

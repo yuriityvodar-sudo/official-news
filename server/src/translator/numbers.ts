@@ -14,6 +14,12 @@ export interface NumberStyle {
    * copied unchanged do not count, except in an identifier after "№".
    */
   decimalComma: boolean;
+  /**
+   * A full stop only groups thousands (1.250.000), as in Spanish and German, so
+   * "3.5" copied from the English is not 3.5 (a reader sees a date or 35), and
+   * a full stop between hours and minutes is a time (17.00 Uhr).
+   */
+  thousandsDot?: boolean;
   /** The month names as written after a day ("14 жовтня"), January first, in lower case. */
   months: readonly string[];
 }
@@ -33,7 +39,7 @@ const TIME_12H = /\b(\d{1,2})(?::(\d{2}))?\s?([ap])\.?m\b\.?/gi;
 /** A time written with a colon: 23:59, 9:30. */
 const TIME = /(?<![\d:])(\d{1,2}):(\d{2})(?![\d:])/g;
 
-/** A time written with a full stop, as Ukrainian and Russian also do: 17.00, 23.59. */
+/** A time written with a full stop, as Ukrainian, Russian and German also do: 17.00, 23.59. */
 const DOTTED_TIME = /^(\d{1,2})\.(\d{2})$/;
 
 /** A date in numbers, day or month first: 15.10.2026, 14/10/2026, 10/14/2026, 14-10-2026. */
@@ -41,6 +47,13 @@ const DATE = /(?<![\d.,/-])(\d{1,2})([./-])(\d{1,2})\2(\d{4})(?![\d/-]|[.,]\d)/g
 
 /** A date in numbers, year first: 2026-10-14. */
 const ISO_DATE = /(?<![\d.,/-])(\d{4})-(\d{1,2})-(\d{1,2})(?![\d/-]|[.,]\d)/g;
+
+/**
+ * What may stand before an identifier (a law number) in a translation, which may
+ * keep the English comma: it is a label, not an amount. № (Ukrainian, Russian),
+ * Nr. (German), n.º, nº or núm. (Spanish), and No. copied from the English.
+ */
+const IDENTIFIER = /(?:№|(?<!\p{L})(?:[Nn]o\.|Nr\.|[Nn]úm\.|[Nn]\.?\s?[º°]))\s*$/u;
 
 const time = (hour: number, minutes: string) => `${hour}:${minutes}`;
 const isTime = (hour: number, minutes: number) => hour <= 24 && minutes <= 59;
@@ -63,9 +76,10 @@ const isGrouping = (groups: string[], separators: string[]) =>
  * or 14.133, "15.10.2026" is none (it is not one number). In the English
  * "1,250" is only 1250, and "500.000" only 500000, so "500" for "500,000" is a
  * missing number. In a translation "1,250" is 1250 or 1.25, but only 1.25 with
- * `decimalComma`, where "1,250,000" is no number at all.
+ * `decimalComma`, where "1,250,000" is no number at all; with `thousandsDot`,
+ * "1.250" is only 1250 and "3.5" no number at all.
  */
-function readRun(text: string, english: boolean, decimalComma: boolean): string[] {
+function readRun(text: string, english: boolean, decimalComma: boolean, thousandsDot = false): string[] {
   const groups = text.split(SEPARATOR);
   const separators = text.match(SEPARATOR) ?? [];
   if (!separators.length) return [canonical(text)];
@@ -80,7 +94,8 @@ function readRun(text: string, english: boolean, decimalComma: boolean): string[
   // The last separator is the decimal mark, any before it group thousands with another mark: 3.5 · 3,5 · 1,234.5 · 1 234,5.
   const mark = separators.at(-1);
   const onlyThousands = english && grouping && (mark === "," || /^0+$/.test(groups.at(-1) ?? ""));
-  if ((mark === "." || mark === ",") && !onlyThousands) {
+  const dotIsDecimal = english || !thousandsDot;
+  if ((mark === "," || (mark === "." && dotIsDecimal)) && !onlyThousands) {
     const whole = groups.slice(0, -1);
     const before = separators.slice(0, -1);
     if (!before.length || (before[0] !== mark && isGrouping(whole, before))) {
@@ -103,14 +118,23 @@ interface Found {
   slots: string[][];
 }
 
-/** The numbers of a run of digits (NUMBER). */
-function numbersIn(text: string, at: number, english: boolean, decimalComma: boolean): Found[] {
-  const values = readRun(text, english, decimalComma);
-  if (values.length) {
-    const dotted = english ? null : DOTTED_TIME.exec(text);
-    if (dotted && isTime(Number(dotted[1]), Number(dotted[2]))) values.push(time(Number(dotted[1]), dotted[2]));
-    return [{ text, at, rank: 1, slots: [values] }];
+/** How a translation writes numbers, for numbersIn; the English is read with none of these. */
+interface RunStyle {
+  decimalComma: boolean;
+  thousandsDot?: boolean;
+}
+
+/** The numbers of a run of digits (NUMBER); `style` is null for the English. */
+function numbersIn(text: string, at: number, style: RunStyle | null): Found[] {
+  const values = readRun(text, !style, style?.decimalComma ?? false, style?.thousandsDot);
+  const dotted = style ? DOTTED_TIME.exec(text) : null;
+  if (dotted && isTime(Number(dotted[1]), Number(dotted[2]))) {
+    // 17.00 and 23.59 are also times. With thousandsDot they are no decimal, but still
+    // stand for the English that wrote them the same way (17.00 or 17, 23.59).
+    if (!values.length) values.push(canonical(text));
+    values.push(time(Number(dotted[1]), dotted[2]));
   }
+  if (values.length) return [{ text, at, rank: 1, slots: [values] }];
   // Not one number. Numbers only a space separates ("2026 1,500") are read one by one;
   // a group of 3 digits stays with the number before it ("2026 1 500" is 2026 and 1500).
   const parts: { text: string; at: number }[] = [];
@@ -121,7 +145,7 @@ function numbersIn(text: string, at: number, english: boolean, decimalComma: boo
     else parts.push({ text: piece, at: at + offset });
     offset += piece.length + 1;
   }
-  if (parts.length > 1) return parts.flatMap((p) => numbersIn(p.text, p.at, english, decimalComma));
+  if (parts.length > 1) return parts.flatMap((p) => numbersIn(p.text, p.at, style));
   // Each digit group on its own: 15.10.2026 in a translation, 1.2.3.
   return [{ text, at, rank: 1, slots: text.split(SEPARATOR).map((g) => [canonical(g)]) }];
 }
@@ -178,7 +202,7 @@ function neededIn(english: string): Found[] {
     if (!isTime(hour, Number(minutes))) return null;
     return { text, at: index, rank: 2, slots: [[time(hour, minutes), ...(minutes === "00" ? [String(hour)] : [])]] };
   });
-  const numbers = [...times.rest.matchAll(NUMBER)].flatMap((m) => numbersIn(m[0], m.index ?? 0, true, false));
+  const numbers = [...times.rest.matchAll(NUMBER)].flatMap((m) => numbersIn(m[0], m.index ?? 0, null));
   return [...times12.found, ...dates.found, ...isoDates.found, ...times.found, ...numbers].sort((x, y) => x.at - y.at);
 }
 
@@ -188,9 +212,9 @@ function numbersOf(translation: string, style: NumberStyle): string[][] {
     isTime(Number(h), Number(minutes)) ? { text, at: index, rank: 2, slots: [[time(Number(h), minutes)]] } : null,
   );
   const numbers = [...times.rest.matchAll(NUMBER)].flatMap((m) => {
-    // An identifier after "№" (a law number) may keep the English comma: it is a label, not an amount.
-    const identifier = /№\s*$/.test(times.rest.slice(0, m.index));
-    return numbersIn(m[0], m.index ?? 0, false, style.decimalComma && !identifier);
+    // An identifier after "№" or "Nr." (a law number) may keep the English comma: it is a label, not an amount.
+    const identifier = IDENTIFIER.test(times.rest.slice(0, m.index));
+    return numbersIn(m[0], m.index ?? 0, identifier ? { decimalComma: false } : style);
   });
   const monthNames = style.months.length
     ? [...translation.matchAll(new RegExp(`(?<!\\p{L})(?:${style.months.join("|")})(?!\\p{L})`, "giu"))].map((m) => [
