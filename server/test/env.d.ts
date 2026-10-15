@@ -6,6 +6,7 @@ declare global {
   namespace Cloudflare {
     interface Env extends WorkerEnv {
       TEST_MIGRATIONS: D1Migration[];
+      TEST_CRONS: string[];
     }
     interface GlobalProps {
       mainModule: typeof import("../src/index");
