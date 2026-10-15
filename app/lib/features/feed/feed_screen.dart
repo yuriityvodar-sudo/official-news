@@ -4,6 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/article.dart';
+import '../../core/feed_language.dart';
 import '../../core/news_widgets.dart';
 import '../../core/router.dart';
 import '../../core/theme.dart';
@@ -81,7 +82,35 @@ class _FeedScreenState extends State<FeedScreen> {
 
   void _open(Article article) {
     unawaited(_feed.markRead(article));
+    // The article as the feed has it, so a translated one opens translated.
     Navigator.of(context).pushNamed(Routes.detail, arguments: article);
+  }
+
+  /// The iOS action sheet with the feed's languages, the current one checked.
+  Future<void> _chooseLanguage() async {
+    final current = _feed.language;
+    final chosen = await showCupertinoModalPopup<FeedLanguage>(
+      context: context,
+      builder: (context) => CupertinoActionSheet(
+        title: const Text('Language'),
+        actions: [
+          for (final lang in FeedLanguage.values)
+            CupertinoActionSheetAction(
+              onPressed: () => Navigator.of(context).pop(lang),
+              child: _LanguageChoice(lang, selected: lang == current),
+            ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          isDefaultAction: true,
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+      ),
+    );
+    if (!mounted || chosen == null || chosen == _feed.language) return;
+    // Another language is another feed: start it from the top.
+    if (_scroll.hasClients) _scroll.jumpTo(0);
+    await _feed.setLanguage(chosen);
   }
 
   @override
@@ -107,8 +136,27 @@ class _FeedScreenState extends State<FeedScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text('Official News', style: text.masthead),
-                        const SizedBox(height: 4),
-                        Text(longDay(DateTime.now()), style: text.dateLine),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                longDay(DateTime.now()),
+                                style: text.dateLine,
+                              ),
+                            ),
+                            // Hidden, keeping its place, until the saved language is read.
+                            Visibility(
+                              visible: _feed.languageKnown,
+                              maintainSize: true,
+                              maintainAnimation: true,
+                              maintainState: true,
+                              child: _LanguageButton(
+                                language: _feed.language,
+                                onPressed: _chooseLanguage,
+                              ),
+                            ),
+                          ],
+                        ),
                       ],
                     ),
                   ),
@@ -146,12 +194,28 @@ class _FeedScreenState extends State<FeedScreen> {
           hasScrollBody: false,
           child: Padding(
             padding: const EdgeInsets.all(20),
-            child: Text(
-              _feed.error != null
-                  ? "Couldn't load the news. Pull down to retry."
-                  : 'No decisions yet today.',
-              style: text.meta,
-            ),
+            child: _feed.error != null
+                ? Text(
+                    "Couldn't load the news. Pull down to retry.",
+                    style: text.meta,
+                  )
+                : _feed.language == FeedLanguage.en
+                ? Text('No decisions yet today.', style: text.meta)
+                // The server lists only finished translations; they come in over the day.
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'No translated decisions yet.',
+                        style: text.meta.copyWith(fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Translations appear here as they are ready.',
+                        style: text.meta,
+                      ),
+                    ],
+                  ),
           ),
         ),
       ];
@@ -258,23 +322,22 @@ class _FeedScreenState extends State<FeedScreen> {
 
   /// Inside a day group, a date-only article shows no day when the group header says
   /// it. Groups follow when articles appeared, so one dated earlier still shows its day.
-  Widget _rows(List<Article> articles, {DateTime? groupDay}) =>
-      SliverPadding(
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        sliver: SliverList.separated(
-          itemCount: articles.length,
-          separatorBuilder: (_, _) => const Divider(),
-          itemBuilder: (context, index) {
-            final a = articles[index];
-            return _ArticleRow(
-              article: a,
-              read: _feed.readIds.contains(a.id),
-              showDay: groupDay == null || localDay(a.publishedAt) != groupDay,
-              onTap: () => _open(a),
-            );
-          },
-        ),
-      );
+  Widget _rows(List<Article> articles, {DateTime? groupDay}) => SliverPadding(
+    padding: const EdgeInsets.symmetric(horizontal: 20),
+    sliver: SliverList.separated(
+      itemCount: articles.length,
+      separatorBuilder: (_, _) => const Divider(),
+      itemBuilder: (context, index) {
+        final a = articles[index];
+        return _ArticleRow(
+          article: a,
+          read: _feed.readIds.contains(a.id),
+          showDay: groupDay == null || localDay(a.publishedAt) != groupDay,
+          onTap: () => _open(a),
+        );
+      },
+    ),
+  );
 }
 
 /// One decision: label, publisher, serif headline, time, thumbnail on the right.
@@ -435,6 +498,77 @@ class _Picture extends StatelessWidget {
             );
           },
         ),
+      ),
+    );
+  }
+}
+
+/// The feed's language next to the date: a globe and "EN", "УКР" or "РУС", in the
+/// accent colour like the feed's other tappable text, with a 44-pt target.
+class _LanguageButton extends StatelessWidget {
+  const _LanguageButton({required this.language, required this.onPressed});
+
+  final FeedLanguage language;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = NewsText.from(
+      context,
+    ).dateLine.copyWith(fontSize: 15, color: AppColors.accent);
+    return CupertinoButton(
+      padding: EdgeInsets.zero,
+      minimumSize: const Size(44, 44),
+      onPressed: onPressed,
+      child: Semantics(
+        label: 'Language: ${language.nativeName}',
+        child: ExcludeSemantics(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                CupertinoIcons.globe,
+                size: 17,
+                color: AppColors.accent,
+              ),
+              const SizedBox(width: 4),
+              Text(language.shortLabel, style: style),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// One language in the menu, its own name centred, a checkmark on the current one.
+class _LanguageChoice extends StatelessWidget {
+  const _LanguageChoice(this.language, {required this.selected});
+
+  final FeedLanguage language;
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      selected: selected,
+      child: Row(
+        children: [
+          const SizedBox(width: 24),
+          Expanded(
+            child: Text(language.nativeName, textAlign: TextAlign.center),
+          ),
+          SizedBox(
+            width: 24,
+            child: selected
+                ? const Icon(
+                    CupertinoIcons.checkmark_alt,
+                    size: 20,
+                    color: AppColors.accent,
+                  )
+                : null,
+          ),
+        ],
       ),
     );
   }
