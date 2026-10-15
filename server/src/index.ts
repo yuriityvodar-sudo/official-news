@@ -1,33 +1,21 @@
 import { handleApi } from "./api";
 import type { Env } from "./env";
-import { runFetcher } from "./fetcher";
-import { runSummarizer } from "./summarizer";
+import { STEPS, stepFor } from "./schedule";
 
-/**
- * The cron triggers in wrangler.jsonc. Each trigger is its own run with its own
- * free-plan budget (at most 50 outside requests and 10 ms of CPU), so the AI
- * step never shares the fetcher's CPU (#41).
- */
-export const CRONS = {
-  fetcher: "* * * * *",
-  summarizer: "1-59/2 * * * *",
-} as const;
-
-/** The step a cron trigger runs; anything else (such as a local test run) is the fetcher. */
-export function stepFor(cron: string): keyof typeof CRONS {
-  return cron === CRONS.summarizer ? "summarizer" : "fetcher";
-}
-
+// Only the default export here: the Workers runtime reads every export of this
+// file as an entrypoint and does not start if one is something else (such as a
+// string constant), so shared constants live in their own modules.
 export default {
   fetch(request: Request, env: Env): Promise<Response> {
     return handleApi(request, env);
   },
 
+  /** One cron trigger, every minute; the steps take turns by minute (`ROTATION` in ./schedule). */
   async scheduled(controller: ScheduledController, env: Env): Promise<void> {
-    if (stepFor(controller.cron) === "summarizer") {
-      await runSummarizer(env, { maxArticles: 5 });
-    } else {
-      await runFetcher(env);
-    }
+    const step = stepFor(controller.scheduledTime);
+    // Every run says which step it took, so `wrangler tail` shows the rotation even
+    // when a step has nothing to do (the summarizer logs nothing then).
+    console.log(JSON.stringify({ message: "scheduled step", step, scheduledTime: new Date(controller.scheduledTime).toISOString() }));
+    await STEPS[step](env);
   },
 } satisfies ExportedHandler<Env>;

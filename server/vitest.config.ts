@@ -7,7 +7,7 @@ import { unstable_readConfig } from "wrangler";
 // migrations (schema and seed) are read here and applied in test/setup.ts.
 export default defineConfig(async () => {
   const migrations = await readD1Migrations(path.join(import.meta.dirname, "migrations"));
-  // The cron triggers as deployed, so a test can check that src/index.ts knows each one.
+  // The cron triggers as deployed, so a test can check they are the one schedule known to run (#50).
   const crons = unstable_readConfig({ config: path.join(import.meta.dirname, "wrangler.jsonc") }).triggers.crons ?? [];
   return {
     plugins: [

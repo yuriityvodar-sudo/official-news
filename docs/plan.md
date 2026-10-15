@@ -104,7 +104,7 @@ The MVP is a Kickoff plus 8 items, 4 each. This is our suggested split: Yurii ow
 | 3 | Feed screen | Yurii | 4 | The feed shows articles from the deployed API on both simulators |
 | 4 | Article detail screen | Roman | 2 | Every article opens with its summary and source link |
 | 5 | Source list: 20 official sites, one per G20 country | Yurii | 2 | 20 verified sources in the database |
-| 6 | Fetcher: small run every minute, 1 source at a time | Yurii | 4 | All sources checked at least hourly, new articles saved without duplicates |
+| 6 | Fetcher: small run every 2 minutes, 1 source at a time | Yurii | 4 | All sources checked at least hourly, new articles saved without duplicates |
 | 7 | AI summaries, noise filter and tags | Roman | 4 | New articles get all summary fields within an hour |
 | 8 | Source health and cleanup of old texts | Roman | 2 | Each source shows its status; expired texts are cleared |
 
@@ -127,7 +127,8 @@ official-news/
     lib/features/feed/      feed screen (item 3)
     lib/features/detail/    article detail screen (item 4)
   server/                   Cloudflare Worker (TypeScript)
-    src/index.ts            fetch handler (API) + scheduled handler (every minute)
+    src/index.ts            fetch handler (API) + scheduled handler (one trigger, every minute)
+    src/schedule.ts         which step each minute runs (fetcher, summarizer)
     src/api/                endpoints (item 1)
     src/fetcher/            source readers (item 6)
     src/summarizer/         AI step and prompt (item 7)
@@ -177,8 +178,8 @@ The feed card reads `headline`, `shortSummary` and `imageUrl`; the detail screen
 
 **Fetcher rule (keeps us on the free plan)**
 
-- The scheduled handler runs every minute and calls `fetcher.run()` then `summarizer.run({ maxArticles: 5 })`; the handler is committed in the Kickoff, and each owner changes only their own module. **Changed 15 Oct (#41):** the summarizer has its own cron trigger every odd minute, so the two never share one run's CPU
-- The fetcher takes the source with the oldest `last_checked_at`, so every source is checked within the hour (up to 60 sources)
+- The scheduled handler runs every minute and calls `fetcher.run()` then `summarizer.run({ maxArticles: 5 })`; the handler is committed in the Kickoff, and each owner changes only their own module. **Changed 15 Oct (#41):** the summarizer has its own cron trigger every odd minute, so the two never share one run's CPU. **Changed 15 Oct (#50):** that trigger never ran, so there is one trigger again and the steps take turns by minute: the fetcher on even minutes, the summarizer on odd ones
+- The fetcher takes the source with the oldest `last_checked_at`, so every source is checked within the hour (up to 30 sources, with the fetcher every 2 minutes since #50)
 - One run shares one budget (one run per step since #41): on the free plan at most 50 outside requests and 10 ms of processing. The requests fit easily; the 10 ms is measured in item 6, and if text extraction needs more, the Worker moves to the paid plan (about $5 a month) and the small runs stay
 
 **Speed rules (fast app, and about 10,000 daily users for free)**
@@ -229,13 +230,13 @@ Each item becomes one GitHub issue owned by one person. **Must** is what the ite
 
 ### 6. Fetcher (Yurii)
 
-- **Must:** `fetcher.run()`, called by the scheduled handler every minute, takes the source with the oldest `last_checked_at`; reads RSS/Atom feeds and news pages (selectors in `config`); skips URLs already stored; saves new articles with their extracted text and `text_expires_at`; clear User-Agent; respects `robots.txt`; logs requests and CPU time per run from the first version.
+- **Must:** `fetcher.run()`, called by the scheduled handler every minute (every even minute since #50), takes the source with the oldest `last_checked_at`; reads RSS/Atom feeds and news pages (selectors in `config`); skips URLs already stored; saves new articles with their extracted text and `text_expires_at`; clear User-Agent; respects `robots.txt`; logs requests and CPU time per run from the first version.
 - **Suggested:** retries for failed sources; reading the site's own data endpoints.
 - **Done when:** the deployed fetcher checks all 20 sources at least once an hour, new articles appear in D1 with no duplicates, and the logs show how close each run is to the free limits.
 
 ### 7. AI summaries (Roman)
 
-- **Must:** `docs/style-guide.md` and the prompt; one call per article returning headline, shortSummary, summary (news-style, facts from the article only), decisionType (from the fixed list), topics (from the fixed list), tags, importance and isNews (an official decision, not opinion, interview or commentary); `summarizer.run()`, called by the scheduled handler every minute (every odd minute in its own run since #41), summarizes up to 5 articles that have text and no summary; anything that is not news is hidden from the feed.
+- **Must:** `docs/style-guide.md` and the prompt; one call per article returning headline, shortSummary, summary (news-style, facts from the article only), decisionType (from the fixed list), topics (from the fixed list), tags, importance and isNews (an official decision, not opinion, interview or commentary); `summarizer.run()`, called by the scheduled handler every minute (every odd minute in its own run since #41 and #50), summarizes up to 5 articles that have text and no summary; anything that is not news is hidden from the feed.
 - **Suggested:** a 25-article test set with `npm run eval`; comparing Workers AI and Claude Haiku and recording the choice and cost in `docs/decisions.md`.
 - **Done when:** new articles get all summary fields within an hour of being fetched.
 
@@ -320,7 +321,7 @@ The app is Flutter; everything behind it runs on one Cloudflare account, with Wo
 | --- | --- |
 | Flutter | The iOS and Android app, one codebase |
 | Cloudflare Workers | All backend code: fetching sources and the API the app calls |
-| Cloudflare Cron Triggers | Runs the fetcher every minute, 1 source at a time |
+| Cloudflare Cron Triggers | One trigger every minute: the fetcher (1 source) and the AI summaries take turns |
 | Cloudflare D1 | Database: sources, articles, summaries, tags |
 | Cloudflare Browser Rendering | After the MVP: reading official sites whose news lists are built by JavaScript |
 | Workers AI or Claude API (Haiku) | Summary, translation, tags and news-or-noise check, once per article |
@@ -366,14 +367,14 @@ The whole MVP fits Cloudflare's free plan; the first cost appears at about 10,00
 flowchart LR
   S[Official websites<br/>verified sources] --> F
   subgraph CF[Cloudflare account]
-    F[Fetcher<br/>small run every minute] -->|saves new articles| DB[(Database D1)]
+    F[Fetcher<br/>small run every 2 minutes] -->|saves new articles| DB[(Database D1)]
     DB -->|reads| API[API Worker<br/>GET /articles, /articles/:id]
   end
   F <--> AI[AI model<br/>headline, summaries, tags, news or noise]
   API --> APP[Flutter app<br/>feed, detail, last feed on phone]
 ```
 
-Every minute the fetcher reads the next source on the list, so all sources are checked within the hour (up to 60 sources); it keeps only new items and sends each one to the AI model once. The app reads only from our API, 20 articles at a time.
+Every 2 minutes the fetcher reads the next source on the list, so all sources are checked within the hour (up to 30 sources); it keeps only new items and sends each one to the AI model once. The app reads only from our API, 20 articles at a time.
 
 ## Feed and reading experience
 

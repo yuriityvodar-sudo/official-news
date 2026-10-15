@@ -66,7 +66,13 @@ Times (`published_at`, `fetched_at`, `summarized_at`, `text_expires_at`) are sto
 
 ## Scheduled job
 
-Two cron triggers (`server/wrangler.jsonc`), each its own run with its own free-plan budget of at most 50 outside requests and 10 ms of CPU. Every minute (`* * * * *`), `runFetcher(env)` (item 6) takes the source with the oldest `last_checked_at`. Every odd minute (`1-59/2 * * * *`), `runSummarizer(env, { maxArticles: 5 })` (item 7) makes one AI call per article. `server/src/index.ts` picks the step by `controller.cron` (`CRONS`). Locally: `npx wrangler dev --test-scheduled`, then open `/__scheduled?cron=1-59/2+*+*+*+*` for the summarizer (any other `cron` runs the fetcher).
+One cron trigger, every minute (`* * * * *` in `server/wrangler.jsonc`). The steps take turns by minute, one step per run, so each has the free plan's whole per-run budget of at most 50 outside requests and 10 ms of CPU. `stepFor(controller.scheduledTime)` in `server/src/schedule.ts` picks the step from `ROTATION`:
+- Even minutes (UTC): `runFetcher(env)` (item 6) takes the source with the oldest `last_checked_at`.
+- Odd minutes: `runSummarizer(env, { maxArticles: 5 })` (item 7) makes one AI call per article.
+
+A new step (such as the translator, #49) joins `ROTATION` and `STEPS` instead of adding a trigger: a second trigger (`1-59/2`, #45) was registered on Cloudflare but never ran (#50). Every run logs which step it took (`"message":"scheduled step"`). `server/src/index.ts` exports only its default handler: the Workers runtime does not start if that file exports something else, such as a string.
+
+Locally, with `npm run dev` running in `server/` (`npx wrangler dev --local` keeps Workers AI off), `curl "http://localhost:8787/cdn-cgi/local/scheduled?time=<ms>"` runs the step for that minute: `time=1792069440000` (13:04 UTC on 15 Oct 2026) the fetcher, `time=1792069500000` (13:05) the summarizer. (`--test-scheduled` with `/__scheduled` ignores `time` and always takes the current minute.)
 
 What the fetcher writes (`server/src/fetcher/`):
 - Only items published in the last 7 days; an item already stored (same `url`) is never saved again. Items without a date are skipped, and a time later than the fetch is stored as the fetch time.

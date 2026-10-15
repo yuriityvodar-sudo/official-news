@@ -17,8 +17,10 @@
   ],
   // Workers AI writes the article summaries (item 7, docs/style-guide.md).
   "ai": { "binding": "AI" },
-  // The fetcher every minute, the summarizer every odd minute in its own run
-  // (CRONS in src/index.ts; a test checks the two match).
-  "triggers": { "crons": ["* * * * *", "1-59/2 * * * *"] },
+  // One trigger, every minute; the steps take turns by minute (ROTATION in
+  // src/schedule.ts: fetcher on even minutes, summarizer on odd ones). Keep it to
+  // this one schedule: a second one (#45) was never run by Cloudflare (#50), and
+  // a test checks that this list is exactly ["* * * * *"].
+  "triggers": { "crons": ["* * * * *"] },
   "observability": { "enabled": true }
 }
