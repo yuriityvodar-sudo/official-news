@@ -2,7 +2,7 @@
 
 What exists right now, outside the code. Update this file whenever an account, service or resource is created or changed, in the same commit or pull request. Secrets never go here, only names and where they live.
 
-Last updated: 2026-10-14 (item 1)
+Last updated: 2026-10-14 (item 7)
 
 ## Accounts and services
 
@@ -14,11 +14,14 @@ Last updated: 2026-10-14 (item 1)
 | Roman's access to Cloudflare | Active since 2026-10-14 | Yurii | Role Administrator, scope NewsApp account only (cannot manage members or billing) |
 | workers.dev address | Created 2026-10-13 | Yurii | `officialnews.workers.dev`; a Worker named `api` would be served at `api.officialnews.workers.dev` |
 | Cloudflare Worker | Deployed 2026-10-14 | Roman (item 1) | Worker `api` in `server/`, live at `https://api.officialnews.workers.dev`. `.github/workflows/deploy.yml` applies D1 migrations and deploys on every merge to `main` that touches `server/` |
+| Workers AI | In use from item 7 | Roman | Binding `AI` in `server/wrangler.jsonc`, model `@cf/zai-org/glm-4.7-flash`. No key; it runs on the NewsApp account's free 10,000 Neurons a day (usage under AI, Workers AI in the dashboard). More than that needs the Workers Paid plan |
 | Cloudflare API token for deploys | Created 2026-10-14 | Yurii | Account API token `github-deploy` on NewsApp ("Edit Cloudflare Workers" template plus D1: Edit). Stored only as the GitHub Secret `CLOUDFLARE_API_TOKEN` (as repo owner, only Yurii can manage secrets) |
 | D1 database | Created 2026-10-14 | Kickoff | Name `official-news`, ID `67052e61-5544-4c6d-a182-1321192f3d0a`, region Western Europe. Migrations `0001_init` and `0002_seed` applied 2026-10-14 by the deploy workflow |
 | Apple Developer team | Yurii joined 2026-10-14 | Roman (Account Holder) | Team "RS Elite Pro s.r.o." (Roman's), team ID `YSF2FQGT86`. Yurii's role: Admin, all apps (checked in App Store Connect, Users and Access, 2026-10-14). Roman accepted the updated Program License Agreement on 2026-10-14. The Paid Applications Schedule still waits in App Store Connect, Business: needed before an App Store submission, not for TestFlight |
 | App Store Connect app and TestFlight | Created 2026-10-14 | Roman | App "Official News: Decisions" ("Official News" is taken in the App Store), Apple ID `6822820350`, bundle ID `com.officialnews.app`, SKU `officialnews-ios`, iOS, primary language English (U.S.). Internal TestFlight group "Official News team" with Roman and Yurii; every uploaded build goes to it automatically |
 | App Store Connect API key (for CI uploads) | Not yet | Yurii | Yurii creates it himself with his Admin role on the RS Elite Pro team (App Store Connect, Users and Access, Integrations, Team Keys, access App Manager; API access is already enabled for the team) and adds it straight to the GitHub Secrets `APPLE_TEAM_ID`, `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_KEY_P8_BASE64`, used by `.github/workflows/testflight.yml`. The key never passes through Roman |
+| Groq account (translation test) | Created 2026-10-15 | Yurii | Free plan, Yurii's own account at console.groq.com. One test key, `official-news-test`, kept only in Yurii's local `server/.dev.vars` as `GROQ_API_KEY` (see `server/.dev.vars.example`); used by `server/scripts/translate-test.mjs`, not by the Worker. See `docs/research/2026-10-15 Translation model test.md` |
+| Mistral account (translation test) | Created 2026-10-15 | Yurii | Free plan, Yurii's own account at console.mistral.ai. No key: the free plan no longer allows API keys |
 | Google Play app | Not yet | Open decision | Whose account is still to decide |
 | Bundle ID and package name | Created 2026-10-14 | Roman | `com.officialnews.app` on both platforms: the iOS App ID is registered on the RS Elite Pro team (explicit, no extra capabilities yet), and it is the Android `applicationId`. Permanent |
 

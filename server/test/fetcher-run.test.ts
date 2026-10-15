@@ -89,14 +89,18 @@ describe("runFetcher", () => {
     expect(requests).toEqual([]);
   });
 
-  it("takes the sources checked longest ago, two per run", async () => {
+  it("takes the source checked longest ago, one per run", async () => {
     await addSource("xx-a", "https://a.test/feed.xml", "rss", null, "2026-10-14T14:00:00Z");
     await addSource("xx-b", "https://b.test/feed.xml", "rss", null, "2026-10-14T13:00:00Z");
     await addSource("xx-c", "https://c.test/feed.xml", "rss", null, null);
     const { fetch } = fakeFetch({});
-    const checks = await runFetcher(env, { fetch, now: NOW });
-    expect(checks.map((c) => c.sourceId).sort()).toEqual(["xx-b", "xx-c"]);
-    expect(LIMITS.sourcesPerRun).toBe(2);
+    const order: string[] = [];
+    for (let minute = 0; minute < 3; minute++) {
+      const checks = await runFetcher(env, { fetch, now: new Date(NOW.getTime() + minute * 60_000) });
+      order.push(...checks.map((c) => c.sourceId));
+    }
+    expect(order).toEqual(["xx-c", "xx-b", "xx-a"]);
+    expect(LIMITS.sourcesPerRun).toBe(1);
   });
 
   it("respects robots.txt and stays away when it cannot be read", async () => {
@@ -106,7 +110,10 @@ describe("runFetcher", () => {
       "https://norobots.test/robots.txt": { body: "User-agent: *\nDisallow: /private/", type: "text/plain" },
       "https://down.test/robots.txt": { status: 503, body: "" },
     });
-    const checks = await runFetcher(env, { fetch, now: NOW });
+    const checks = [
+      ...(await runFetcher(env, { fetch, now: NOW })),
+      ...(await runFetcher(env, { fetch, now: new Date(NOW.getTime() + 60_000) })),
+    ];
     expect(checks.map((c) => [c.sourceId, c.ok, c.error]).sort()).toEqual([
       ["xx-down", false, "robots.txt answered HTTP 503"],
       ["xx-robots", false, "robots.txt does not allow this path"],
@@ -141,9 +148,15 @@ describe("runFetcher", () => {
     expect(saved[0]).toMatchObject({ original_title: "Decision 5", image_url: "https://list.test/img/5.jpg" });
     expect(saved[0].text).toContain("cabinet meeting");
 
-    // The items left waiting are saved on the next check.
-    const [next] = await runFetcher(env, { fetch, now: new Date("2026-10-14T15:10:00Z") });
-    expect(next).toMatchObject({ saved: 6 - LIMITS.pagesPerRun, waiting: 0 });
+    // The items left waiting are saved on the next checks, a page budget at a time.
+    let left = 6 - LIMITS.pagesPerRun;
+    for (let minute = 10; left > 0; minute += 10) {
+      const [next] = await runFetcher(env, { fetch, now: new Date(NOW.getTime() + minute * 60_000) });
+      const saved = Math.min(left, LIMITS.pagesPerRun);
+      left -= saved;
+      expect(next).toMatchObject({ saved, waiting: left });
+    }
+    expect(await articlesOf("xx-page")).toHaveLength(6);
   });
 
   it("keeps each new stage of the same item when the source asks for it", async () => {
