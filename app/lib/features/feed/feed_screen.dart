@@ -197,7 +197,8 @@ class _FeedScreenState extends State<FeedScreen> {
     // Latest, then one group per earlier day: "Yesterday", "Monday 12 October"…
     final groups = <DateTime, List<Article>>{};
     for (final a in latest) {
-      groups.putIfAbsent(localDay(a.publishedAt), () => []).add(a);
+      // The feed is in the order articles appeared, so days follow when they appeared.
+      groups.putIfAbsent(localDay(a.addedAt ?? a.publishedAt), () => []).add(a);
     }
     var firstGroup = true;
     for (final entry in groups.entries) {

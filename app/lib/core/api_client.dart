@@ -33,6 +33,7 @@ class ApiClient {
   Future<ArticlesPage> fetchArticles({
     String? cursor,
     DateTime? since,
+    int? after,
     int limit = 20,
   }) async {
     final uri = Uri.parse('$_baseUrl/articles').replace(
@@ -40,6 +41,7 @@ class ApiClient {
         'limit': '$limit',
         'cursor': ?cursor,
         if (since != null) 'since': since.toUtc().toIso8601String(),
+        if (after != null) 'after': '$after',
       },
     );
     return ArticlesPage.fromJson(await _getJson(uri));

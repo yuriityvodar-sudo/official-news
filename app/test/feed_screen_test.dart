@@ -22,7 +22,11 @@ Map<String, dynamic> _article(
   String? headline,
   String? imageUrl,
   String country = 'DE',
+  int? feedSeq,
+  DateTime? addedAt,
 }) => {
+  'feedSeq': feedSeq,
+  'addedAt': addedAt?.toUtc().toIso8601String(),
   'id': id,
   'country': country,
   'source': {
@@ -55,7 +59,7 @@ ApiClient _api(
   client: MockClient((request) async {
     log?.add(request.url);
     final query = request.url.queryParameters;
-    if (query.containsKey('since')) {
+    if (query.containsKey('since') || query.containsKey('after')) {
       return http.Response(
         jsonEncode(since ?? {'items': [], 'nextCursor': null, 'top': []}),
         200,
@@ -422,4 +426,78 @@ void main() {
     expect(dayLabel(DateTime(2026, 3, 30, 0, 10), now: now), 'Today');
     expect(dayLabel(DateTime(2026, 3, 28, 12), now: now), 'Saturday 28 March');
   });
+
+  test(
+    'the new check asks by feed position, so a late article is counted',
+    () async {
+      final log = <Uri>[];
+      final yesterday = DateTime.now().subtract(const Duration(days: 1));
+      final feed = FeedController(
+        api: _api(
+          {
+            '': {
+              'items': [
+                _article('s2', DateTime.now(), feedSeq: 12),
+                _article('s1', DateTime.now(), feedSeq: 11),
+              ],
+              'nextCursor': null,
+              'top': [],
+            },
+          },
+          log: log,
+          // Published yesterday, appeared just now: the server returns it for after=12.
+          since: {
+            'items': [_article('late', yesterday, feedSeq: 13)],
+            'nextCursor': null,
+            'top': [],
+          },
+        ),
+      );
+      await feed.start();
+      await feed.checkForNew();
+      expect(log.last.queryParameters['after'], '12');
+      expect(log.last.queryParameters.containsKey('since'), isFalse);
+      expect(feed.newCount, 1);
+    },
+  );
+
+  testWidgets(
+    'groups days by when articles appeared, not when they were published',
+    (tester) async {
+      final now = DateTime.now();
+      await _pump(
+        tester,
+        FeedController(
+          api: _api({
+            '': {
+              'items': [
+                // Published three days ago, appeared just now: belongs under today.
+                _article(
+                  'late',
+                  now.subtract(const Duration(days: 3)),
+                  headline: 'Late but new',
+                  feedSeq: 2,
+                  addedAt: now,
+                ),
+                _article(
+                  'older',
+                  now.subtract(const Duration(days: 1)),
+                  headline: 'Appeared yesterday',
+                  feedSeq: 1,
+                  addedAt: now.subtract(const Duration(days: 1)),
+                ),
+              ],
+              'nextCursor': null,
+              'top': [],
+            },
+          }),
+        ),
+      );
+      expect(find.text('Latest'), findsOneWidget);
+      expect(find.text('Yesterday'), findsOneWidget);
+      final late = tester.getTopLeft(find.text('Late but new')).dy;
+      final yesterdayHeader = tester.getTopLeft(find.text('Yesterday')).dy;
+      expect(late, lessThan(yesterdayHeader));
+    },
+  );
 }
