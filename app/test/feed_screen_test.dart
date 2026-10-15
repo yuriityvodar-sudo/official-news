@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -119,6 +120,16 @@ ApiClient _langApi(
         : _ok(page);
   }),
 );
+
+/// A phone-sized screen (iPhone 15, 393 x 852 pt), or an iPad's (820 x 1180).
+void _screen(WidgetTester tester, Size size) {
+  tester.view.physicalSize = size * 3;
+  tester.view.devicePixelRatio = 3;
+  addTearDown(tester.view.reset);
+}
+
+const _phone = Size(393, 852);
+const _iPad = Size(820, 1180);
 
 Future<FeedController> _pump(WidgetTester tester, FeedController feed) async {
   await tester.pumpWidget(
@@ -660,6 +671,7 @@ void main() {
     testWidgets(
       'choosing Українська saves it, asks for lang=uk and shows the translated feed',
       (tester) async {
+        _screen(tester, _phone);
         final semantics = tester.ensureSemantics();
         final log = <Uri>[];
         final feed = await _pump(
@@ -926,5 +938,255 @@ void main() {
         ]);
       },
     );
+
+    testWidgets(
+      'a server that does not know lang shows no English under УКР and saves none',
+      (tester) async {
+        final log = <Uri>[];
+        SharedPreferences.setMockInitialValues({
+          'feed.lang': 'uk',
+          // An English page saved under Ukrainian by a build that trusted any page.
+          'feed.lastPage.uk': jsonEncode(english),
+        });
+        // The API before #49 ignores `lang` and sends the English feed.
+        final api = ApiClient(
+          baseUrl: 'https://api.test',
+          client: MockClient((request) async {
+            log.add(request.url);
+            return _ok({
+              ...english,
+              'nextCursor': 'c2',
+              'top': english['items'],
+            });
+          }),
+        );
+        final feed = await _pump(tester, FeedController(api: api));
+        expect(log.first.queryParameters['lang'], 'uk');
+        expect(find.text('УКР'), findsOneWidget);
+        expect(find.text('Cabinet approves budget'), findsNothing);
+        expect(find.text('Law on water signed'), findsNothing);
+        expect(find.text('No translated decisions yet.'), findsOneWidget);
+        // Its cursor pages through the English feed: not followed.
+        expect(feed.hasMore, isFalse);
+        expect(
+          log.where((u) => u.queryParameters.containsKey('cursor')),
+          isEmpty,
+        );
+        final prefs = await SharedPreferences.getInstance();
+        expect(
+          prefs.getString('feed.lastPage.uk'),
+          isNot(contains('Cabinet approves budget')),
+        );
+      },
+    );
+
+    test(
+      'only articles in the chosen language are kept, on every request',
+      () async {
+        SharedPreferences.setMockInitialValues({'feed.lang': 'uk'});
+        final feed = FeedController(
+          api: ApiClient(
+            baseUrl: 'https://api.test',
+            client: MockClient((request) async {
+              if (request.url.queryParameters.containsKey('after')) {
+                return _ok(_page([_article('e9', now, feedSeq: 9)]));
+              }
+              // A page with an English article mixed in.
+              return _ok({
+                ..._page([
+                  _translated('a1', now, 'Кабінет схвалив бюджет', feedSeq: 2),
+                  _article(
+                    'a2',
+                    now,
+                    headline: 'Law on water signed',
+                    feedSeq: 6,
+                  ),
+                ], next: 'c2'),
+                'top': [_article('a2', now, headline: 'Law on water signed')],
+              });
+            }),
+          ),
+        );
+        await feed.start();
+        expect(feed.items.map((a) => a.id), ['a1']);
+        expect(feed.items.single.lang, 'uk');
+        expect(feed.top, isEmpty);
+        expect(feed.hasMore, isFalse);
+        await feed.checkForNew();
+        expect(feed.newCount, 0);
+      },
+    );
+
+    test(
+      'an article asked for in a language is never taken in another',
+      () async {
+        final api = ApiClient(
+          baseUrl: 'https://api.test',
+          client: MockClient((request) async => _ok(_article('x', now))),
+        );
+        await expectLater(
+          api.fetchArticle('x', lang: 'uk'),
+          throwsA(
+            isA<ApiException>().having((e) => e.statusCode, 'statusCode', 404),
+          ),
+        );
+        expect((await api.fetchArticle('x')).id, 'x');
+      },
+    );
+
+    testWidgets(
+      'an empty translated feed fills in at the next check, without a pull',
+      (tester) async {
+        SharedPreferences.setMockInitialValues({'feed.lang': 'uk'});
+        var translated = false;
+        final feed = await _pump(
+          tester,
+          FeedController(
+            api: ApiClient(
+              baseUrl: 'https://api.test',
+              client: MockClient(
+                (request) async => _ok(translated ? ukrainian : _page([])),
+              ),
+            ),
+          ),
+        );
+        expect(find.text('No translated decisions yet.'), findsOneWidget);
+
+        translated = true;
+        await feed.checkForNew(); // what the screen's timer calls
+        await tester.pump();
+        expect(find.text('Кабінет схвалив бюджет'), findsOneWidget);
+        expect(find.text('No translated decisions yet.'), findsNothing);
+      },
+    );
+
+    test(
+      'offline with nothing to show, the check retries and keeps the error meanwhile',
+      () async {
+        final second = Completer<http.Response>();
+        var calls = 0;
+        final feed = FeedController(
+          api: ApiClient(
+            baseUrl: 'https://api.test',
+            client: MockClient((request) async {
+              calls++;
+              return calls == 1 ? http.Response('offline', 503) : second.future;
+            }),
+          ),
+        );
+        await feed.start();
+        expect(feed.error, isNotNull);
+
+        final checking = feed.checkForNew();
+        await Future<void>.delayed(Duration.zero);
+        expect(calls, 2);
+        // "Couldn't load the news" stays while it asks, not "No decisions yet".
+        expect(feed.error, isNotNull);
+
+        second.complete(_ok(english));
+        await checking;
+        expect(feed.error, isNull);
+        expect(feed.items.map((a) => a.id), ['a1', 'a2']);
+      },
+    );
+
+    testWidgets(
+      'at large text sizes the language moves under the date, so no word is split',
+      (tester) async {
+        _screen(tester, _phone);
+        addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+        await _pump(
+          tester,
+          FeedController(
+            api: _langApi({
+              'en': {'': english},
+            }),
+          ),
+        );
+        final day = longDay(DateTime.now());
+        Rect button() => tester.getRect(
+          find.ancestor(
+            of: find.text('EN'),
+            matching: find.byType(CupertinoButton),
+          ),
+        );
+
+        tester.platformDispatcher.textScaleFactorTestValue = 2;
+        await tester.pump();
+        final date = tester.getRect(find.text(day));
+        expect(button().top, greaterThanOrEqualTo(date.bottom));
+        // The globe grows with the text, like an SF Symbol.
+        expect(tester.getSize(find.byIcon(CupertinoIcons.globe)).height, 34);
+        final paragraph = tester.renderObject<RenderParagraph>(find.text(day));
+        var start = 0;
+        for (final word in day.split(' ')) {
+          final end = start + word.length;
+          expect(
+            paragraph.getBoxesForSelection(
+              TextSelection(baseOffset: start, extentOffset: end),
+            ),
+            hasLength(1),
+            reason: '"$word" is split over two lines',
+          );
+          start = end + 1;
+        }
+      },
+    );
+
+    testWidgets('on iPad the menu is a popover at the globe, without Cancel', (
+      tester,
+    ) async {
+      _screen(tester, _iPad);
+      await _pump(
+        tester,
+        FeedController(
+          api: _langApi({
+            'en': {'': english},
+            'uk': {'': ukrainian},
+          }),
+        ),
+      );
+      final button = tester.getRect(
+        find.ancestor(
+          of: find.text('EN'),
+          matching: find.byType(CupertinoButton),
+        ),
+      );
+      // Where there is room, the language sits beside the date, at the right edge.
+      expect(
+        button.top,
+        lessThan(tester.getRect(find.text(longDay(DateTime.now()))).bottom),
+      );
+      expect(button.right, _iPad.width - 20);
+
+      await tester.tap(find.text('EN'));
+      await tester.pumpAndSettle();
+      expect(find.text('Language'), findsOneWidget);
+      expect(find.text('Cancel'), findsNothing);
+      final choice = tester.getRect(
+        find.ancestor(
+          of: find.text('English'),
+          matching: find.byType(CupertinoActionSheetAction),
+        ),
+      );
+      expect(choice.width, lessThanOrEqualTo(320));
+      expect(choice.right, moreOrLessEquals(button.right));
+      final title = tester.getRect(find.text('Language'));
+      expect(title.top - button.bottom, inInclusiveRange(0, 40));
+      expect(find.byIcon(CupertinoIcons.checkmark_alt), findsOneWidget);
+
+      // A tap outside closes it, as on iPad.
+      await tester.tapAt(const Offset(100, 700));
+      await tester.pumpAndSettle();
+      expect(find.text('Language'), findsNothing);
+
+      await tester.tap(find.text('EN'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Українська'));
+      await tester.pumpAndSettle();
+      expect(find.text('Language'), findsNothing);
+      expect(find.text('УКР'), findsOneWidget);
+      expect(find.text('Кабінет схвалив бюджет'), findsOneWidget);
+    });
   });
 }

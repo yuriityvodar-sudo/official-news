@@ -30,6 +30,7 @@ class FeedScreen extends StatefulWidget {
 class _FeedScreenState extends State<FeedScreen> {
   late final FeedController _feed = widget.controller ?? FeedController();
   final _scroll = ScrollController();
+  final _languageButton = GlobalKey();
   Timer? _newCheck;
 
   @override
@@ -86,31 +87,93 @@ class _FeedScreenState extends State<FeedScreen> {
     Navigator.of(context).pushNamed(Routes.detail, arguments: article);
   }
 
-  /// The iOS action sheet with the feed's languages, the current one checked.
+  /// The iOS action sheet with the feed's languages, the current one checked. On
+  /// iPad, as iOS shows an action sheet there, a popover at the globe without Cancel.
   Future<void> _chooseLanguage() async {
     final current = _feed.language;
-    final chosen = await showCupertinoModalPopup<FeedLanguage>(
-      context: context,
-      builder: (context) => CupertinoActionSheet(
-        title: const Text('Language'),
-        actions: [
-          for (final lang in FeedLanguage.values)
-            CupertinoActionSheetAction(
-              onPressed: () => Navigator.of(context).pop(lang),
-              child: _LanguageChoice(lang, selected: lang == current),
-            ),
-        ],
-        cancelButton: CupertinoActionSheetAction(
-          isDefaultAction: true,
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
-        ),
-      ),
-    );
+    Widget sheet(BuildContext context, {required bool cancel}) =>
+        CupertinoActionSheet(
+          title: const Text('Language'),
+          actions: [
+            for (final lang in FeedLanguage.values)
+              CupertinoActionSheetAction(
+                onPressed: () => Navigator.of(context).pop(lang),
+                child: _LanguageChoice(lang, selected: lang == current),
+              ),
+          ],
+          cancelButton: cancel
+              ? CupertinoActionSheetAction(
+                  isDefaultAction: true,
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Cancel'),
+                )
+              : null,
+        );
+    final button = _languageButton.currentContext?.findRenderObject();
+    final chosen =
+        MediaQuery.sizeOf(context).shortestSide >= 600 && button is RenderBox
+        ? await _showPopover<FeedLanguage>(
+            anchor: button.localToGlobal(Offset.zero) & button.size,
+            builder: (context) => sheet(context, cancel: false),
+          )
+        : await showCupertinoModalPopup<FeedLanguage>(
+            context: context,
+            builder: (context) => sheet(context, cancel: true),
+          );
     if (!mounted || chosen == null || chosen == _feed.language) return;
     // Another language is another feed: start it from the top.
     if (_scroll.hasClients) _scroll.jumpTo(0);
     await _feed.setLanguage(chosen);
+  }
+
+  /// An iPad popover: [builder]'s action sheet just under [anchor], right edges
+  /// aligned, closed by a tap outside it.
+  Future<T?> _showPopover<T>({
+    required Rect anchor,
+    required WidgetBuilder builder,
+  }) {
+    return showGeneralDialog<T>(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: CupertinoLocalizations.of(context).modalBarrierDismissLabel,
+      barrierColor: Colors.transparent,
+      transitionDuration: const Duration(milliseconds: 150),
+      transitionBuilder: (context, animation, _, child) =>
+          FadeTransition(opacity: animation, child: child),
+      pageBuilder: (context, _, _) {
+        final screen = MediaQuery.of(context);
+        // CupertinoActionSheet takes the screen's width and pads itself (8 pt at
+        // the sides and bottom, 20 at the top, with no safe area): it is given a
+        // screen of the popover's size, and placed so the sheet starts 8 pt
+        // under the button.
+        const width = 300.0, side = 8.0, top = 20.0;
+        return Stack(
+          children: [
+            Positioned(
+              top: anchor.bottom + 8 - top,
+              bottom: 0,
+              right: (screen.size.width - anchor.right - side).clamp(
+                0,
+                screen.size.width,
+              ),
+              width: width + 2 * side,
+              child: Align(
+                alignment: Alignment.topCenter,
+                child: MediaQuery(
+                  data: screen.copyWith(
+                    size: Size(width + 2 * side, screen.size.height),
+                    padding: EdgeInsets.zero,
+                    viewPadding: EdgeInsets.zero,
+                    viewInsets: EdgeInsets.zero,
+                  ),
+                  child: Builder(builder: builder),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   @override
@@ -136,26 +199,32 @@ class _FeedScreenState extends State<FeedScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text('Official News', style: text.masthead),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
+                        // The language at the right of the date, or under it when
+                        // large text needs the whole line, so no word of the date is split.
+                        SizedBox(
+                          width: double.infinity,
+                          child: Wrap(
+                            alignment: WrapAlignment.spaceBetween,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              Text(
                                 longDay(DateTime.now()),
                                 style: text.dateLine,
                               ),
-                            ),
-                            // Hidden, keeping its place, until the saved language is read.
-                            Visibility(
-                              visible: _feed.languageKnown,
-                              maintainSize: true,
-                              maintainAnimation: true,
-                              maintainState: true,
-                              child: _LanguageButton(
-                                language: _feed.language,
-                                onPressed: _chooseLanguage,
+                              // Hidden, keeping its place, until the saved language is read.
+                              Visibility(
+                                visible: _feed.languageKnown,
+                                maintainSize: true,
+                                maintainAnimation: true,
+                                maintainState: true,
+                                child: _LanguageButton(
+                                  key: _languageButton,
+                                  language: _feed.language,
+                                  onPressed: _chooseLanguage,
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ],
                     ),
@@ -506,7 +575,11 @@ class _Picture extends StatelessWidget {
 /// The feed's language next to the date: a globe and "EN", "УКР" or "РУС", in the
 /// accent colour like the feed's other tappable text, with a 44-pt target.
 class _LanguageButton extends StatelessWidget {
-  const _LanguageButton({required this.language, required this.onPressed});
+  const _LanguageButton({
+    super.key,
+    required this.language,
+    required this.onPressed,
+  });
 
   final FeedLanguage language;
   final VoidCallback onPressed;
@@ -526,10 +599,12 @@ class _LanguageButton extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
+              // Grows with the text, like an SF Symbol.
               const Icon(
                 CupertinoIcons.globe,
                 size: 17,
                 color: AppColors.accent,
+                applyTextScaling: true,
               ),
               const SizedBox(width: 4),
               Text(language.shortLabel, style: style),

@@ -100,11 +100,17 @@ class FeedController extends ChangeNotifier {
     await refresh();
   }
 
-  Future<void> refresh() async {
+  Future<void> refresh() => _load();
+
+  /// The first page, shown in place of the feed. `quiet` keeps the error on screen
+  /// while it asks: a check in the background, not a pull the user is watching.
+  Future<void> _load({bool quiet = false}) async {
     final generation = _generation;
     final lang = language;
-    error = null;
-    notifyListeners();
+    if (!quiet) {
+      error = null;
+      notifyListeners();
+    }
     try {
       final page = await api.fetchArticles(lang: lang.code);
       // Another language, or a refresh that finished first, replaced the feed meanwhile.
@@ -151,8 +157,16 @@ class FeedController extends ChangeNotifier {
   /// Counts articles that appeared after the newest one shown (called every few minutes).
   /// Asks by feed position, so one that appeared late is counted too. Positions are
   /// per language, so the check asks in the feed's language.
+  ///
+  /// An empty feed has nothing to count from and no place to keep: it loads the
+  /// first page instead, so the first translations of the day, or the feed after
+  /// being offline, appear without a pull.
   Future<void> checkForNew() async {
-    if (items.isEmpty) return;
+    if (items.isEmpty) {
+      // Still loading: the first page is on its way.
+      if (!loading) await _load(quiet: true);
+      return;
+    }
     final generation = _generation;
     final lang = language.code;
     final highest = items

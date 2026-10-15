@@ -35,6 +35,7 @@ class Article {
     required this.originalUrl,
     this.feedSeq,
     this.addedAt,
+    this.lang,
   });
 
   factory Article.fromJson(Map<String, dynamic> json) {
@@ -61,6 +62,7 @@ class Article {
       addedAt: json['addedAt'] == null
           ? null
           : DateTime.parse(json['addedAt'] as String),
+      lang: json['lang'] as String?,
     );
   }
 
@@ -89,6 +91,10 @@ class Article {
   /// When it appeared in the feed; the card still shows [publishedAt].
   final DateTime? addedAt;
 
+  /// The language of the headline and summaries in a translated feed (`uk`, `ru`, #46);
+  /// none in the English feed.
+  final String? lang;
+
   /// The contract format, so the last feed can be saved on the phone and read back.
   Map<String, dynamic> toJson() => {
     'id': id,
@@ -109,6 +115,7 @@ class Article {
     'originalUrl': originalUrl,
     'feedSeq': feedSeq,
     'addedAt': addedAt?.toUtc().toIso8601String(),
+    'lang': lang,
   };
 }
 
@@ -135,6 +142,20 @@ class ArticlesPage {
   final List<Article> items;
   final String? nextCursor;
   final List<Article> top;
+
+  /// Only the articles in [lang]. A translated feed lists nothing else (#46), but a
+  /// server without translations ignores `lang` and sends the English feed: none of
+  /// it is shown as [lang], and its cursor, which pages through that other feed, is
+  /// not followed.
+  ArticlesPage inLanguage(String lang) {
+    bool inLang(Article a) => a.lang == lang;
+    if (items.every(inLang) && top.every(inLang)) return this;
+    return ArticlesPage(
+      items: items.where(inLang).toList(),
+      nextCursor: null,
+      top: top.where(inLang).toList(),
+    );
+  }
 
   Map<String, dynamic> toJson() => {
     'items': [for (final a in items) a.toJson()],

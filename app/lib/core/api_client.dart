@@ -32,6 +32,8 @@ class ApiClient {
   /// `GET /articles`: news from the last 7 days, newest first, 20 per page.
   /// With `lang` (`uk`, `ru`) only the articles translated into it, in that
   /// language's own order; `en` or none is the English feed, without the parameter.
+  /// An article that is not in `lang` is dropped here, whatever the server sends
+  /// ([ArticlesPage.inLanguage]).
   Future<ArticlesPage> fetchArticles({
     String? cursor,
     DateTime? since,
@@ -39,27 +41,34 @@ class ApiClient {
     int limit = 20,
     String? lang,
   }) async {
+    final param = _langParam(lang);
     final uri = Uri.parse('$_baseUrl/articles').replace(
       queryParameters: {
         'limit': '$limit',
         'cursor': ?cursor,
         if (since != null) 'since': since.toUtc().toIso8601String(),
         if (after != null) 'after': '$after',
-        'lang': ?_langParam(lang),
+        'lang': ?param,
       },
     );
-    return ArticlesPage.fromJson(await _getJson(uri));
+    final page = ArticlesPage.fromJson(await _getJson(uri));
+    return param == null ? page : page.inLanguage(param);
   }
 
-  /// `GET /articles/:id`; with `lang`, 404 when it is not translated.
+  /// `GET /articles/:id`; with `lang`, 404 when it is not translated, also when
+  /// a server without translations answers in English.
   Future<Article> fetchArticle(String id, {String? lang}) async {
     final uri = Uri.parse('$_baseUrl/articles/$id');
     final param = _langParam(lang);
-    return Article.fromJson(
+    final article = Article.fromJson(
       await _getJson(
         param == null ? uri : uri.replace(queryParameters: {'lang': param}),
       ),
     );
+    if (param != null && article.lang != param) {
+      throw ApiException(404, 'Not translated into $param');
+    }
+    return article;
   }
 
   /// English is the API without `lang`, so its requests stay as they were.

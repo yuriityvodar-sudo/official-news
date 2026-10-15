@@ -34,7 +34,12 @@ class FeedStore {
     final raw = _prefs.getString(_pageKeyFor(lang));
     if (raw == null) return null;
     try {
-      return ArticlesPage.fromJson(jsonDecode(raw) as Map<String, dynamic>);
+      final page = ArticlesPage.fromJson(
+        jsonDecode(raw) as Map<String, dynamic>,
+      );
+      // The first draft of #46 saved whatever came back, English too, under
+      // 'feed.lastPage.uk' when the server had no translations yet.
+      return lang == FeedLanguage.en ? page : page.inLanguage(lang.code);
     } catch (_) {
       return null; // an older or broken copy: start fresh
     }
