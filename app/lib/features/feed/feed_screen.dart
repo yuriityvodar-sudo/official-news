@@ -194,37 +194,19 @@ class _FeedScreenState extends State<FeedScreen> {
       slivers.add(_rows(rest.toList()));
     }
 
-    // Latest, then one group per earlier day: "Yesterday", "Monday 12 October"…
-    final groups = <DateTime, List<Article>>{};
-    for (final a in latest) {
-      // The feed is in the order articles appeared, so days follow when they appeared.
-      groups.putIfAbsent(localDay(a.addedAt ?? a.publishedAt), () => []).add(a);
-    }
-    var firstGroup = true;
-    for (final entry in groups.entries) {
-      final label = dayLabel(entry.key);
-      final title = firstGroup && (label == 'Today' || _feed.top.isEmpty)
-          ? 'Latest'
-          : label;
-      final style = title == 'Latest'
-          ? text.section
-          : text.section.copyWith(
-              color: Theme.of(context).colorScheme.onSurface,
-              fontSize: 20,
-            );
+    // One "Latest" list in the order articles appeared, with no day headings: an
+    // article dated yesterday can appear today, so headings by day would contradict
+    // the cards' own dates. Each card shows its date instead.
+    if (latest.isNotEmpty) {
       slivers.add(
         _padded(
           Padding(
             padding: const EdgeInsets.only(top: 20, bottom: 4),
-            child: Text(title, style: style),
+            child: Text('Latest', style: text.section),
           ),
         ),
       );
-      if (title == 'Latest' && label != 'Today') {
-        slivers.add(_padded(Text(label, style: text.meta)));
-      }
-      slivers.add(_rows(entry.value, groupDay: entry.key));
-      firstGroup = false;
+      slivers.add(_rows(latest));
     }
 
     slivers.add(
@@ -256,25 +238,23 @@ class _FeedScreenState extends State<FeedScreen> {
     sliver: SliverToBoxAdapter(child: child),
   );
 
-  /// Inside a day group, a date-only article shows no day when the group header says
-  /// it. Groups follow when articles appeared, so one dated earlier still shows its day.
-  Widget _rows(List<Article> articles, {DateTime? groupDay}) =>
-      SliverPadding(
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        sliver: SliverList.separated(
-          itemCount: articles.length,
-          separatorBuilder: (_, _) => const Divider(),
-          itemBuilder: (context, index) {
-            final a = articles[index];
-            return _ArticleRow(
-              article: a,
-              read: _feed.readIds.contains(a.id),
-              showDay: groupDay == null || localDay(a.publishedAt) != groupDay,
-              onTap: () => _open(a),
-            );
-          },
-        ),
-      );
+  /// Every card shows its own date ("2h ago", or the day for date-only articles).
+  Widget _rows(List<Article> articles) => SliverPadding(
+    padding: const EdgeInsets.symmetric(horizontal: 20),
+    sliver: SliverList.separated(
+      itemCount: articles.length,
+      separatorBuilder: (_, _) => const Divider(),
+      itemBuilder: (context, index) {
+        final a = articles[index];
+        return _ArticleRow(
+          article: a,
+          read: _feed.readIds.contains(a.id),
+          showDay: true,
+          onTap: () => _open(a),
+        );
+      },
+    ),
+  );
 }
 
 /// One decision: label, publisher, serif headline, time, thumbnail on the right.
@@ -316,9 +296,11 @@ class _ArticleRow extends StatelessWidget {
                     maxLines: 4,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  if (showDay || !article.dateOnly) ...[
+                  if (showDay ||
+                      !article.dateOnly ||
+                      article.addedAt != null) ...[
                     const SizedBox(height: 6),
-                    Text(articleTime(article), style: dim(text.meta, read)),
+                    Text(feedTime(article), style: dim(text.meta, read)),
                   ],
                 ],
               ),
@@ -377,7 +359,7 @@ class _TopCard extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             ),
             const SizedBox(height: 6),
-            Text(articleTime(article), style: dim(text.meta, read)),
+            Text(feedTime(article), style: dim(text.meta, read)),
           ],
         ),
       ),

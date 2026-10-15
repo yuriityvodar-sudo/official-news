@@ -92,7 +92,7 @@ Future<FeedController> _pump(WidgetTester tester, FeedController feed) async {
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
-  testWidgets('shows top stories, then the latest decisions grouped by day', (
+  testWidgets('shows top stories, then one Latest list without day headings', (
     tester,
   ) async {
     final top = _article(
@@ -132,7 +132,8 @@ void main() {
     ); // only once: top articles are not repeated below
     expect(find.text('Latest'), findsOneWidget);
     expect(find.text('Law on water signed'), findsOneWidget);
-    expect(find.text('Yesterday'), findsOneWidget);
+    // No day heading: the older article shows its own time on the card.
+    expect(find.text('Yesterday'), findsNothing);
     expect(find.text('Decree on visas'), findsOneWidget);
     expect(find.text('CABINET DECISION'), findsNWidgets(3));
     expect(find.text('Federal Government · Germany'), findsNWidgets(3));
@@ -463,7 +464,7 @@ void main() {
   );
 
   testWidgets(
-    'groups days by when articles appeared, not when they were published',
+    'lists articles in the order they appeared, with no day heading in between',
     (tester) async {
       final now = DateTime.now();
       await _pump(
@@ -472,7 +473,7 @@ void main() {
           api: _api({
             '': {
               'items': [
-                // Published three days ago, appeared just now: belongs under today.
+                // Published three days ago, appeared just now: first.
                 _article(
                   'late',
                   now.subtract(const Duration(days: 3)),
@@ -495,14 +496,14 @@ void main() {
         ),
       );
       expect(find.text('Latest'), findsOneWidget);
-      expect(find.text('Yesterday'), findsOneWidget);
+      expect(find.text('Yesterday'), findsNothing);
       final late = tester.getTopLeft(find.text('Late but new')).dy;
-      final yesterdayHeader = tester.getTopLeft(find.text('Yesterday')).dy;
-      expect(late, lessThan(yesterdayHeader));
+      final older = tester.getTopLeft(find.text('Appeared yesterday')).dy;
+      expect(late, lessThan(older));
     },
   );
 
-  testWidgets('a date-only decision that appeared later still shows its own day', (
+  testWidgets('a card shows when the article appeared, so times only go down', (
     tester,
   ) async {
     final now = DateTime.now();
@@ -538,8 +539,9 @@ void main() {
       ),
     );
     expect(find.text('Latest'), findsOneWidget);
-    // The earlier one shows its day; the one from today needs none under its header.
-    expect(find.text(dayLabel(dated)), findsOneWidget);
+    // Both appeared just now: the cards say so, not the older publication day.
+    expect(find.text(dayLabel(dated)), findsNothing);
     expect(find.text('Today'), findsNothing);
+    expect(find.textContaining('m ago'), findsNWidgets(2));
   });
 }
