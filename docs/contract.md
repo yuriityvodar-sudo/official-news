@@ -23,11 +23,14 @@ What the API returns and both screens read.
   "tags": ["Saudi Arabia", "Houthis", "aviation"],
   "importance": 4,
   "imageUrl": "https://www.gov.pl/photo/… or null",
-  "originalUrl": "https://www.gov.pl/web/dyplomacja/oswiadczenie-msz-ws-ataku-w-rijadzie"
+  "originalUrl": "https://www.gov.pl/web/dyplomacja/oswiadczenie-msz-ws-ataku-w-rijadzie",
+  "feedSeq": 1204,
+  "addedAt": "2026-10-11T15:20:00Z"
 }
 ```
 
 - The feed card reads `headline`, `shortSummary` and `imageUrl`; both show `decisionType` as a red label above the headline ("DECISION"); the detail screen reads `summary`. `topics` is set by the AI; the MVP app does not use it yet.
+- `feedSeq` is the article's place in the feed: a number given when it becomes visible (the AI marks it an official decision), only ever rising and never changed afterwards. `addedAt` is when that happened (column `added_at`, set with `feed_seq` and, like it, never changed by a later re-summary). The card shows `publishedAt`; the feed order follows `feedSeq`, so an article that appears late lands on top, not among the ones already read (docs/research/2026-10-15 Feed ordering for late items.md).
 - Before the AI step has run, `headline`, `shortSummary`, `summary`, `decisionType` and `importance` are `null` and `topics` is `[]`; the app shows `originalTitle` instead.
 - `publishedAt` is UTC. `dateOnly: true` means the source gave no time.
 
@@ -47,11 +50,12 @@ A fixed list. The AI gives each article 1 to 3 of them; topic features (onboardi
 
 Base URL: `https://api.officialnews.workers.dev` (deployed), `http://localhost:8787` (local, `npm run dev` in `server/`).
 
-- `GET /articles?limit=20&cursor=<c>` → `{ "items": [Article], "nextCursor": "…" | null, "top": [Article] }`: news from the last 7 days where `is_news = 1`, newest first (same time: by `id`). `limit` is 1 to 50, default 20. `nextCursor` is an opaque string to send back as `cursor` for the next page, `null` on the last page. `top` is filled only on the first page (no `cursor`, no `since`): last 24 hours, highest importance, at most 2 per country, up to 5; otherwise `[]`. It may be empty, so the app must not depend on it. Top articles also appear in `items`.
-- `GET /articles?since=<ISO time>` → only articles published after that time, for the "new updates" check; pages with `cursor` like the feed.
+- `GET /articles?limit=20&cursor=<c>` → `{ "items": [Article], "nextCursor": "…" | null, "top": [Article] }`: news from the last 7 days where `is_news = 1`, in the order they appeared in the feed, newest `feedSeq` first. `limit` is 1 to 50, default 20. `nextCursor` is an opaque string to send back as `cursor` for the next page, `null` on the last page. `top` is filled only on the first page (no `cursor`, no `since`): last 24 hours, highest importance, at most 2 per country, up to 5, listed newest `feedSeq` first; otherwise `[]`. It may be empty, so the app must not depend on it. Top articles also appear in `items`.
+- `GET /articles?after=<feedSeq>` → only articles that appeared after that `feedSeq`, late ones included: the "N new" check. The app sends the highest `feedSeq` it holds.
+- `GET /articles?since=<ISO time>` → kept for app builds before `after`, which send the publication time of the first article they show: returns articles with a higher `feedSeq` than the newest article published at or before that time (the one those builds show first), so late articles count once and only when they are new.
 - `GET /articles/:id` → `Article` shown in the feed, or 404 (hidden articles too).
 - `GET /health` → `{ "sources": { "<status>": <count> }, "lastFetcherRun": "<ISO time>" | null, "articles": { "fetchedLast24h": <n>, "waitingForSummary": <n>, "inFeed": <n> } }`: real sources only (seed rows skipped); `lastFetcherRun` is the latest `last_checked_at`; `inFeed` counts official decisions of the last 7 days. Open in a browser to see whether the fetcher and the AI step are running.
-- Errors are JSON `{ "error": "<message>" }`: 400 for a bad `limit`, `cursor` or `since`, 404, 405 for any method other than GET, 500.
+- Errors are JSON `{ "error": "<message>" }`: 400 for a bad `limit`, `cursor`, `after` or `since`, 404, 405 for any method other than GET, 500.
 
 ## Database (D1)
 
@@ -60,7 +64,7 @@ Defined in `server/migrations/0001_init.sql`.
 - `sources`: id, country, name, kind (`rss` | `page` | `api`), url, config (JSON: selectors for pages), language, verified_by (`domain` | `portal` | `wikidata`), verified_at, licence, status (`active` | `stale` | `moved` | `broken` | `blocked`), last_checked_at, last_item_at, list_etag, list_last_modified (the list's validators, kept by the fetcher for sources with `conditionalGet`; migration `0003`), failed_checks, last_ok_at, last_error (source health, migration `0007`)
   - The source list lives in `docs/sources.csv` (one row per source, with how it was verified as official). The deploy loads it into the live database on every change (`npm run sources:local` for a laptop). Loading adds or updates rows and never changes `status` or the check times, which the fetcher and health checks own.
   - Rows with `config` `{"seed": true}` come from the Kickoff seed so the app has data; the fetcher and the health checks skip them.
-- `articles`: id, source_id, url (unique), original_title, published_at, date_only, fetched_at, text, text_expires_at, headline, short_summary, summary, image_url, original_language, topics (JSON), tags (JSON), importance, decision_type, is_news (NULL until the AI decides, 1 = official decision shown in the feed, 0 = hidden), summarized_at, model, summary_attempts (migration `0004`), summary_claimed_at (migration `0005`)
+- `articles`: id, source_id, url (unique), original_title, published_at, date_only, fetched_at, text, text_expires_at, headline, short_summary, summary, image_url, original_language, topics (JSON), tags (JSON), importance, decision_type, is_news (NULL until the AI decides, 1 = official decision shown in the feed, 0 = hidden), summarized_at, model, summary_attempts (migration `0004`), summary_claimed_at (migration `0005`), feed_seq (unique; migration `0006`, given by the summarizer in the same statement that sets `is_news = 1`), added_at (when feed_seq was given)
 
 Times (`published_at`, `fetched_at`, `summarized_at`, `text_expires_at`) are stored in UTC as `YYYY-MM-DDTHH:MM:SSZ`, without milliseconds, so they sort and compare as text.
 
