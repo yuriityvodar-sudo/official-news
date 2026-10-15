@@ -70,7 +70,7 @@ Times (`published_at`, `fetched_at`, `summarized_at`, `text_expires_at`) are sto
 
 ## Scheduled job
 
-`server/src/index.ts` runs every minute: `runFetcher(env)` (item 6) takes the 2 sources with the oldest `last_checked_at`; then `runSummarizer(env, { maxArticles: 5 })` (item 7) makes one AI call per article. One run stays within the free plan: at most 50 outside requests and 10 ms of CPU.
+`server/src/index.ts` runs every minute: `runFetcher(env)` (item 6) takes the source with the oldest `last_checked_at`; then `runSummarizer(env, { maxArticles: 5 })` (item 7) makes one AI call per article. One run stays within the free plan: at most 50 outside requests and 10 ms of CPU.
 
 What the fetcher writes (`server/src/fetcher/`):
 - Only items published in the last 7 days; an item already stored (same `url`) is never saved again. Items without a date are skipped, and a time later than the fetch is stored as the fetch time.
