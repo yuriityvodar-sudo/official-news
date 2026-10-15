@@ -1,10 +1,11 @@
 -- Translations (#46): an article's headline, short summary and summary in
 -- another language, written by the translator step from the English ones.
--- One row per article and language. A row exists from the moment a run claims
--- it; it is finished once lang_seq is set. The API shows an article in a
--- language only when its row is finished (docs/contract.md).
--- This migration reads and changes nothing in articles, so it works with or
--- without 0006 (#38, feed_seq), which is why it is 0007.
+-- One row per article and language, which is also its place in the
+-- translation queue: a row exists from the moment the translator queues the
+-- article for that language; it is finished once lang_seq is set. The API shows
+-- an article in a language only when its row is finished (docs/contract.md).
+-- This migration changes nothing in articles but one new index, so it works
+-- with or without 0006 (#38, feed_seq), which is why it is 0007.
 CREATE TABLE article_translations (
   article_id           TEXT NOT NULL REFERENCES articles (id),
   lang                 TEXT NOT NULL,     -- e.g. 'uk'; the list is LANGS in server/src/translator/index.ts
@@ -21,8 +22,11 @@ CREATE TABLE article_translations (
   claimed_at           TEXT,              -- when a run took it, or last got an unusable answer for it; older than
                                           -- 10 minutes means it is free again
   attempts             INTEGER NOT NULL DEFAULT 0, -- unusable answers for the English of attempts_source; after 3
-                                                   -- it is not tried again until the English changes
-  attempts_source      TEXT,              -- articles.summarized_at the attempts count for
+                                                   -- it leaves the queue until the English changes
+  attempts_source      TEXT,              -- articles.summarized_at of the English the queue holds for it, and the
+                                          -- attempts count for; the queue's order, oldest first
+  queued_at            TEXT,              -- when that English was queued; NULL when nothing is waiting: translated,
+                                          -- out of tries, or the article left the feed
   PRIMARY KEY (article_id, lang),
   -- All or nothing: a row has no translation at all, or every field of one.
   CHECK (
@@ -41,3 +45,14 @@ CREATE UNIQUE INDEX article_translations_lang_seq ON article_translations (lang,
 -- translated_at rises with lang_seq, so the first translation of the last 7 days
 -- bounds a page's walk from below: one row read instead of every older one.
 CREATE INDEX article_translations_lang_time ON article_translations (lang, translated_at, lang_seq) WHERE lang_seq IS NOT NULL;
+
+-- The queue: what waits, oldest English first. A run claims from here, so it
+-- reads about what it takes, not the feed's 7 days.
+CREATE INDEX article_translations_queue ON article_translations (attempts_source, article_id, lang) WHERE queued_at IS NOT NULL;
+
+-- The newest English queued for a language, where the next run starts looking.
+CREATE INDEX article_translations_source ON article_translations (lang, attempts_source);
+
+-- News by when its English was written, so the translator finds what is new
+-- or re-summarized without reading the feed's 7 days.
+CREATE INDEX articles_news_summarized ON articles (summarized_at) WHERE is_news = 1;

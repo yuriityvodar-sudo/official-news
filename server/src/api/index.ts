@@ -1,6 +1,6 @@
 import type { Env } from "../env";
 import { sourceHealth } from "../health";
-import { LANGS, type Lang, isLang } from "../translator";
+import { LANGS, type Lang, SHOWN, isLang } from "../translator";
 
 /** A row of `articles` joined with its source, as stored in D1. */
 interface ArticleRow {
@@ -228,11 +228,15 @@ const FROM_TRANSLATIONS = `FROM article_translations t
   JOIN articles a ON a.id = t.article_id
   JOIN sources s ON s.id = a.source_id`;
 
-/** A finished translation (into the language bound to `?`) of an article shown in the feed. */
-const TRANSLATED = "t.lang = ? AND t.lang_seq IS NOT NULL AND a.is_news = 1";
+/**
+ * A finished translation (into the language bound to `?`) of an article shown
+ * in the feed, and not one of an older English whose new English used up its
+ * tries (SHOWN).
+ */
+const TRANSLATED = `t.lang = ? AND t.lang_seq IS NOT NULL AND a.is_news = 1 AND ${SHOWN}`;
 
 /**
- * A language feed page: TRANSLATED, last 7 days, two binds of the language.
+ * A language feed page: what TRANSLATED shows, last 7 days, two binds of the language.
  * The page walks the index on (lang, lang_seq) newest first. The lower bound
  * stops the walk at the 7-day edge: translated_at >= published_at, and
  * translated_at rises with lang_seq (both are set in one statement), so the
@@ -247,6 +251,7 @@ export const LANG_PAGE_CONDITIONS = [
   "t.lang = ?",
   "t.lang_seq IS NOT NULL",
   "+a.is_news = 1",
+  SHOWN,
   "+a.published_at >= strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-7 days')",
   `t.lang_seq >= COALESCE((SELECT b.lang_seq FROM article_translations b
                            WHERE b.lang = ? AND b.lang_seq IS NOT NULL
