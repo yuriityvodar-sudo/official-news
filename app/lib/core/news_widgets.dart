@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 
 import 'article.dart';
+import 'countries.dart';
 import 'decision_types.dart';
 import 'theme.dart';
 
@@ -22,7 +23,7 @@ class KindLabel extends StatelessWidget {
   }
 }
 
-/// "Federal Government · DE" with the blue official-source mark.
+/// "Federal Government · Germany" with the blue official-source mark.
 class PublisherLine extends StatelessWidget {
   const PublisherLine(this.article, {super.key});
 
@@ -34,7 +35,7 @@ class PublisherLine extends StatelessWidget {
       children: [
         Flexible(
           child: Text(
-            '${article.source.name} · ${article.country}',
+            '${article.source.name} · ${countryName(article.country)}',
             style: NewsText.from(context).publisher,
             overflow: TextOverflow.ellipsis,
           ),
@@ -93,3 +94,24 @@ String timeAgo(DateTime date, {DateTime? now}) {
   if (diff.inHours < 24) return '${diff.inHours}h ago';
   return '${diff.inDays}d ago';
 }
+
+/// The local calendar day, for grouping the feed.
+DateTime localDay(DateTime date) {
+  final d = date.toLocal();
+  return DateTime(d.year, d.month, d.day);
+}
+
+/// "Today", "Yesterday", or "Monday 12 October".
+String dayLabel(DateTime date, {DateTime? now}) {
+  final day = localDay(date);
+  final today = localDay(now ?? DateTime.now());
+  final days = today.difference(day).inDays;
+  if (days == 0) return 'Today';
+  if (days == 1) return 'Yesterday';
+  return '${_weekdays[day.weekday - 1]} ${day.day} ${_months[day.month - 1]}';
+}
+
+/// "2h ago" for articles with a time; the day for those whose source gave only a date.
+String articleTime(Article article, {DateTime? now}) => article.dateOnly
+    ? dayLabel(article.publishedAt, now: now)
+    : timeAgo(article.publishedAt, now: now);
