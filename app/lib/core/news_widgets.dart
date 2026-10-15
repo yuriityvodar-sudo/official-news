@@ -8,9 +8,10 @@ import 'theme.dart';
 /// The red decision type above a headline ("CABINET DECISION"); nothing when
 /// the article has no known type yet.
 class KindLabel extends StatelessWidget {
-  const KindLabel(this.article, {super.key});
+  const KindLabel(this.article, {super.key, this.dimmed = false});
 
   final Article article;
+  final bool dimmed;
 
   @override
   Widget build(BuildContext context) {
@@ -18,16 +19,30 @@ class KindLabel extends StatelessWidget {
     if (label == null) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),
-      child: Text(label.toUpperCase(), style: NewsText.from(context).kindLabel),
+      child: Text(
+        label.toUpperCase(),
+        style: dim(NewsText.from(context).kindLabel, dimmed),
+      ),
     );
   }
 }
 
+/// How much of its colour a read article keeps.
+const readOpacity = 0.55;
+
+/// A style faded for an article already read; cheaper than an Opacity layer per row.
+TextStyle dim(TextStyle style, bool dimmed) => dimmed && style.color != null
+    ? style.copyWith(
+        color: style.color!.withValues(alpha: style.color!.a * readOpacity),
+      )
+    : style;
+
 /// "Federal Government · Germany" with the blue official-source mark.
 class PublisherLine extends StatelessWidget {
-  const PublisherLine(this.article, {super.key});
+  const PublisherLine(this.article, {super.key, this.dimmed = false});
 
   final Article article;
+  final bool dimmed;
 
   @override
   Widget build(BuildContext context) {
@@ -36,15 +51,17 @@ class PublisherLine extends StatelessWidget {
         Flexible(
           child: Text(
             '${article.source.name} · ${countryName(article.country)}',
-            style: NewsText.from(context).publisher,
+            style: dim(NewsText.from(context).publisher, dimmed),
             overflow: TextOverflow.ellipsis,
           ),
         ),
         const SizedBox(width: 4),
-        const Icon(
+        Icon(
           CupertinoIcons.checkmark_seal,
           size: 15,
-          color: AppColors.verified,
+          color: dimmed
+              ? AppColors.verified.withValues(alpha: readOpacity)
+              : AppColors.verified,
         ),
       ],
     );
@@ -105,13 +122,26 @@ DateTime localDay(DateTime date) {
 String dayLabel(DateTime date, {DateTime? now}) {
   final day = localDay(date);
   final today = localDay(now ?? DateTime.now());
-  final days = today.difference(day).inDays;
+  // Compared as UTC dates: local midnights are 23 or 25 hours apart on a clock change.
+  final days = DateTime.utc(
+    today.year,
+    today.month,
+    today.day,
+  ).difference(DateTime.utc(day.year, day.month, day.day)).inDays;
   if (days == 0) return 'Today';
   if (days == 1) return 'Yesterday';
   return '${_weekdays[day.weekday - 1]} ${day.day} ${_months[day.month - 1]}';
 }
 
 /// "2h ago" for articles with a time; the day for those whose source gave only a date.
+/// The time on a feed card: when the article appeared in the feed ("5m ago"),
+/// the same moment the feed is ordered by, so times only go down as you scroll.
+/// The official publication date is on the article screen. Before the server
+/// sends `addedAt`, the publication time.
+String feedTime(Article article, {DateTime? now}) => article.addedAt != null
+    ? timeAgo(article.addedAt!, now: now)
+    : articleTime(article, now: now);
+
 String articleTime(Article article, {DateTime? now}) => article.dateOnly
     ? dayLabel(article.publishedAt, now: now)
     : timeAgo(article.publishedAt, now: now);

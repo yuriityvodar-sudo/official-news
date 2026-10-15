@@ -33,6 +33,8 @@ class Article {
     required this.importance,
     required this.imageUrl,
     required this.originalUrl,
+    this.feedSeq,
+    this.addedAt,
   });
 
   factory Article.fromJson(Map<String, dynamic> json) {
@@ -55,6 +57,10 @@ class Article {
       importance: json['importance'] as int?,
       imageUrl: json['imageUrl'] as String?,
       originalUrl: json['originalUrl'] as String,
+      feedSeq: json['feedSeq'] as int?,
+      addedAt: json['addedAt'] == null
+          ? null
+          : DateTime.parse(json['addedAt'] as String),
     );
   }
 
@@ -77,6 +83,12 @@ class Article {
   final String? imageUrl;
   final String originalUrl;
 
+  /// The article's place in the feed: given when it appeared, only rising (docs/contract.md).
+  final int? feedSeq;
+
+  /// When it appeared in the feed; the card still shows [publishedAt].
+  final DateTime? addedAt;
+
   /// The contract format, so the last feed can be saved on the phone and read back.
   Map<String, dynamic> toJson() => {
     'id': id,
@@ -95,6 +107,8 @@ class Article {
     'importance': importance,
     'imageUrl': imageUrl,
     'originalUrl': originalUrl,
+    'feedSeq': feedSeq,
+    'addedAt': addedAt?.toUtc().toIso8601String(),
   };
 }
 

@@ -53,7 +53,14 @@ class _FeedScreenState extends State<FeedScreen> {
     super.dispose();
   }
 
-  void _changed() => setState(() {});
+  void _changed() {
+    setState(() {});
+    // A page dropped because a refresh replaced the feed leaves the list at its end:
+    // look again once the new feed is drawn.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _scroll.hasClients) _nearEnd();
+    });
+  }
 
   void _nearEnd() {
     if (_scroll.position.pixels > _scroll.position.maxScrollExtent - 600) {
@@ -187,36 +194,19 @@ class _FeedScreenState extends State<FeedScreen> {
       slivers.add(_rows(rest.toList()));
     }
 
-    // Latest, then one group per earlier day: "Yesterday", "Monday 12 October"…
-    final groups = <DateTime, List<Article>>{};
-    for (final a in latest) {
-      groups.putIfAbsent(localDay(a.publishedAt), () => []).add(a);
-    }
-    var firstGroup = true;
-    for (final entry in groups.entries) {
-      final label = dayLabel(entry.key);
-      final title = firstGroup && (label == 'Today' || _feed.top.isEmpty)
-          ? 'Latest'
-          : label;
-      final style = title == 'Latest'
-          ? text.section
-          : text.section.copyWith(
-              color: Theme.of(context).colorScheme.onSurface,
-              fontSize: 20,
-            );
+    // One "Latest" list in the order articles appeared, with no day headings: an
+    // article dated yesterday can appear today, so headings by day would contradict
+    // the cards' own dates. Each card shows its date instead.
+    if (latest.isNotEmpty) {
       slivers.add(
         _padded(
           Padding(
             padding: const EdgeInsets.only(top: 20, bottom: 4),
-            child: Text(title, style: style),
+            child: Text('Latest', style: text.section),
           ),
         ),
       );
-      if (title == 'Latest' && label != 'Today') {
-        slivers.add(_padded(Text(label, style: text.meta)));
-      }
-      slivers.add(_rows(entry.value, inDayGroup: true));
-      firstGroup = false;
+      slivers.add(_rows(latest));
     }
 
     slivers.add(
@@ -224,7 +214,16 @@ class _FeedScreenState extends State<FeedScreen> {
         padding: const EdgeInsets.fromLTRB(20, 24, 20, 48),
         sliver: SliverToBoxAdapter(
           child: Center(
-            child: _feed.loadingMore || _feed.hasMore
+            child: _feed.loadMoreFailed
+                ? CupertinoButton(
+                    // A 44-pt target and a button role for VoiceOver.
+                    onPressed: () => unawaited(_feed.loadMore(retry: true)),
+                    child: Text(
+                      "Couldn't load more. Tap to try again.",
+                      style: text.meta.copyWith(color: AppColors.accent),
+                    ),
+                  )
+                : _feed.loadingMore || _feed.hasMore
                 ? const CupertinoActivityIndicator()
                 : Text("You're all caught up", style: text.meta),
           ),
@@ -239,24 +238,23 @@ class _FeedScreenState extends State<FeedScreen> {
     sliver: SliverToBoxAdapter(child: child),
   );
 
-  /// Inside a day group, a date-only article shows no day: the group header says it.
-  Widget _rows(List<Article> articles, {bool inDayGroup = false}) =>
-      SliverPadding(
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        sliver: SliverList.separated(
-          itemCount: articles.length,
-          separatorBuilder: (_, _) => const Divider(),
-          itemBuilder: (context, index) {
-            final a = articles[index];
-            return _ArticleRow(
-              article: a,
-              read: _feed.readIds.contains(a.id),
-              showDay: !inDayGroup,
-              onTap: () => _open(a),
-            );
-          },
-        ),
-      );
+  /// Every card shows its own date ("2h ago", or the day for date-only articles).
+  Widget _rows(List<Article> articles) => SliverPadding(
+    padding: const EdgeInsets.symmetric(horizontal: 20),
+    sliver: SliverList.separated(
+      itemCount: articles.length,
+      separatorBuilder: (_, _) => const Divider(),
+      itemBuilder: (context, index) {
+        final a = articles[index];
+        return _ArticleRow(
+          article: a,
+          read: _feed.readIds.contains(a.id),
+          showDay: true,
+          onTap: () => _open(a),
+        );
+      },
+    ),
+  );
 }
 
 /// One decision: label, publisher, serif headline, time, thumbnail on the right.
@@ -279,40 +277,44 @@ class _ArticleRow extends StatelessWidget {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
-      child: Opacity(
-        // Opened articles stay in the feed, dimmed.
-        opacity: read ? 0.55 : 1,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    KindLabel(article),
-                    PublisherLine(article),
-                    const SizedBox(height: 4),
-                    Text(
-                      article.headline,
-                      style: text.headline,
-                      maxLines: 4,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    if (showDay || !article.dateOnly) ...[
-                      const SizedBox(height: 6),
-                      Text(articleTime(article), style: text.meta),
-                    ],
+      // Opened articles stay in the feed, dimmed.
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  KindLabel(article, dimmed: read),
+                  PublisherLine(article, dimmed: read),
+                  const SizedBox(height: 4),
+                  Text(
+                    article.headline,
+                    style: dim(text.headline, read),
+                    maxLines: 4,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (showDay ||
+                      !article.dateOnly ||
+                      article.addedAt != null) ...[
+                    const SizedBox(height: 6),
+                    Text(feedTime(article), style: dim(text.meta, read)),
                   ],
-                ),
+                ],
               ),
-              if (article.imageUrl != null) ...[
-                const SizedBox(width: 14),
-                _Picture(url: article.imageUrl!, width: 84, height: 84),
-              ],
+            ),
+            if (article.imageUrl != null) ...[
+              const SizedBox(width: 14),
+              _Picture(
+                url: article.imageUrl!,
+                width: 84,
+                height: 84,
+                dimmed: read,
+              ),
             ],
-          ),
+          ],
         ),
       ),
     );
@@ -337,31 +339,28 @@ class _TopCard extends StatelessWidget {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
-      child: Opacity(
-        opacity: read ? 0.55 : 1,
-        child: Padding(
-          padding: const EdgeInsets.only(top: 8, bottom: 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              AspectRatio(
-                aspectRatio: 16 / 9,
-                child: _Picture(url: article.imageUrl!),
-              ),
-              const SizedBox(height: 12),
-              KindLabel(article),
-              PublisherLine(article),
-              const SizedBox(height: 4),
-              Text(
-                article.headline,
-                style: text.headline.copyWith(fontSize: 25),
-                maxLines: 4,
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 6),
-              Text(articleTime(article), style: text.meta),
-            ],
-          ),
+      child: Padding(
+        padding: const EdgeInsets.only(top: 8, bottom: 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            AspectRatio(
+              aspectRatio: 16 / 9,
+              child: _Picture(url: article.imageUrl!, dimmed: read),
+            ),
+            const SizedBox(height: 12),
+            KindLabel(article, dimmed: read),
+            PublisherLine(article, dimmed: read),
+            const SizedBox(height: 4),
+            Text(
+              article.headline,
+              style: dim(text.headline.copyWith(fontSize: 25), read),
+              maxLines: 4,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 6),
+            Text(feedTime(article), style: dim(text.meta, read)),
+          ],
         ),
       ),
     );
@@ -370,26 +369,53 @@ class _TopCard extends StatelessWidget {
 
 /// A picture from the official page; it simply disappears if it cannot be loaded.
 class _Picture extends StatelessWidget {
-  const _Picture({required this.url, this.width, this.height});
+  const _Picture({
+    required this.url,
+    this.width,
+    this.height,
+    this.dimmed = false,
+  });
 
   final String url;
   final double? width;
   final double? height;
+  final bool dimmed;
 
   @override
   Widget build(BuildContext context) {
+    final ratio = MediaQuery.devicePixelRatioOf(context);
     return ClipRRect(
       borderRadius: BorderRadius.circular(10),
       child: Container(
         width: width,
         height: height,
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        child: Image.network(
-          url,
-          fit: BoxFit.cover,
-          width: width,
-          height: height,
-          errorBuilder: (_, _, _) => const SizedBox.shrink(),
+        // A read picture fades together with its placeholder, so it looks faded, not grey.
+        color: dim(
+          TextStyle(
+            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+          ),
+          dimmed,
+        ).color,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            // Official pages often serve 2,000+ px images; decode near the size shown,
+            // so a long feed does not hold hundreds of MB of pictures. A square
+            // thumbnail with BoxFit.cover crops a landscape picture to its height,
+            // so it is decoded twice as wide as the box to stay sharp.
+            final square = width != null && height != null && width == height;
+            final shown = (width ?? constraints.maxWidth) * (square ? 2 : 1);
+            return Image.network(
+              url,
+              fit: BoxFit.cover,
+              width: width,
+              height: height,
+              cacheWidth: shown.isFinite ? (shown * ratio).round() : null,
+              opacity: dimmed
+                  ? const AlwaysStoppedAnimation(readOpacity)
+                  : null,
+              errorBuilder: (_, _, _) => const SizedBox.shrink(),
+            );
+          },
         ),
       ),
     );

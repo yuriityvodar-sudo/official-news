@@ -1,5 +1,5 @@
 import type { Env } from "../env";
-import { sourceHealth } from "../health";
+import { health } from "../health";
 import { LANGS, type Lang, SHOWN, isLang, queueStatus, releaseStatus } from "../translator";
 
 /** A row of `articles` joined with its source, as stored in D1. */
@@ -377,7 +377,7 @@ async function route(request: Request, env: Env): Promise<Response> {
   }
 
   if (url.pathname === "/health") {
-    return json({ sources: await sourceHealth(env), lastFetcherRun: null });
+    return json(await health(env));
   }
 
   // The translation queue per language and the articles waiting for release (#46): read-only counts and times, no secrets.
