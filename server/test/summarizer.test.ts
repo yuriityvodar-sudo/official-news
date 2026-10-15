@@ -150,6 +150,60 @@ describe("runSummarizer", () => {
     expect(results.map((r) => r.articleId)).toEqual(["cut-off"]);
   });
 
+  it("gives each article that becomes news the next feed_seq, and nothing to the rest", async () => {
+    const before = await env.DB.prepare("SELECT COALESCE(MAX(feed_seq), 0) AS n FROM articles").first<{ n: number }>();
+    await insertUnsummarized("a", "2026-10-14T08:00:00Z");
+    await insertUnsummarized("b", "2026-10-14T09:00:00Z");
+    await insertUnsummarized("c", "2026-10-14T10:00:00Z");
+    // Newest fetched first: c, b, a. b is not an official decision.
+    const { summarize } = fakeModel(answer(), answer({ isNews: false, decisionType: null }), answer());
+
+    await runSummarizer(env, { maxArticles: 3 }, summarize);
+
+    const base = before?.n ?? 0;
+    expect((await row("c"))?.feed_seq).toBe(base + 1);
+    expect((await row("b"))?.feed_seq).toBeNull();
+    expect((await row("a"))?.feed_seq).toBe(base + 2);
+  });
+
+  it("numbers an article an older Worker made visible during a deploy, one per run", async () => {
+    // What main's summarizer writes after migration 0006 and before the new code is live.
+    for (const id of ["raced-1", "raced-2"]) {
+      await insertUnsummarized(id, now());
+      await env.DB.prepare("UPDATE articles SET is_news = 1, summarized_at = ?, headline = 'H' WHERE id = ?").bind(now(), id).run();
+    }
+    await runSummarizer(env, { maxArticles: 5 }, fakeModel().summarize);
+    const numbered = [await row("raced-1"), await row("raced-2")].filter((r) => r?.feed_seq != null);
+    expect(numbered).toHaveLength(1);
+    expect(numbered[0]?.added_at).toBeTruthy();
+    await runSummarizer(env, { maxArticles: 5 }, fakeModel().summarize);
+    const seqs = [(await row("raced-1"))?.feed_seq, (await row("raced-2"))?.feed_seq];
+    expect(seqs.every((n) => typeof n === "number")).toBe(true);
+    expect(seqs[0]).not.toBe(seqs[1]);
+  });
+
+  it("reads the highest feed_seq from its index, not the whole table", async () => {
+    const { results } = await env.DB.prepare(
+      "EXPLAIN QUERY PLAN SELECT COALESCE(MAX(feed_seq), 0) + 1 FROM articles WHERE feed_seq IS NOT NULL",
+    ).all<{ detail: string }>();
+    expect(results.map((r) => r.detail).join(" ")).toContain("articles_feed_seq");
+  });
+
+  it("keeps an article's feed_seq and added_at when it is summarized again", async () => {
+    await insertUnsummarized("again", now());
+    await runSummarizer(env, { maxArticles: 1 }, fakeModel(answer()).summarize);
+    const first = (await row("again"))?.feed_seq;
+    const addedAt = (await row("again"))?.added_at;
+    expect(addedAt).toBeTruthy();
+    await env.DB.prepare("UPDATE articles SET summarized_at = NULL WHERE id = 'again'").run();
+    await insertUnsummarized("later", now());
+    await runSummarizer(env, { maxArticles: 2 }, fakeModel(answer(), answer()).summarize);
+    expect((await row("again"))?.feed_seq).toBe(first);
+    // When it appeared stays too, so the app keeps it in its day.
+    expect((await row("again"))?.added_at).toBe(addedAt);
+    expect(Number((await row("later"))?.feed_seq)).toBeGreaterThan(Number(first));
+  });
+
   it("accepts an answer wrapped in a ```json fence", async () => {
     await insertUnsummarized("fenced", now());
     const [result] = await runSummarizer(env, { maxArticles: 5 }, fakeModel(`\`\`\`json\n${answer()}\n\`\`\``).summarize);
