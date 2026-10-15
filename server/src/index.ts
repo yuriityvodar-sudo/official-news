@@ -1,6 +1,8 @@
 import { handleApi } from "./api";
 import type { Env } from "./env";
 import { runFetcher } from "./fetcher";
+import { runCleanup } from "./health/cleanup";
+import { recordChecks } from "./health/status";
 import { runSummarizer } from "./summarizer";
 
 /**
@@ -11,11 +13,13 @@ import { runSummarizer } from "./summarizer";
 export const CRONS = {
   fetcher: "* * * * *",
   summarizer: "1-59/2 * * * *",
+  cleanup: "17 3 * * *",
 } as const;
 
 /** The step a cron trigger runs; anything else (such as a local test run) is the fetcher. */
 export function stepFor(cron: string): keyof typeof CRONS {
-  return cron === CRONS.summarizer ? "summarizer" : "fetcher";
+  const steps = Object.keys(CRONS) as (keyof typeof CRONS)[];
+  return steps.find((step) => CRONS[step] === cron) ?? "fetcher";
 }
 
 export default {
@@ -24,10 +28,14 @@ export default {
   },
 
   async scheduled(controller: ScheduledController, env: Env): Promise<void> {
-    if (stepFor(controller.cron) === "summarizer") {
+    const step = stepFor(controller.cron);
+    if (step === "summarizer") {
       await runSummarizer(env, { maxArticles: 5 });
+    } else if (step === "cleanup") {
+      await runCleanup(env);
     } else {
-      await runFetcher(env);
+      // Every check gives its source a status straight away (item 8).
+      await recordChecks(env, await runFetcher(env));
     }
   },
 } satisfies ExportedHandler<Env>;
