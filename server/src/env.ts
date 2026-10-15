@@ -5,7 +5,7 @@ export interface Env {
   /**
    * Groq API key, for the translations (#46). A Worker secret, never in the repo
    * (`npx wrangler secret put GROQ_API_KEY`; locally in `.dev.vars`). Without it
-   * the translator skips its runs and the API returns English.
+   * the translator skips its runs, so `?lang=uk` and `?lang=ru` stay empty.
    */
   GROQ_API_KEY?: string;
 }

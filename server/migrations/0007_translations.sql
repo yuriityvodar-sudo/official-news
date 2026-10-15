@@ -1,18 +1,43 @@
--- Translations (#46, proposed): an article's headline, short summary and
--- summary in another language, written by the translator step from the English
--- ones. One row per article and language. A row exists from the moment a run
--- claims it; it is finished once translated_at is set. The API shows only
--- finished rows and falls back to English for the rest.
--- (0006 is taken by the open feed-order pull request, #38.)
+-- Translations (#46): an article's headline, short summary and summary in
+-- another language, written by the translator step from the English ones.
+-- One row per article and language. A row exists from the moment a run claims
+-- it; it is finished once lang_seq is set. The API shows an article in a
+-- language only when its row is finished (docs/contract.md).
+-- This migration reads and changes nothing in articles, so it works with or
+-- without 0006 (#38, feed_seq), which is why it is 0007.
 CREATE TABLE article_translations (
-  article_id    TEXT NOT NULL REFERENCES articles (id),
-  lang          TEXT NOT NULL,              -- e.g. 'uk'; the list is LANGS in server/src/translator/index.ts
-  headline      TEXT,
-  short_summary TEXT,
-  summary       TEXT,
-  model         TEXT,                       -- provider and model that wrote it, e.g. 'groq:qwen/qwen3.8-27b'
-  translated_at TEXT,                       -- NULL until the translation is stored
-  claimed_at    TEXT,                       -- when a run took it; older than 10 minutes means that run was cut off
-  attempts      INTEGER NOT NULL DEFAULT 0, -- unusable answers so far; after 3 the article stays in English
-  PRIMARY KEY (article_id, lang)
+  article_id           TEXT NOT NULL REFERENCES articles (id),
+  lang                 TEXT NOT NULL,     -- e.g. 'uk'; the list is LANGS in server/src/translator/index.ts
+  headline             TEXT,
+  short_summary        TEXT,
+  summary              TEXT,
+  model                TEXT,              -- provider and model that wrote it, e.g. 'groq:qwen/qwen3.8-27b'
+  source_summarized_at TEXT,              -- articles.summarized_at of the English it was translated from. When the
+                                          -- article's is newer, the English changed: it is translated again, and
+                                          -- this text is served until the new one is stored
+  lang_seq             INTEGER,           -- the order of this language's feed: MAX + 1 for the language when the
+                                          -- first translation is stored, never changed, so a late one lands on top
+  translated_at        TEXT,              -- when it appeared in this language: set with lang_seq, never changed
+  claimed_at           TEXT,              -- when a run took it, or last got an unusable answer for it; older than
+                                          -- 10 minutes means it is free again
+  attempts             INTEGER NOT NULL DEFAULT 0, -- unusable answers for the English of attempts_source; after 3
+                                                   -- it is not tried again until the English changes
+  attempts_source      TEXT,              -- articles.summarized_at the attempts count for
+  PRIMARY KEY (article_id, lang),
+  -- All or nothing: a row has no translation at all, or every field of one.
+  CHECK (
+    (lang_seq IS NULL AND translated_at IS NULL AND headline IS NULL AND short_summary IS NULL
+     AND summary IS NULL AND model IS NULL AND source_summarized_at IS NULL)
+    OR (lang_seq IS NOT NULL AND translated_at IS NOT NULL
+        AND headline IS NOT NULL AND headline <> '' AND short_summary IS NOT NULL AND short_summary <> ''
+        AND summary IS NOT NULL AND summary <> '' AND model IS NOT NULL AND source_summarized_at IS NOT NULL)
+  )
 );
+
+-- One number per language: a duplicate would be a bug, so the database refuses it.
+-- A language's feed page walks this index newest first, and MAX + 1 reads its last entry.
+CREATE UNIQUE INDEX article_translations_lang_seq ON article_translations (lang, lang_seq) WHERE lang_seq IS NOT NULL;
+
+-- translated_at rises with lang_seq, so the first translation of the last 7 days
+-- bounds a page's walk from below: one row read instead of every older one.
+CREATE INDEX article_translations_lang_time ON article_translations (lang, translated_at, lang_seq) WHERE lang_seq IS NOT NULL;

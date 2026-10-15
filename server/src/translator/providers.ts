@@ -18,8 +18,14 @@ export interface Provider {
   translate(messages: Messages): Promise<unknown>;
 }
 
-/** A translation is about 250 to 320 output tokens; Groq's free qwen limit needs 1,000 or less. */
-const MAX_TOKENS = 1000;
+/**
+ * A translation is about 250 to 320 output tokens (docs/research/2026-10-15
+ * Translation model test.md); a longer answer is cut off and counts an attempt.
+ * Groq counts the requested max_tokens, not the tokens used, against Qwen's free
+ * 1,000 output tokens a minute, so a lower limit leaves room for the next
+ * request sooner (#46).
+ */
+const MAX_TOKENS = 700;
 const TEMPERATURE = 0.2;
 /** A request that takes longer is treated as an outage, so a run never hangs on one provider. */
 const TIMEOUT_MS = 30_000;

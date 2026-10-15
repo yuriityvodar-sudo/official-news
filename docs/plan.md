@@ -107,7 +107,7 @@ The MVP is a Kickoff plus 8 items, 4 each. This is our suggested split: Yurii ow
 | 6 | Fetcher: small run every minute, 1 source at a time | Yurii | 4 | All sources checked at least hourly, new articles saved without duplicates |
 | 7 | AI summaries, noise filter and tags | Roman | 4 | New articles get all summary fields within an hour |
 | 8 | Source health and cleanup of old texts | Roman | 2 | Each source shows its status; expired texts are cleared |
-| 9 | Translations, after the MVP: Ukrainian and Russian | Yurii | 2 | News in the feed gets its Ukrainian and Russian text, and the API returns it with `lang` |
+| 9 | Translations, after the MVP: Ukrainian and Russian | Yurii | 2 | News in the feed gets its Ukrainian and Russian text, and the API returns only translated articles with `lang` |
 
 **Order:** Kickoff first, then item 1 (it gives everyone real data from Cloudflare). Items 2, 5 and 7 start at the same time; 3 and 4 follow the design; 6 follows 5; 8 comes last.
 
@@ -248,11 +248,11 @@ Each item becomes one GitHub issue owned by one person. **Must** is what the ite
 
 ### 9. Translations, after the MVP (Yurii)
 
-Agreed on #46 (15 Oct): a second AI call per article, one per language; the summarizer (item 7) stays as it is.
+Agreed on #46 (15 Oct): a second AI call per article, one per language; the summarizer (item 7) stays as it is. Consistency first, speed second (Yurii): a post shows in a language only when it is fully and correctly translated.
 
-- **Must:** `article_translations` (migration `0007`); a translator step on its own cron trigger that translates the headline, short summary and summary of news in the feed into Ukrainian and Russian, claims its work first and stores which model wrote each one; providers per language in one constant (`TRANSLATORS`), Groq only for now (Ukrainian Qwen then GPT-OSS, Russian GPT-OSS then Qwen), the Worker secret `GROQ_API_KEY`; `lang=uk` and `lang=ru` on `GET /articles` and `GET /articles/:id`, English where there is no translation yet.
+- **Must:** `article_translations` (migration `0007`); a translator step that translates the headline, short summary and summary of news in the feed into Ukrainian and Russian, claims its work first and stores which model wrote each one; the three fields checked and stored together, with every number of the English in the translation; a per-language order (`lang_seq`) so a late translation lands on top; a re-summarized article translated again, the old translation served until then; providers per language in one constant (`TRANSLATORS`), Groq only for now (Ukrainian Qwen then GPT-OSS, Russian GPT-OSS then Qwen), the Worker secret `GROQ_API_KEY`; `lang=uk` and `lang=ru` on `GET /articles` (only translated articles, with `after=` and cursors by `langSeq`) and `GET /articles/:id` (404 until translated). No cron trigger of its own: it joins the one-trigger step rotation of #50.
 - **Suggested:** the app's language setting: a small language icon next to the date at the top of the feed opens a native language menu (a local iOS Simulator run shown to Yurii before it is built); more languages; Workers AI as a provider if Groq's free limits are not enough.
-- **Done when:** with the secret set, new news articles get their Ukrainian and Russian text within an hour, and `GET /articles?lang=uk` returns it.
+- **Done when:** with the secret set and the translator in the #50 rotation, new news articles get their Ukrainian and Russian text, and `GET /articles?lang=uk` returns only those, latest translated first.
 
 ## How we work together
 

@@ -1,8 +1,11 @@
 // The translation prompt and the check of the model's answer (#46). The prompt
 // is the one tested in docs/research/2026-10-15 Translation model test.md
-// (server/scripts/translate-test.mjs on that branch), with the language as a
-// parameter; for Ukrainian it is word for word the tested one.
+// (server/scripts/translate-test.mjs), with the language as a parameter; for
+// Ukrainian it is word for word the tested one. The check is strict: an answer
+// that is not stored is retried, and a post shows in a language only when it
+// passed (docs/contract.md).
 import { parseJson } from "../summarizer/schema";
+import { missingNumbers } from "./numbers";
 
 /** The three English fields a translation replaces, as the API returns them. */
 export interface Texts {
@@ -15,11 +18,19 @@ export interface Texts {
 export interface Language {
   /** Its English name, for the prompt. */
   name: string;
-  /** Letters every translated field must contain, so an untranslated English answer is not stored. */
+  /**
+   * Letters every translated field must contain, so an untranslated English
+   * answer is not stored. Other letters (Latin names such as "Emmanuel Macron",
+   * acronyms such as "NATO") are allowed next to them.
+   */
   letters: RegExp;
   /** Letters only this language uses, at least one of which the whole answer must contain. */
   own?: RegExp;
-  /** Letters the language never uses. With `own`, these keep an answer in a neighbouring language (Russian for Ukrainian) out. */
+  /**
+   * Letters of the same script the language never uses. With `own`, these keep
+   * an answer in a neighbouring language (Russian for Ukrainian) out. Only
+   * letters of that script: a Latin "ë" or "ï" (Citroën, Moïse) is not one.
+   */
   foreign?: RegExp;
 }
 
@@ -58,9 +69,11 @@ const paragraphs = (text: string): string[] =>
  * Checks the model's answer against the English it translates. Returns the
  * problems instead of a translation when it cannot be stored: not JSON, a field
  * missing or empty, much longer than the English, not in the language (no
- * letters of its script, or letters only a neighbouring language uses), or a
- * summary with a different number of paragraphs (one dropped or added).
- * The summary keeps the English summary's paragraph separator.
+ * letters of its script, or letters only a neighbouring language uses), a
+ * number of the English missing from the same field (numbers.ts), or a summary
+ * with a different number of paragraphs (one dropped or added). All three
+ * fields pass, or none is stored. The summary keeps the English summary's
+ * paragraph separator.
  */
 export function toTranslation(
   answer: unknown,
@@ -99,7 +112,12 @@ export function toTranslation(
     const max = english[field].length * MAX_LENGTH_RATIO + LENGTH_ROOM;
     if (text.length > max) problems.push(`${field} is too long (${text.length} characters, at most ${max})`);
     else if (!language.letters.test(text) || language.foreign?.test(text)) problems.push(`${field} is not in ${language.name}`);
-    else out[field] = text;
+    else {
+      // No missing information: every number of the English field is in its translation.
+      const missing = missingNumbers(english[field], text);
+      if (missing.length) problems.push(`${field} is missing numbers of the English: ${missing.join(", ")}`);
+      else out[field] = text;
+    }
   }
   if (problems.length) return { problems };
   const translation = out as Texts;
