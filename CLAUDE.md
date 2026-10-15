@@ -40,12 +40,13 @@ We start with these owners and can change them as we go (agreed 14 Oct 2026). To
 - Official sources only: verified government and international-body websites, never media, aggregators or trending lists.
 - The shared definitions in `docs/plan.md` (repo layout, article format, API, database). From the Kickoff they live in `docs/contract.md`.
 - One AI call per article, run once on the server.
-- The fetcher works in small runs (every minute, 2 sources) to stay within Cloudflare's free limits.
+- The fetcher works in small runs (every minute, 1 source) to stay within Cloudflare's free limits.
 - Never bypass CAPTCHAs or bot checks on source websites; respect `robots.txt`.
 
 ## Secrets (the repo is public)
 
 - Nothing secret is ever committed: no keys, tokens, certificates or passwords.
 - CI keys live in GitHub Secrets; runtime keys are Cloudflare Worker secrets; local keys go in `.dev.vars` or `.env`, which git ignores.
+- A key never travels between us (no chat, email or shared vault): whoever creates it puts it straight into its home. Only Yurii, the repo owner, can add GitHub Secrets, so he creates the keys CI needs.
 - Commit a `.env.example` with variable names and empty values instead.
 - If a secret is ever committed, rotate it at once and tell the other person; deleting the commit is not enough.
