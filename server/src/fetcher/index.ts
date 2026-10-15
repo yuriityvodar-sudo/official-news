@@ -10,13 +10,14 @@ export const USER_AGENT = "OfficialNewsBot/0.1 (+https://github.com/yuriityvodar
 
 /** Limits that keep one run inside the free plan (50 outside requests, 10 ms CPU). */
 export const LIMITS = {
-  sourcesPerRun: 2,
+  /** One source per run: two often went over 10 ms of CPU and the run was stopped (#40). */
+  sourcesPerRun: 1,
   /** Newest items looked at per check. */
   itemsPerSource: 20,
   /** New items saved per check; the rest are saved on the next check. */
   newPerSource: 10,
-  /** Item pages opened per run, for text and image. */
-  pagesPerRun: 4,
+  /** Item pages opened per run, for text and image. Reading HTML is the heavy part of a run (#40). */
+  pagesPerRun: 2,
   requestsPerRun: 40,
   /** The feed shows 7 days, so older items are never saved. */
   maxAgeDays: 7,
@@ -334,6 +335,9 @@ export async function runFetcher(env: Env, options: FetcherOptions = {}): Promis
   )
     .bind(toStoredTime(run.now), LIMITS.sourcesPerRun)
     .all<SourceRow>();
+  // Logged before the work: a run stopped for CPU writes no "fetcher run" line, and this
+  // one still shows which source it was on.
+  if (sources.length) console.log(JSON.stringify({ message: "fetcher start", sources: sources.map((s) => s.id) }));
 
   const checks = await Promise.all(sources.map((source) => checkSource(run, source)));
 
