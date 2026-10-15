@@ -381,9 +381,10 @@ describe("runTranslator", () => {
   });
 
   it("numbers each language in the order its translations are stored, so a late one lands on top", async () => {
-    await insertNews("a1", hoursAgo(1));
-    await insertNews("a2", hoursAgo(2));
+    // Inserted oldest first, so the English feed has the same order by publication and by arrival (#38).
     await insertNews("a3", hoursAgo(3));
+    await insertNews("a2", hoursAgo(2));
+    await insertNews("a1", hoursAgo(1));
     // Qwen's second answer (a2 in Ukrainian) is unusable; everything else passes.
     const groq = fakeGroq({ [QWEN]: [uk(), "not json at all"] });
 
@@ -689,8 +690,9 @@ describe("GET /articles with lang", () => {
     ).bind(id, lang, headline, QWEN, hoursAgo(1), langSeq, minutesAgo(10 - langSeq));
 
   beforeEach(async () => {
-    await insertNews("translated", hoursAgo(1));
+    // Inserted oldest first, so the English feed has the same order by publication and by arrival (#38).
     await insertNews("english-only", hoursAgo(2));
+    await insertNews("translated", hoursAgo(1));
     await env.DB.batch([
       finished("translated", "uk", 1, "Заголовок"),
       finished("translated", "ru", 1, "Заголовок по-русски"),
