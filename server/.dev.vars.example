@@ -1,0 +1,3 @@
+# Local only: copy to .dev.vars (git ignores it) and fill in. Never commit real values.
+# Groq API key, used only by scripts/translate-test.mjs (SET=groq).
+GROQ_API_KEY=
