@@ -179,8 +179,10 @@ describe("runTranslator", () => {
     // Another run's live claim, which this run must leave alone.
     await insertNews("busy", hoursAgo(0.5));
     await env.DB.batch(["uk", "ru"].map((lang) => env.DB.prepare(ENQUEUE).bind(lang, minutesAgo(2), hoursAgo(8 * 24), hoursAgo(7 * 24))));
+    // One time for the claim and its check, so a run across a second boundary (a slow CI) cannot tell them apart.
+    const busyAt = minutesAgo(1);
     await env.DB.prepare("UPDATE article_translations SET state = 'translating', claimed_at = ?1, state_at = ?1 WHERE article_id = 'busy' AND lang = 'uk'")
-      .bind(minutesAgo(1))
+      .bind(busyAt)
       .run();
     const groq = fakeGroq({ [QWEN]: [{ status: 429 }], [GPT_OSS]: [{ status: 429 }] });
     const ai = fakeAi();
@@ -208,7 +210,7 @@ describe("runTranslator", () => {
         expect((await translation(id, lang))?.last_error).toContain("HTTP 429");
       }
     }
-    expect(await translation("busy", "uk")).toMatchObject({ state: "translating", claimed_at: minutesAgo(1) });
+    expect(await translation("busy", "uk")).toMatchObject({ state: "translating", claimed_at: busyAt });
 
     // A run at once leaves them waiting and takes the one still queued; the next run, two minutes later
     // and with quota back, takes the same ones.
