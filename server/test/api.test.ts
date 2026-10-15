@@ -1,5 +1,6 @@
 import { env, exports } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
+import { PAGE_CONDITIONS } from "../src/api";
 
 interface Article {
   id: string;
@@ -39,15 +40,20 @@ interface TestArticle {
   isNews?: number | null;
   importance?: number | null;
   topics?: string;
+  /** When it appeared in the feed; defaults to now, as the summarizer stamps it. */
+  addedAt?: string;
 }
 
 async function insertArticles(articles: TestArticle[]) {
   await env.DB.batch(
     articles.map((a) =>
       env.DB.prepare(
+        // Visible articles get the next feed_seq, as the summarizer gives it: insertion order is feed order.
         `INSERT INTO articles (id, source_id, url, original_title, published_at, fetched_at,
-                               headline, is_news, importance, topics, decision_type)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'decision')`,
+                               headline, is_news, importance, topics, decision_type, feed_seq, added_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 'decision',
+                 CASE WHEN ?8 = 1 THEN (SELECT COALESCE(MAX(feed_seq), 0) + 1 FROM articles WHERE feed_seq IS NOT NULL) END,
+                 CASE WHEN ?8 = 1 THEN ?11 END)`,
       ).bind(
         a.id,
         a.sourceId ?? "de-federal-government",
@@ -59,6 +65,7 @@ async function insertArticles(articles: TestArticle[]) {
         a.isNews === undefined ? 1 : a.isNews,
         a.importance ?? null,
         a.topics ?? '["economy"]',
+        a.addedAt ?? hoursAgo(0),
       ),
     ),
   );
@@ -74,13 +81,43 @@ describe("GET /articles", () => {
     expect(page.top).toEqual([]);
     expect(Object.keys(page.items[0]).sort()).toEqual(
       [
-        "country", "dateOnly", "decisionType", "headline", "id", "imageUrl", "importance",
+        "addedAt", "country", "dateOnly", "decisionType", "feedSeq", "headline", "id", "imageUrl", "importance",
         "originalLanguage", "originalTitle", "originalUrl", "publishedAt", "shortSummary",
         "source", "summary", "tags", "topics",
       ].sort(),
     );
-    const times = page.items.map((a) => a.publishedAt);
-    expect(times).toEqual([...times].sort().reverse());
+    const order = page.items.map((a) => (a as unknown as { feedSeq: number }).feedSeq);
+    expect(order).toEqual([...order].sort((x, y) => y - x));
+  });
+
+  it("puts an article that appears late on top, above newer publication dates", async () => {
+    await insertArticles([{ id: "published-1h-ago", publishedAt: hoursAgo(1) }]);
+    // Published 30 hours ago, but only now marked as news by the AI step.
+    await insertArticles([{ id: "late", publishedAt: hoursAgo(30) }]);
+    const ids = (await getPage("/articles")).items.map((a) => a.id);
+    expect(ids.slice(0, 2)).toEqual(["late", "published-1h-ago"]);
+  });
+
+  it("with after, returns only articles that appeared after that feedSeq, late ones included", async () => {
+    await insertArticles([{ id: "seen", publishedAt: hoursAgo(1) }]);
+    const seen = (await getPage("/articles")).items[0] as unknown as { id: string; feedSeq: number };
+    expect(seen.id).toBe("seen");
+    await insertArticles([
+      { id: "late", publishedAt: hoursAgo(40) },
+      { id: "fresh", publishedAt: hoursAgo(0.5) },
+    ]);
+    const page = await getPage(`/articles?after=${seen.feedSeq}`);
+    expect(page.items.map((a) => a.id)).toEqual(["fresh", "late"]);
+    expect(page.top).toEqual([]);
+  });
+
+  it("still accepts a cursor from an app build before feed_seq", async () => {
+    await insertArticles(Array.from({ length: 5 }, (_, i) => ({ id: `old-${i}`, publishedAt: hoursAgo(1) })));
+    const first = await getPage("/articles?limit=3");
+    const oldStyle = btoa(JSON.stringify([first.items[2].publishedAt, first.items[2].id])).replace(/=+$/, "");
+    const next = await getPage(`/articles?limit=3&cursor=${oldStyle}`);
+    expect(next.items.map((a) => a.id)).not.toContain(first.items[2].id);
+    expect(next.items[0].id).toBe((await getPage("/articles?limit=4")).items[3].id);
   });
 
   it("hides articles the AI marked as not news or has not checked yet", async () => {
@@ -123,14 +160,81 @@ describe("GET /articles", () => {
     expect(new Set(seen).size).toBe(seen.length);
   });
 
-  it("with since, returns only articles published after that time", async () => {
-    await insertArticles([
-      { id: "older", publishedAt: hoursAgo(5) },
-      { id: "newer", publishedAt: hoursAgo(1) },
-    ]);
-    const page = await getPage(`/articles?since=${encodeURIComponent(hoursAgo(2))}`);
+  it("with since, returns what appeared after the article the app showed first", async () => {
+    await insertArticles([{ id: "older", publishedAt: hoursAgo(5) }]);
+    const top = (await getPage("/articles")).items[0];
+    expect(top.id).toBe("older");
+    await insertArticles([{ id: "newer", publishedAt: hoursAgo(1) }]);
+    const page = await getPage(`/articles?since=${encodeURIComponent(top.publishedAt)}`);
     expect(page.items.map((a) => a.id)).toEqual(["newer"]);
     expect(page.top).toEqual([]);
+  });
+
+  it("with since from a build before #39, counts only what appeared after its first article", async () => {
+    // Such a build sends the publication time of the first article it shows; in the
+    // feed's order that is the newest to appear, here one published 30 hours ago.
+    await insertArticles([{ id: "late-top", publishedAt: hoursAgo(30) }]);
+    const top = (await getPage("/articles")).items[0];
+    expect(top.id).toBe("late-top");
+    const since = `/articles?since=${encodeURIComponent(top.publishedAt)}`;
+    expect((await getPage(since)).items).toEqual([]);
+    await insertArticles([{ id: "fresh", publishedAt: hoursAgo(0.5) }]);
+    expect((await getPage(since)).items.map((a) => a.id)).toEqual(["fresh"]);
+  });
+
+  it("with since from a build before #39, counts a late article and the fresh ones before it", async () => {
+    await insertArticles([{ id: "seen", publishedAt: hoursAgo(1) }]);
+    const top = (await getPage("/articles")).items[0];
+    // After the app loaded: one fresh decision, then one published 40 hours ago.
+    await insertArticles([
+      { id: "fresh", publishedAt: hoursAgo(0.5) },
+      { id: "late", publishedAt: hoursAgo(40) },
+    ]);
+    const page = await getPage(`/articles?since=${encodeURIComponent(top.publishedAt)}`);
+    expect(page.items.map((a) => a.id)).toEqual(["late", "fresh"]);
+  });
+
+  it("walks the feed index and stops at the 7-day edge instead of reading older rows", async () => {
+    // As in the live table: older rows have lower numbers and appeared earlier. The seed
+    // rows' numbers are dropped so the 60 old rows can come first.
+    await env.DB.prepare("UPDATE articles SET feed_seq = NULL, added_at = NULL").run();
+    await insertArticles(
+      Array.from({ length: 60 }, (_, i) => {
+        const at = hoursAgo(10 * 24 + i);
+        return { id: `old-${i}`, publishedAt: at, addedAt: at };
+      }).reverse(),
+    );
+    await insertArticles(Array.from({ length: 3 }, (_, i) => ({ id: `now-${i}`, publishedAt: hoursAgo(1) })));
+    const sql = `SELECT a.id FROM articles a JOIN sources s ON s.id = a.source_id
+                 WHERE ${PAGE_CONDITIONS.join(" AND ")} ORDER BY a.feed_seq DESC LIMIT 21`;
+    const plan = await env.DB.prepare(`EXPLAIN QUERY PLAN ${sql}`).all<{ detail: string }>();
+    const details = plan.results.map((r) => r.detail).join(" | ");
+    expect(details).toContain("articles_feed_seq");
+    expect(details).not.toContain("TEMP B-TREE FOR ORDER BY");
+    const { results, meta } = await env.DB.prepare(sql).all<{ id: string }>();
+    expect(results.map((r) => r.id)).toEqual(expect.arrayContaining(["now-0", "now-1", "now-2"]));
+    expect(results.some((r) => r.id.startsWith("old-"))).toBe(false);
+    // The 3 new rows (and their sources), not the 60 older ones.
+    expect(meta.rows_read).toBeLessThan(20);
+  });
+
+  it("continues an old cursor whose article is gone instead of ending the feed", async () => {
+    await insertArticles(Array.from({ length: 3 }, (_, i) => ({ id: `kept-${i}`, publishedAt: hoursAgo(3) })));
+    const gone = btoa(JSON.stringify([hoursAgo(2), "01JAGONE000000000000000000"])).replace(/=+$/, "");
+    const ids = (await getPage(`/articles?cursor=${gone}`)).items.map((a) => a.id);
+    expect(ids).toEqual(expect.arrayContaining(["kept-0", "kept-1", "kept-2"]));
+  });
+
+  it("shows in top only articles that are in the feed", async () => {
+    await env.DB.prepare(
+      `INSERT INTO articles (id, source_id, url, original_title, published_at, fetched_at, headline, is_news, importance, topics)
+       VALUES ('no-number', 'de-federal-government', 'https://example.gov/no-number', 'T', ?1, ?1, 'H', 1, 5, '[]')`,
+    )
+      .bind(hoursAgo(1))
+      .run();
+    const page = await getPage("/articles");
+    expect(page.top.map((a) => a.id)).not.toContain("no-number");
+    expect(page.items.map((a) => a.id)).not.toContain("no-number");
   });
 
   it("puts the most important of the last 24 hours in top, at most 2 per country and 5 in all", async () => {
@@ -160,6 +264,8 @@ describe("GET /articles", () => {
     ["limit=ten"],
     ["cursor=not-a-cursor"],
     ["since=yesterday"],
+    ["after=-1"],
+    ["after=12abc"],
   ])("rejects %s with a JSON error", async (query) => {
     const { status, type, body } = await get(`/articles?${query}`);
     expect(status).toBe(400);
