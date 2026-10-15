@@ -134,6 +134,14 @@ String dayLabel(DateTime date, {DateTime? now}) {
 }
 
 /// "2h ago" for articles with a time; the day for those whose source gave only a date.
+/// The time on a feed card: when the article appeared in the feed ("5m ago"),
+/// the same moment the feed is ordered by, so times only go down as you scroll.
+/// The official publication date is on the article screen. Before the server
+/// sends `addedAt`, the publication time.
+String feedTime(Article article, {DateTime? now}) => article.addedAt != null
+    ? timeAgo(article.addedAt!, now: now)
+    : articleTime(article, now: now);
+
 String articleTime(Article article, {DateTime? now}) => article.dateOnly
     ? dayLabel(article.publishedAt, now: now)
     : timeAgo(article.publishedAt, now: now);

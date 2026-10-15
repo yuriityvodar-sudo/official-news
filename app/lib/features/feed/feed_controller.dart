@@ -114,14 +114,18 @@ class FeedController extends ChangeNotifier {
     }
   }
 
-  /// Counts articles newer than the newest one shown (called every few minutes).
+  /// Counts articles that appeared after the newest one shown (called every few minutes).
+  /// Asks by feed position, so one that appeared late is counted too.
   Future<void> checkForNew() async {
     if (items.isEmpty) return;
+    final highest = items
+        .map((a) => a.feedSeq ?? 0)
+        .fold(0, (a, b) => a > b ? a : b);
     try {
-      final page = await api.fetchArticles(
-        since: items.first.publishedAt,
-        limit: 50,
-      );
+      final page = highest > 0
+          ? await api.fetchArticles(after: highest, limit: 50)
+          // A feed saved before the server numbered articles: the older check.
+          : await api.fetchArticles(since: items.first.publishedAt, limit: 50);
       final known = items.map((a) => a.id).toSet();
       final count = page.items.where((a) => !known.contains(a.id)).length;
       if (count != newCount) {

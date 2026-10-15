@@ -22,7 +22,12 @@ Map<String, dynamic> _article(
   String? headline,
   String? imageUrl,
   String country = 'DE',
+  int? feedSeq,
+  DateTime? addedAt,
+  bool dateOnly = false,
 }) => {
+  'feedSeq': feedSeq,
+  'addedAt': addedAt?.toUtc().toIso8601String(),
   'id': id,
   'country': country,
   'source': {
@@ -31,7 +36,7 @@ Map<String, dynamic> _article(
     'url': 'https://www.bundesregierung.de',
   },
   'publishedAt': publishedAt.toUtc().toIso8601String(),
-  'dateOnly': false,
+  'dateOnly': dateOnly,
   'headline': headline ?? 'Decision $id',
   'shortSummary': null,
   'summary': 'Summary $id',
@@ -55,7 +60,7 @@ ApiClient _api(
   client: MockClient((request) async {
     log?.add(request.url);
     final query = request.url.queryParameters;
-    if (query.containsKey('since')) {
+    if (query.containsKey('since') || query.containsKey('after')) {
       return http.Response(
         jsonEncode(since ?? {'items': [], 'nextCursor': null, 'top': []}),
         200,
@@ -87,7 +92,7 @@ Future<FeedController> _pump(WidgetTester tester, FeedController feed) async {
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
-  testWidgets('shows top stories, then the latest decisions grouped by day', (
+  testWidgets('shows top stories, then one Latest list without day headings', (
     tester,
   ) async {
     final top = _article(
@@ -127,7 +132,8 @@ void main() {
     ); // only once: top articles are not repeated below
     expect(find.text('Latest'), findsOneWidget);
     expect(find.text('Law on water signed'), findsOneWidget);
-    expect(find.text('Yesterday'), findsOneWidget);
+    // No day heading: the older article shows its own time on the card.
+    expect(find.text('Yesterday'), findsNothing);
     expect(find.text('Decree on visas'), findsOneWidget);
     expect(find.text('CABINET DECISION'), findsNWidgets(3));
     expect(find.text('Federal Government · Germany'), findsNWidgets(3));
@@ -421,5 +427,121 @@ void main() {
     expect(dayLabel(DateTime(2026, 3, 29, 12), now: now), 'Yesterday');
     expect(dayLabel(DateTime(2026, 3, 30, 0, 10), now: now), 'Today');
     expect(dayLabel(DateTime(2026, 3, 28, 12), now: now), 'Saturday 28 March');
+  });
+
+  test(
+    'the new check asks by feed position, so a late article is counted',
+    () async {
+      final log = <Uri>[];
+      final yesterday = DateTime.now().subtract(const Duration(days: 1));
+      final feed = FeedController(
+        api: _api(
+          {
+            '': {
+              'items': [
+                _article('s2', DateTime.now(), feedSeq: 12),
+                _article('s1', DateTime.now(), feedSeq: 11),
+              ],
+              'nextCursor': null,
+              'top': [],
+            },
+          },
+          log: log,
+          // Published yesterday, appeared just now: the server returns it for after=12.
+          since: {
+            'items': [_article('late', yesterday, feedSeq: 13)],
+            'nextCursor': null,
+            'top': [],
+          },
+        ),
+      );
+      await feed.start();
+      await feed.checkForNew();
+      expect(log.last.queryParameters['after'], '12');
+      expect(log.last.queryParameters.containsKey('since'), isFalse);
+      expect(feed.newCount, 1);
+    },
+  );
+
+  testWidgets(
+    'lists articles in the order they appeared, with no day heading in between',
+    (tester) async {
+      final now = DateTime.now();
+      await _pump(
+        tester,
+        FeedController(
+          api: _api({
+            '': {
+              'items': [
+                // Published three days ago, appeared just now: first.
+                _article(
+                  'late',
+                  now.subtract(const Duration(days: 3)),
+                  headline: 'Late but new',
+                  feedSeq: 2,
+                  addedAt: now,
+                ),
+                _article(
+                  'older',
+                  now.subtract(const Duration(days: 1)),
+                  headline: 'Appeared yesterday',
+                  feedSeq: 1,
+                  addedAt: now.subtract(const Duration(days: 1)),
+                ),
+              ],
+              'nextCursor': null,
+              'top': [],
+            },
+          }),
+        ),
+      );
+      expect(find.text('Latest'), findsOneWidget);
+      expect(find.text('Yesterday'), findsNothing);
+      final late = tester.getTopLeft(find.text('Late but new')).dy;
+      final older = tester.getTopLeft(find.text('Appeared yesterday')).dy;
+      expect(late, lessThan(older));
+    },
+  );
+
+  testWidgets('a card shows when the article appeared, so times only go down', (
+    tester,
+  ) async {
+    final now = DateTime.now();
+    final dated = DateTime(now.year, now.month, now.day - 3, 12);
+    await _pump(
+      tester,
+      FeedController(
+        api: _api({
+          '': {
+            'items': [
+              // Dated three days ago (no time), appeared just now: under "Latest".
+              _article(
+                'dated',
+                dated,
+                headline: 'Dated earlier',
+                feedSeq: 2,
+                addedAt: now,
+                dateOnly: true,
+              ),
+              _article(
+                'today',
+                DateTime(now.year, now.month, now.day, 0, 30),
+                headline: 'Dated today',
+                feedSeq: 1,
+                addedAt: now,
+                dateOnly: true,
+              ),
+            ],
+            'nextCursor': null,
+            'top': [],
+          },
+        }),
+      ),
+    );
+    expect(find.text('Latest'), findsOneWidget);
+    // Both appeared just now: the cards say so, not the older publication day.
+    expect(find.text(dayLabel(dated)), findsNothing);
+    expect(find.text('Today'), findsNothing);
+    expect(find.textContaining('m ago'), findsNWidgets(2));
   });
 }
