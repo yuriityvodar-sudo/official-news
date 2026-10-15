@@ -265,7 +265,12 @@ function readLang(params: URLSearchParams): Lang | null | undefined {
 
 const LANG_ERROR = `lang must be one of: en, ${LANGS.join(", ")}`;
 
-/** The article in `lang`: its translated headline, short summary and summary, the language and its place in that feed. */
+/**
+ * The article in `lang`: its translated headline, short summary and summary,
+ * and the language. `feedSeq` and `addedAt` are its place in that language's
+ * feed (`lang_seq`) and when it appeared there (`translated_at`): the fields the
+ * English feed has from #38, so the app reads every feed the same way (#51).
+ */
 function toTranslatedArticle(row: TranslatedRow, lang: Lang) {
   return {
     ...toArticle(row),
@@ -273,17 +278,17 @@ function toTranslatedArticle(row: TranslatedRow, lang: Lang) {
     shortSummary: row.t_short_summary,
     summary: row.t_summary,
     lang,
-    langSeq: row.lang_seq,
-    translatedAt: row.translated_at,
+    feedSeq: row.lang_seq,
+    addedAt: row.translated_at,
   };
 }
 
-/** A language feed's cursor: the language and the last `langSeq` of the page, opaque to the app. */
+/** A language feed's cursor: the language and the last `lang_seq` of the page, opaque to the app. */
 function encodeLangCursor(lang: Lang, langSeq: number): string {
   return btoa(JSON.stringify([lang, langSeq])).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
 }
 
-/** The `langSeq` in a cursor of this language's feed, or null (an English cursor, another language's, or none of ours). */
+/** The `lang_seq` in a cursor of this language's feed, or null (an English cursor, another language's, or none of ours). */
 function decodeLangCursor(value: string, lang: Lang): number | null {
   try {
     const parsed: unknown = JSON.parse(atob(value.replaceAll("-", "+").replaceAll("_", "/")));
@@ -301,7 +306,7 @@ function decodeLangCursor(value: string, lang: Lang): number | null {
  * translated into `lang`, the latest translated first (`lang_seq`), so one
  * translated late lands on top, never between ones already read. `cursor`
  * continues from the previous page; `after` keeps only articles translated
- * after a given `langSeq` (the "N new" check); `since` keeps only articles
+ * after a given `feedSeq` of this feed (the "N new" check); `since` keeps only articles
  * published after that time. `top` is filled on the first page only, from the
  * translated articles.
  */
@@ -312,7 +317,7 @@ async function listTranslated(params: URLSearchParams, lang: Lang, limit: number
   const afterParam = params.get("after");
   if (afterParam !== null) {
     if (!/^\d+$/.test(afterParam) || !Number.isSafeInteger(Number(afterParam))) {
-      return badRequest("after must be a langSeq (a whole number)");
+      return badRequest("after must be a feedSeq (a whole number)");
     }
     where.push("t.lang_seq > ?");
     binds.push(Number(afterParam));

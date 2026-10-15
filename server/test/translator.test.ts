@@ -140,8 +140,8 @@ interface Article {
   shortSummary: string;
   summary: string;
   lang?: string;
-  langSeq?: number;
-  translatedAt?: string;
+  feedSeq?: number;
+  addedAt?: string;
 }
 
 interface ArticlesPage {
@@ -432,7 +432,11 @@ describe("runTranslator", () => {
       lang_seq: old?.lang_seq,
       translated_at: old?.translated_at,
     });
-    expect((await get("/articles/a1?lang=uk")).body).toMatchObject({ shortSummary: revised, langSeq: 1 });
+    expect((await get("/articles/a1?lang=uk")).body).toMatchObject({
+      shortSummary: revised,
+      feedSeq: 1,
+      addedAt: old?.translated_at,
+    });
     expect(await runTranslator(testEnv(), { maxTranslations: 6, fetch: fakeGroq().fetch })).toEqual([]);
   });
 
@@ -709,8 +713,8 @@ describe("GET /articles with lang", () => {
         shortSummary: "Коротко.",
         summary: "Підсумок.",
         lang: "uk",
-        langSeq: 1,
-        translatedAt: expect.stringMatching(/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/),
+        feedSeq: 1,
+        addedAt: expect.stringMatching(/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/),
       });
     }
     expect(page.nextCursor).toBeNull();
@@ -722,7 +726,7 @@ describe("GET /articles with lang", () => {
   });
 
   it("returns one article translated, or 404 when it is not translated into that language", async () => {
-    expect((await get("/articles/translated?lang=uk")).body).toMatchObject({ headline: "Заголовок", lang: "uk", langSeq: 1 });
+    expect((await get("/articles/translated?lang=uk")).body).toMatchObject({ headline: "Заголовок", lang: "uk", feedSeq: 1 });
     expect((await get("/articles/translated?lang=ru")).body).toMatchObject({ headline: "Заголовок по-русски", lang: "ru" });
     for (const path of ["/articles/english-only?lang=uk", "/articles/english-only?lang=ru", "/articles/nope?lang=uk"]) {
       expect(await get(path), path).toEqual({ status: 404, body: { error: "Not found" } });
@@ -738,10 +742,7 @@ describe("GET /articles with lang", () => {
       ["translated", ENGLISH.headline],
       ["english-only", ENGLISH.headline],
     ]);
-    for (const article of [...page.items, ...page.top]) {
-      expect(article).not.toHaveProperty("lang");
-      expect(article).not.toHaveProperty("langSeq");
-    }
+    for (const article of [...page.items, ...page.top]) expect(article).not.toHaveProperty("lang");
     expect(await get("/articles/translated?lang=en")).toEqual(await get("/articles/translated"));
     expect((await get("/articles/translated")).body).toMatchObject({ headline: ENGLISH.headline });
   });
@@ -756,22 +757,22 @@ describe("GET /articles with lang", () => {
     expect((await get("/articles/translated?lang=uk")).status).toBe(404);
   });
 
-  it("pages a language by langSeq with cursor, and after= returns what was translated later", async () => {
+  it("pages a language by its own feedSeq with cursor, and after= returns what was translated later", async () => {
     // Published newest first a, b, c, d; translated into Ukrainian in the order c, a, d, b.
     for (const [i, id] of ["a", "b", "c", "d"].entries()) await insertNews(id, hoursAgo(3 + i));
     await env.DB.batch([finished("c", "uk", 2, "В"), finished("a", "uk", 3, "А"), finished("d", "uk", 4, "Г"), finished("b", "uk", 5, "Б")]);
 
     const first = (await get("/articles?lang=uk&limit=2")).body as ArticlesPage;
-    expect(first.items.map((a) => [a.id, a.langSeq])).toEqual([["b", 5], ["d", 4]]);
+    expect(first.items.map((a) => [a.id, a.feedSeq])).toEqual([["b", 5], ["d", 4]]);
     expect(first.top.length).toBeGreaterThan(0);
     const second = (await get(`/articles?lang=uk&limit=2&cursor=${first.nextCursor}`)).body as ArticlesPage;
-    expect(second.items.map((a) => [a.id, a.langSeq])).toEqual([["a", 3], ["c", 2]]);
+    expect(second.items.map((a) => [a.id, a.feedSeq])).toEqual([["a", 3], ["c", 2]]);
     expect(second.top).toEqual([]);
     const third = (await get(`/articles?lang=uk&limit=2&cursor=${second.nextCursor}`)).body as ArticlesPage;
     expect(third.items.map((a) => a.id)).toEqual(["translated"]);
     expect(third.nextCursor).toBeNull();
 
-    // "N new" since the reader saw langSeq 3: b and d, although both were published before a.
+    // "N new" since the reader saw feedSeq 3: b and d, although both were published before a.
     const after = (await get("/articles?lang=uk&after=3")).body as ArticlesPage;
     expect(after.items.map((a) => a.id)).toEqual(["b", "d"]);
     expect(after.top).toEqual([]);
@@ -810,7 +811,7 @@ describe("GET /articles with lang", () => {
   it.each([["/articles?lang=uk&after=abc"], ["/articles?lang=uk&after=-1"], ["/articles?lang=uk&after=1.5"]])(
     "rejects %s with a JSON error",
     async (path) => {
-      expect(await get(path)).toEqual({ status: 400, body: { error: "after must be a langSeq (a whole number)" } });
+      expect(await get(path)).toEqual({ status: 400, body: { error: "after must be a feedSeq (a whole number)" } });
     },
   );
 
