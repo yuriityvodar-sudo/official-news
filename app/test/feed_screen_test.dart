@@ -760,7 +760,8 @@ void main() {
         await tester.pumpAndSettle();
         expect(find.text('Кабінет схвалив бюджет'), findsOneWidget);
         expect(
-          find.text('https://www.bundesregierung.de/a1', findRichText: true),
+          // #36's article screen shows the official link as "site · original title".
+          find.text('bundesregierung.de · Original a1'),
           findsOneWidget,
         );
         semantics.dispose();
