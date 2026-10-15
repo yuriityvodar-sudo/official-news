@@ -60,12 +60,16 @@ function workersAi(env: Env): Summarize {
 
 function store(env: Env, id: string, s: Summary, now: string): D1PreparedStatement {
   return env.DB.prepare(
-    // feed_seq: the article's place in the feed, given in this same statement when it
-    // becomes visible and never changed afterwards. D1 runs one statement at a time,
-    // so MAX + 1 cannot be handed out twice (a unique index also guards it).
+    // feed_seq and added_at: the article's place in the feed and when it got it, given in
+    // this same statement when it becomes visible and never changed afterwards. D1 runs one
+    // statement at a time, so MAX + 1 cannot be handed out twice (a unique index also
+    // guards it). `WHERE feed_seq IS NOT NULL` lets SQLite read MAX from that partial
+    // index (1 row) instead of scanning the table. Inside an UPDATE the columns still hold
+    // their old values, so `feed_seq IS NULL` means "not numbered before this statement".
     `UPDATE articles SET headline = ?, short_summary = ?, summary = ?, decision_type = ?, topics = ?, tags = ?,
             importance = ?, is_news = ?, summarized_at = ?, model = ?,
-            feed_seq = CASE WHEN ? = 1 THEN COALESCE(feed_seq, (SELECT COALESCE(MAX(feed_seq), 0) + 1 FROM articles)) ELSE feed_seq END
+            feed_seq = CASE WHEN ? = 1 THEN COALESCE(feed_seq, (SELECT COALESCE(MAX(feed_seq), 0) + 1 FROM articles WHERE feed_seq IS NOT NULL)) ELSE feed_seq END,
+            added_at = CASE WHEN ? = 1 AND feed_seq IS NULL THEN ? ELSE added_at END
      WHERE id = ?`,
   ).bind(
     s.headline,
@@ -78,8 +82,11 @@ function store(env: Env, id: string, s: Summary, now: string): D1PreparedStateme
     s.isNews ? 1 : 0,
     now,
     MODEL,
-    // The new is_news: inside an UPDATE, the column itself still holds the old value.
+    // The new is_news, for feed_seq and added_at: inside an UPDATE, the column itself
+    // still holds the old value.
     s.isNews ? 1 : 0,
+    s.isNews ? 1 : 0,
+    now,
     id,
   );
 }

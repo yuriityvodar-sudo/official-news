@@ -22,14 +22,14 @@ interface ArticleRow {
   tags: string | null;
   importance: number | null;
   feed_seq: number | null;
-  summarized_at: string | null;
+  added_at: string | null;
 }
 
 const ARTICLE_COLUMNS = `
   a.id, s.country, a.source_id, s.name AS source_name, s.url AS source_url,
   a.url, a.original_title, a.published_at, a.date_only, a.headline, a.short_summary,
   a.summary, a.decision_type, a.image_url, a.original_language, a.topics, a.tags, a.importance,
-  a.feed_seq, a.summarized_at`;
+  a.feed_seq, a.added_at`;
 
 const FROM_ARTICLES = "FROM articles a JOIN sources s ON s.id = a.source_id";
 
@@ -47,7 +47,7 @@ const TOP_QUERY = `
              PARTITION BY s.country ORDER BY a.importance DESC, a.published_at DESC, a.id DESC
            ) AS country_rank
     ${FROM_ARTICLES}
-    WHERE a.is_news = 1 AND a.importance IS NOT NULL
+    WHERE a.is_news = 1 AND a.feed_seq IS NOT NULL AND a.importance IS NOT NULL
       AND a.published_at >= strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-24 hours')
   )
   WHERE country_rank <= 2
@@ -85,7 +85,7 @@ export function toArticle(row: ArticleRow) {
     imageUrl: row.image_url,
     originalUrl: row.url,
     feedSeq: row.feed_seq,
-    addedAt: row.summarized_at,
+    addedAt: row.added_at,
   };
 }
 
@@ -107,7 +107,7 @@ function toStoredTime(date: Date): string {
  * is that article's `feed_seq`; cursors from app builds before the change name
  * an article instead, and still work.
  */
-type Cursor = { feedSeq: number } | { articleId: string };
+type Cursor = { feedSeq: number } | { articleId: string; publishedAt: string };
 
 function encodeCursor(feedSeq: number): string {
   return btoa(JSON.stringify([feedSeq])).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
@@ -121,7 +121,7 @@ function decodeCursor(value: string): Cursor | null {
     }
     // Before the feed was ordered by feed_seq: [publishedAt, id].
     if (Array.isArray(parsed) && parsed.length === 2 && typeof parsed[0] === "string" && typeof parsed[1] === "string") {
-      return { articleId: parsed[1] };
+      return { articleId: parsed[1], publishedAt: parsed[0] };
     }
   } catch {
     // Falls through to null: not a cursor we issued.
@@ -171,7 +171,14 @@ async function listArticles(url: URL, env: Env): Promise<Response> {
   if (sinceParam !== null) {
     const since = new Date(sinceParam);
     if (Number.isNaN(since.getTime())) return badRequest("since must be an ISO 8601 time");
-    where.push("a.published_at > ?");
+    // Builds before #39 send the publication time of the first article they show. In
+    // the feed's order that article is the newest to appear, so "new" means a higher
+    // feed_seq than any article published by then, not a later publication time (which
+    // would count late articles further down as new, again on every refresh).
+    where.push(
+      `a.feed_seq > COALESCE((SELECT MAX(b.feed_seq) FROM articles b
+                              WHERE b.is_news = 1 AND b.published_at <= ? AND b.feed_seq IS NOT NULL), 0)`,
+    );
     binds.push(toStoredTime(since));
   }
 
@@ -183,9 +190,17 @@ async function listArticles(url: URL, env: Env): Promise<Response> {
       where.push("a.feed_seq < ?");
       binds.push(cursor.feedSeq);
     } else {
-      // An older cursor: continue below the article it names.
-      where.push("a.feed_seq < (SELECT b.feed_seq FROM articles b WHERE b.id = ?)");
-      binds.push(cursor.articleId);
+      // An older cursor: continue below the article it names. If that article is gone
+      // or has no number, continue below what was published by the cursor's time, so the
+      // page is never empty by mistake (an empty page reads as "all caught up").
+      where.push(
+        `a.feed_seq < COALESCE(
+           (SELECT b.feed_seq FROM articles b WHERE b.id = ?),
+           (SELECT MAX(b.feed_seq) + 1 FROM articles b
+            WHERE b.is_news = 1 AND b.published_at <= ? AND b.feed_seq IS NOT NULL),
+           0)`,
+      );
+      binds.push(cursor.articleId, cursor.publishedAt);
     }
   }
 

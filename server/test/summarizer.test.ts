@@ -166,14 +166,25 @@ describe("runSummarizer", () => {
     expect((await row("a"))?.feed_seq).toBe(base + 2);
   });
 
-  it("keeps an article's feed_seq when it is summarized again", async () => {
+  it("reads the highest feed_seq from its index, not the whole table", async () => {
+    const { results } = await env.DB.prepare(
+      "EXPLAIN QUERY PLAN SELECT COALESCE(MAX(feed_seq), 0) + 1 FROM articles WHERE feed_seq IS NOT NULL",
+    ).all<{ detail: string }>();
+    expect(results.map((r) => r.detail).join(" ")).toContain("articles_feed_seq");
+  });
+
+  it("keeps an article's feed_seq and added_at when it is summarized again", async () => {
     await insertUnsummarized("again", now());
     await runSummarizer(env, { maxArticles: 1 }, fakeModel(answer()).summarize);
     const first = (await row("again"))?.feed_seq;
+    const addedAt = (await row("again"))?.added_at;
+    expect(addedAt).toBeTruthy();
     await env.DB.prepare("UPDATE articles SET summarized_at = NULL WHERE id = 'again'").run();
     await insertUnsummarized("later", now());
     await runSummarizer(env, { maxArticles: 2 }, fakeModel(answer(), answer()).summarize);
     expect((await row("again"))?.feed_seq).toBe(first);
+    // When it appeared stays too, so the app keeps it in its day.
+    expect((await row("again"))?.added_at).toBe(addedAt);
     expect(Number((await row("later"))?.feed_seq)).toBeGreaterThan(Number(first));
   });
 

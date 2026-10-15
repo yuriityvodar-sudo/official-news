@@ -4,15 +4,22 @@
 -- the middle of what a reader already saw (docs/research/2026-10-15 Feed
 -- ordering for late items.md). The publication date stays on the card.
 ALTER TABLE articles ADD COLUMN feed_seq INTEGER;
+-- When the article appeared in the feed: set together with feed_seq and, like it,
+-- never changed by a later re-summary (summarized_at is).
+ALTER TABLE articles ADD COLUMN added_at TEXT;
 
--- Articles already visible get numbers in the order they became visible.
+-- Articles already visible get numbers in the order they became visible. A visible
+-- row without summarized_at counts by fetched_at, so no two rows share a number and
+-- the unique index below cannot fail the deploy.
 UPDATE articles
 SET feed_seq = (
-  SELECT COUNT(*) FROM articles b
-  WHERE b.is_news = 1
-    AND (b.summarized_at < articles.summarized_at
-         OR (b.summarized_at = articles.summarized_at AND b.id <= articles.id))
-)
+      SELECT COUNT(*) FROM articles b
+      WHERE b.is_news = 1
+        AND (COALESCE(b.summarized_at, b.fetched_at) < COALESCE(articles.summarized_at, articles.fetched_at)
+             OR (COALESCE(b.summarized_at, b.fetched_at) = COALESCE(articles.summarized_at, articles.fetched_at)
+                 AND b.id <= articles.id))
+    ),
+    added_at = COALESCE(summarized_at, fetched_at)
 WHERE is_news = 1;
 
 -- One number per article; a duplicate would be a bug, so the database refuses it.
