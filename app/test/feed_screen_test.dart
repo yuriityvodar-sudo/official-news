@@ -688,13 +688,13 @@ void main() {
         await tester.pageBack();
         await tester.pumpAndSettle();
 
-        // Cancel changes nothing.
+        // The pull-down opens from the button; a tap outside closes it and changes nothing.
         await tester.tap(find.text('EN'));
         await tester.pumpAndSettle();
-        expect(find.text('Language'), findsOneWidget);
-        await tester.tap(find.text('Cancel'));
+        expect(find.text('Українська'), findsOneWidget);
+        await tester.tapAt(const Offset(20, 20));
         await tester.pumpAndSettle();
-        expect(find.text('Language'), findsNothing);
+        expect(find.text('Українська'), findsNothing);
         expect(log, hasLength(1));
 
         await tester.tap(find.text('EN'));
@@ -707,7 +707,7 @@ void main() {
           find.descendant(
             of: find.ancestor(
               of: find.text('English'),
-              matching: find.byType(CupertinoActionSheetAction),
+              matching: find.byType(CupertinoMenuItem),
             ),
             matching: find.byIcon(CupertinoIcons.checkmark_alt),
           ),
@@ -717,7 +717,7 @@ void main() {
         // VoiceOver says which one is current.
         expect(
           tester.getSemantics(find.text('English')),
-          isSemantics(label: 'English', isSelected: true, isButton: true),
+          isSemantics(label: 'English', isSelected: true),
         );
         expect(
           tester.getSemantics(find.text('Українська')),
@@ -726,7 +726,7 @@ void main() {
 
         await tester.tap(find.text('Українська'));
         await tester.pumpAndSettle();
-        expect(find.text('Language'), findsNothing);
+        expect(find.text('Русский'), findsNothing); // the menu closed
         expect(find.text('УКР'), findsOneWidget);
         expect(log.last.queryParameters['lang'], 'uk');
         expect(find.text('Кабінет схвалив бюджет'), findsOneWidget);
@@ -1133,9 +1133,30 @@ void main() {
       },
     );
 
-    testWidgets('on iPad the menu is a popover at the globe, without Cancel', (
+    testWidgets('a tap while the menu is still closing opens it again', (
       tester,
     ) async {
+      _screen(tester, _phone);
+      await _pump(
+        tester,
+        FeedController(
+          api: _langApi({
+            'en': {'': english},
+          }),
+        ),
+      );
+      await tester.tap(find.text('EN'));
+      await tester.pumpAndSettle();
+      expect(find.text('Українська'), findsOneWidget);
+      // Close with a tap outside, and tap the button before the animation ends.
+      await tester.tapAt(const Offset(20, 20));
+      await tester.pump(const Duration(milliseconds: 30));
+      await tester.tap(find.text('EN'));
+      await tester.pumpAndSettle();
+      expect(find.text('Українська'), findsOneWidget);
+    });
+
+    testWidgets('on iPad the pull-down opens at the globe', (tester) async {
       _screen(tester, _iPad);
       await _pump(
         tester,
@@ -1161,30 +1182,28 @@ void main() {
 
       await tester.tap(find.text('EN'));
       await tester.pumpAndSettle();
-      expect(find.text('Language'), findsOneWidget);
-      expect(find.text('Cancel'), findsNothing);
       final choice = tester.getRect(
         find.ancestor(
           of: find.text('English'),
-          matching: find.byType(CupertinoActionSheetAction),
+          matching: find.byType(CupertinoMenuItem),
         ),
       );
+      // A small menu under the button, not a sheet across the screen.
       expect(choice.width, lessThanOrEqualTo(320));
-      expect(choice.right, moreOrLessEquals(button.right));
-      final title = tester.getRect(find.text('Language'));
-      expect(title.top - button.bottom, inInclusiveRange(0, 40));
+      expect(choice.top, greaterThanOrEqualTo(button.bottom - 4));
+      expect(choice.right, greaterThanOrEqualTo(button.left));
+      expect(choice.left, lessThanOrEqualTo(button.right));
       expect(find.byIcon(CupertinoIcons.checkmark_alt), findsOneWidget);
 
-      // A tap outside closes it, as on iPad.
-      await tester.tapAt(const Offset(100, 700));
+      // A tap outside closes it.
+      await tester.tapAt(const Offset(20, 20));
       await tester.pumpAndSettle();
-      expect(find.text('Language'), findsNothing);
+      expect(find.text('Українська'), findsNothing);
 
       await tester.tap(find.text('EN'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Українська'));
       await tester.pumpAndSettle();
-      expect(find.text('Language'), findsNothing);
       expect(find.text('УКР'), findsOneWidget);
       expect(find.text('Кабінет схвалив бюджет'), findsOneWidget);
     });

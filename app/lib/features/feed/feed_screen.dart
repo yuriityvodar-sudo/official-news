@@ -30,7 +30,6 @@ class FeedScreen extends StatefulWidget {
 class _FeedScreenState extends State<FeedScreen> {
   late final FeedController _feed = widget.controller ?? FeedController();
   final _scroll = ScrollController();
-  final _languageButton = GlobalKey();
   Timer? _newCheck;
 
   @override
@@ -87,93 +86,11 @@ class _FeedScreenState extends State<FeedScreen> {
     Navigator.of(context).pushNamed(Routes.detail, arguments: article);
   }
 
-  /// The iOS action sheet with the feed's languages, the current one checked. On
-  /// iPad, as iOS shows an action sheet there, a popover at the globe without Cancel.
-  Future<void> _chooseLanguage() async {
-    final current = _feed.language;
-    Widget sheet(BuildContext context, {required bool cancel}) =>
-        CupertinoActionSheet(
-          title: const Text('Language'),
-          actions: [
-            for (final lang in FeedLanguage.values)
-              CupertinoActionSheetAction(
-                onPressed: () => Navigator.of(context).pop(lang),
-                child: _LanguageChoice(lang, selected: lang == current),
-              ),
-          ],
-          cancelButton: cancel
-              ? CupertinoActionSheetAction(
-                  isDefaultAction: true,
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Cancel'),
-                )
-              : null,
-        );
-    final button = _languageButton.currentContext?.findRenderObject();
-    final chosen =
-        MediaQuery.sizeOf(context).shortestSide >= 600 && button is RenderBox
-        ? await _showPopover<FeedLanguage>(
-            anchor: button.localToGlobal(Offset.zero) & button.size,
-            builder: (context) => sheet(context, cancel: false),
-          )
-        : await showCupertinoModalPopup<FeedLanguage>(
-            context: context,
-            builder: (context) => sheet(context, cancel: true),
-          );
-    if (!mounted || chosen == null || chosen == _feed.language) return;
-    // Another language is another feed: start it from the top.
+  /// A language picked in the menu: another language is another feed, from the top.
+  Future<void> _chooseLanguage(FeedLanguage chosen) async {
+    if (chosen == _feed.language) return;
     if (_scroll.hasClients) _scroll.jumpTo(0);
     await _feed.setLanguage(chosen);
-  }
-
-  /// An iPad popover: [builder]'s action sheet just under [anchor], right edges
-  /// aligned, closed by a tap outside it.
-  Future<T?> _showPopover<T>({
-    required Rect anchor,
-    required WidgetBuilder builder,
-  }) {
-    return showGeneralDialog<T>(
-      context: context,
-      barrierDismissible: true,
-      barrierLabel: CupertinoLocalizations.of(context).modalBarrierDismissLabel,
-      barrierColor: Colors.transparent,
-      transitionDuration: const Duration(milliseconds: 150),
-      transitionBuilder: (context, animation, _, child) =>
-          FadeTransition(opacity: animation, child: child),
-      pageBuilder: (context, _, _) {
-        final screen = MediaQuery.of(context);
-        // CupertinoActionSheet takes the screen's width and pads itself (8 pt at
-        // the sides and bottom, 20 at the top, with no safe area): it is given a
-        // screen of the popover's size, and placed so the sheet starts 8 pt
-        // under the button.
-        const width = 300.0, side = 8.0, top = 20.0;
-        return Stack(
-          children: [
-            Positioned(
-              top: anchor.bottom + 8 - top,
-              bottom: 0,
-              right: (screen.size.width - anchor.right - side).clamp(
-                0,
-                screen.size.width,
-              ),
-              width: width + 2 * side,
-              child: Align(
-                alignment: Alignment.topCenter,
-                child: MediaQuery(
-                  data: screen.copyWith(
-                    size: Size(width + 2 * side, screen.size.height),
-                    padding: EdgeInsets.zero,
-                    viewPadding: EdgeInsets.zero,
-                    viewInsets: EdgeInsets.zero,
-                  ),
-                  child: Builder(builder: builder),
-                ),
-              ),
-            ),
-          ],
-        );
-      },
-    );
   }
 
   @override
@@ -217,10 +134,9 @@ class _FeedScreenState extends State<FeedScreen> {
                                 maintainSize: true,
                                 maintainAnimation: true,
                                 maintainState: true,
-                                child: _LanguageButton(
-                                  key: _languageButton,
+                                child: _LanguageMenu(
                                   language: _feed.language,
-                                  onPressed: _chooseLanguage,
+                                  onSelected: _chooseLanguage,
                                 ),
                               ),
                             ],
@@ -575,11 +491,7 @@ class _Picture extends StatelessWidget {
 /// The feed's language next to the date: a globe and "EN", "УКР" or "РУС", in the
 /// accent colour like the feed's other tappable text, with a 44-pt target.
 class _LanguageButton extends StatelessWidget {
-  const _LanguageButton({
-    super.key,
-    required this.language,
-    required this.onPressed,
-  });
+  const _LanguageButton({required this.language, required this.onPressed});
 
   final FeedLanguage language;
   final VoidCallback onPressed;
@@ -616,34 +528,49 @@ class _LanguageButton extends StatelessWidget {
   }
 }
 
-/// One language in the menu, its own name centred, a checkmark on the current one.
-class _LanguageChoice extends StatelessWidget {
-  const _LanguageChoice(this.language, {required this.selected});
+/// The iOS pull-down menu at the language button (as in Apple's apps): the
+/// languages in their own names, a checkmark on the current one. It opens from the
+/// button and stays on screen on any device size, iPad included.
+class _LanguageMenu extends StatefulWidget {
+  const _LanguageMenu({required this.language, required this.onSelected});
 
   final FeedLanguage language;
-  final bool selected;
+  final ValueChanged<FeedLanguage> onSelected;
+
+  @override
+  State<_LanguageMenu> createState() => _LanguageMenuState();
+}
+
+class _LanguageMenuState extends State<_LanguageMenu> {
+  // Follows the animation, not MenuController.isOpen: while the menu is closing,
+  // isOpen is still true, and a tap then would "close" it again instead of opening.
+  AnimationStatus _status = AnimationStatus.dismissed;
 
   @override
   Widget build(BuildContext context) {
-    return Semantics(
-      selected: selected,
-      child: Row(
-        children: [
-          const SizedBox(width: 24),
-          Expanded(
-            child: Text(language.nativeName, textAlign: TextAlign.center),
-          ),
-          SizedBox(
-            width: 24,
-            child: selected
+    return CupertinoMenuAnchor(
+      onAnimationStatusChanged: (status) => _status = status,
+      menuChildren: [
+        for (final lang in FeedLanguage.values)
+          CupertinoMenuItem(
+            onPressed: () => widget.onSelected(lang),
+            trailing: lang == widget.language
                 ? const Icon(
                     CupertinoIcons.checkmark_alt,
-                    size: 20,
                     color: AppColors.accent,
                   )
                 : null,
+            child: Semantics(
+              selected: lang == widget.language,
+              child: Text(lang.nativeName),
+            ),
           ),
-        ],
+      ],
+      builder: (context, controller, _) => _LanguageButton(
+        language: widget.language,
+        onPressed: () => _status.isForwardOrCompleted
+            ? controller.close()
+            : controller.open(),
       ),
     );
   }
