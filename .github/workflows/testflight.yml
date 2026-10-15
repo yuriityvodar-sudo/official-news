@@ -1,14 +1,14 @@
 name: TestFlight
 
 # On demand only: Actions tab → TestFlight → Run workflow → pick a branch.
-# Needs these repository secrets (see docs/setup.md), created from Roman's
-# App Store Connect account:
+# Needs these repository secrets (see docs/setup.md). Yurii creates the API key
+# with his Admin role on Roman's App Store Connect team and adds them himself:
 #   APPLE_TEAM_ID      the RS Elite Pro team ID (10 characters)
 #   ASC_KEY_ID         App Store Connect API key ID
 #   ASC_ISSUER_ID      App Store Connect API issuer ID
 #   ASC_KEY_P8_BASE64  the .p8 key file, base64-encoded
 # The app must already exist in App Store Connect with the bundle ID set in
-# app/ios/Runner.xcodeproj. Not run yet: first run happens once the key exists.
+# app/ios/Runner.xcodeproj. Builds use the live API at api.officialnews.workers.dev.
 
 on:
   workflow_dispatch:
@@ -22,6 +22,12 @@ jobs:
         working-directory: app
     steps:
       - uses: actions/checkout@v4
+      # App Store Connect only accepts builds made with the iOS 26 SDK (Xcode 26) or later.
+      # Pinned to the newest 26.x, so a new major Xcode never changes builds by surprise.
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: "26"
+      - run: xcodebuild -version
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: 3.44.6
@@ -35,7 +41,8 @@ jobs:
         run: echo "$ASC_KEY_P8_BASE64" | base64 --decode > "$RUNNER_TEMP/asc_key.p8"
 
       - name: Build the iOS app without signing
-        run: flutter build ios --release --no-codesign --build-number=${{ github.run_number }}
+        # The live API, not the laptop default (app/lib/core/config.dart).
+        run: flutter build ios --release --no-codesign --build-number=${{ github.run_number }} --dart-define=API_URL=https://api.officialnews.workers.dev
 
       - name: Archive with automatic signing
         working-directory: app/ios
@@ -43,6 +50,7 @@ jobs:
           xcodebuild archive \
             -workspace Runner.xcworkspace -scheme Runner -configuration Release \
             -archivePath "$RUNNER_TEMP/Runner.xcarchive" \
+            -destination "generic/platform=iOS" \
             -allowProvisioningUpdates \
             -authenticationKeyPath "$RUNNER_TEMP/asc_key.p8" \
             -authenticationKeyID "${{ secrets.ASC_KEY_ID }}" \
