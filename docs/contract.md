@@ -54,14 +54,14 @@ Base URL: `https://api.officialnews.workers.dev` (deployed), `http://localhost:8
 - `GET /articles?after=<feedSeq>` → only articles that appeared after that `feedSeq`, late ones included: the "N new" check. The app sends the highest `feedSeq` it holds.
 - `GET /articles?since=<ISO time>` → kept for app builds before `after`, which send the publication time of the first article they show: returns articles with a higher `feedSeq` than the newest article published at or before that time (the one those builds show first), so late articles count once and only when they are new.
 - `GET /articles/:id` → `Article` shown in the feed, or 404 (hidden articles too).
-- `GET /health` → `{ "sources": { "<status>": <count> }, "lastFetcherRun": "<ISO time>" | null }`.
+- `GET /health` → `{ "sources": { "<status>": <count> }, "lastFetcherRun": "<ISO time>" | null, "articles": { "fetchedLast24h": <n>, "waitingForSummary": <n>, "inFeed": <n> } }`: real sources only (seed rows skipped); `lastFetcherRun` is the latest `last_checked_at`; `inFeed` counts official decisions of the last 7 days. Open in a browser to see whether the fetcher and the AI step are running.
 - Errors are JSON `{ "error": "<message>" }`: 400 for a bad `limit`, `cursor`, `after` or `since`, 404, 405 for any method other than GET, 500.
 
 ## Database (D1)
 
 Defined in `server/migrations/0001_init.sql`.
 
-- `sources`: id, country, name, kind (`rss` | `page` | `api`), url, config (JSON: selectors for pages), language, verified_by (`domain` | `portal` | `wikidata`), verified_at, licence, status (`active` | `stale` | `moved` | `broken` | `blocked`), last_checked_at, last_item_at, list_etag, list_last_modified (the list's validators, kept by the fetcher for sources with `conditionalGet`; migration `0003`)
+- `sources`: id, country, name, kind (`rss` | `page` | `api`), url, config (JSON: selectors for pages), language, verified_by (`domain` | `portal` | `wikidata`), verified_at, licence, status (`active` | `stale` | `moved` | `broken` | `blocked`), last_checked_at, last_item_at, list_etag, list_last_modified (the list's validators, kept by the fetcher for sources with `conditionalGet`; migration `0003`), failed_checks, last_ok_at, last_error (source health, migration `0007`)
   - The source list lives in `docs/sources.csv` (one row per source, with how it was verified as official). The deploy loads it into the live database on every change (`npm run sources:local` for a laptop). Loading adds or updates rows and never changes `status` or the check times, which the fetcher and health checks own.
   - Rows with `config` `{"seed": true}` come from the Kickoff seed so the app has data; the fetcher and the health checks skip them.
 - `articles`: id, source_id, url (unique), original_title, published_at, date_only, fetched_at, text, text_expires_at, headline, short_summary, summary, image_url, original_language, topics (JSON), tags (JSON), importance, decision_type, is_news (NULL until the AI decides, 1 = official decision shown in the feed, 0 = hidden), summarized_at, model, summary_attempts (migration `0004`), summary_claimed_at (migration `0005`), feed_seq (unique; migration `0006`, given by the summarizer in the same statement that sets `is_news = 1`), added_at (when feed_seq was given)
@@ -70,7 +70,7 @@ Times (`published_at`, `fetched_at`, `summarized_at`, `text_expires_at`) are sto
 
 ## Scheduled job
 
-Two cron triggers (`server/wrangler.jsonc`), each its own run with its own free-plan budget of at most 50 outside requests and 10 ms of CPU. Every minute (`* * * * *`), `runFetcher(env)` (item 6) takes the source with the oldest `last_checked_at`. Every odd minute (`1-59/2 * * * *`), `runSummarizer(env, { maxArticles: 5 })` (item 7) makes one AI call per article. `server/src/index.ts` picks the step by `controller.cron` (`CRONS`). Locally: `npx wrangler dev --test-scheduled`, then open `/__scheduled?cron=1-59/2+*+*+*+*` for the summarizer (any other `cron` runs the fetcher).
+Two cron triggers (`server/wrangler.jsonc`), each its own run with its own free-plan budget of at most 50 outside requests and 10 ms of CPU. Every minute (`* * * * *`), `runFetcher(env)` (item 6) takes the source with the oldest `last_checked_at`. Every odd minute (`1-59/2 * * * *`), `runSummarizer(env, { maxArticles: 5 })` (item 7) makes one AI call per article. Once a day at 03:17 UTC (`17 3 * * *`), `runCleanup(env)` (item 8) clears old texts. Right after each fetcher run, `recordChecks(env, checks)` (item 8) gives the checked sources their status. `server/src/index.ts` picks the step by `controller.cron` (`CRONS`). Locally: `npx wrangler dev --test-scheduled`, then open `/__scheduled?cron=1-59/2+*+*+*+*` for the summarizer (any other `cron` runs the fetcher).
 
 What the fetcher writes (`server/src/fetcher/`):
 - Only items published in the last 7 days; an item already stored (same `url`) is never saved again. Items without a date are skipped, and a time later than the fetch is stored as the fetch time.
@@ -80,6 +80,11 @@ What the fetcher writes (`server/src/fetcher/`):
 - A date without a time is stored at 12:00 UTC (or the fetch time if that is earlier) with `date_only = 1`.
 - `url` may end in `#…` when one link holds several items (bill stages); the part before `#` is the page.
 - Every check sets `last_checked_at`; `last_item_at` is the newest item seen. `runFetcher` returns one `SourceCheck` per source (`ok`, `httpStatus`, `found`, `saved`, `waiting`, `undated`, `offSite`, `error`), which source health (item 8) can use, and logs it as JSON.
+
+What source health writes (`server/src/health/`, item 8):
+- After every check, the source's `status`: `active` when the check worked and the source listed an item from the last 14 days; `stale` when it worked but nothing listed is newer; `broken` after 3 failed checks in a row (no answer, robots.txt, an HTTP error); `moved` the same, when the list page answers 404 or 410. One failed check keeps the status. `failed_checks` counts the failures in a row, `last_ok_at` is the last check that worked, `last_error` why the last one failed.
+- `blocked` is set by people (`docs/sources.csv`) and never changed by health. The fetcher keeps checking `broken`, `moved` and `stale` sources, so a source that recovers turns `active` on its next good check.
+- Once a day: `text` is cleared where `text_expires_at` has passed (30 days after fetching). Title, summary and link stay; a later re-summary of such an article works from its title.
 
 What the summarizer writes (`server/src/summarizer/`, rules in `docs/style-guide.md`):
 - It takes articles with no `summarized_at`, newest `fetched_at` first, also those with only a title.

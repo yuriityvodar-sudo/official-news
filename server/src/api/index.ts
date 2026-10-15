@@ -1,5 +1,5 @@
 import type { Env } from "../env";
-import { sourceHealth } from "../health";
+import { health } from "../health";
 
 /** A row of `articles` joined with its source, as stored in D1. */
 interface ArticleRow {
@@ -273,7 +273,7 @@ async function route(request: Request, env: Env): Promise<Response> {
   }
 
   if (url.pathname === "/health") {
-    return json({ sources: await sourceHealth(env), lastFetcherRun: null });
+    return json(await health(env));
   }
 
   return json({ error: "Not found" }, 404);

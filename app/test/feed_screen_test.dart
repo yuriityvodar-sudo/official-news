@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -293,5 +294,132 @@ void main() {
       jsonDecode(jsonEncode(a.toJson())) as Map<String, dynamic>,
     );
     expect(back.toJson(), a.toJson());
+  });
+
+  testWidgets(
+    'after a failed page, offers a retry instead of retrying on every scroll',
+    (tester) async {
+      final log = <Uri>[];
+      var failing = true;
+      final first = [
+        for (var i = 0; i < 20; i++)
+          _article('f$i', _today.add(Duration(minutes: 60 - i))),
+      ];
+      final api = ApiClient(
+        baseUrl: 'https://api.test',
+        client: MockClient((request) async {
+          log.add(request.url);
+          if (request.url.queryParameters['cursor'] == 'c2') {
+            return failing
+                ? http.Response('offline', 503)
+                : http.Response(
+                    jsonEncode({
+                      'items': [
+                        _article(
+                          'back',
+                          _today.add(const Duration(minutes: 1)),
+                          headline: 'Back online',
+                        ),
+                      ],
+                      'nextCursor': null,
+                      'top': [],
+                    }),
+                    200,
+                  );
+          }
+          return http.Response(
+            jsonEncode({'items': first, 'nextCursor': 'c2', 'top': []}),
+            200,
+          );
+        }),
+      );
+      await _pump(tester, FeedController(api: api));
+      final retry = find.text("Couldn't load more. Tap to try again.");
+      await tester.scrollUntilVisible(
+        retry,
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.drag(find.byType(CustomScrollView), const Offset(0, -500));
+      await tester.drag(find.byType(CustomScrollView), const Offset(0, -500));
+      await tester.pump();
+      expect(
+        log.where((u) => u.queryParameters['cursor'] == 'c2'),
+        hasLength(1),
+      );
+
+      failing = false;
+      await tester.tap(retry);
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.text('Back online'),
+        300,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(find.text('Back online'), findsOneWidget);
+    },
+  );
+
+  test('a page that arrives after a refresh is dropped', () async {
+    final page2 = Completer<http.Response>();
+    final api = ApiClient(
+      baseUrl: 'https://api.test',
+      client: MockClient((request) async {
+        if (request.url.queryParameters['cursor'] == 'c2') return page2.future;
+        return http.Response(
+          jsonEncode({
+            'items': [_article('new1', DateTime.now())],
+            'nextCursor': 'c2',
+            'top': [],
+          }),
+          200,
+        );
+      }),
+    );
+    final feed = FeedController(api: api);
+    await feed.start();
+    final loading = feed.loadMore();
+    await feed.refresh();
+    page2.complete(
+      http.Response(
+        jsonEncode({
+          'items': [_article('stale', DateTime.utc(2026, 10, 10))],
+          'nextCursor': null,
+          'top': [],
+        }),
+        200,
+      ),
+    );
+    await loading;
+    expect(feed.items.map((a) => a.id), ['new1']);
+    expect(feed.hasMore, isTrue);
+  });
+
+  test(
+    'an article opened before the store is ready is still remembered',
+    () async {
+      final feed = FeedController(
+        api: _api({
+          '': {'items': [], 'nextCursor': null, 'top': []},
+        }),
+      );
+      final article = Article.fromJson(_article('early', DateTime.now()));
+      await feed.markRead(article);
+      await feed.start();
+      expect(feed.readIds, contains('early'));
+      expect(
+        (await SharedPreferences.getInstance()).getStringList('feed.readIds'),
+        contains('early'),
+      );
+    },
+  );
+
+  // Meaningful in a time zone with a clock change: CI runs the app tests with
+  // TZ=Europe/Berlin, where 29 March 2026 has 23 hours.
+  test('day labels count calendar days, not 24-hour blocks', () {
+    final now = DateTime(2026, 3, 30, 9);
+    expect(dayLabel(DateTime(2026, 3, 29, 12), now: now), 'Yesterday');
+    expect(dayLabel(DateTime(2026, 3, 30, 0, 10), now: now), 'Today');
+    expect(dayLabel(DateTime(2026, 3, 28, 12), now: now), 'Saturday 28 March');
   });
 }

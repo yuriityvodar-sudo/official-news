@@ -290,10 +290,28 @@ describe("GET /articles/:id", () => {
 });
 
 describe("other requests", () => {
-  it("GET /health counts sources per status", async () => {
+  it("GET /health counts real sources per status, and seed rows not at all", async () => {
     const { status, body } = await get("/health");
     expect(status).toBe(200);
-    expect(body).toEqual({ sources: { active: 20 }, lastFetcherRun: null });
+    // Only the 20 Kickoff seed sources exist here, and health skips them.
+    expect(body).toEqual({ sources: {}, lastFetcherRun: null, articles: { fetchedLast24h: expect.any(Number), waitingForSummary: 0, inFeed: 3 } });
+  });
+
+  it("GET /health shows the last fetcher run and the articles waiting for the AI", async () => {
+    await env.DB.batch([
+      env.DB.prepare(
+        "INSERT INTO sources (id, country, name, kind, url, status, last_checked_at) VALUES ('xx-a', 'XX', 'A', 'rss', 'https://a.test/feed', 'active', '2026-10-14T18:00:00Z'), ('xx-b', 'XX', 'B', 'rss', 'https://b.test/feed', 'broken', '2026-10-14T18:01:00Z')",
+      ),
+      env.DB.prepare(
+        "INSERT INTO articles (id, source_id, url, original_title, published_at, fetched_at) VALUES ('w1', 'xx-a', 'https://a.test/1', 'Waiting', strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-1 hours'), strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-1 hours'))",
+      ),
+    ]);
+    const { body } = await get("/health");
+    expect(body).toMatchObject({
+      sources: { active: 1, broken: 1 },
+      lastFetcherRun: "2026-10-14T18:01:00Z",
+      articles: { waitingForSummary: 1, inFeed: 3 },
+    });
   });
 
   it("returns JSON errors for unknown paths and other methods", async () => {
