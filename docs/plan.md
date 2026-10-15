@@ -392,7 +392,7 @@ The feed shows official news from the last 7 days, newest first, with a short "T
 **Order**
 
 - **Top today:** 3–5 items from the last 24 hours with the highest AI importance score, at most 2 per country
-- **Latest:** everything else, newest first, grouped under Today, Yesterday and so on
+- **Latest:** everything else, in the order it appeared in the feed, newest first (each card shows its official publication date), grouped under Today, Yesterday and so on by the day it appeared (decision 2026-10-15)
 - Country chips filter the feed (after the MVP)
 - At the end of the 7 days: "You're all caught up" (a "Show older" button can be added later)
 

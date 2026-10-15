@@ -45,9 +45,11 @@ async function insertArticles(articles: TestArticle[]) {
   await env.DB.batch(
     articles.map((a) =>
       env.DB.prepare(
+        // Visible articles get the next feed_seq, as the summarizer gives it: insertion order is feed order.
         `INSERT INTO articles (id, source_id, url, original_title, published_at, fetched_at,
-                               headline, is_news, importance, topics, decision_type)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'decision')`,
+                               headline, is_news, importance, topics, decision_type, feed_seq)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'decision',
+                 CASE WHEN ?8 = 1 THEN (SELECT COALESCE(MAX(feed_seq), 0) + 1 FROM articles) END)`,
       ).bind(
         a.id,
         a.sourceId ?? "de-federal-government",
@@ -74,13 +76,43 @@ describe("GET /articles", () => {
     expect(page.top).toEqual([]);
     expect(Object.keys(page.items[0]).sort()).toEqual(
       [
-        "country", "dateOnly", "decisionType", "headline", "id", "imageUrl", "importance",
+        "addedAt", "country", "dateOnly", "decisionType", "feedSeq", "headline", "id", "imageUrl", "importance",
         "originalLanguage", "originalTitle", "originalUrl", "publishedAt", "shortSummary",
         "source", "summary", "tags", "topics",
       ].sort(),
     );
-    const times = page.items.map((a) => a.publishedAt);
-    expect(times).toEqual([...times].sort().reverse());
+    const order = page.items.map((a) => (a as unknown as { feedSeq: number }).feedSeq);
+    expect(order).toEqual([...order].sort((x, y) => y - x));
+  });
+
+  it("puts an article that appears late on top, above newer publication dates", async () => {
+    await insertArticles([{ id: "published-1h-ago", publishedAt: hoursAgo(1) }]);
+    // Published 30 hours ago, but only now marked as news by the AI step.
+    await insertArticles([{ id: "late", publishedAt: hoursAgo(30) }]);
+    const ids = (await getPage("/articles")).items.map((a) => a.id);
+    expect(ids.slice(0, 2)).toEqual(["late", "published-1h-ago"]);
+  });
+
+  it("with after, returns only articles that appeared after that feedSeq, late ones included", async () => {
+    await insertArticles([{ id: "seen", publishedAt: hoursAgo(1) }]);
+    const seen = (await getPage("/articles")).items[0] as unknown as { id: string; feedSeq: number };
+    expect(seen.id).toBe("seen");
+    await insertArticles([
+      { id: "late", publishedAt: hoursAgo(40) },
+      { id: "fresh", publishedAt: hoursAgo(0.5) },
+    ]);
+    const page = await getPage(`/articles?after=${seen.feedSeq}`);
+    expect(page.items.map((a) => a.id)).toEqual(["fresh", "late"]);
+    expect(page.top).toEqual([]);
+  });
+
+  it("still accepts a cursor from an app build before feed_seq", async () => {
+    await insertArticles(Array.from({ length: 5 }, (_, i) => ({ id: `old-${i}`, publishedAt: hoursAgo(1) })));
+    const first = await getPage("/articles?limit=3");
+    const oldStyle = btoa(JSON.stringify([first.items[2].publishedAt, first.items[2].id])).replace(/=+$/, "");
+    const next = await getPage(`/articles?limit=3&cursor=${oldStyle}`);
+    expect(next.items.map((a) => a.id)).not.toContain(first.items[2].id);
+    expect(next.items[0].id).toBe((await getPage("/articles?limit=4")).items[3].id);
   });
 
   it("hides articles the AI marked as not news or has not checked yet", async () => {
@@ -160,6 +192,8 @@ describe("GET /articles", () => {
     ["limit=ten"],
     ["cursor=not-a-cursor"],
     ["since=yesterday"],
+    ["after=-1"],
+    ["after=12abc"],
   ])("rejects %s with a JSON error", async (query) => {
     const { status, type, body } = await get(`/articles?${query}`);
     expect(status).toBe(400);

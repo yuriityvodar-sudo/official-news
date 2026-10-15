@@ -60,8 +60,12 @@ function workersAi(env: Env): Summarize {
 
 function store(env: Env, id: string, s: Summary, now: string): D1PreparedStatement {
   return env.DB.prepare(
+    // feed_seq: the article's place in the feed, given in this same statement when it
+    // becomes visible and never changed afterwards. D1 runs one statement at a time,
+    // so MAX + 1 cannot be handed out twice (a unique index also guards it).
     `UPDATE articles SET headline = ?, short_summary = ?, summary = ?, decision_type = ?, topics = ?, tags = ?,
-            importance = ?, is_news = ?, summarized_at = ?, model = ?
+            importance = ?, is_news = ?, summarized_at = ?, model = ?,
+            feed_seq = CASE WHEN ? = 1 THEN COALESCE(feed_seq, (SELECT COALESCE(MAX(feed_seq), 0) + 1 FROM articles)) ELSE feed_seq END
      WHERE id = ?`,
   ).bind(
     s.headline,
@@ -74,6 +78,8 @@ function store(env: Env, id: string, s: Summary, now: string): D1PreparedStateme
     s.isNews ? 1 : 0,
     now,
     MODEL,
+    // The new is_news: inside an UPDATE, the column itself still holds the old value.
+    s.isNews ? 1 : 0,
     id,
   );
 }

@@ -21,12 +21,15 @@ interface ArticleRow {
   topics: string | null;
   tags: string | null;
   importance: number | null;
+  feed_seq: number | null;
+  summarized_at: string | null;
 }
 
 const ARTICLE_COLUMNS = `
   a.id, s.country, a.source_id, s.name AS source_name, s.url AS source_url,
   a.url, a.original_title, a.published_at, a.date_only, a.headline, a.short_summary,
-  a.summary, a.decision_type, a.image_url, a.original_language, a.topics, a.tags, a.importance`;
+  a.summary, a.decision_type, a.image_url, a.original_language, a.topics, a.tags, a.importance,
+  a.feed_seq, a.summarized_at`;
 
 const FROM_ARTICLES = "FROM articles a JOIN sources s ON s.id = a.source_id";
 
@@ -81,6 +84,8 @@ export function toArticle(row: ArticleRow) {
     importance: row.importance,
     imageUrl: row.image_url,
     originalUrl: row.url,
+    feedSeq: row.feed_seq,
+    addedAt: row.summarized_at,
   };
 }
 
@@ -97,29 +102,26 @@ function toStoredTime(date: Date): string {
   return `${date.toISOString().slice(0, 19)}Z`;
 }
 
-/** The position after the last article of a page: opaque to the app. */
-interface Cursor {
-  publishedAt: string;
-  id: string;
-}
+/**
+ * The position after the last article of a page: opaque to the app. Today it
+ * is that article's `feed_seq`; cursors from app builds before the change name
+ * an article instead, and still work.
+ */
+type Cursor = { feedSeq: number } | { articleId: string };
 
-function encodeCursor(cursor: Cursor): string {
-  return btoa(JSON.stringify([cursor.publishedAt, cursor.id]))
-    .replaceAll("+", "-")
-    .replaceAll("/", "_")
-    .replace(/=+$/, "");
+function encodeCursor(feedSeq: number): string {
+  return btoa(JSON.stringify([feedSeq])).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
 }
 
 function decodeCursor(value: string): Cursor | null {
   try {
     const parsed: unknown = JSON.parse(atob(value.replaceAll("-", "+").replaceAll("_", "/")));
-    if (
-      Array.isArray(parsed) &&
-      parsed.length === 2 &&
-      typeof parsed[0] === "string" &&
-      typeof parsed[1] === "string"
-    ) {
-      return { publishedAt: parsed[0], id: parsed[1] };
+    if (Array.isArray(parsed) && parsed.length === 1 && Number.isInteger(parsed[0])) {
+      return { feedSeq: parsed[0] as number };
+    }
+    // Before the feed was ordered by feed_seq: [publishedAt, id].
+    if (Array.isArray(parsed) && parsed.length === 2 && typeof parsed[0] === "string" && typeof parsed[1] === "string") {
+      return { articleId: parsed[1] };
     }
   } catch {
     // Falls through to null: not a cursor we issued.
@@ -127,10 +129,20 @@ function decodeCursor(value: string): Cursor | null {
   return null;
 }
 
+/** A whole number of at least 0, or null. */
+function nonNegativeInteger(value: string): number | null {
+  const n = Number(value);
+  return /^\d+$/.test(value) && Number.isSafeInteger(n) ? n : null;
+}
+
 /**
- * `GET /articles?limit=&cursor=&since=`: news from the last 7 days, newest
- * first. `cursor` continues from the previous page; `since` keeps only
- * articles published after that time. `top` is filled on the first page only.
+ * `GET /articles?limit=&cursor=&after=&since=`: official decisions of the last
+ * 7 days in the order they appeared in the feed (`feed_seq`), newest first, so
+ * one that appears late lands on top, never between ones already read.
+ * `cursor` continues from the previous page; `after` keeps only articles that
+ * appeared after a given `feedSeq` (the "N new" check); `since` is the older
+ * check by publication time, kept for app builds before `after`. `top` is
+ * filled on the first page only.
  */
 async function listArticles(url: URL, env: Env): Promise<Response> {
   const params = url.searchParams;
@@ -144,8 +156,16 @@ async function listArticles(url: URL, env: Env): Promise<Response> {
     }
   }
 
-  const where = ["a.is_news = 1", FEED_WINDOW];
+  const where = ["a.is_news = 1", "a.feed_seq IS NOT NULL", FEED_WINDOW];
   const binds: (string | number)[] = [];
+
+  const afterParam = params.get("after");
+  if (afterParam !== null) {
+    const after = nonNegativeInteger(afterParam);
+    if (after === null) return badRequest("after must be a feedSeq (a whole number)");
+    where.push("a.feed_seq > ?");
+    binds.push(after);
+  }
 
   const sinceParam = params.get("since");
   if (sinceParam !== null) {
@@ -159,27 +179,32 @@ async function listArticles(url: URL, env: Env): Promise<Response> {
   if (cursorParam !== null) {
     const cursor = decodeCursor(cursorParam);
     if (!cursor) return badRequest("cursor is not valid");
-    where.push("(a.published_at < ? OR (a.published_at = ? AND a.id < ?))");
-    binds.push(cursor.publishedAt, cursor.publishedAt, cursor.id);
+    if ("feedSeq" in cursor) {
+      where.push("a.feed_seq < ?");
+      binds.push(cursor.feedSeq);
+    } else {
+      // An older cursor: continue below the article it names.
+      where.push("a.feed_seq < (SELECT b.feed_seq FROM articles b WHERE b.id = ?)");
+      binds.push(cursor.articleId);
+    }
   }
 
   // One extra row tells whether there is a next page.
   const pageQuery = env.DB.prepare(
     `SELECT ${ARTICLE_COLUMNS} ${FROM_ARTICLES}
      WHERE ${where.join(" AND ")}
-     ORDER BY a.published_at DESC, a.id DESC
+     ORDER BY a.feed_seq DESC
      LIMIT ?`,
   ).bind(...binds, limit + 1);
 
-  const firstPage = cursorParam === null && sinceParam === null;
+  const firstPage = cursorParam === null && sinceParam === null && afterParam === null;
   const [page, top] = firstPage
     ? await env.DB.batch<ArticleRow>([pageQuery, env.DB.prepare(TOP_QUERY)])
     : [await pageQuery.all<ArticleRow>(), null];
 
   const rows = page.results.slice(0, limit);
   const last = rows.at(-1);
-  const nextCursor =
-    page.results.length > limit && last ? encodeCursor({ publishedAt: last.published_at, id: last.id }) : null;
+  const nextCursor = page.results.length > limit && last?.feed_seq != null ? encodeCursor(last.feed_seq) : null;
 
   return json({
     items: rows.map(toArticle),
