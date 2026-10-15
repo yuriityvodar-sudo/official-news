@@ -1,6 +1,7 @@
 name: Deploy
 
-# On every merge to main: apply new D1 migrations, then deploy the Worker.
+# On every merge to main: apply new D1 migrations, load docs/sources.csv, then
+# deploy the Worker.
 # Needs the repository secret CLOUDFLARE_API_TOKEN (see docs/setup.md). Until
 # it exists, the run ends with a warning instead of failing.
 
@@ -9,6 +10,7 @@ on:
     branches: [main]
     paths:
       - "server/**"
+      - "docs/sources.csv"
       - ".github/workflows/deploy.yml"
   workflow_dispatch:
 
@@ -46,9 +48,17 @@ jobs:
           cache-dependency-path: server/package-lock.json
       - if: steps.token.outputs.ready == 'true'
         run: npm ci
+      # Two pull requests can each pass alone and still break together, so main is
+      # tested again here; nothing reaches the live database or Worker if it fails.
+      - if: steps.token.outputs.ready == 'true'
+        name: Typecheck and test before deploying
+        run: npm run typecheck && npm test
       - if: steps.token.outputs.ready == 'true'
         name: Apply D1 migrations
         run: npm run db:migrate:remote
+      - if: steps.token.outputs.ready == 'true'
+        name: Load the source list
+        run: npm run sources:remote
       - if: steps.token.outputs.ready == 'true'
         name: Deploy the Worker
         run: npm run deploy

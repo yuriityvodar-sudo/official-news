@@ -27,7 +27,7 @@ After Roman's review (issues #3 to #11), these replace anything older further do
 - **The AI summary reads like news**, not two fixed blocks, facts from the article only. One AI call per article returns one news-style summary, the same for everyone, and tags the article with 1 to 3 topics from the fixed list, so the topic features have data when they come.
 - **The app looks and feels like Apple News** on iOS and Android, light and dark: large bold titles, red accent, serif headlines, publisher line above each headline, big images, iOS navigation and gestures. Each headline has a red decision-type label (Law, Bill, Cabinet decision…). Screens: [docs/design/mvp.png](design/mvp.png).
 - **Countries:** G20 only in the MVP. Labels for disputed territories wait until after the MVP.
-- **Secrets:** shared keys go through **Bitwarden**.
+- **Secrets:** no shared password vault. A key never travels between us: whoever creates it puts it straight into its one home. Yurii creates the keys that live in GitHub Secrets, the App Store Connect API key included (replaces Bitwarden, 14 Oct).
 - **Google Play:** Yurii's account, Roman as Admin.
 
 **Topic list (fixed, in the contract; the AI picks from it):** foreign-affairs, economy, security-defence, health, climate, trade, technology, energy, migration, elections, human-rights, science.
@@ -104,7 +104,7 @@ The MVP is a Kickoff plus 8 items, 4 each. This is our suggested split: Yurii ow
 | 3 | Feed screen | Yurii | 4 | The feed shows articles from the deployed API on both simulators |
 | 4 | Article detail screen | Roman | 2 | Every article opens with its summary and source link |
 | 5 | Source list: 20 official sites, one per G20 country | Yurii | 2 | 20 verified sources in the database |
-| 6 | Fetcher: small run every minute, 2 sources at a time | Yurii | 4 | All sources checked at least hourly, new articles saved without duplicates |
+| 6 | Fetcher: small run every minute, 1 source at a time | Yurii | 4 | All sources checked at least hourly, new articles saved without duplicates |
 | 7 | AI summaries, noise filter and tags | Roman | 4 | New articles get all summary fields within an hour |
 | 8 | Source health and cleanup of old texts | Roman | 2 | Each source shows its status; expired texts are cleared |
 
@@ -177,9 +177,9 @@ The feed card reads `headline`, `shortSummary` and `imageUrl`; the detail screen
 
 **Fetcher rule (keeps us on the free plan)**
 
-- The scheduled handler runs every minute and calls `fetcher.run()` then `summarizer.run({ maxArticles: 5 })`; the handler is committed in the Kickoff, and each owner changes only their own module
-- The fetcher takes the 2 sources with the oldest `last_checked_at`, so every source is checked within the hour
-- One run shares one budget: on the free plan at most 50 outside requests and 10 ms of processing. The requests fit easily; the 10 ms is measured in item 6, and if text extraction needs more, the Worker moves to the paid plan (about $5 a month) and the small runs stay
+- The scheduled handler runs every minute and calls `fetcher.run()` then `summarizer.run({ maxArticles: 5 })`; the handler is committed in the Kickoff, and each owner changes only their own module. **Changed 15 Oct (#41):** the summarizer has its own cron trigger every odd minute, so the two never share one run's CPU
+- The fetcher takes the source with the oldest `last_checked_at`, so every source is checked within the hour (up to 60 sources)
+- One run shares one budget (one run per step since #41): on the free plan at most 50 outside requests and 10 ms of processing. The requests fit easily; the 10 ms is measured in item 6, and if text extraction needs more, the Worker moves to the paid plan (about $5 a month) and the small runs stay
 
 **Speed rules (fast app, and about 10,000 daily users for free)**
 
@@ -223,19 +223,19 @@ Each item becomes one GitHub issue owned by one person. **Must** is what the ite
 
 ### 5. Source list (Yurii)
 
-- **Must:** `docs/sources.csv` with 20 sources, one per G20 country, chosen from those that read cleanly in the 11 Oct test, each with kind, URL, language, `verified_by` and licence, preferring pages that publish official decisions (laws, proposals, meeting agendas, minutes and outcomes); loaded into `sources`.
+- **Must:** `docs/sources.csv` with one source per G20 member (19 since 14 Oct: Saudi Arabia waits for consent), each with kind, URL, language, `verified_by` and licence, preferring pages that publish official decisions (laws, proposals, meeting agendas, minutes and outcomes); loaded into `sources`.
 - **Suggested:** grow to about 85 Phase 1 sources once the fetcher is stable.
-- **Done when:** 20 verified sources are in D1.
+- **Done when:** the verified sources are in D1 (19 since 14 Oct: Saudi Arabia waits for the gazette's written consent, see `docs/sources.md`).
 
 ### 6. Fetcher (Yurii)
 
-- **Must:** `fetcher.run()`, called by the scheduled handler every minute, takes the 2 sources with the oldest `last_checked_at`; reads RSS/Atom feeds and news pages (selectors in `config`); skips URLs already stored; saves new articles with their extracted text and `text_expires_at`; clear User-Agent; respects `robots.txt`; logs requests and CPU time per run from the first version.
+- **Must:** `fetcher.run()`, called by the scheduled handler every minute, takes the source with the oldest `last_checked_at`; reads RSS/Atom feeds and news pages (selectors in `config`); skips URLs already stored; saves new articles with their extracted text and `text_expires_at`; clear User-Agent; respects `robots.txt`; logs requests and CPU time per run from the first version.
 - **Suggested:** retries for failed sources; reading the site's own data endpoints.
 - **Done when:** the deployed fetcher checks all 20 sources at least once an hour, new articles appear in D1 with no duplicates, and the logs show how close each run is to the free limits.
 
 ### 7. AI summaries (Roman)
 
-- **Must:** `docs/style-guide.md` and the prompt; one call per article returning headline, shortSummary, summary (news-style, facts from the article only), decisionType (from the fixed list), topics (from the fixed list), tags, importance and isNews (an official decision, not opinion, interview or commentary); `summarizer.run()`, called by the scheduled handler every minute, summarizes up to 5 articles that have text and no summary; anything that is not news is hidden from the feed.
+- **Must:** `docs/style-guide.md` and the prompt; one call per article returning headline, shortSummary, summary (news-style, facts from the article only), decisionType (from the fixed list), topics (from the fixed list), tags, importance and isNews (an official decision, not opinion, interview or commentary); `summarizer.run()`, called by the scheduled handler every minute (every odd minute in its own run since #41), summarizes up to 5 articles that have text and no summary; anything that is not news is hidden from the feed.
 - **Suggested:** a 25-article test set with `npm run eval`; comparing Workers AI and Claude Haiku and recording the choice and cost in `docs/decisions.md`.
 - **Done when:** new articles get all summary fields within an hour of being fetched.
 
@@ -320,7 +320,7 @@ The app is Flutter; everything behind it runs on one Cloudflare account, with Wo
 | --- | --- |
 | Flutter | The iOS and Android app, one codebase |
 | Cloudflare Workers | All backend code: fetching sources and the API the app calls |
-| Cloudflare Cron Triggers | Runs the fetcher every minute, 2 sources at a time |
+| Cloudflare Cron Triggers | Runs the fetcher every minute, 1 source at a time |
 | Cloudflare D1 | Database: sources, articles, summaries, tags |
 | Cloudflare Browser Rendering | After the MVP: reading official sites whose news lists are built by JavaScript |
 | Workers AI or Claude API (Haiku) | Summary, translation, tags and news-or-noise check, once per article |
@@ -373,7 +373,7 @@ flowchart LR
   API --> APP[Flutter app<br/>feed, detail, last feed on phone]
 ```
 
-Every minute the fetcher reads the next 2 sources on the list, so all sources are checked within the hour; it keeps only new items and sends each one to the AI model once. The app reads only from our API, 20 articles at a time.
+Every minute the fetcher reads the next source on the list, so all sources are checked within the hour (up to 60 sources); it keeps only new items and sends each one to the AI model once. The app reads only from our API, 20 articles at a time.
 
 ## Feed and reading experience
 
@@ -585,7 +585,7 @@ We read the latest official news (4–11 Oct) from all Phase 2 sources and the P
 - [ ] Google Play: Yurii's account or Roman's (GitHub and Cloudflare by Yurii, App Store Connect and TestFlight by Roman: agreed on our call)
 - [ ] Confirm the split in the Work plan
 - [ ] Secrets: confirm the five rules. Nothing secret in the repo (secret scanning and push protection on); each secret has one home (CI keys in GitHub Secrets, runtime keys as Cloudflare Worker secrets, local keys in .dev.vars or .env); Cloudflare, GitHub and Apple are each person's own login, and Workers AI and D1 need no key; the two shared keys (Claude API if chosen, App Store Connect upload) go through a shared password-manager vault, never chat; every key has a spending limit and a leaked key is rotated at once
-- [ ] AI model: Workers AI or Claude Haiku (item 7 decides; a Claude API key is needed only if Claude wins)
+- [x] AI model: Workers AI, `@cf/zai-org/glm-4.7-flash` (decided in item 7, 14 Oct; see `docs/decisions.md`)
 - [ ] Home countries in Phase 1: move Kenya, and Roman's country, up from Phase 2?
 - [ ] Labels for territories with disputed status (Taiwan, Palestine, Kosovo)
 - [ ] Later: app name
