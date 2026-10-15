@@ -56,9 +56,11 @@ const MAX_LIMIT = 50;
 
 /**
  * Top today: last 24 hours, highest importance, at most 2 per country, up to 5,
- * among the articles `where` picks (the feed's, or a language's: #46).
+ * among the articles `where` picks (the feed's, or a language's: #46). Picked by
+ * importance, shown newest first (feed order), so times only go down here too.
  */
 const topQuery = (columns: string, from: string, where: string) => `
+  SELECT * FROM (
   SELECT * FROM (
     SELECT ${columns},
            ROW_NUMBER() OVER (
@@ -70,7 +72,8 @@ const topQuery = (columns: string, from: string, where: string) => `
   )
   WHERE country_rank <= 2
   ORDER BY importance DESC, published_at DESC, id DESC
-  LIMIT 5`;
+  LIMIT 5
+  ) ORDER BY feed_seq DESC`;
 
 const TOP_QUERY = topQuery(ARTICLE_COLUMNS, FROM_ARTICLES, "a.is_news = 1 AND a.feed_seq IS NOT NULL");
 
@@ -314,7 +317,7 @@ const TRANSLATED_TOP_QUERY = `
   SELECT top.*, t.headline AS t_headline, t.short_summary AS t_short_summary, t.summary AS t_summary
   FROM (${TOP_QUERY}) top JOIN article_translations t ON t.article_id = top.id AND t.lang = ?
   WHERE ${TRANSLATED_CONDITIONS.join(" AND ")}
-  ORDER BY top.importance DESC, top.published_at DESC, top.id DESC`;
+  ORDER BY top.feed_seq DESC`;
 
 /** 0 while the language is translated as it should be; 1 while it is paused (by hand or automatically) or off. */
 const LANG_SWITCH = "SELECT CASE WHEN enabled = 1 AND paused = 0 THEN 0 ELSE 1 END AS delayed FROM translation_langs WHERE lang = ?";

@@ -939,9 +939,10 @@ describe("GET /articles with lang", () => {
     await insertNews("third", hoursAgo(3), 1, { released: true });
     await env.DB.batch([finished("third", "uk", 2, "Третє"), env.DB.prepare("UPDATE articles SET importance = 2, source_id = 'fr-foreign-ministry' WHERE id = 'third'")]);
     const english = ((await get("/articles")).body as ArticlesPage).top.map((a) => a.id);
-    expect(english).toEqual(["english-only", "translated", "third"]);
+    // Picked by importance, shown in feed order (newest first).
+    expect(english).toEqual(["third", "translated", "english-only"]);
     const uk = ((await get("/articles?lang=uk")).body as ArticlesPage).top;
-    expect(uk.map((a) => [a.id, a.headline])).toEqual([["translated", "Заголовок"], ["third", "Третє"]]);
+    expect(uk.map((a) => [a.id, a.headline])).toEqual([["third", "Третє"], ["translated", "Заголовок"]]);
     expect(((await get("/articles?lang=ru")).body as ArticlesPage).top.map((a) => a.id)).toEqual(["translated"]);
   });
 
