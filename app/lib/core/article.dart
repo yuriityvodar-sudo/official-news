@@ -11,6 +11,8 @@ class Source {
   final String id;
   final String name;
   final String url;
+
+  Map<String, dynamic> toJson() => {'id': id, 'name': name, 'url': url};
 }
 
 class Article {
@@ -74,6 +76,26 @@ class Article {
   final int? importance;
   final String? imageUrl;
   final String originalUrl;
+
+  /// The contract format, so the last feed can be saved on the phone and read back.
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'country': country,
+    'source': source.toJson(),
+    'publishedAt': publishedAt.toUtc().toIso8601String(),
+    'dateOnly': dateOnly,
+    'headline': headline,
+    'shortSummary': shortSummary,
+    'summary': summary,
+    'decisionType': decisionType,
+    'originalTitle': originalTitle,
+    'originalLanguage': originalLanguage,
+    'topics': topics,
+    'tags': tags,
+    'importance': importance,
+    'imageUrl': imageUrl,
+    'originalUrl': originalUrl,
+  };
 }
 
 class ArticlesPage {
@@ -99,4 +121,10 @@ class ArticlesPage {
   final List<Article> items;
   final String? nextCursor;
   final List<Article> top;
+
+  Map<String, dynamic> toJson() => {
+    'items': [for (final a in items) a.toJson()],
+    'nextCursor': nextCursor,
+    'top': [for (final a in top) a.toJson()],
+  };
 }

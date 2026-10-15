@@ -48,6 +48,11 @@ jobs:
           cache-dependency-path: server/package-lock.json
       - if: steps.token.outputs.ready == 'true'
         run: npm ci
+      # Two pull requests can each pass alone and still break together, so main is
+      # tested again here; nothing reaches the live database or Worker if it fails.
+      - if: steps.token.outputs.ready == 'true'
+        name: Typecheck and test before deploying
+        run: npm run typecheck && npm test
       - if: steps.token.outputs.ready == 'true'
         name: Apply D1 migrations
         run: npm run db:migrate:remote
