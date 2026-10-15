@@ -17,9 +17,14 @@ class ApiException implements Exception {
 
 /// Client for the endpoints in docs/contract.md.
 class ApiClient {
-  ApiClient({http.Client? client, String? baseUrl})
-    : _client = client ?? http.Client(),
-      _baseUrl = baseUrl ?? apiUrl;
+  ApiClient({
+    http.Client? client,
+    String? baseUrl,
+    this.timeout = const Duration(seconds: 15),
+  }) : _client = client ?? http.Client(),
+       _baseUrl = baseUrl ?? apiUrl;
+
+  final Duration timeout;
 
   final http.Client _client;
   final String _baseUrl;
@@ -45,7 +50,8 @@ class ApiClient {
       Article.fromJson(await _getJson(Uri.parse('$_baseUrl/articles/$id')));
 
   Future<Map<String, dynamic>> _getJson(Uri uri) async {
-    final response = await _client.get(uri);
+    // A phone on a weak network should not wait forever; the feed shows its error state instead.
+    final response = await _client.get(uri).timeout(timeout);
     if (response.statusCode != 200) {
       throw ApiException(response.statusCode, response.body);
     }
