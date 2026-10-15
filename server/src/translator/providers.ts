@@ -114,7 +114,8 @@ function groq(model: string, key: string, fetch: typeof globalThis.fetch): Provi
 const ZAI_CONTENT_FILTER = new Set(["1301"]);
 
 /**
- * Z.ai's OpenAI-compatible chat API (#46), for Spanish and German. Thinking
+ * Z.ai's OpenAI-compatible chat API (#46), for German (off for now: Z.ai answers
+ * requests from Cloudflare Workers with an HTTP 405 block page). Thinking
  * off, JSON mode. Its free plan allows about one request at a time, and a run
  * makes its requests one after another, so it never sends two.
  */

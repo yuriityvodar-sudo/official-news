@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { LANG_PAGE_CONDITIONS } from "../src/api";
+import { FROM_TRANSLATED, PAGE_CONDITIONS, TRANSLATED_CONDITIONS } from "../src/api";
 import {
   CLAIM,
   CLAIM_MINUTES,
@@ -25,6 +25,7 @@ import {
   GLM_45,
   GLM_47,
   GPT_OSS,
+  GPT_OSS_20B,
   QWEN,
   type ArticlesPage,
   type Reply,
@@ -39,7 +40,8 @@ import {
   ids,
   inMinutes,
   insertNews,
-  langOrder,
+  feeds,
+  releasedOrder,
   minutesAgo,
   only,
   outcome,
@@ -134,9 +136,10 @@ describe("runTranslator", () => {
     expect(await runTranslator(testEnv(), { maxTranslations: 6, fetch: groq.fetch })).toEqual([]);
     expect(groq.requests).toHaveLength(4);
     for (const id of ["hidden", "unchecked", "eight-days"]) expect(await translation(id)).toBeNull();
-    expect(await langOrder()).toEqual(["uk 1 old", "uk 2 new", "ru 1 old", "ru 2 new"]);
+    // Released oldest English first (eight-days at once: shown nowhere, as it is older than the feed).
+    expect(await releasedOrder()).toEqual(["eight-days", "old", "new"]);
     // Each language reads like the English feed.
-    expect(await ids("/articles?lang=uk")).toEqual(await ids("/articles"));
+    expect(await feeds("uk", "ru")).toEqual({ en: ["new", "old"], uk: ["new", "old"], ru: ["new", "old"] });
   });
 
   it.each([
@@ -231,6 +234,9 @@ describe("runTranslator", () => {
     expect(claim).toContain("SEARCH x USING COVERING INDEX article_translations_retry (lang=? AND next_attempt_at<?)");
     expect(claim).toContain("SEARCH r USING INTEGER PRIMARY KEY (rowid=?)");
     expect(claim).toContain("SEARCH a USING INDEX sqlite_autoindex_articles_1 (id=?)");
+    // Articles waiting for release, through their partial index, each language's row by primary key.
+    expect(claim).toMatch(/SCAN u USING (COVERING )?INDEX articles_unreleased/);
+    expect(claim).toContain("SEARCH x USING INDEX sqlite_autoindex_article_translations_1 (article_id=? AND lang=?)");
     expect(claim).not.toMatch(/SCAN (r|x|t|a)\b/);
     expect(await plan(RELEASE_STALE, minutesAgo(0), minutesAgo(CLAIM_MINUTES))).toMatch(/SEARCH article_translations USING (COVERING )?INDEX article_translations_claims \(claimed_at<\?\)/);
     expect(await plan(FREE_CLAIM, "a1", "uk", minutesAgo(0), minutesAgo(0))).toMatch(/SEARCH article_translations USING INDEX sqlite_autoindex_article_translations_1 \(article_id=\? AND lang=\?\)/);
@@ -338,8 +344,8 @@ describe("runTranslator", () => {
     expect(await translation("a1", "uk")).toMatchObject({ attempts: 1 });
   });
 
-  it("numbers each language in the order its translations are stored, so a late one lands on top", async () => {
-    // Inserted oldest first, so the English feed has the same order by publication and by arrival (#38).
+  it("releases an article in every language at once, only when each enabled language has published it", async () => {
+    // Inserted oldest first, as the summarizer would write them.
     await insertNews("a3", hoursAgo(3));
     await insertNews("a2", hoursAgo(2));
     await insertNews("a1", hoursAgo(1));
@@ -351,18 +357,18 @@ describe("runTranslator", () => {
     for (let i = 0; i < 3; i++) first.push(...(await runTranslator(testEnv(), { maxTranslations: 6, fetch: groq.fetch })));
 
     expect(outcome(first)).toEqual([`a3 uk ${QWEN}`, `a3 ru ${GPT_OSS}`, "a2 uk failed", `a2 ru ${GPT_OSS}`, `a1 uk ${QWEN}`, `a1 ru ${GPT_OSS}`]);
-    // Until a2 has its Ukrainian, it is not in the Ukrainian feed at all.
-    expect(await ids("/articles?lang=uk")).toEqual(["a1", "a3"]);
-    expect(await ids("/articles?lang=ru")).toEqual(["a1", "a2", "a3"]);
+    // a2 has its Russian, but waits for its Ukrainian: in no feed, English included, and no page of its own.
+    expect(await feeds("uk", "ru")).toEqual({ en: ["a1", "a3"], uk: ["a1", "a3"], ru: ["a1", "a3"] });
+    for (const path of ["/articles/a2", "/articles/a2?lang=ru", "/articles/a2?lang=uk"]) expect((await get(path)).status, path).toBe(404);
+    expect(await env.DB.prepare("SELECT feed_seq FROM articles WHERE id = 'a2'").first("feed_seq")).toBeNull();
 
     const second = await runTranslator(testEnv(), { maxTranslations: 6, fetch: groq.fetch, now: inMinutes(AFTER_BACKOFF) });
 
     expect(outcome(second)).toEqual([`a2 uk ${QWEN}`]);
-    expect(await langOrder()).toEqual(["uk 1 a3", "uk 2 a1", "uk 3 a2", "ru 1 a3", "ru 2 a2", "ru 3 a1"]);
-    // Translated last, so on top of the Ukrainian feed, not between articles already read.
-    expect(await ids("/articles?lang=uk")).toEqual(["a2", "a1", "a3"]);
-    // The English feed is unchanged: newest published first.
-    expect(await ids("/articles")).toEqual(["a1", "a2", "a3"]);
+    // Released last, with one feed_seq: on top of every feed at once, not between articles already read.
+    expect(await feeds("uk", "ru")).toEqual({ en: ["a2", "a1", "a3"], uk: ["a2", "a1", "a3"], ru: ["a2", "a1", "a3"] });
+    const seq = await env.DB.prepare("SELECT feed_seq FROM articles WHERE id = 'a2'").first<number>("feed_seq");
+    for (const lang of ["", "?lang=uk", "?lang=ru"]) expect((await get(`/articles/a2${lang}`)).body).toMatchObject({ feedSeq: seq });
   });
 
   it("takes its queue oldest first, so a backlog comes out in each language in the English order", async () => {
@@ -392,8 +398,9 @@ describe("runTranslator", () => {
     for (let i = 0; i < 40; i++) await insertNews(`new-${i}`, hoursAgo(50 - i));
     await translateAll();
     const idleAt80 = await rowsRead(idleRun);
-    // A run with nothing to do reads a few dozen rows (54 here: 4 languages queued, 2 claimed), not ~5 per article in the 7-day window.
-    expect(idleAt40).toBeLessThanOrEqual(60);
+    // A run with nothing to do reads a few dozen rows (79 here: 4 languages queued, 2 claimed, the switches
+    // and the release), not ~5 per article in the 7-day window.
+    expect(idleAt40).toBeLessThanOrEqual(85);
     expect(idleAt80).toBe(idleAt40);
 
     // One new article: what it needs, still not the window.
@@ -401,8 +408,9 @@ describe("runTranslator", () => {
     const busy = await rowsRead(async () => {
       expect(outcome(await idleRun())).toEqual([`latest uk ${QWEN}`, `latest ru ${GPT_OSS}`]);
     });
-    // 124 here, with the state log and the counts the triggers keep, and the claim's order per language.
-    expect(busy).toBeLessThanOrEqual(130);
+    // 193 here, with the state log and the counts the triggers keep, the claim's order per language
+    // (articles waiting for release first), the switches and the release.
+    expect(busy).toBeLessThanOrEqual(200);
   });
 
   it("does not store a translation of an English that changed meanwhile, and keeps the new English queued", async () => {
@@ -500,11 +508,9 @@ describe("runTranslator", () => {
       lang_seq: old?.lang_seq,
       translated_at: old?.translated_at,
     });
-    expect((await get("/articles/a1?lang=uk")).body).toMatchObject({
-      shortSummary: revised,
-      feedSeq: 1,
-      addedAt: old?.translated_at,
-    });
+    // Its place in the feed is the English one, kept.
+    const english = (await get("/articles/a1")).body as { feedSeq: number; addedAt: string };
+    expect((await get("/articles/a1?lang=uk")).body).toMatchObject({ shortSummary: revised, feedSeq: english.feedSeq, addedAt: english.addedAt });
     expect(await runTranslator(testEnv(), { maxTranslations: 6, fetch: fakeGroq().fetch })).toEqual([]);
   });
 
@@ -624,8 +630,8 @@ describe("runTranslator", () => {
     expect(overlapping).toEqual(["a3 uk", "a3 ru"]);
     // Two articles in two languages, four requests: none translated twice.
     expect(groq.requests).toHaveLength(4);
-    // The overlapping run stored first, so its article got the first numbers.
-    expect(await langOrder()).toEqual(["uk 1 a3", "uk 2 a4", "ru 1 a3", "ru 2 a4"]);
+    // Each run released what it translated: the overlapping run first.
+    expect(await releasedOrder()).toEqual(["a3", "a4"]);
   });
 
   it("takes a translation again when its claim is from a run that was cut off", async () => {
@@ -651,8 +657,9 @@ describe("runTranslator", () => {
     ]);
   });
 
-  it("by default uses Groq for Ukrainian (Qwen first) and Russian (GPT-OSS first), Z.ai for Spanish and German", () => {
-    expect(TRANSLATORS).toEqual({ uk: [QWEN, GPT_OSS], ru: [GPT_OSS, QWEN], es: [GLM_45, GLM_47], de: [GLM_45, GLM_47] });
+  it("by default uses Groq for Ukrainian (Qwen first), Russian (GPT-OSS first) and Spanish (gpt-oss-20b first), Z.ai for German", () => {
+    // Z.ai answers requests from Cloudflare Workers with an HTTP 405 block page (15 Oct), so German is off by default.
+    expect(TRANSLATORS).toEqual({ uk: [QWEN, GPT_OSS], ru: [GPT_OSS, QWEN], es: [GPT_OSS_20B, GPT_OSS], de: [GLM_45, GLM_47] });
   });
 
   it("can use Workers AI when it is put in TRANSLATORS", async () => {
@@ -811,14 +818,14 @@ describe("GET /articles with lang", () => {
   const finished = (id: string, lang: string, langSeq: number, headline: string) =>
     env.DB.prepare(
       `INSERT INTO article_translations (article_id, lang, headline, short_summary, summary, model, source_summarized_at,
-                                         lang_seq, translated_at, published_at, state)
-       VALUES (?1, ?2, ?3, 'Коротко.', 'Підсумок.', ?4, ?5, ?6, ?7, ?7, 'published')`,
+                                         attempts_source, lang_seq, translated_at, published_at, state)
+       VALUES (?1, ?2, ?3, 'Коротко.', 'Підсумок.', ?4, ?5, ?5, ?6, ?7, ?7, 'published')`,
     ).bind(id, lang, headline, QWEN, hoursAgo(1), langSeq, minutesAgo(10 - langSeq));
 
   beforeEach(async () => {
-    // Inserted oldest first, so the English feed has the same order by publication and by arrival (#38).
-    await insertNews("english-only", hoursAgo(2));
-    await insertNews("translated", hoursAgo(1));
+    // Released oldest first, as the translator releases them.
+    await insertNews("english-only", hoursAgo(2), 1, { released: true });
+    await insertNews("translated", hoursAgo(1), 1, { released: true });
     await env.DB.batch([
       finished("translated", "uk", 1, "Заголовок"),
       finished("translated", "ru", 1, "Заголовок по-русски"),
@@ -828,6 +835,7 @@ describe("GET /articles with lang", () => {
   });
 
   it("returns only articles translated into that language, never English ones, in items and top", async () => {
+    const english = (await get("/articles")).body as ArticlesPage;
     const { status, body } = await get("/articles?lang=uk");
     expect(status).toBe(200);
     const page = body as ArticlesPage;
@@ -839,11 +847,13 @@ describe("GET /articles with lang", () => {
         shortSummary: "Коротко.",
         summary: "Підсумок.",
         lang: "uk",
-        feedSeq: 1,
-        addedAt: expect.stringMatching(/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/),
+        // The English feed's place and time: every language has the same feed.
+        feedSeq: english.items[0].feedSeq,
+        addedAt: english.items[0].addedAt,
       });
     }
     expect(page.nextCursor).toBeNull();
+    expect(page.translationsDelayed).toBe(false);
   });
 
   it("returns the Russian translation with lang=ru", async () => {
@@ -852,7 +862,7 @@ describe("GET /articles with lang", () => {
   });
 
   it("returns one article translated, or 404 when it is not translated into that language", async () => {
-    expect((await get("/articles/translated?lang=uk")).body).toMatchObject({ headline: "Заголовок", lang: "uk", feedSeq: 1 });
+    expect((await get("/articles/translated?lang=uk")).body).toMatchObject({ headline: "Заголовок", lang: "uk" });
     expect((await get("/articles/translated?lang=ru")).body).toMatchObject({ headline: "Заголовок по-русски", lang: "ru" });
     for (const path of ["/articles/english-only?lang=uk", "/articles/english-only?lang=ru", "/articles/nope?lang=uk"]) {
       expect(await get(path), path).toEqual({ status: 404, body: { error: "Not found" } });
@@ -869,68 +879,96 @@ describe("GET /articles with lang", () => {
       ["english-only", ENGLISH.headline],
     ]);
     for (const article of [...page.items, ...page.top]) expect(article).not.toHaveProperty("lang");
+    expect(page).not.toHaveProperty("translationsDelayed");
     expect(await get("/articles/translated?lang=en")).toEqual(await get("/articles/translated"));
     expect((await get("/articles/translated")).body).toMatchObject({ headline: ENGLISH.headline });
   });
 
-  it("leaves out a translated article that is hidden or older than 7 days", async () => {
-    await insertNews("old", hoursAgo(8 * 24));
+  it("leaves out a translated article that is hidden, older than 7 days, or not released yet", async () => {
+    await insertNews("old", hoursAgo(8 * 24), 1, { released: true });
+    await insertNews("waiting", hoursAgo(0.5));
     await env.DB.batch([
       finished("old", "uk", 2, "Старе"),
+      finished("waiting", "uk", 3, "Чекає"),
       env.DB.prepare("UPDATE articles SET is_news = 0 WHERE id = 'translated'"),
     ]);
     expect(await ids("/articles?lang=uk")).toEqual([]);
-    expect((await get("/articles/translated?lang=uk")).status).toBe(404);
+    for (const id of ["translated", "waiting"]) expect((await get(`/articles/${id}?lang=uk`)).status).toBe(404);
   });
 
-  it("pages a language by its own feedSeq with cursor, and after= returns what was translated later", async () => {
-    // Published newest first a, b, c, d; translated into Ukrainian in the order c, a, d, b.
-    for (const [i, id] of ["a", "b", "c", "d"].entries()) await insertNews(id, hoursAgo(3 + i));
+  it("pages a language in the English order, with the English feedSeq, cursors and after=", async () => {
+    // Released a, b, c, d (in that order, so d is newest in the feed); translated into Ukrainian in another order.
+    for (const [i, id] of ["a", "b", "c", "d"].entries()) await insertNews(id, hoursAgo(6 - i), 1, { released: true });
     await env.DB.batch([finished("c", "uk", 2, "В"), finished("a", "uk", 3, "А"), finished("d", "uk", 4, "Г"), finished("b", "uk", 5, "Б")]);
+    const seq = Object.fromEntries(((await get("/articles?limit=50")).body as ArticlesPage).items.map((a) => [a.id, a.feedSeq]));
 
     const first = (await get("/articles?lang=uk&limit=2")).body as ArticlesPage;
-    expect(first.items.map((a) => [a.id, a.feedSeq])).toEqual([["b", 5], ["d", 4]]);
+    expect(first.items.map((a) => [a.id, a.feedSeq])).toEqual([["d", seq.d], ["c", seq.c]]);
     expect(first.top.length).toBeGreaterThan(0);
     const second = (await get(`/articles?lang=uk&limit=2&cursor=${first.nextCursor}`)).body as ArticlesPage;
-    expect(second.items.map((a) => [a.id, a.feedSeq])).toEqual([["a", 3], ["c", 2]]);
+    expect(second.items.map((a) => a.id)).toEqual(["b", "a"]);
     expect(second.top).toEqual([]);
-    const third = (await get(`/articles?lang=uk&limit=2&cursor=${second.nextCursor}`)).body as ArticlesPage;
+    const thirdResponse = await get(`/articles?lang=uk&limit=2&cursor=${second.nextCursor}`);
+    expect(thirdResponse.status).toBe(200);
+    const third = thirdResponse.body as ArticlesPage;
     expect(third.items.map((a) => a.id)).toEqual(["translated"]);
     expect(third.nextCursor).toBeNull();
+    // Without english-only, the Ukrainian feed is the English one.
+    expect(await ids("/articles?lang=uk&limit=50")).toEqual((await ids("/articles?limit=50")).filter((id) => id !== "english-only"));
 
-    // "N new" since the reader saw feedSeq 3: b and d, although both were published before a.
-    const after = (await get("/articles?lang=uk&after=3")).body as ArticlesPage;
-    expect(after.items.map((a) => a.id)).toEqual(["b", "d"]);
-    expect(after.top).toEqual([]);
+    // "N new" since the reader saw b: c and d, in every language.
+    expect(await ids(`/articles?lang=uk&after=${seq.b}`)).toEqual(["d", "c"]);
+    expect(await ids(`/articles?after=${seq.b}`)).toEqual(["d", "c"]);
 
-    const since = (await get(`/articles?lang=uk&since=${encodeURIComponent(hoursAgo(4.5))}`)).body as ArticlesPage;
-    expect(since.items.map((a) => a.id)).toEqual(["b", "a", "translated"]);
-
-    // A cursor belongs to its own feed.
-    const english = (await get("/articles?limit=1")).body as ArticlesPage;
-    const ruFirst = (await get("/articles?lang=ru&limit=1")).body as ArticlesPage;
-    expect(ruFirst.nextCursor).toBeNull();
-    for (const path of [
-      `/articles?lang=uk&cursor=${english.nextCursor}`,
-      `/articles?lang=ru&cursor=${first.nextCursor}`,
-      `/articles?cursor=${first.nextCursor}`,
-    ]) {
-      expect(await get(path), path).toEqual({ status: 400, body: { error: "cursor is not valid" } });
-    }
+    // One cursor format for every feed: the same positions.
+    const english = (await get("/articles?limit=2")).body as ArticlesPage;
+    expect(await ids(`/articles?lang=uk&limit=2&cursor=${english.nextCursor}`)).toEqual(["b", "a"]);
+    expect(await ids(`/articles?limit=2&cursor=${first.nextCursor}`)).toEqual(["b", "a"]);
+    // A cursor of the preview builds' own language order (lang_seq) is refused.
+    const oldCursor = btoa(JSON.stringify(["uk", 3])).replace(/=+$/, "");
+    expect(await get(`/articles?lang=uk&cursor=${oldCursor}`)).toEqual({ status: 400, body: { error: "cursor is not valid" } });
   });
 
-  it("walks a language's page through its index, newest first, from the 7-day edge, even with table statistics", async () => {
+  it("gives a language the English top stories that are translated into it, in the same order", async () => {
+    await env.DB.batch([
+      env.DB.prepare("UPDATE articles SET importance = 5 WHERE id = 'english-only'"),
+      env.DB.prepare("UPDATE articles SET importance = 3 WHERE id = 'translated'"),
+    ]);
+    await insertNews("third", hoursAgo(3), 1, { released: true });
+    await env.DB.batch([finished("third", "uk", 2, "Третє"), env.DB.prepare("UPDATE articles SET importance = 2, source_id = 'fr-foreign-ministry' WHERE id = 'third'")]);
+    const english = ((await get("/articles")).body as ArticlesPage).top.map((a) => a.id);
+    expect(english).toEqual(["english-only", "translated", "third"]);
+    const uk = ((await get("/articles?lang=uk")).body as ArticlesPage).top;
+    expect(uk.map((a) => [a.id, a.headline])).toEqual([["translated", "Заголовок"], ["third", "Третє"]]);
+    expect(((await get("/articles?lang=ru")).body as ArticlesPage).top.map((a) => a.id)).toEqual(["translated"]);
+  });
+
+  it("says translationsDelayed while the language is paused (by hand or automatically) or off", async () => {
+    const delayed = async (lang: string) => ((await get(`/articles?lang=${lang}`)).body as ArticlesPage).translationsDelayed;
+    expect(await delayed("uk")).toBe(false);
+    await env.DB.prepare("UPDATE translation_langs SET paused = 1, paused_reason = 'auto: provider down since 2026-10-15T10:00:00Z' WHERE lang = 'uk'").run();
+    expect(await delayed("uk")).toBe(true);
+    // Also on later pages, and the articles already translated stay.
+    const page = (await get("/articles?lang=uk&after=0")).body as ArticlesPage;
+    expect(page).toMatchObject({ translationsDelayed: true });
+    expect(page.items.map((a) => a.id)).toEqual(["translated"]);
+    // German is off by default.
+    expect(await delayed("de")).toBe(true);
+    expect(await delayed("ru")).toBe(false);
+  });
+
+  it("walks a language's page through the feed's index, newest first, from the 7-day edge, even with table statistics", async () => {
     // Statistics of an empty table make the (is_news, published_at) index look cheaper.
     await env.DB.batch([env.DB.prepare("DELETE FROM article_translations"), env.DB.prepare("ANALYZE")]);
     const { results } = await env.DB.prepare(
-      `EXPLAIN QUERY PLAN SELECT a.id FROM article_translations t JOIN articles a ON a.id = t.article_id
-       JOIN sources s ON s.id = a.source_id WHERE ${LANG_PAGE_CONDITIONS.join(" AND ")} ORDER BY t.lang_seq DESC LIMIT 21`,
+      `EXPLAIN QUERY PLAN SELECT a.id ${FROM_TRANSLATED}
+       WHERE ${[...PAGE_CONDITIONS, ...TRANSLATED_CONDITIONS].join(" AND ")} ORDER BY a.feed_seq DESC LIMIT 21`,
     )
-      .bind("uk", "uk")
+      .bind("uk")
       .all<{ detail: string }>();
     const plan = results.map((r) => r.detail).join("; ");
-    expect(plan).toMatch(/^SEARCH t USING INDEX article_translations_lang_seq \(lang=\? AND lang_seq>\?\)/);
-    expect(plan).toContain("SEARCH b USING COVERING INDEX article_translations_lang_time (lang=? AND translated_at>?)");
+    expect(plan).toMatch(/^SEARCH a USING INDEX articles_feed_seq \(feed_seq>\?\)/);
+    expect(plan).toContain("SEARCH t USING INDEX sqlite_autoindex_article_translations_1 (article_id=? AND lang=?)");
     expect(plan).not.toContain("TEMP B-TREE");
   });
 

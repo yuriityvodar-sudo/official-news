@@ -10,9 +10,9 @@ export interface Env {
    */
   GROQ_API_KEY?: string;
   /**
-   * Z.ai API key, for the Spanish and German translations (#46). A Worker
+   * Z.ai API key, for the German translations (#46; German is off for now: Z.ai blocks Cloudflare Workers). A Worker
    * secret (`npx wrangler secret put ZAI_API_KEY`; locally in `.dev.vars`).
-   * Without it Spanish and German wait in the queue.
+   * Without it German waits in the queue.
    */
   ZAI_API_KEY?: string;
 }

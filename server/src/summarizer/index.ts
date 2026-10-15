@@ -59,17 +59,11 @@ function workersAi(env: Env): Summarize {
 }
 
 function store(env: Env, id: string, s: Summary, now: string): D1PreparedStatement {
+  // No feed_seq here: an article enters the feed when the translator releases it, in
+  // English and every language at once (release together, #46: translator/release.ts).
   return env.DB.prepare(
-    // feed_seq and added_at: the article's place in the feed and when it got it, given in
-    // this same statement when it becomes visible and never changed afterwards. D1 runs one
-    // statement at a time, so MAX + 1 cannot be handed out twice (a unique index also
-    // guards it). `WHERE feed_seq IS NOT NULL` lets SQLite read MAX from that partial
-    // index (1 row) instead of scanning the table. Inside an UPDATE the columns still hold
-    // their old values, so `feed_seq IS NULL` means "not numbered before this statement".
     `UPDATE articles SET headline = ?, short_summary = ?, summary = ?, decision_type = ?, topics = ?, tags = ?,
-            importance = ?, is_news = ?, summarized_at = ?, model = ?,
-            feed_seq = CASE WHEN ? = 1 THEN COALESCE(feed_seq, (SELECT COALESCE(MAX(feed_seq), 0) + 1 FROM articles WHERE feed_seq IS NOT NULL)) ELSE feed_seq END,
-            added_at = CASE WHEN ? = 1 AND feed_seq IS NULL THEN ? ELSE added_at END
+            importance = ?, is_news = ?, summarized_at = ?, model = ?
      WHERE id = ?`,
   ).bind(
     s.headline,
@@ -82,11 +76,6 @@ function store(env: Env, id: string, s: Summary, now: string): D1PreparedStateme
     s.isNews ? 1 : 0,
     now,
     MODEL,
-    // The new is_news, for feed_seq and added_at: inside an UPDATE, the column itself
-    // still holds the old value.
-    s.isNews ? 1 : 0,
-    s.isNews ? 1 : 0,
-    now,
     id,
   );
 }
@@ -94,7 +83,10 @@ function store(env: Env, id: string, s: Summary, now: string): D1PreparedStateme
 /**
  * Item 7. Summarizes up to `maxArticles` articles that have no summary yet,
  * newest first: one AI call each, writing the fields in docs/style-guide.md
- * and `is_news`, which decides whether the article shows in the feed.
+ * and `is_news`, which decides whether the article goes to the feed.
+ *
+ * An official decision is not shown yet: the translator releases it into the
+ * feed (feed_seq) once it is translated into every enabled language (#46).
  *
  * An unusable answer counts as an attempt; after MAX_ATTEMPTS the article
  * stays hidden. An error from Workers AI itself (an outage, or the daily free
@@ -109,17 +101,6 @@ export async function runSummarizer(
   summarize: Summarize = workersAi(env),
 ): Promise<SummaryResult[]> {
   const now = new Date();
-  // A visible article without a number (made visible by an older Worker during a deploy)
-  // gets one now, and added_at = now, as it enters the feed now. One row per statement:
-  // MAX + 1 is read once per statement. Usually nothing, found through a partial index.
-  await env.DB.prepare(
-    `UPDATE articles
-     SET feed_seq = (SELECT COALESCE(MAX(feed_seq), 0) + 1 FROM articles WHERE feed_seq IS NOT NULL), added_at = ?1
-     WHERE id = (SELECT id FROM articles WHERE is_news = 1 AND feed_seq IS NULL ORDER BY id LIMIT 1)`,
-  )
-    .bind(toStoredTime(now))
-    .run();
-
   // Claim before calling the model, in one statement (as the fetcher claims its sources).
   const { results: claimed } = await env.DB.prepare(
     `UPDATE articles SET summary_claimed_at = ?1

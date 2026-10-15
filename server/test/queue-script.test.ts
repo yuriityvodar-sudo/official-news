@@ -5,6 +5,7 @@ import * as sql from "../scripts/queue-sql.mjs";
 import { LANGS, NOT_STORED, STATES, TRANSLATIONS_PER_RUN, runTranslator } from "../src/translator";
 import {
   GLM_45,
+  GPT_OSS_20B,
   QWEN,
   TRANSLATED,
   events,
@@ -16,6 +17,7 @@ import {
   inMinutes,
   insertNews,
   minutesAgo,
+  only,
   outcome,
   testEnv,
   translation,
@@ -30,6 +32,8 @@ const langRow = (lang: string) => env.DB.prepare("SELECT enabled, paused FROM tr
 
 beforeEach(async () => {
   await hideSeed();
+  // All four languages, so every command meets Groq and Z.ai (German is off by default).
+  await only("uk", "ru", "es", "de");
 });
 
 afterEach(() => {
@@ -61,7 +65,7 @@ describe("scripts/queue.mjs", () => {
     expect(changes(await exec(sql.requeue("a1", "es")))).toBe(1);
     expect(await translation("a1", "es")).toMatchObject({ state: "updating", attempts: 0, last_error: "requeued by hand" });
     expect(changes(await exec(sql.requeue("nope", "es")))).toBe(0);
-    expect(outcome(await run())).toEqual([`a1 es ${GLM_45}`]);
+    expect(outcome(await run())).toEqual([`a1 es ${GPT_OSS_20B}`]);
     expect((await events("a1", "es")).map((e) => `${e.state} ${e.detail ?? ""}`.trim())).toContain("updating requeued by hand");
   });
 
@@ -131,6 +135,25 @@ describe("scripts/queue.mjs", () => {
     expect((await run()).filter((r) => r.lang === "de")).toEqual([]);
     await exec(sql.resume("de"));
     expect(outcome(await run())).toEqual([`a1 de ${GLM_45}`]);
+  });
+
+  it("pause is manual and stays; resume also ends an automatic pause, with a fresh start", async () => {
+    const reason = () =>
+      env.DB.prepare("SELECT paused, paused_reason, down_since FROM translation_langs WHERE lang = 'es'").first();
+    const [paused] = await exec(sql.pause("es"));
+    expect(paused.results).toEqual([expect.objectContaining({ lang: "es", paused: 1, paused_reason: "manual" })]);
+    const [status] = await exec(sql.status());
+    expect(status.results).toContainEqual(expect.objectContaining({ lang: "es", paused: 1, paused_reason: "manual", down_since: null }));
+    // A provider's answer ends only an automatic pause: a manual one is never probed.
+    await insertNews("a1", hoursAgo(1));
+    expect((await run()).filter((r) => r.lang === "es")).toEqual([]);
+    expect(await reason()).toEqual({ paused: 1, paused_reason: "manual", down_since: null });
+
+    await env.DB.prepare(
+      "UPDATE translation_langs SET paused_reason = 'auto: provider down since 2026-10-15T08:00:00Z', down_since = '2026-10-15T08:00:00Z' WHERE lang = 'es'",
+    ).run();
+    await exec(sql.resume("es"));
+    expect(await reason()).toEqual({ paused: 0, paused_reason: null, down_since: null });
   });
 
   it("backlog queues only what is not queued yet for its English, within the feed's 7 days", async () => {

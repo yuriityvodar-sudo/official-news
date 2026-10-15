@@ -4,6 +4,8 @@ import { LANGS, LANGUAGES, type Lang } from "./languages";
 import { type Texts, systemPrompt, toTranslation, userMessage } from "./prompt";
 import { type Provider, ProviderDown, UnusableAnswer, providerFor } from "./providers";
 import {
+  AUTO_PAUSE,
+  AUTO_PAUSE_HOURS,
   CLAIM_MINUTES,
   CLAIM_WINDOW,
   CLAIMS_PER_LANGUAGE,
@@ -11,6 +13,8 @@ import {
   ENQUEUE,
   EVENT_DAYS,
   FREE_CLAIM,
+  MARK_DOWN,
+  MARK_UP,
   MAX_ATTEMPTS,
   OUTAGE,
   PRUNE_EVENTS,
@@ -21,15 +25,22 @@ import {
   CLAIM,
   nextAttemptAt,
 } from "./queue";
+import { releaseReady } from "./release";
 
 export { LANGS, LANGUAGES, type Lang, isLang } from "./languages";
+export { RELEASE, RELEASES_PER_BATCH, releaseReady, releaseStatus } from "./release";
 export {
+  AUTO_PAUSE,
+  AUTO_PAUSE_HOURS,
+  AUTO_PAUSED,
   CLAIM_MINUTES,
   CLAIM_WINDOW,
   CLAIMS_PER_LANGUAGE,
   COUNT_ATTEMPT,
   ENQUEUE,
   FREE_CLAIM,
+  MARK_DOWN,
+  MARK_UP,
   MAX_ATTEMPTS,
   OUTAGE,
   RELEASE_STALE,
@@ -44,14 +55,17 @@ export {
  * editing its line. Each Groq model has its own free limits, so the two Groq
  * models back each other up, and so do the two Z.ai models. Groq needs the
  * Worker secret GROQ_API_KEY, Z.ai ZAI_API_KEY; without its key a language
- * waits in the queue. `workers-ai:<model>` also works here (for example
+ * waits in the queue (and is paused automatically after AUTO_PAUSE_HOURS).
+ * Spanish is on Groq's gpt-oss-20b: Z.ai answers requests from Cloudflare
+ * Workers with an HTTP 405 block page (seen 15 Oct), so German, still on Z.ai,
+ * is off (translation_langs, migration 0010) until another provider is chosen. `workers-ai:<model>` also works here (for example
  * `workers-ai:@cf/google/gemma-4-26b-a4b-it`), but is left out for now so the
  * Workers AI Neurons stay for the summaries (#46).
  */
 export const TRANSLATORS: Record<Lang, readonly string[]> = {
   uk: ["groq:qwen/qwen3.8-27b", "groq:openai/gpt-oss-120b"],
   ru: ["groq:openai/gpt-oss-120b", "groq:qwen/qwen3.8-27b"],
-  es: ["zai:glm-4.5-flash", "zai:glm-4.7-flash"],
+  es: ["groq:openai/gpt-oss-20b", "groq:openai/gpt-oss-120b"],
   de: ["zai:glm-4.5-flash", "zai:glm-4.7-flash"],
 };
 
@@ -69,13 +83,19 @@ export const TRANSLATIONS_PER_RUN = LANGS.length;
 const FEED_DAYS = 7;
 const DAY_MS = 24 * 3_600_000;
 
-/** The next number of a language's feed: its last entry in the index on (lang, lang_seq), plus 1. */
+/**
+ * The order in which a language's first translations were stored: its last
+ * entry in the index on (lang, lang_seq), plus 1. No longer the order of the
+ * language's feed (that is the article's feed_seq, release together); kept
+ * because the all-or-nothing CHECK of migration 0008 reads lang_seq as "has a
+ * translation".
+ */
 export const NEXT_LANG_SEQ = `SELECT COALESCE(MAX(n.lang_seq), 0) + 1 FROM article_translations n
                               WHERE n.lang = ?7 AND n.lang_seq IS NOT NULL`;
 
 /**
- * SQL for the API: whether translation `t` is shown, besides having a text
- * (`lang_seq`). An older translation is shown while the new English waits or
+ * SQL for the API: whether translation `t` is shown, besides having its
+ * texts. An older translation is shown while the new English waits or
  * is being translated (`updating`, `translating`, `retrying`), and no longer
  * once the new English has used its tries (`failed`): it no longer matches the
  * English, and nothing will replace it. A text of the English it was asked for
@@ -129,28 +149,34 @@ interface Taken {
  * the feed into each language in LANGS, one article and language per AI call,
  * and stores them in `article_translations`. Consistency first, speed second:
  * an article shows in a language only once all three fields are translated and
- * checked (prompt.ts), and each language numbers its articles in the order
- * their translations are published (`lang_seq`), so a late one lands on top of
- * that language's feed.
+ * checked (prompt.ts), and the feed is the same in every language (release
+ * together, release.ts): an article enters it, with its feed_seq, in English
+ * and every language at once, once each enabled language that is not paused
+ * has published it or failed it MAX_ATTEMPTS times.
  *
  * The queue (queue.ts) has an explicit state per article and language. Each
  * run, in one batch before any AI call: drops the state log older than 30
- * days, sends claims that ran out back to `queued`, queues the news whose
- * English is new or changed for every enabled language (ENQUEUE), and claims
- * one translation in each language that is enabled, not paused and has a
- * provider, the oldest English waiting (CLAIM), so no language waits for
- * another's backlog or outage. So nothing is translated twice, and a run with
- * nothing to do reads a few rows.
+ * days, sends claims that ran out back to `queued`, marks a language without a
+ * provider key as down, queues the news whose English is new or changed for
+ * every enabled language (ENQUEUE), and claims one translation in each
+ * language that is enabled, not paused by hand and has a provider (CLAIM):
+ * articles still waiting for release first, then the oldest English, so no
+ * language waits for another's backlog or outage. So nothing is translated
+ * twice, and a run with nothing to do reads a few rows.
  *
  * Each language tries its providers in TRANSLATORS order, one request at a
  * time. One that is down, rate limited or out of quota is skipped for the rest
  * of the run; when none answers, the translation is `retrying` with a growing
- * wait (2, 4, 8 … 60 minutes), no attempt counted. An unusable answer counts an
- * attempt: `retrying` after 10, then 20 minutes, `failed` after MAX_ATTEMPTS,
- * with the reason. When the English is summarized again, the translation is
- * `updating`: made again, with the old one shown until the new one is
- * published, or until the new English has used its tries.
+ * wait (2, 4, 8 … 60 minutes), no attempt counted, and the language is down
+ * from then on: after AUTO_PAUSE_HOURS it is paused automatically, so the
+ * release stops waiting for it, and it is still probed with one claim a run;
+ * its first answer unpauses it, and it catches up at the articles' feed_seq.
+ * An unusable answer counts an attempt: `retrying` after 10, then 20 minutes,
+ * `failed` after MAX_ATTEMPTS, with the reason. When the English is summarized
+ * again, the translation is `updating`: made again, with the old one shown
+ * until the new one is published, or until the new English has used its tries.
  *
+ * Every run ends with the release (also a run with nothing to translate).
  * Its own cron trigger (CRONS in ../index.ts) runs it every even minute with
  * TRANSLATIONS_PER_RUN.
  */
@@ -164,7 +190,7 @@ export async function runTranslator(env: Env, options: TranslatorOptions): Promi
     if (!byName.has(spec)) byName.set(spec, providerFor(spec, env, options.fetch ?? globalThis.fetch));
   }
   const providersOf = (lang: Lang) => orders[lang].map((spec) => byName.get(spec)).filter((p): p is Provider => !!p);
-  // A language without a provider (its key is not set) is queued but waits.
+  // A language without a provider (its key is not set) is queued but waits, and counts as down.
   const ready = LANGS.filter((lang) => providersOf(lang).length);
   const waiting = LANGS.filter((lang) => !ready.includes(lang));
 
@@ -177,14 +203,16 @@ export async function runTranslator(env: Env, options: TranslatorOptions): Promi
   const batch = await env.DB.batch<Taken>([
     env.DB.prepare(PRUNE_EVENTS).bind(ago(EVENT_DAYS * DAY_MS)),
     env.DB.prepare(RELEASE_STALE).bind(claimedAt, ago(CLAIM_MINUTES * 60_000)),
+    // A language without a provider key is down too (always the 3rd statement; it changes nothing when none is missing).
+    env.DB.prepare(MARK_DOWN).bind(claimedAt, JSON.stringify(waiting)),
     ...LANGS.map((lang) => env.DB.prepare(ENQUEUE).bind(lang, claimedAt, writtenFrom, feedStart)),
     ...(ready.length
       ? [env.DB.prepare(CLAIM).bind(claimedAt, feedStart, options.maxTranslations, JSON.stringify(ready), CLAIM_WINDOW, CLAIMS_PER_LANGUAGE)]
       : []),
   ]);
   // Counted from the rows returned: D1's `changes` also counts what the triggers write.
-  const released = batch[1].results.length;
-  const queued = batch.slice(2, 2 + LANGS.length).reduce((n, r) => n + r.results.length, 0);
+  const claimsRanOut = batch[1].results.length;
+  const queued = batch.slice(3, 3 + LANGS.length).reduce((n, r) => n + r.results.length, 0);
   const taken = ready.length ? (batch.at(-1)?.results ?? []) : [];
   const skipped = taken.filter((t) => t.state === "skipped").map((t) => `${t.article_id}:${t.lang}`);
   const claimed = taken
@@ -197,23 +225,63 @@ export async function runTranslator(env: Env, options: TranslatorOptions): Promi
     );
   const queue = {
     ...(queued ? { queued } : {}),
-    ...(released ? { released } : {}),
+    ...(claimsRanOut ? { claimsRanOut } : {}),
     ...(skipped.length ? { skipped } : {}),
     // Which languages have no provider key, so they wait (the names only).
     ...(waiting.length ? { waiting } : {}),
   };
-  if (!claimed.length) {
-    if (!ready.length) {
-      console.log(JSON.stringify({ message: "translator skipped", reason: "no provider available (GROQ_API_KEY, ZAI_API_KEY)", ...queue }));
-    } else if (queued || released || skipped.length) {
-      console.log(JSON.stringify({ message: "translator queue", ...queue }));
-    }
-    return [];
+
+  const results: TranslationResult[] = [];
+  /** Providers that failed in this run, with why; they are not asked again until the next run. */
+  const down: Record<string, string> = {};
+  if (claimed.length) {
+    // Logged before any model call, so a run stopped by a limit still shows what it took.
+    console.log(JSON.stringify({ message: "translator start", claimed: claimed.map((c) => `${c.article_id}:${c.lang}`), ...queue }));
+    results.push(...(await translate(env, claimed, providersOf, down, now, claimedAt)));
   }
 
-  // Logged before any model call, so a run stopped by a limit still shows what it took.
-  console.log(JSON.stringify({ message: "translator start", claimed: claimed.map((c) => `${c.article_id}:${c.lang}`), ...queue }));
+  // Which languages' providers answered (a translation, or an unusable answer) and which
+  // answered nothing; then the automatic pauses, then the release, in one batch.
+  const answered = [...new Set(results.filter((r) => r.provider).map((r) => r.lang))];
+  const unanswered = [...new Set(results.filter((r) => !r.provider && r.error === NO_ANSWER).map((r) => r.lang))].filter(
+    (lang) => !answered.includes(lang),
+  );
+  const switches = await env.DB.batch<{ lang: Lang; paused?: number }>([
+    ...(answered.length ? [env.DB.prepare(MARK_UP).bind(claimedAt, JSON.stringify(answered))] : []),
+    ...(unanswered.length ? [env.DB.prepare(MARK_DOWN).bind(claimedAt, JSON.stringify(unanswered))] : []),
+    env.DB.prepare(AUTO_PAUSE).bind(claimedAt, ago(AUTO_PAUSE_HOURS * 3_600_000)),
+  ]);
+  const resumed = answered.length ? switches[0].results.filter((r) => r.paused === 0).map((r) => r.lang) : [];
+  const autoPaused = (switches.at(-1)?.results ?? []).map((r) => r.lang);
+  const released = await releaseReady(env, claimedAt, feedStart);
 
+  const after = {
+    ...(released.length ? { released } : {}),
+    ...(autoPaused.length ? { autoPaused } : {}),
+    ...(resumed.length ? { resumed } : {}),
+  };
+  if (claimed.length) {
+    console.log(JSON.stringify({ message: "translator run", results, ...(Object.keys(down).length ? { down } : {}), ...after }));
+  } else if (!ready.length) {
+    console.log(JSON.stringify({ message: "translator skipped", reason: "no provider available (GROQ_API_KEY, ZAI_API_KEY)", ...queue, ...after }));
+  } else if (Object.keys(queue).length || Object.keys(after).length) {
+    console.log(JSON.stringify({ message: "translator queue", ...queue, ...after }));
+  }
+  return results;
+}
+
+/** The error of a translation no provider answered: an outage, a rate limit or the quota. */
+const NO_ANSWER = "no translator answered";
+
+/** Translates the claimed rows one after another, and stores each outcome while the claim holds. */
+async function translate(
+  env: Env,
+  claimed: Taken[],
+  providersOf: (lang: Lang) => Provider[],
+  down: Record<string, string>,
+  now: Date,
+  claimedAt: string,
+): Promise<TranslationResult[]> {
   // The English as it is now. A claim whose English changed since it was queued is
   // given back: the next run queues the new English.
   const { results: articles } = await env.DB.prepare(
@@ -237,8 +305,6 @@ export async function runTranslator(env: Env, options: TranslatorOptions): Promi
   }
 
   const results: TranslationResult[] = [];
-  /** Providers that failed in this run, with why; they are not asked again until the next run. */
-  const down: Record<string, string> = {};
   for (const job of jobs) {
     const language = LANGUAGES[job.lang];
     const messages = [
@@ -274,7 +340,7 @@ export async function runTranslator(env: Env, options: TranslatorOptions): Promi
       await env.DB.prepare(OUTAGE)
         .bind(job.articleId, job.lang, claimedAt, nextAttemptAt(now, RETRY_OUTAGE_MINUTES, job.outageRetries), why, claimedAt)
         .run();
-      result = { articleId: job.articleId, lang: job.lang, ok: false, error: "no translator answered" };
+      result = { articleId: job.articleId, lang: job.lang, ok: false, error: NO_ANSWER };
     }
     results.push(result);
   }
@@ -283,8 +349,6 @@ export async function runTranslator(env: Env, options: TranslatorOptions): Promi
     // One statement per claim, by primary key, in one batch.
     await env.DB.batch(free.map((c) => env.DB.prepare(FREE_CLAIM).bind(c.articleId, c.lang, claimedAt, claimedAt)));
   }
-
-  console.log(JSON.stringify({ message: "translator run", results, ...(Object.keys(down).length ? { down } : {}) }));
   return results;
 }
 
@@ -294,10 +358,11 @@ export const NOT_STORED = "not stored: requeued, claimed again or a newer Englis
 /**
  * Publishes a checked translation: all three fields, the model and the English
  * version in one statement, which also makes it `published`. The first one of
- * an article in a language also gets that language's next number (`lang_seq`,
- * MAX + 1) and `translated_at`, in the same statement; a translation of a newer
- * English keeps both, so the article keeps its place in the feed. One row per
- * statement, and the unique index refuses a duplicate number. It is stored only
+ * an article in a language also gets `lang_seq` (MAX + 1, the order of first
+ * translations; not the feed's order, which is the article's feed_seq) and
+ * `translated_at`, in the same statement; a translation of a newer English
+ * keeps both. One row per statement, and the unique index refuses a duplicate
+ * number. It is stored only
  * while this run's claim (?8) holds, as COUNT_ATTEMPT, OUTAGE and FREE_CLAIM
  * are: not over a requeue made meanwhile (queue.mjs, after a prompt change),
  * nor once the claim ran out and another run may be translating it too; and

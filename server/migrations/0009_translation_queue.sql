@@ -1,6 +1,6 @@
 -- The explicit translation queue (#46): a state per article and language, a
--- switch per language, every state change logged with its time, and counts per
--- state that GET /queue reads without counting the table. 0007 created the
+-- switch per language (was 0008 until #55 took 0007), every state change logged with its time, and counts per
+-- state that GET /queue reads without counting the table. 0008 created the
 -- rows; this gives them their state. States (docs/contract.md):
 --   queued       waiting for its first translation
 --   updating     its English was summarized again; the old translation is shown until the new one is published
@@ -17,7 +17,7 @@ ALTER TABLE article_translations ADD COLUMN last_error TEXT;          -- why it 
 ALTER TABLE article_translations ADD COLUMN published_at TEXT;        -- when the text shown was published (translated_at: the first time)
 ALTER TABLE article_translations ADD COLUMN outage_retries INTEGER NOT NULL DEFAULT 0; -- tries no provider answered, for the backoff; no attempt
 
--- Rows written by 0007's translator (a preview database) get the state their columns describe.
+-- Rows written by 0008's translator (a preview database) get the state their columns describe.
 UPDATE article_translations SET
   state = CASE
     WHEN queued_at IS NOT NULL AND claimed_at IS NOT NULL AND attempts > 0 THEN 'retrying'
@@ -72,7 +72,7 @@ CREATE TABLE translation_counts (
 );
 INSERT INTO translation_counts (lang, state, n) SELECT lang, state, COUNT(*) FROM article_translations GROUP BY lang, state;
 INSERT INTO translation_events (article_id, lang, state, at, attempts, detail)
-  SELECT article_id, lang, state, state_at, attempts, 'migration 0008' FROM article_translations;
+  SELECT article_id, lang, state, state_at, attempts, 'migration 0009' FROM article_translations;
 
 -- The database itself logs and counts every state change, whoever makes it
 -- (the translator or queue.mjs). A new English for a row in the same state

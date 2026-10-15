@@ -4,8 +4,11 @@
 -- translation queue: a row exists from the moment the translator queues the
 -- article for that language; it is finished once lang_seq is set. The API shows
 -- an article in a language only when its row is finished (docs/contract.md).
--- This migration changes nothing in articles but one new index, so it works
--- with or without 0006 (#38, feed_seq), which is why it is 0007.
+-- This migration changes nothing in articles but one new index. It was 0007
+-- until #55 took that number (0007_source_health); a database that applied it
+-- as 0007 renames its row in d1_migrations (docs/setup.md, the preview database).
+-- Since 0010 (release together) lang_seq is no longer the order of a language's
+-- feed: every language follows articles.feed_seq.
 CREATE TABLE article_translations (
   article_id           TEXT NOT NULL REFERENCES articles (id),
   lang                 TEXT NOT NULL,     -- e.g. 'uk'; the list is LANGS in server/src/translator/index.ts

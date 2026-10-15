@@ -10,6 +10,12 @@
 //
 // The database logs every change of state with its time (`translation_events`)
 // and keeps the counts per state (`translation_counts`), both by trigger.
+//
+// Release together (Yurii, 15 Oct; release.ts): an article enters the feed, in
+// English and every language at once, only when each enabled language that is
+// not paused has published it or failed it 3 times. A language whose provider
+// has not answered for AUTO_PAUSE_HOURS is paused automatically, so the release
+// stops waiting for it, and unpaused on its first answer (migration 0010).
 import type { Env } from "../env";
 import { toStoredTime } from "../fetcher/text";
 import { LANGS, type Lang } from "./languages";
@@ -87,6 +93,48 @@ export const RELEASE_STALE = `UPDATE article_translations INDEXED BY article_tra
   WHERE state = 'translating' AND claimed_at < ?2
   RETURNING article_id`;
 
+/**
+ * A language whose providers have not answered for this long (an outage, the
+ * free quota used up, or no key) is paused automatically, so the release stops
+ * waiting for it (Yurii, 15 Oct). Unusable answers do not count: the provider
+ * answered.
+ */
+export const AUTO_PAUSE_HOURS = 2;
+
+/** SQL on `translation_langs`: paused automatically, not by hand (queue.mjs pauses with paused_reason 'manual'). */
+export const AUTO_PAUSED = "paused_reason LIKE 'auto:%'";
+
+/**
+ * Languages whose providers did not answer (?2, a JSON array): down since ?1,
+ * unless already down. Also a language with no provider key, each run.
+ * Binds: ?1 now, ?2 the languages.
+ */
+export const MARK_DOWN = `UPDATE translation_langs SET down_since = ?1
+  WHERE lang IN (SELECT value FROM json_each(?2)) AND enabled = 1 AND down_since IS NULL
+  RETURNING lang`;
+
+/**
+ * Languages whose provider answered (?2): no longer down, and unpaused if they
+ * were paused automatically; a pause by hand stays. Writes only what changes.
+ * Binds: ?1 now, ?2 the languages.
+ */
+export const MARK_UP = `UPDATE translation_langs
+  SET down_since = NULL,
+      paused = CASE WHEN ${AUTO_PAUSED} THEN 0 ELSE paused END,
+      paused_reason = CASE WHEN ${AUTO_PAUSED} THEN NULL ELSE paused_reason END,
+      updated_at = CASE WHEN ${AUTO_PAUSED} THEN ?1 ELSE updated_at END
+  WHERE lang IN (SELECT value FROM json_each(?2)) AND (down_since IS NOT NULL OR ${AUTO_PAUSED})
+  RETURNING lang, paused`;
+
+/**
+ * Pauses every enabled language down since ?2 or earlier (AUTO_PAUSE_HOURS
+ * ago), with the reason. Binds: ?1 now, ?2 the cutoff.
+ */
+export const AUTO_PAUSE = `UPDATE translation_langs
+  SET paused = 1, paused_reason = 'auto: provider down since ' || down_since, updated_at = ?1
+  WHERE enabled = 1 AND paused = 0 AND down_since IS NOT NULL AND down_since <= ?2
+  RETURNING lang`;
+
 /** Translations a run claims per language: one, so a backlog, an outage or a paused language holds back no other language. */
 export const CLAIMS_PER_LANGUAGE = 1;
 
@@ -104,24 +152,27 @@ export const CLAIM_WINDOW = 4;
 /**
  * Claims the next translations in one statement, so an overlapping run takes
  * other ones. For each language in ?4 (a JSON array, in LANGS order) that is
- * enabled and not paused, it reads at most ?5 (CLAIM_WINDOW) rows of `queued`
- * and `updating` (oldest English first) and of `retrying` that are due, each
- * through its own partial index, so it reads about what it takes, also when
- * another language has a backlog. One whose article has left the feed
- * (hidden, older than 7 days) or whose English is being redone becomes
- * `skipped`, with why; it comes back with a new English. Of the others it
- * takes the oldest English, ?6 (CLAIMS_PER_LANGUAGE) per language, so a
- * backlog comes out in each language in the English feed's order and no
- * language waits for another's; and of those at most ?3 in all, oldest English
- * first, each article's languages in LANGS order. A skipped row takes no
- * place. Inside out: the rows read with why (w, p), each language's rows still
- * in the feed numbered oldest English first (nth), the first ?6 of each
- * language numbered in the order to take them (turn), and the rows to skip or
- * claim (q). (Two parts of a compound SELECT, whatever the number of
- * languages: D1 allows only a few.)
+ * enabled and not paused by hand (one paused automatically is probed: one
+ * claim a run, as any other), it reads at most ?5 (CLAIM_WINDOW) rows of
+ * `queued` and `updating` (oldest English first), as many of articles not
+ * released yet (release.ts), and of `retrying` that are due, each through its
+ * own partial index, so it reads about what it takes, also when another
+ * language has a backlog. One whose article has left the feed (hidden, older
+ * than 7 days) or whose English is being redone becomes `skipped`, with why;
+ * it comes back with a new English. Of the others it takes articles not
+ * released yet first, as the whole feed waits for them, then the oldest
+ * English: so a language back from a pause catches up without holding back
+ * the new articles. ?6 (CLAIMS_PER_LANGUAGE) per language, so no language
+ * waits for another's; and of those at most ?3 in all, in the same order, each
+ * article's languages in LANGS order. A skipped row takes no place. Inside
+ * out: the rows read with why and whether the article is released (w, p),
+ * each language's rows still in the feed numbered in the order to take them
+ * (nth), the first ?6 of each language numbered in that order (turn), and the
+ * rows to skip or claim (q). (Three parts of a compound SELECT, whatever the
+ * number of languages: D1 allows at most 5.)
  * Binds: ?1 now (the claim), ?2 the feed's start, ?3 limit, ?4 the languages, ?5 rows read per language, ?6 claims per language.
  */
-const OPEN = "EXISTS (SELECT 1 FROM translation_langs s WHERE s.lang = l.value AND s.enabled = 1 AND s.paused = 0)";
+const OPEN = `EXISTS (SELECT 1 FROM translation_langs s WHERE s.lang = l.value AND s.enabled = 1 AND (s.paused = 0 OR s.${AUTO_PAUSED}))`;
 export const CLAIM = `UPDATE article_translations AS t
   SET state = CASE WHEN c.why = '' THEN 'translating' ELSE 'skipped' END,
       state_at = ?1,
@@ -132,23 +183,32 @@ export const CLAIM = `UPDATE article_translations AS t
   FROM (SELECT q.article_id, q.lang, q.why
         FROM (SELECT o.*,
                      CASE WHEN o.why = '' AND o.nth <= ?6
-                          THEN ROW_NUMBER() OVER (PARTITION BY o.why = '' AND o.nth <= ?6 ORDER BY o.attempts_source, o.article_id, o.rank) END AS turn
+                          THEN ROW_NUMBER() OVER (PARTITION BY o.why = '' AND o.nth <= ?6 ORDER BY o.released, o.attempts_source, o.article_id, o.rank) END AS turn
               FROM (SELECT p.*,
-                           ROW_NUMBER() OVER (PARTITION BY p.lang, p.why = '' ORDER BY p.attempts_source, p.article_id) AS nth
+                           ROW_NUMBER() OVER (PARTITION BY p.lang, p.why = '' ORDER BY p.released, p.attempts_source, p.article_id) AS nth
                     FROM (SELECT w.article_id, w.lang, w.attempts_source, w.rank,
                                  COALESCE((SELECT CASE WHEN a.is_news IS NOT 1 THEN 'the article is hidden'
                                                        WHEN a.published_at < ?2 THEN 'the article is older than 7 days'
                                                        WHEN a.summarized_at IS NOT w.attempts_source OR a.headline IS NULL
                                                             OR a.short_summary IS NULL OR a.summary IS NULL THEN 'its English is being redone'
                                                        ELSE '' END
-                                           FROM articles a WHERE a.id = w.article_id), 'the article is gone') AS why
+                                           FROM articles a WHERE a.id = w.article_id), 'the article is gone') AS why,
+                                 COALESCE((SELECT a.feed_seq IS NOT NULL FROM articles a WHERE a.id = w.article_id), 1) AS released
                           FROM (SELECT r.article_id, r.lang, r.attempts_source, l.key AS rank
                                 FROM json_each(?4) l, article_translations r
                                 WHERE ${OPEN}
                                   AND r.rowid IN (SELECT x.rowid FROM article_translations x INDEXED BY article_translations_ready
                                                   WHERE x.lang = l.value AND x.state IN ('queued', 'updating')
                                                   ORDER BY x.attempts_source, x.article_id LIMIT ?5)
-                                UNION ALL
+                                UNION
+                                SELECT r.article_id, r.lang, r.attempts_source, l.key AS rank
+                                FROM json_each(?4) l, article_translations r
+                                WHERE ${OPEN}
+                                  AND r.rowid IN (SELECT x.rowid FROM articles u INDEXED BY articles_unreleased
+                                                  JOIN article_translations x ON x.article_id = u.id AND x.lang = l.value
+                                                  WHERE u.is_news = 1 AND u.feed_seq IS NULL AND x.state IN ('queued', 'updating')
+                                                  ORDER BY u.summarized_at, u.id LIMIT ?5)
+                                UNION
                                 SELECT r.article_id, r.lang, r.attempts_source, l.key AS rank
                                 FROM json_each(?4) l, article_translations r
                                 WHERE ${OPEN}
@@ -201,6 +261,10 @@ export const PRUNE_EVENTS = "DELETE FROM translation_events WHERE at < ?1";
 export interface LanguageQueue extends Record<State, number> {
   enabled: boolean;
   paused: boolean;
+  /** Why it is paused: "manual" (queue.mjs) or "auto: provider down since <time>"; null when it is not. */
+  pausedReason: string | null;
+  /** Since when its providers have not answered (the first try of the current outage), or null. */
+  downSince: string | null;
   publishedLast24h: number;
   /** Minutes since the oldest translation still waiting (queued, updating, translating or retrying) was queued. */
   oldestWaitingAgeMinutes: number | null;
@@ -208,7 +272,8 @@ export interface LanguageQueue extends Record<State, number> {
 }
 
 /**
- * GET /queue: per language, how many translations are in each state, how many
+ * GET /queue: per language, its switch (and why it is paused, and since when
+ * its provider is down), how many translations are in each state, how many
  * were published in the last 24 hours, how long the oldest waiting one has
  * waited and when the last one was published. Read-only and cheap: the counts
  * come from `translation_counts`, the rest through partial indexes, about 4 rows
@@ -216,7 +281,7 @@ export interface LanguageQueue extends Record<State, number> {
  */
 export async function queueStatus(env: Env, now = new Date()): Promise<Record<Lang, LanguageQueue>> {
   const [langs, counts, times] = await env.DB.batch<Record<string, string | number | null>>([
-    env.DB.prepare("SELECT lang, enabled, paused FROM translation_langs"),
+    env.DB.prepare("SELECT lang, enabled, paused, paused_reason, down_since FROM translation_langs"),
     env.DB.prepare("SELECT lang, state, n FROM translation_counts"),
     env.DB.prepare(
       `SELECT l.value AS lang,
@@ -237,6 +302,8 @@ export async function queueStatus(env: Env, now = new Date()): Promise<Record<La
     const entry = {
       enabled: switches?.enabled === 1,
       paused: switches?.paused === 1,
+      pausedReason: switches?.paused === 1 ? ((switches?.paused_reason as string | null) ?? "manual") : null,
+      downSince: (switches?.down_since as string | null | undefined) ?? null,
       ...(Object.fromEntries(STATES.map((state) => [state, 0])) as Record<State, number>),
       publishedLast24h: Number(time?.published_24h ?? 0),
       oldestWaitingAgeMinutes: oldest ? Math.max(0, Math.floor((now.getTime() - Date.parse(oldest)) / 60_000)) : null,

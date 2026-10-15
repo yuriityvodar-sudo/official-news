@@ -6,6 +6,8 @@ import { GROQ_URL, ZAI_URL } from "../src/translator/providers";
 
 export const QWEN = "groq:qwen/qwen3.8-27b";
 export const GPT_OSS = "groq:openai/gpt-oss-120b";
+/** Spanish's first model (TRANSLATORS.es). */
+export const GPT_OSS_20B = "groq:openai/gpt-oss-20b";
 export const GLM_45 = "zai:glm-4.5-flash";
 export const GLM_47 = "zai:glm-4.7-flash";
 export const GEMMA = "workers-ai:@cf/google/gemma-4-26b-a4b-it";
@@ -59,15 +61,35 @@ export const only = (...langs: Lang[]) =>
     .bind(JSON.stringify(langs))
     .run();
 
-/** A news article in the feed with its English summary (seed articles are hidden in these tests). */
-export async function insertNews(id: string, publishedAt: string, isNews: number | null = 1) {
+/**
+ * A news article with its English summary, as the summarizer leaves it: not
+ * released yet, so in no feed until the translator releases it (seed articles
+ * are hidden in these tests). With `released`, it is in the feed already, with
+ * the next feed_seq, as an article released earlier.
+ */
+export async function insertNews(id: string, publishedAt: string, isNews: number | null = 1, { released = false } = {}) {
   await env.DB.prepare(
     `INSERT INTO articles (id, source_id, url, original_title, published_at, fetched_at, headline, short_summary,
-                           summary, is_news, importance, decision_type, summarized_at, topics, tags)
-     VALUES (?, 'de-federal-government', ?, ?, ?, ?, ?, ?, ?, ?, 4, 'cabinet-decision', ?, '["economy"]', '[]')`,
+                           summary, is_news, importance, decision_type, summarized_at, topics, tags, feed_seq, added_at)
+     VALUES (?1, 'de-federal-government', ?2, ?3, ?4, ?4, ?5, ?6, ?7, ?8, 4, 'cabinet-decision', ?4, '["economy"]', '[]',
+             CASE WHEN ?9 THEN (SELECT COALESCE(MAX(feed_seq), 0) + 1 FROM articles WHERE feed_seq IS NOT NULL) END,
+             CASE WHEN ?9 THEN strftime('%Y-%m-%dT%H:%M:%SZ', 'now') END)`,
   )
-    .bind(id, `https://example.gov/${id}`, `Kabinett ${id}`, publishedAt, publishedAt, ENGLISH.headline, ENGLISH.shortSummary, ENGLISH.summary, isNews, publishedAt)
+    .bind(id, `https://example.gov/${id}`, `Kabinett ${id}`, publishedAt, ENGLISH.headline, ENGLISH.shortSummary, ENGLISH.summary, isNews, released ? 1 : 0)
     .run();
+}
+
+/** The news articles released into the feed, in feed order (feed_seq), oldest first. */
+export async function releasedOrder() {
+  const { results } = await env.DB.prepare("SELECT id FROM articles WHERE is_news = 1 AND feed_seq IS NOT NULL ORDER BY feed_seq").all<{ id: string }>();
+  return results.map((r) => r.id);
+}
+
+/** Each feed's article ids, newest feed_seq first: English and the languages given. */
+export async function feeds(...langs: Lang[]) {
+  const out: Record<string, string[]> = { en: await ids("/articles") };
+  for (const lang of langs) out[lang] = await ids(`/articles?lang=${lang}`);
+  return out;
 }
 
 /** A translation that a run has claimed at `at` (or that waits in `state`), as the translator writes it. */
@@ -94,14 +116,6 @@ export async function events(id: string, lang: Lang = "uk") {
     .bind(id, lang)
     .all<{ state: string; at: string; attempts: number; detail: string | null }>();
   return results;
-}
-
-/** Each language's articles in lang_seq order. */
-export async function langOrder() {
-  const { results } = await env.DB.prepare(
-    "SELECT lang, article_id, lang_seq FROM article_translations WHERE lang_seq IS NOT NULL ORDER BY lang DESC, lang_seq",
-  ).all<{ lang: string; article_id: string; lang_seq: number }>();
-  return results.map((r) => `${r.lang} ${r.lang_seq} ${r.article_id}`);
 }
 
 export const chat = (content: unknown, finishReason = "stop") => ({
@@ -193,6 +207,8 @@ export interface ArticlesPage {
   items: Article[];
   nextCursor: string | null;
   top: Article[];
+  /** Language feeds only: the language is paused or off (#46). */
+  translationsDelayed?: boolean;
 }
 
 export async function get(path: string) {

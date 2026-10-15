@@ -59,9 +59,9 @@ function enqueue(lang, where, why, { onlyNew = false } = {}) {
   RETURNING article_id, lang, state`;
 }
 
-/** Each language's switch and how many translations it has in each state. */
+/** Each language's switch (why it is paused, since when its provider is down) and how many translations it has in each state. */
 export const status = () => [
-  `SELECT l.lang, l.enabled, l.paused, l.updated_at, c.state, c.n
+  `SELECT l.lang, l.enabled, l.paused, l.paused_reason, l.down_since, l.updated_at, c.state, c.n
    FROM translation_langs l LEFT JOIN translation_counts c ON c.lang = l.lang AND c.n > 0
    ORDER BY l.lang, c.state`,
 ];
@@ -116,14 +116,21 @@ export function backlog(lang) {
 }
 
 const setLang = (lang, values, change) =>
-  `INSERT INTO translation_langs (lang, enabled, paused, updated_at) VALUES (${quote(checkLang(lang))}, ${values}, ${NOW})
+  `INSERT INTO translation_langs (lang, enabled, paused, paused_reason, down_since, updated_at)
+  VALUES (${quote(checkLang(lang))}, ${values}, ${NOW})
   ON CONFLICT (lang) DO UPDATE SET ${change}, updated_at = excluded.updated_at
-  RETURNING lang, enabled, paused, updated_at`;
+  RETURNING lang, enabled, paused, paused_reason, down_since, updated_at`;
 
-/** A paused language is still queued, but nothing of it is claimed. */
-export const pause = (lang) => [setLang(lang, "0, 1", "paused = 1")];
-export const resume = (lang) => [setLang(lang, "0, 0", "paused = 0")];
+/**
+ * A paused language is still queued, but nothing of it is claimed, and the
+ * release no longer waits for it. Paused by hand ('manual'), it stays paused
+ * until resume; the translator pauses a language whose provider is down for 2
+ * hours by itself ('auto: …') and unpauses it on the first answer.
+ */
+export const pause = (lang) => [setLang(lang, "0, 1, 'manual', NULL", "paused = 1, paused_reason = 'manual'")];
+/** Resumes a language paused by hand or automatically, with a fresh 2 hours before an outage pauses it again. */
+export const resume = (lang) => [setLang(lang, "0, 0, NULL, NULL", "paused = 0, paused_reason = NULL, down_since = NULL")];
 /** Enabling also queues the feed's 7 days (backlog). */
-export const enable = (lang) => [setLang(lang, "1, 0", "enabled = 1"), ...backlog(lang)];
-/** A disabled language is no longer queued; what it has stays, and the API still shows what is published. */
-export const disable = (lang) => [setLang(lang, "0, 0", "enabled = 0")];
+export const enable = (lang) => [setLang(lang, "1, 0, NULL, NULL", "enabled = 1"), ...backlog(lang)];
+/** A disabled language is no longer queued, nor waited for; what it has stays, and the API still shows what is published. */
+export const disable = (lang) => [setLang(lang, "0, 0, NULL, NULL", "enabled = 0")];

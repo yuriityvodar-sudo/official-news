@@ -23,7 +23,8 @@ commands:
   requeue <article-id> <lang>         that translation again, with fresh tries
   requeue-lang <lang> [--failed]      the whole feed of a language again (after a prompt change), or its failed ones
   backlog <lang>                      queue the feed's 7 days for a language (enable does this too)
-  pause <lang> | resume <lang>        a paused language is queued but not translated
+  pause <lang> | resume <lang>        a paused language is queued but not translated, and not waited for;
+                                      resume also ends an automatic pause (provider down for 2 hours)
   enable <lang> | disable <lang>      only an enabled language is queued
 languages: ${sql.LANGS.join(", ")}`;
 
