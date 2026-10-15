@@ -177,9 +177,9 @@ The feed card reads `headline`, `shortSummary` and `imageUrl`; the detail screen
 
 **Fetcher rule (keeps us on the free plan)**
 
-- The scheduled handler runs every minute and calls `fetcher.run()` then `summarizer.run({ maxArticles: 5 })`; the handler is committed in the Kickoff, and each owner changes only their own module
+- The scheduled handler runs every minute and calls `fetcher.run()` then `summarizer.run({ maxArticles: 5 })`; the handler is committed in the Kickoff, and each owner changes only their own module. **Changed 15 Oct (#41):** the summarizer has its own cron trigger every odd minute, so the two never share one run's CPU
 - The fetcher takes the 2 sources with the oldest `last_checked_at`, so every source is checked within the hour
-- One run shares one budget: on the free plan at most 50 outside requests and 10 ms of processing. The requests fit easily; the 10 ms is measured in item 6, and if text extraction needs more, the Worker moves to the paid plan (about $5 a month) and the small runs stay
+- One run shares one budget (one run per step since #41): on the free plan at most 50 outside requests and 10 ms of processing. The requests fit easily; the 10 ms is measured in item 6, and if text extraction needs more, the Worker moves to the paid plan (about $5 a month) and the small runs stay
 
 **Speed rules (fast app, and about 10,000 daily users for free)**
 
@@ -235,7 +235,7 @@ Each item becomes one GitHub issue owned by one person. **Must** is what the ite
 
 ### 7. AI summaries (Roman)
 
-- **Must:** `docs/style-guide.md` and the prompt; one call per article returning headline, shortSummary, summary (news-style, facts from the article only), decisionType (from the fixed list), topics (from the fixed list), tags, importance and isNews (an official decision, not opinion, interview or commentary); `summarizer.run()`, called by the scheduled handler every minute, summarizes up to 5 articles that have text and no summary; anything that is not news is hidden from the feed.
+- **Must:** `docs/style-guide.md` and the prompt; one call per article returning headline, shortSummary, summary (news-style, facts from the article only), decisionType (from the fixed list), topics (from the fixed list), tags, importance and isNews (an official decision, not opinion, interview or commentary); `summarizer.run()`, called by the scheduled handler every minute (every odd minute in its own run since #41), summarizes up to 5 articles that have text and no summary; anything that is not news is hidden from the feed.
 - **Suggested:** a 25-article test set with `npm run eval`; comparing Workers AI and Claude Haiku and recording the choice and cost in `docs/decisions.md`.
 - **Done when:** new articles get all summary fields within an hour of being fetched.
 
