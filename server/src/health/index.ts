@@ -1,4 +1,5 @@
 import type { Env } from "../env";
+import { MAX_ATTEMPTS } from "../summarizer";
 
 /** Non-seed sources: the Kickoff seed rows are never fetched (docs/contract.md). */
 const REAL_SOURCE = "(config IS NULL OR json_extract(config, '$.seed') IS NOT 1)";
@@ -11,7 +12,7 @@ export interface Health {
   articles: {
     /** Fetched in the last 24 hours. */
     fetchedLast24h: number;
-    /** Fetched but not yet read by the AI (articles it gave up on after 3 tries not counted). */
+    /** Fetched but not yet read by the AI (articles it gave up on after MAX_ATTEMPTS tries not counted). */
     waitingForSummary: number;
     /** Shown in the feed now (official decisions of the last 7 days). */
     inFeed: number;
@@ -26,10 +27,10 @@ export async function health(env: Env): Promise<Health> {
     env.DB.prepare(
       `SELECT
          SUM(fetched_at >= strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-24 hours')) AS fetched,
-         SUM(summarized_at IS NULL AND summary_attempts < 3) AS waiting,
+         SUM(summarized_at IS NULL AND summary_attempts < ?1) AS waiting,
          SUM(is_news = 1 AND published_at >= strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-7 days')) AS in_feed
        FROM articles`,
-    ),
+    ).bind(MAX_ATTEMPTS),
   ]);
   const totals = articles.results[0] ?? {};
   return {
