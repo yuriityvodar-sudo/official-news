@@ -1,9 +1,12 @@
-/// The languages the feed can be read in (#46). The server translates the
+/// The languages the feed can be read in (#46): Ukrainian and Russian via Groq,
+/// Spanish and German via Z.ai (decided 15 Oct). The server translates the
 /// headline and summaries; the app's own words stay English for now.
 enum FeedLanguage {
   en('en', 'English', 'EN'),
   uk('uk', 'Українська', 'УКР'),
-  ru('ru', 'Русский', 'РУС');
+  ru('ru', 'Русский', 'РУС'),
+  es('es', 'Español', 'ES'),
+  de('de', 'Deutsch', 'DE');
 
   const FeedLanguage(this.code, this.nativeName, this.shortLabel);
 

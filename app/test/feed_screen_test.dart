@@ -699,7 +699,13 @@ void main() {
 
         await tester.tap(find.text('EN'));
         await tester.pumpAndSettle();
-        for (final name in ['English', 'Українська', 'Русский']) {
+        for (final name in [
+          'English',
+          'Українська',
+          'Русский',
+          'Español',
+          'Deutsch',
+        ]) {
           expect(find.text(name), findsOneWidget);
         }
         // The checkmark is on the current language.
@@ -1132,6 +1138,34 @@ void main() {
         }
       },
     );
+
+    testWidgets('choosing Español asks for lang=es and shows ES', (
+      tester,
+    ) async {
+      _screen(tester, _phone);
+      final log = <Uri>[];
+      await _pump(
+        tester,
+        FeedController(
+          api: _langApi({
+            'en': {'': english},
+            'es': {
+              '': {
+                'items': <Map<String, dynamic>>[],
+                'nextCursor': null,
+                'top': <Map<String, dynamic>>[],
+              },
+            },
+          }, log: log),
+        ),
+      );
+      await tester.tap(find.text('EN'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Español'));
+      await tester.pumpAndSettle();
+      expect(find.text('ES'), findsOneWidget);
+      expect(log.last.queryParameters['lang'], 'es');
+    });
 
     testWidgets('a tap while the menu is still closing opens it again', (
       tester,
