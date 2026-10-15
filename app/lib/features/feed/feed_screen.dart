@@ -223,7 +223,7 @@ class _FeedScreenState extends State<FeedScreen> {
       if (title == 'Latest' && label != 'Today') {
         slivers.add(_padded(Text(label, style: text.meta)));
       }
-      slivers.add(_rows(entry.value, inDayGroup: true));
+      slivers.add(_rows(entry.value, groupDay: entry.key));
       firstGroup = false;
     }
 
@@ -256,8 +256,9 @@ class _FeedScreenState extends State<FeedScreen> {
     sliver: SliverToBoxAdapter(child: child),
   );
 
-  /// Inside a day group, a date-only article shows no day: the group header says it.
-  Widget _rows(List<Article> articles, {bool inDayGroup = false}) =>
+  /// Inside a day group, a date-only article shows no day when the group header says
+  /// it. Groups follow when articles appeared, so one dated earlier still shows its day.
+  Widget _rows(List<Article> articles, {DateTime? groupDay}) =>
       SliverPadding(
         padding: const EdgeInsets.symmetric(horizontal: 20),
         sliver: SliverList.separated(
@@ -268,7 +269,7 @@ class _FeedScreenState extends State<FeedScreen> {
             return _ArticleRow(
               article: a,
               read: _feed.readIds.contains(a.id),
-              showDay: !inDayGroup,
+              showDay: groupDay == null || localDay(a.publishedAt) != groupDay,
               onTap: () => _open(a),
             );
           },

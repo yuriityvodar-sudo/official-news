@@ -24,6 +24,7 @@ Map<String, dynamic> _article(
   String country = 'DE',
   int? feedSeq,
   DateTime? addedAt,
+  bool dateOnly = false,
 }) => {
   'feedSeq': feedSeq,
   'addedAt': addedAt?.toUtc().toIso8601String(),
@@ -35,7 +36,7 @@ Map<String, dynamic> _article(
     'url': 'https://www.bundesregierung.de',
   },
   'publishedAt': publishedAt.toUtc().toIso8601String(),
-  'dateOnly': false,
+  'dateOnly': dateOnly,
   'headline': headline ?? 'Decision $id',
   'shortSummary': null,
   'summary': 'Summary $id',
@@ -500,4 +501,45 @@ void main() {
       expect(late, lessThan(yesterdayHeader));
     },
   );
+
+  testWidgets('a date-only decision that appeared later still shows its own day', (
+    tester,
+  ) async {
+    final now = DateTime.now();
+    final dated = DateTime(now.year, now.month, now.day - 3, 12);
+    await _pump(
+      tester,
+      FeedController(
+        api: _api({
+          '': {
+            'items': [
+              // Dated three days ago (no time), appeared just now: under "Latest".
+              _article(
+                'dated',
+                dated,
+                headline: 'Dated earlier',
+                feedSeq: 2,
+                addedAt: now,
+                dateOnly: true,
+              ),
+              _article(
+                'today',
+                DateTime(now.year, now.month, now.day, 0, 30),
+                headline: 'Dated today',
+                feedSeq: 1,
+                addedAt: now,
+                dateOnly: true,
+              ),
+            ],
+            'nextCursor': null,
+            'top': [],
+          },
+        }),
+      ),
+    );
+    expect(find.text('Latest'), findsOneWidget);
+    // The earlier one shows its day; the one from today needs none under its header.
+    expect(find.text(dayLabel(dated)), findsOneWidget);
+    expect(find.text('Today'), findsNothing);
+  });
 }
