@@ -5,6 +5,8 @@ import { type Texts, systemPrompt, toTranslation, userMessage } from "./prompt";
 import { type Provider, ProviderDown, UnusableAnswer, providerFor } from "./providers";
 import {
   CLAIM_MINUTES,
+  CLAIM_WINDOW,
+  CLAIMS_PER_LANGUAGE,
   COUNT_ATTEMPT,
   ENQUEUE,
   EVENT_DAYS,
@@ -23,6 +25,8 @@ import {
 export { LANGS, LANGUAGES, type Lang, isLang } from "./languages";
 export {
   CLAIM_MINUTES,
+  CLAIM_WINDOW,
+  CLAIMS_PER_LANGUAGE,
   COUNT_ATTEMPT,
   ENQUEUE,
   FREE_CLAIM,
@@ -52,10 +56,12 @@ export const TRANSLATORS: Record<Lang, readonly string[]> = {
 };
 
 /**
- * Translations for one scheduled run: one article in each language. Groq
- * counts a request's max_tokens (700) against Qwen's 1,000 output tokens a
- * minute, so Qwen takes one request a run; Z.ai's free plan takes one request
- * at a time, and a run makes them one after another.
+ * Translations for one scheduled run: one article in each language (CLAIM
+ * takes CLAIMS_PER_LANGUAGE), also when other languages have nothing to do or
+ * are paused. Groq counts a request's max_tokens (700) against Qwen's 1,000
+ * output tokens a minute, so Qwen takes one request a run; Z.ai's free plan
+ * takes one request at a time, and a run makes them one after another, at most
+ * one per language.
  */
 export const TRANSLATIONS_PER_RUN = LANGS.length;
 
@@ -72,9 +78,11 @@ export const NEXT_LANG_SEQ = `SELECT COALESCE(MAX(n.lang_seq), 0) + 1 FROM artic
  * (`lang_seq`). An older translation is shown while the new English waits or
  * is being translated (`updating`, `translating`, `retrying`), and no longer
  * once the new English has used its tries (`failed`): it no longer matches the
- * English, and nothing will replace it.
+ * English, and nothing will replace it. A text of the English it was asked for
+ * again (requeued by hand, after a prompt change) still matches it, so it stays
+ * when the redo fails.
  */
-export const SHOWN = "t.state <> 'failed'";
+export const SHOWN = "(t.state <> 'failed' OR t.source_summarized_at IS t.attempts_source)";
 
 /** What happened to one article and language in a run, for the log. */
 export interface TranslationResult {
@@ -98,7 +106,7 @@ interface Job {
 }
 
 export interface TranslatorOptions {
-  /** Translations per run: one per article and language. */
+  /** Translations per run in all, each one article in one language; at most CLAIMS_PER_LANGUAGE per language. */
   maxTranslations: number;
   now?: Date;
   /** The providers to try per language; TRANSLATORS by default. */
@@ -129,8 +137,9 @@ interface Taken {
  * run, in one batch before any AI call: drops the state log older than 30
  * days, sends claims that ran out back to `queued`, queues the news whose
  * English is new or changed for every enabled language (ENQUEUE), and claims
- * the oldest English waiting in the languages that are enabled, not paused and
- * have a provider (CLAIM). So nothing is translated twice, and a run with
+ * one translation in each language that is enabled, not paused and has a
+ * provider, the oldest English waiting (CLAIM), so no language waits for
+ * another's backlog or outage. So nothing is translated twice, and a run with
  * nothing to do reads a few rows.
  *
  * Each language tries its providers in TRANSLATORS order, one request at a
@@ -169,7 +178,9 @@ export async function runTranslator(env: Env, options: TranslatorOptions): Promi
     env.DB.prepare(PRUNE_EVENTS).bind(ago(EVENT_DAYS * DAY_MS)),
     env.DB.prepare(RELEASE_STALE).bind(claimedAt, ago(CLAIM_MINUTES * 60_000)),
     ...LANGS.map((lang) => env.DB.prepare(ENQUEUE).bind(lang, claimedAt, writtenFrom, feedStart)),
-    ...(ready.length ? [env.DB.prepare(CLAIM).bind(claimedAt, feedStart, options.maxTranslations, JSON.stringify(ready))] : []),
+    ...(ready.length
+      ? [env.DB.prepare(CLAIM).bind(claimedAt, feedStart, options.maxTranslations, JSON.stringify(ready), CLAIM_WINDOW, CLAIMS_PER_LANGUAGE)]
+      : []),
   ]);
   // Counted from the rows returned: D1's `changes` also counts what the triggers write.
   const released = batch[1].results.length;
@@ -240,7 +251,7 @@ export async function runTranslator(env: Env, options: TranslatorOptions): Promi
       try {
         const checked = toTranslation(await provider.translate(messages), job.english, language);
         if ("problems" in checked) throw new UnusableAnswer(checked.problems.join("; "));
-        result = { ...(await store(env, job, checked.translation, provider.name)), provider: provider.name };
+        result = { ...(await store(env, job, checked.translation, provider.name, claimedAt)), provider: provider.name };
       } catch (error) {
         if (error instanceof ProviderDown) {
           down[provider.name] = error.message;
@@ -277,6 +288,9 @@ export async function runTranslator(env: Env, options: TranslatorOptions): Promi
   return results;
 }
 
+/** Why a checked translation was not stored: the queue no longer holds this run's claim for that English. */
+export const NOT_STORED = "not stored: requeued, claimed again or a newer English meanwhile";
+
 /**
  * Publishes a checked translation: all three fields, the model and the English
  * version in one statement, which also makes it `published`. The first one of
@@ -284,10 +298,13 @@ export async function runTranslator(env: Env, options: TranslatorOptions): Promi
  * MAX + 1) and `translated_at`, in the same statement; a translation of a newer
  * English keeps both, so the article keeps its place in the feed. One row per
  * statement, and the unique index refuses a duplicate number. It is stored only
- * for the English the queue holds, and never over a translation of a newer
- * English (a run that was cut off and came back late).
+ * while this run's claim (?8) holds, as COUNT_ATTEMPT, OUTAGE and FREE_CLAIM
+ * are: not over a requeue made meanwhile (queue.mjs, after a prompt change),
+ * nor once the claim ran out and another run may be translating it too; and
+ * only for the English the queue holds, never over a translation of a newer
+ * English.
  */
-async function store(env: Env, job: Job, t: Texts, model: string): Promise<Omit<TranslationResult, "provider">> {
+async function store(env: Env, job: Job, t: Texts, model: string, claim: string): Promise<Omit<TranslationResult, "provider">> {
   const { results } = await env.DB.prepare(
     `UPDATE article_translations
      SET headline = ?1, short_summary = ?2, summary = ?3, model = ?4, source_summarized_at = ?5,
@@ -296,13 +313,13 @@ async function store(env: Env, job: Job, t: Texts, model: string): Promise<Omit<
          published_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now'),
          state = 'published', state_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now'),
          claimed_at = NULL, queued_at = NULL, next_attempt_at = NULL, last_error = NULL, outage_retries = 0
-     WHERE article_id = ?6 AND lang = ?7 AND attempts_source IS ?5
+     WHERE article_id = ?6 AND lang = ?7 AND attempts_source IS ?5 AND state = 'translating' AND claimed_at = ?8
        AND (source_summarized_at IS NULL OR source_summarized_at <= ?5)
      RETURNING lang_seq`,
   )
-    .bind(t.headline, t.shortSummary, t.summary, model, job.source, job.articleId, job.lang)
+    .bind(t.headline, t.shortSummary, t.summary, model, job.source, job.articleId, job.lang, claim)
     .all();
   return results.length
     ? { articleId: job.articleId, lang: job.lang, ok: true }
-    : { articleId: job.articleId, lang: job.lang, ok: false, error: "not stored: a newer English is queued or translated" };
+    : { articleId: job.articleId, lang: job.lang, ok: false, error: NOT_STORED };
 }

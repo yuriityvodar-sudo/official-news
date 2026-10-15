@@ -4,12 +4,19 @@
 // the check counts these words instead: a sentence with more English (or
 // German, in Spanish) function words than Spanish ones is not Spanish.
 //
-// Each list holds only words the other two languages do not use, so no word
-// counts for two languages: "a" and "no" (English and Spanish), "es"
-// (Spanish and German), "in", "an", "so", "also", "was", "war" and "will"
-// (English and German), "he" (English and Spanish) are in none of them.
+// Each list holds only function words the other two languages do not use as
+// function words, so no word counts for two languages: "a" and "no" (English
+// and Spanish), "es" (Spanish and German), "in", "an", "so", "also", "was",
+// "war" and "will" (English and German), "he" (English and Spanish) are in
+// none of them. A few are ordinary words of another language all the same
+// (German "los" and "her", Spanish "bis"): that language's check leaves them
+// out of its foreign lists (`except`, languages.ts).
 
 const words = (text: string): ReadonlySet<string> => new Set(text.trim().split(/\s+/));
+
+/** A list without some words: the foreign words a language also writes itself. */
+export const except = (list: ReadonlySet<string>, ...own: string[]): ReadonlySet<string> =>
+  new Set([...list].filter((word) => !own.includes(word)));
 
 export const ENGLISH = words(`
   the and of to is are were for with that this these those from by on at which
@@ -34,4 +41,13 @@ export const GERMAN = words(`
   muss müssen hat haben hatte sein seine seiner seinen ihre ihr ihren ihrer diese
   dieser dieses diesem diesen wir sie er am vom beim zwischen ab neue neuen neuer
   mehr wenn weil damit dabei jedoch bereits nun
+`);
+
+/**
+ * Lower-case words inside names of people, places and institutions, such as
+ * Ursula von der Leyen, Sindicatura General de la Nación or Veracruz de
+ * Ignacio de la Llave. Between capitalised words they are part of the name.
+ */
+export const NAME_PARTICLES = words(`
+  von der den zu zum zur vom van de del la las los y
 `);

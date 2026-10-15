@@ -223,6 +223,53 @@ describe("the translation queue in four languages", () => {
     expect(await translation("a1", "es")).toMatchObject({ state: "published", attempts: 0, outage_retries: 0 });
   });
 
+  it("claims one article per language a run, so Spanish and German retrying in a Z.ai outage hold back no other language", async () => {
+    for (const [i, id] of ["o1", "o2", "o3"].entries()) await insertNews(id, hoursAgo(5 - i));
+    await insertNews("new", hoursAgo(1));
+    const now = new Date();
+    await env.DB.batch(LANGS.map((lang) => env.DB.prepare(ENQUEUE).bind(lang, stored(now), hoursAgo(8 * 24), hoursAgo(7 * 24))));
+    // The older news is done in Ukrainian and Russian (out of the way here) and due again in Spanish and German.
+    await env.DB.prepare("UPDATE article_translations SET state = 'skipped' WHERE article_id <> 'new' AND lang IN ('uk', 'ru')").run();
+    await env.DB.prepare("UPDATE article_translations SET state = 'retrying', next_attempt_at = ?1 WHERE article_id <> 'new' AND lang IN ('es', 'de')")
+      .bind(stored(now))
+      .run();
+    const zaiDown = fakeApis({ [GLM_45]: [{ status: 503 }], [GLM_47]: [{ status: 503 }] });
+
+    const results = await run(zaiDown.fetch, { now });
+
+    // Not the four oldest due ones (all Spanish and German): the oldest of each language.
+    expect(outcome(results)).toEqual(["o1 es failed", "o1 de failed", `new uk ${QWEN}`, `new ru ${GPT_OSS}`]);
+    expect(zaiDown.requests.filter((r) => r.url === ZAI_URL).map((r) => `${r.lang} ${r.model}`)).toEqual(["es glm-4.5-flash", "es glm-4.7-flash"]);
+    for (const lang of ["es", "de"] as const) expect(await translation("new", lang)).toMatchObject({ state: "queued" });
+  });
+
+  it("sends Z.ai one Spanish and one German request a run, also while Ukrainian and Russian are paused", async () => {
+    await insertNews("a1", hoursAgo(2));
+    await insertNews("a2", hoursAgo(1));
+    await setLang("uk", "paused", 1);
+    await setLang("ru", "paused", 1);
+    const apis = fakeApis();
+
+    expect(outcome(await run(apis.fetch))).toEqual([`a1 es ${GLM_45}`, `a1 de ${GLM_45}`]);
+    expect(apis.requests.map((r) => `${r.lang} ${r.model}`)).toEqual(["es glm-4.5-flash", "de glm-4.5-flash"]);
+    expect(outcome(await run(apis.fetch))).toEqual([`a2 es ${GLM_45}`, `a2 de ${GLM_45}`]);
+  });
+
+  it("enabling a language with a backlog holds back no other language", async () => {
+    await setLang("de", "enabled", 0);
+    for (const [i, id] of ["b1", "b2", "b3"].entries()) await insertNews(id, hoursAgo(30 - i));
+    // The others are done with the backlog (out of the way here).
+    await run(fakeApis().fetch);
+    await run(fakeApis().fetch);
+    await run(fakeApis().fetch);
+    await setLang("de", "enabled", 1);
+    await insertNews("new", hoursAgo(1));
+
+    // German takes its backlog one article a run, oldest first; the new article goes out in the others at once.
+    expect(outcome(await run(fakeApis().fetch))).toEqual([`b1 de ${GLM_45}`, `new uk ${QWEN}`, `new ru ${GPT_OSS}`, `new es ${GLM_45}`]);
+    expect(outcome(await run(fakeApis().fetch))).toEqual([`b2 de ${GLM_45}`]);
+  });
+
   it("re-summarized: published, then updating with the old text shown, then published again; failed after 3 unusable answers", async () => {
     await insertNews("a1", hoursAgo(1));
     await run(fakeApis().fetch);
@@ -338,10 +385,10 @@ describe("GET /queue", () => {
     await insertNews("a1", hoursAgo(3));
     await insertNews("a2", hoursAgo(2));
     await setLang("es", "paused", 1);
-    // The first run publishes a1 in uk, ru and de, and a2 in uk (4 a run; Spanish is paused). The second
-    // publishes a2 in de, and a2 in ru is retrying (Groq is down).
+    // The first run publishes a1 in uk, ru and de (one article in each language; Spanish is paused). The
+    // second publishes a2 in uk and de, and a2 in ru is retrying (GPT-OSS and then Qwen are down).
     await run(fakeApis().fetch);
-    await run(fakeApis({ [GPT_OSS]: [{ status: 429 }], [QWEN]: [{ status: 429 }] }).fetch);
+    await run(fakeApis({ [QWEN]: [answer("uk"), { status: 429 }], [GPT_OSS]: [{ status: 429 }] }).fetch);
     await env.DB.prepare("UPDATE article_translations SET queued_at = ? WHERE article_id = 'a1' AND lang = 'es'").bind(minutesAgo(90)).run();
 
     const response = await exports.default.fetch("https://api.test/queue");

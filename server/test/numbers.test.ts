@@ -51,6 +51,12 @@ describe("missingNumbers", () => {
     // Two numbers that only a space separates in the English.
     ["In 2025 1,400 people applied", "У 2025 році заявки подали 1 400 людей"],
     ["no numbers at all", "жодних чисел"],
+    // A time with a full stop in the English may take a colon.
+    ["from 9 to 16.30 hours", "з 9 до 16:30"],
+    ["from 9 to 16.30 hours", "з 9 до 16.30"],
+    // An amount in millions for billions, by its full value.
+    ["€2.86 billion", "2 860 млн євро"],
+    ["1,500 million euros", "1,5 млрд євро"],
   ])("finds every number of %j in %j", (english, translation) => {
     expect(missingNumbers(english, translation, UK)).toEqual([]);
   });
@@ -110,6 +116,14 @@ describe("missingNumbers", () => {
     ["closes at 11:59pm on 5 November 2026", "cierra a las 23:59 del 5 de noviembre de 2026"],
     ["at 5 p.m.", "a las 17:00"],
     ["at 5 p.m.", "a las 5 de la tarde"],
+    ["from 9 to 16.30 hours", "de 9 a 16:30 horas"],
+    ["from 9 to 16.30 hours", "de 9 a 16.30 horas"],
+    // The usual Spanish form for billions: thousands of millions, or "mil millones".
+    ["€2.86 billion", "2.860 millones de euros"],
+    ["€90 billion", "90.000 millones de euros"],
+    ["€1.2 billion", "1.200 millones de euros"],
+    ["€2.86 billion", "2,86 mil millones de euros"],
+    ["1.5 million people", "1.500.000 personas"],
   ])("finds every number of %j in the Spanish %j", (english, translation) => {
     expect(missingNumbers(english, translation, ES)).toEqual([]);
   });
@@ -126,6 +140,9 @@ describe("missingNumbers", () => {
     ["dated 15.10.2026", "vom 15.10.2026"],
     ["dated 01.03.2027", "vom 1. März 2027"],
     ["published 2026-10-14", "veröffentlicht am 14. Oktober 2026"],
+    ["from 9 to 16.30 hours", "von 9 bis 16:30 Uhr"],
+    ["€2.86 billion", "2,86 Milliarden Euro"],
+    ["€2.86 billion", "2.860 Millionen Euro"],
   ])("finds every number of %j in the German %j", (english, translation) => {
     expect(missingNumbers(english, translation, DE)).toEqual([]);
   });
@@ -138,6 +155,9 @@ describe("missingNumbers", () => {
     ["a dropped amount", "1.2 billion euros for 300 schools", "1,2 mil millones de euros para escuelas", ES, ["300"]],
     ["a changed month", "dated 15.10.2026", "del 15 de noviembre de 2026", ES, ["15.10.2026"]],
     ["a wrong time", "at 5 p.m.", "um 15.00 Uhr", DE, ["5 p.m."]],
+    ["a wrong time with a colon", "from 9 to 16.30 hours", "de 9 a 16:40 horas", ES, ["16.30"]],
+    ["an amount a thousand times too large", "€2.86 billion", "2.860 mil millones de euros", ES, ["2.86"]],
+    ["a changed amount in millions", "€2.86 billion", "2.680 millones de euros", ES, ["2.86"]],
   ])("reports %s", (_, english, translation, style, missing) => {
     expect(missingNumbers(english, translation, style)).toEqual(missing);
   });

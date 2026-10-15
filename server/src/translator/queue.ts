@@ -87,19 +87,39 @@ export const RELEASE_STALE = `UPDATE article_translations INDEXED BY article_tra
   WHERE state = 'translating' AND claimed_at < ?2
   RETURNING article_id`;
 
+/** Translations a run claims per language: one, so a backlog, an outage or a paused language holds back no other language. */
+export const CLAIMS_PER_LANGUAGE = 1;
+
+/**
+ * Waiting rows a run reads per language, of `queued` and `updating` and as
+ * many due `retrying`: it claims the first whose article is still in the feed,
+ * and marks those that left it `skipped`, so a language back from a long pause
+ * sheds its stale rows four a run while the other languages go on. With a
+ * backlog in four languages the claim reads about 260 D1 rows (144 when a run
+ * took the four oldest in all, which let one language hold back the others),
+ * and 8 when idle (4 before).
+ */
+export const CLAIM_WINDOW = 4;
+
 /**
  * Claims the next translations in one statement, so an overlapping run takes
  * other ones. For each language in ?4 (a JSON array, in LANGS order) that is
- * enabled and not paused, it reads at most ?3 rows of `queued` and `updating`
- * (oldest English first) and of `retrying` that are due, each through its own
- * partial index, so it reads about what it takes, also when another language
- * has a backlog. Of those it takes the oldest English first, each article's
- * languages in LANGS order, so a backlog comes out in each language in the
- * English feed's order. One whose article has left the feed (hidden, older
- * than 7 days) or whose English is being redone becomes `skipped` instead,
- * with why; it comes back with a new English. (Two parts of a compound SELECT,
- * whatever the number of languages: D1 allows only a few.)
- * Binds: ?1 now (the claim), ?2 the feed's start, ?3 limit, ?4 the languages.
+ * enabled and not paused, it reads at most ?5 (CLAIM_WINDOW) rows of `queued`
+ * and `updating` (oldest English first) and of `retrying` that are due, each
+ * through its own partial index, so it reads about what it takes, also when
+ * another language has a backlog. One whose article has left the feed
+ * (hidden, older than 7 days) or whose English is being redone becomes
+ * `skipped`, with why; it comes back with a new English. Of the others it
+ * takes the oldest English, ?6 (CLAIMS_PER_LANGUAGE) per language, so a
+ * backlog comes out in each language in the English feed's order and no
+ * language waits for another's; and of those at most ?3 in all, oldest English
+ * first, each article's languages in LANGS order. A skipped row takes no
+ * place. Inside out: the rows read with why (w, p), each language's rows still
+ * in the feed numbered oldest English first (nth), the first ?6 of each
+ * language numbered in the order to take them (turn), and the rows to skip or
+ * claim (q). (Two parts of a compound SELECT, whatever the number of
+ * languages: D1 allows only a few.)
+ * Binds: ?1 now (the claim), ?2 the feed's start, ?3 limit, ?4 the languages, ?5 rows read per language, ?6 claims per language.
  */
 const OPEN = "EXISTS (SELECT 1 FROM translation_langs s WHERE s.lang = l.value AND s.enabled = 1 AND s.paused = 0)";
 export const CLAIM = `UPDATE article_translations AS t
@@ -109,28 +129,33 @@ export const CLAIM = `UPDATE article_translations AS t
       queued_at = CASE WHEN c.why = '' THEN t.queued_at END,
       next_attempt_at = NULL,
       last_error = CASE WHEN c.why = '' THEN t.last_error ELSE c.why END
-  FROM (SELECT p.article_id, p.lang,
-               COALESCE((SELECT CASE WHEN a.is_news IS NOT 1 THEN 'the article is hidden'
-                                     WHEN a.published_at < ?2 THEN 'the article is older than 7 days'
-                                     WHEN a.summarized_at IS NOT p.attempts_source OR a.headline IS NULL
-                                          OR a.short_summary IS NULL OR a.summary IS NULL THEN 'its English is being redone'
-                                     ELSE '' END
-                         FROM articles a WHERE a.id = p.article_id), 'the article is gone') AS why
-        FROM (SELECT r.article_id, r.lang, r.attempts_source, l.key AS rank
-              FROM json_each(?4) l, article_translations r
-              WHERE ${OPEN}
-                AND r.rowid IN (SELECT x.rowid FROM article_translations x INDEXED BY article_translations_ready
-                                WHERE x.lang = l.value AND x.state IN ('queued', 'updating')
-                                ORDER BY x.attempts_source, x.article_id LIMIT ?3)
-              UNION ALL
-              SELECT r.article_id, r.lang, r.attempts_source, l.key AS rank
-              FROM json_each(?4) l, article_translations r
-              WHERE ${OPEN}
-                AND r.rowid IN (SELECT x.rowid FROM article_translations x INDEXED BY article_translations_retry
-                                WHERE x.lang = l.value AND x.state = 'retrying' AND x.next_attempt_at <= ?1
-                                ORDER BY x.next_attempt_at LIMIT ?3)) p
-        ORDER BY p.attempts_source, p.article_id, p.rank
-        LIMIT ?3) AS c
+  FROM (SELECT q.article_id, q.lang, q.why
+        FROM (SELECT o.*,
+                     CASE WHEN o.why = '' AND o.nth <= ?6
+                          THEN ROW_NUMBER() OVER (PARTITION BY o.why = '' AND o.nth <= ?6 ORDER BY o.attempts_source, o.article_id, o.rank) END AS turn
+              FROM (SELECT p.*,
+                           ROW_NUMBER() OVER (PARTITION BY p.lang, p.why = '' ORDER BY p.attempts_source, p.article_id) AS nth
+                    FROM (SELECT w.article_id, w.lang, w.attempts_source, w.rank,
+                                 COALESCE((SELECT CASE WHEN a.is_news IS NOT 1 THEN 'the article is hidden'
+                                                       WHEN a.published_at < ?2 THEN 'the article is older than 7 days'
+                                                       WHEN a.summarized_at IS NOT w.attempts_source OR a.headline IS NULL
+                                                            OR a.short_summary IS NULL OR a.summary IS NULL THEN 'its English is being redone'
+                                                       ELSE '' END
+                                           FROM articles a WHERE a.id = w.article_id), 'the article is gone') AS why
+                          FROM (SELECT r.article_id, r.lang, r.attempts_source, l.key AS rank
+                                FROM json_each(?4) l, article_translations r
+                                WHERE ${OPEN}
+                                  AND r.rowid IN (SELECT x.rowid FROM article_translations x INDEXED BY article_translations_ready
+                                                  WHERE x.lang = l.value AND x.state IN ('queued', 'updating')
+                                                  ORDER BY x.attempts_source, x.article_id LIMIT ?5)
+                                UNION ALL
+                                SELECT r.article_id, r.lang, r.attempts_source, l.key AS rank
+                                FROM json_each(?4) l, article_translations r
+                                WHERE ${OPEN}
+                                  AND r.rowid IN (SELECT x.rowid FROM article_translations x INDEXED BY article_translations_retry
+                                                  WHERE x.lang = l.value AND x.state = 'retrying' AND x.next_attempt_at <= ?1
+                                                  ORDER BY x.next_attempt_at LIMIT ?5)) w) p) o) q
+        WHERE q.why <> '' OR q.turn <= ?3) AS c
   WHERE t.article_id = c.article_id AND t.lang = c.lang
   RETURNING article_id, lang, attempts_source, state, attempts, outage_retries`;
 

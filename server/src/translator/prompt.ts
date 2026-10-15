@@ -6,6 +6,7 @@
 // retried, and a post shows in a language only when it passed (docs/contract.md).
 import { parseJson } from "../summarizer/schema";
 import { type NumberStyle, missingNumbers } from "./numbers";
+import { NAME_PARTICLES } from "./words";
 
 /** The three English fields a translation replaces, as the API returns them. */
 export interface Texts {
@@ -54,7 +55,10 @@ export interface Language {
 
 export interface StopWords {
   own: ReadonlySet<string>;
-  foreign: readonly ReadonlySet<string>[];
+  /** English's, the language it is translated from. */
+  english: ReadonlySet<string>;
+  /** The other Latin-script target language's: German for Spanish, Spanish for German. */
+  other: ReadonlySet<string>;
 }
 
 export function systemPrompt(language: Language): string {
@@ -120,27 +124,51 @@ export const OWN_WORDS_FROM = 8;
 
 const WORD = /\p{L}+/gu;
 const isCapital = (word: string | undefined) => !!word && /^\p{Lu}/u.test(word);
+/** IT, WHO, UN: an acronym, not the function word it spells. */
+const isAcronym = (word: string) => word.length > 1 && word === word.toUpperCase() && word !== word.toLowerCase();
+
+/** Name particles (words.ts) that stand together in a name, at most: "von der", "de la", "van den". */
+const NAME_RUN = 2;
 
 /**
- * The function words of a sentence (words.ts): the language's own, and each
- * foreign language's. A foreign one inside a name does not count: in lower
- * case between two capitalised words ("Bank of England", "Ministerio de
- * Sanidad"), or capitalised before one, other than at the start of the
- * sentence ("Die Linke", "The Guardian").
+ * The function words of a sentence (words.ts): how many are the language's
+ * own, and how many English's and the other language's (`foreign`, one count
+ * each). An acronym (IT, WHO) is none of them. A foreign one inside a name does not count: in lower case
+ * between two capitalised words ("Bank of England", "Ministerio de Sanidad"),
+ * also past a second name particle ("Ursula von der Leyen", "Sindicatura
+ * General de la Nación"); capitalised after the start of the sentence, where
+ * it is a name or a German noun ("mit Die Linke", "in Not"); and one of the
+ * other language capitalised at the start, before a capitalised word ("Los
+ * Angeles", "El Salvador", "Von der Leyen", "Die Linke"). An English one at
+ * the start counts ("The Commission said"): English is what a translation
+ * most likely leaves in.
  */
 function functionWords(sentence: string, stopWords: StopWords) {
   const tokens = sentence.match(WORD) ?? [];
+  /** Whether a capitalised word stands next to token i, before (step -1) or after (step 1) it, past at most `skip` name particles. */
+  const capitalNext = (i: number, step: 1 | -1, skip: number): boolean => {
+    const next = tokens[i + step];
+    if (next === undefined) return false;
+    if (isCapital(next)) return true;
+    return skip > 0 && NAME_PARTICLES.has(next) && capitalNext(i + step, step, skip - 1);
+  };
   let own = 0;
-  const foreign = stopWords.foreign.map(() => 0);
+  const lists = [stopWords.english, stopWords.other];
+  const foreign = lists.map(() => 0);
   tokens.forEach((token, i) => {
+    if (isAcronym(token)) return;
     const word = token.toLowerCase();
     if (stopWords.own.has(word)) {
       own++;
       return;
     }
-    const j = stopWords.foreign.findIndex((set) => set.has(word));
-    const inName = i > 0 && isCapital(tokens[i + 1]) && (isCapital(token) || isCapital(tokens[i - 1]));
-    if (j >= 0 && !inName) foreign[j]++;
+    const j = lists.findIndex((set) => set.has(word));
+    if (j < 0) return;
+    const skip = NAME_PARTICLES.has(token) ? NAME_RUN - 1 : 0;
+    const inName = isCapital(token)
+      ? i > 0 || (lists[j] === stopWords.other && capitalNext(i, 1, NAME_RUN - 1))
+      : capitalNext(i, -1, skip) && capitalNext(i, 1, skip);
+    if (!inName) foreign[j]++;
   });
   return { own, foreign, words: tokens.length };
 }

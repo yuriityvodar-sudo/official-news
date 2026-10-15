@@ -65,6 +65,8 @@ describe("Spanish and German answers", () => {
     ["an English paragraph", "de", { summary: "Das Bundeskabinett hat den Haushaltsentwurf für 2027 gebilligt.\n\nThe Bundestag now debates it in the coming weeks." }, "summary is not in German"],
     ["a German answer for Spanish", "es", TRANSLATED.de, "headline is not in Spanish"],
     ["a Spanish answer for German", "de", TRANSLATED.es, "headline is not in German"],
+    ["a Spanish sentence that starts with its article", "de", { headline: "Los ministros aprueban el presupuesto" }, "headline is not in German"],
+    ["an English sentence that starts with The before a name", "es", { headline: "The Commission backs the plan" }, "headline is not in Spanish"],
     ["one German field in a Spanish answer", "es", { shortSummary: TRANSLATED.de.shortSummary }, "shortSummary is not in Spanish"],
     [
       "a long field without one of its own function words",
@@ -75,6 +77,37 @@ describe("Spanish and German answers", () => {
   ] as [string, Latin, Record<string, string>, string, typeof ENGLISH?][])("rejects %s", (_, lang, overrides, problem, english) => {
     const result = check({ ...TRANSLATED[lang], ...overrides }, lang, english);
     expect(result).toMatchObject({ problems: expect.arrayContaining([expect.stringContaining(problem)]) });
+  });
+
+  it.each([
+    // Name particles of the other language, also at the start of the sentence.
+    ["es", "Ursula von der Leyen celebró el acuerdo"],
+    ["es", "Ursula von der Leyen visitó Kiev el lunes"],
+    ["es", "Von der Leyen visita Kiev"],
+    ["de", "Die Sindicatura General de la Nación billigte Leitlinien"],
+    ["de", "Der Consejo de la Judicatura Federal tagte"],
+    ["de", "Los Angeles: Präsident entsendet Nationalgarde"],
+    ["de", "El Salvador senkt Steuern"],
+    ["de", "Las Palmas erweitert Hafen"],
+    // Acronyms that spell an English or Spanish function word.
+    ["de", "IT-Sicherheitsgesetz verabschiedet"],
+    ["de", "WHO erklärt Mpox-Notstand"],
+    ["de", "UN warnt: Hungersnot droht"],
+    // Words of its own that the other lists have: German "los", "her" and the noun "Not", Spanish "bis".
+    ["de", "Impfkampagne geht los"],
+    ["de", "Mauerfall: 35 Jahre her"],
+    ["de", "In Not geratene Firmen erhalten Hilfe"],
+    ["es", "Artículo bis reformado"],
+  ] as [Latin, string][])("accepts the %s headline %j: names, acronyms and its own words do not count as foreign", (lang, headline) => {
+    const english = { ...ENGLISH, headline: `${headline.replace(/\d/g, "")} (in English)` };
+    const reply = { ...TRANSLATED[lang], headline: headline.replace(/\d/g, "") };
+    expect(check(reply, lang, english)).toHaveProperty("translation");
+  });
+
+  it("accepts an English time with a full stop written with a colon", () => {
+    const english = { ...ENGLISH, shortSummary: "The offices are open from 9 to 16.30 hours." };
+    expect(check({ ...TRANSLATED.es, shortSummary: "Las oficinas abren de 9 a 16:30 horas." }, "es", english)).toHaveProperty("translation");
+    expect(check({ ...TRANSLATED.de, shortSummary: "Die Büros sind von 9 bis 16:30 Uhr geöffnet." }, "de", english)).toHaveProperty("translation");
   });
 
   it("accepts a short field it cannot tell, such as a headline of names", () => {

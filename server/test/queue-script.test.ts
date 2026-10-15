@@ -2,8 +2,24 @@
 import { env } from "cloudflare:workers";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as sql from "../scripts/queue-sql.mjs";
-import { LANGS, STATES, TRANSLATIONS_PER_RUN, runTranslator } from "../src/translator";
-import { GLM_45, events, fakeApis, hideSeed, hoursAgo, insertNews, minutesAgo, outcome, testEnv, translation } from "./helpers";
+import { LANGS, NOT_STORED, STATES, TRANSLATIONS_PER_RUN, runTranslator } from "../src/translator";
+import {
+  GLM_45,
+  QWEN,
+  TRANSLATED,
+  events,
+  fakeApis,
+  get,
+  hideSeed,
+  hoursAgo,
+  ids,
+  inMinutes,
+  insertNews,
+  minutesAgo,
+  outcome,
+  testEnv,
+  translation,
+} from "./helpers";
 
 /** Runs a command's statements as wrangler d1 execute does: in one batch. */
 const exec = async (statements: string[]) => env.DB.batch(statements.map((s) => env.DB.prepare(s)));
@@ -60,6 +76,45 @@ describe("scripts/queue.mjs", () => {
     expect(await translation("a1", "de")).toMatchObject({ state: "published" });
     expect(changes(await exec(sql.requeueLang("uk")))).toBe(2);
     for (const id of ["a1", "a2"]) expect(await translation(id, "uk")).toMatchObject({ state: "updating", attempts: 0 });
+  });
+
+  it("requeue-lang keeps a published translation shown when its redo fails: it still matches the English", async () => {
+    await insertNews("a1", hoursAgo(1));
+    await run();
+    expect(changes(await exec(sql.requeueLang("uk")))).toBe(1);
+
+    // The redo gets three unusable answers (for example after a stricter prompt).
+    for (const minutes of [0, 11, 32]) {
+      await runTranslator(testEnv(), { maxTranslations: TRANSLATIONS_PER_RUN, fetch: fakeApis({ [QWEN]: ["not json"] }).fetch, now: inMinutes(minutes) });
+    }
+
+    const row = await translation("a1", "uk");
+    expect(row).toMatchObject({ state: "failed", attempts: 3, headline: TRANSLATED.uk.headline });
+    expect(row?.source_summarized_at).toBe(row?.attempts_source);
+    expect(await ids("/articles?lang=uk")).toEqual(["a1"]);
+    expect((await get("/articles/a1?lang=uk")).body).toMatchObject({ lang: "uk", headline: TRANSLATED.uk.headline });
+  });
+
+  it("a requeue made while a run translates that row is not undone when the run stores its answer", async () => {
+    await insertNews("a1", hoursAgo(1));
+    const apis = fakeApis();
+    let requeued = false;
+    const requeueMeanwhile = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (!requeued) {
+        requeued = true;
+        // The first request is Ukrainian: while it is on its way, someone requeues it (a new prompt is deployed).
+        await exec(sql.requeue("a1", "uk"));
+      }
+      return apis.fetch(input, init);
+    }) as typeof globalThis.fetch;
+
+    const results = await runTranslator(testEnv(), { maxTranslations: TRANSLATIONS_PER_RUN, fetch: requeueMeanwhile });
+
+    expect(results.find((r) => r.lang === "uk")).toMatchObject({ ok: false, error: NOT_STORED });
+    expect(await translation("a1", "uk")).toMatchObject({ state: "queued", headline: null, last_error: "requeued by hand" });
+    // The next run makes it again, as the requeue asked; only that run's answer is published.
+    expect(outcome(await run())).toEqual([`a1 uk ${QWEN}`]);
+    expect((await events("a1", "uk")).map((e) => e.state)).toEqual(["queued", "translating", "queued", "translating", "published"]);
   });
 
   it("pause and resume, disable and enable: enable queues the feed's 7 days the language missed", async () => {

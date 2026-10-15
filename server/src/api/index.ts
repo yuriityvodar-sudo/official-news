@@ -231,7 +231,7 @@ const FROM_TRANSLATIONS = `FROM article_translations t
 /**
  * A finished translation (into the language bound to `?`) of an article shown
  * in the feed, and not one of an older English whose new English used up its
- * tries (SHOWN: not `failed`).
+ * tries (SHOWN: not `failed`, unless its text is of the English it failed for).
  */
 const TRANSLATED = `t.lang = ? AND t.lang_seq IS NOT NULL AND a.is_news = 1 AND ${SHOWN}`;
 

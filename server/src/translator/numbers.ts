@@ -2,8 +2,9 @@
 // the English must also be in the translation, each one by a number of its own,
 // so "5 ministers in 5 regions" needs two fives. Numbers are compared by value,
 // so a translation may write them the way its language does: 1,250,000 as
-// "1 250 000", 3.5% as "3,5 %", 1.2 billion as "1,2 млрд", 11:59pm as "23:59"
-// or "23.59", 15.10.2026 as "15 жовтня 2026".
+// "1 250 000", 3.5% as "3,5 %", 1.2 billion as "1,2 млрд" or "1.200 millones",
+// 11:59pm as "23:59" or "23.59", 16.30 hours as "16:30", 15.10.2026 as
+// "15 жовтня 2026".
 
 /** How a language writes numbers and dates: LANGUAGES in ./index.ts has one per language. */
 export interface NumberStyle {
@@ -22,7 +23,21 @@ export interface NumberStyle {
   thousandsDot?: boolean;
   /** The month names as written after a day ("14 жовтня"), January first, in lower case. */
   months: readonly string[];
+  /**
+   * Words for millions, billions and more after a number, each a pattern (in
+   * lower case, without groups of its own) with its power of ten: "2.860 millones" is 2,860,000,000, so
+   * it stands for "2.86 billion". Not thousands: a translation writes them in
+   * digits, as the prompt asks, so "500 тисяч" for 500,000 is missing.
+   */
+  scales: readonly (readonly [pattern: string, power: number])[];
 }
+
+/** The English words for millions, billions and more after a number. */
+const ENGLISH_SCALES: NumberStyle["scales"] = [
+  ["millions?", 6],
+  ["billions?|bn", 9],
+  ["trillions?", 12],
+];
 
 /**
  * Digits, with the separators numbers use between them: 1,250,000 · 3.5 ·
@@ -54,6 +69,42 @@ const ISO_DATE = /(?<![\d.,/-])(\d{4})-(\d{1,2})-(\d{1,2})(?![\d/-]|[.,]\d)/g;
  * Nr. (German), n.º, nº or núm. (Spanish), and No. copied from the English.
  */
 const IDENTIFIER = /(?:№|(?<!\p{L})(?:[Nn]o\.|Nr\.|[Nn]úm\.|[Nn]\.?\s?[º°]))\s*$/u;
+
+/** Each language's scale words as one sticky pattern, a group per word, made once. */
+const scalePatterns = new WeakMap<NumberStyle["scales"], RegExp>();
+
+/** The power of ten of a scale word at `end` of `text` (right after a number, spaces between at most). */
+function scaleAt(text: string, end: number, scales: NumberStyle["scales"]): number | null {
+  let pattern = scalePatterns.get(scales);
+  if (!pattern) {
+    pattern = new RegExp(`[\\s\\u00a0\\u202f]*(?:${scales.map(([words]) => `(${words})`).join("|")})(?!\\p{L})`, "iuy");
+    scalePatterns.set(scales, pattern);
+  }
+  pattern.lastIndex = end;
+  const match = pattern.exec(text);
+  const group = match ? match.slice(1).findIndex((g) => g !== undefined) : -1;
+  return group < 0 ? null : scales[group][1];
+}
+
+/** A number times a power of ten, as text: ("2.86", 9) → "2860000000", ("1.2345", 3) → "1234.5". */
+function scaled(value: string, power: number): string {
+  const [whole, fraction = ""] = value.split(".");
+  const digits = whole + fraction.padEnd(power, "0");
+  return canonical(`${digits.slice(0, whole.length + power)}.${digits.slice(whole.length + power)}`);
+}
+
+/**
+ * The numbers of a run of digits (numbersIn) with a scale word after them:
+ * the last number also stands for its full value, so "2.86 billion" is also
+ * 2860000000, and "2.860 millones" too. A scale word is not checked otherwise.
+ */
+function withScale(found: Found[], text: string, end: number, scales: NumberStyle["scales"]): Found[] {
+  const power = scaleAt(text, end, scales);
+  const last = found.at(-1)?.slots.at(-1);
+  if (power === null || !last) return found;
+  last.push(...last.filter((r) => /^\d+(?:\.\d+)?$/.test(r)).map((r) => scaled(r, power)));
+  return found;
+}
 
 const time = (hour: number, minutes: string) => `${hour}:${minutes}`;
 const isTime = (hour: number, minutes: number) => hour <= 24 && minutes <= 59;
@@ -127,10 +178,11 @@ interface RunStyle {
 /** The numbers of a run of digits (NUMBER); `style` is null for the English. */
 function numbersIn(text: string, at: number, style: RunStyle | null): Found[] {
   const values = readRun(text, !style, style?.decimalComma ?? false, style?.thousandsDot);
-  const dotted = style ? DOTTED_TIME.exec(text) : null;
+  const dotted = DOTTED_TIME.exec(text);
   if (dotted && isTime(Number(dotted[1]), Number(dotted[2]))) {
-    // 17.00 and 23.59 are also times. With thousandsDot they are no decimal, but still
-    // stand for the English that wrote them the same way (17.00 or 17, 23.59).
+    // 17.00 and 23.59 are also times, in the English ("from 9 to 16.30 hours", which a
+    // translation may write 16:30) and in a translation. With thousandsDot they are no
+    // decimal, but still stand for the English that wrote them the same way (17.00 or 17, 23.59).
     if (!values.length) values.push(canonical(text));
     values.push(time(Number(dotted[1]), dotted[2]));
   }
@@ -202,7 +254,9 @@ function neededIn(english: string): Found[] {
     if (!isTime(hour, Number(minutes))) return null;
     return { text, at: index, rank: 2, slots: [[time(hour, minutes), ...(minutes === "00" ? [String(hour)] : [])]] };
   });
-  const numbers = [...times.rest.matchAll(NUMBER)].flatMap((m) => numbersIn(m[0], m.index ?? 0, null));
+  const numbers = [...times.rest.matchAll(NUMBER)].flatMap((m) =>
+    withScale(numbersIn(m[0], m.index ?? 0, null), times.rest, (m.index ?? 0) + m[0].length, ENGLISH_SCALES),
+  );
   return [...times12.found, ...dates.found, ...isoDates.found, ...times.found, ...numbers].sort((x, y) => x.at - y.at);
 }
 
@@ -214,7 +268,8 @@ function numbersOf(translation: string, style: NumberStyle): string[][] {
   const numbers = [...times.rest.matchAll(NUMBER)].flatMap((m) => {
     // An identifier after "№" or "Nr." (a law number) may keep the English comma: it is a label, not an amount.
     const identifier = IDENTIFIER.test(times.rest.slice(0, m.index));
-    return numbersIn(m[0], m.index ?? 0, identifier ? { decimalComma: false } : style);
+    if (identifier) return numbersIn(m[0], m.index ?? 0, { decimalComma: false });
+    return withScale(numbersIn(m[0], m.index ?? 0, style), times.rest, (m.index ?? 0) + m[0].length, style.scales);
   });
   const monthNames = style.months.length
     ? [...translation.matchAll(new RegExp(`(?<!\\p{L})(?:${style.months.join("|")})(?!\\p{L})`, "giu"))].map((m) => [

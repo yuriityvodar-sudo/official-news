@@ -1,7 +1,7 @@
 // The languages news articles are translated into (#46), and what the prompt
 // and the answer check need to know about each one.
 import type { Language } from "./prompt";
-import { ENGLISH, GERMAN, SPANISH } from "./words";
+import { ENGLISH, GERMAN, SPANISH, except } from "./words";
 
 /** The languages news articles are translated into, besides English. */
 export const LANGS = ["uk", "ru", "es", "de"] as const;
@@ -24,6 +24,7 @@ export const LANGUAGES: Record<Lang, Language> = {
     numbers: {
       decimalComma: true,
       months: ["січня", "лютого", "березня", "квітня", "травня", "червня", "липня", "серпня", "вересня", "жовтня", "листопада", "грудня"],
+      scales: [["мільйон\\p{L}*|млн", 6], ["мільярд\\p{L}*|млрд", 9], ["трильйон\\p{L}*|трлн", 12]],
     },
   },
   ru: {
@@ -35,6 +36,7 @@ export const LANGUAGES: Record<Lang, Language> = {
     numbers: {
       decimalComma: true,
       months: ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"],
+      scales: [["миллион\\p{L}*|млн", 6], ["миллиард\\p{L}*|млрд", 9], ["триллион\\p{L}*|трлн", 12]],
     },
   },
   // Spanish and German use the English letters, so their check counts function
@@ -43,21 +45,27 @@ export const LANGUAGES: Record<Lang, Language> = {
   es: {
     name: "Spanish",
     letters: LATIN,
-    stopWords: { own: SPANISH, foreign: [ENGLISH, GERMAN] },
+    // "bis" is also Spanish: "artículo 5 bis".
+    stopWords: { own: SPANISH, english: ENGLISH, other: except(GERMAN, "bis") },
     numbers: {
       decimalComma: true,
       thousandsDot: true,
       months: ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"],
+      // "mil millones" is a billion; a "billón" is a million millions.
+      scales: [["millón|millones", 6], ["mil millones", 9], ["billón|billones", 12]],
     },
   },
   de: {
     name: "German",
     letters: LATIN,
-    stopWords: { own: GERMAN, foreign: [ENGLISH, SPANISH] },
+    // "los" and "her" are also German: "geht los", "lange her".
+    stopWords: { own: GERMAN, english: except(ENGLISH, "her"), other: except(SPANISH, "los") },
     numbers: {
       decimalComma: true,
       thousandsDot: true,
       months: ["januar", "februar", "märz", "april", "mai", "juni", "juli", "august", "september", "oktober", "november", "dezember"],
+      // A German "Billion" is a million millions.
+      scales: [["millionen|million|mio\\.", 6], ["milliarden|milliarde|mrd\\.", 9], ["billionen|billion", 12]],
     },
   },
 };

@@ -24,7 +24,7 @@ A growing `oldestWaitingAgeMinutes` with nothing `translating` means the languag
 | Translations in a state, in a language | `npm run queue -- list --state failed --lang es --remote` (`--limit 50` by default) |
 | Every state change of one article, with times and reasons | `npm run queue -- history <article-id> [lang] --remote` |
 | One translation again, with fresh tries (a failed one, a stuck one, or a published one to redo) | `npm run queue -- requeue <article-id> <lang> --remote` |
-| A whole language again, for example after a prompt change (published ones stay visible until redone) | `npm run queue -- requeue-lang <lang> --remote` |
+| A whole language again, for example after a prompt change (published ones stay visible until redone, and also if the redo fails; a run translating one at that moment does not store its old answer) | `npm run queue -- requeue-lang <lang> --remote` |
 | Only a language's failed ones | `npm run queue -- requeue-lang <lang> --failed --remote` |
 | Stop a language for a while: still queued, nothing translated | `npm run queue -- pause <lang> --remote`, then `resume <lang>` |
 | Turn a language off: no longer queued; what is published stays | `npm run queue -- disable <lang> --remote` |
@@ -35,7 +35,8 @@ The languages are `uk`, `ru`, `es` and `de` (`LANGS` in `server/src/translator/l
 
 ## Timing and limits
 
-- The translator runs every even minute (`0-58/2 * * * *`), up to 4 translations a run: one article in each language. Groq (Ukrainian, Russian) and Z.ai (Spanish, German) each get one request at a time.
+- The translator runs every even minute (`0-58/2 * * * *`), up to 4 translations a run: one article in each language, oldest English first, so a backlog or an outage in one language (a language just enabled, Z.ai down) never holds back the others. Groq (Ukrainian, Russian) and Z.ai (Spanish, German) each get one request at a time.
+- A language back from a long pause (or a key set late) may find articles that left the feed meanwhile: a run marks them `skipped`, up to 4 a run, and they take no place among its translations.
 - A new Cloudflare cron schedule can take about an hour to start firing after the deploy (#50). Check `wrangler tail` for `translator` lines an hour after the first deploy before calling it broken.
 - Waits: after an unusable answer 10, then 20 minutes; after a try no provider answered 2, 4, 8 … up to 60 minutes, without counting an attempt. A claim older than 10 minutes (a run that was cut off) goes back to `queued`.
 - Keys: `GROQ_API_KEY` and `ZAI_API_KEY` are Worker secrets (`docs/setup.md`). Without one, its languages wait in the queue; nothing is lost.
