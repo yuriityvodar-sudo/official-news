@@ -35,12 +35,36 @@ class FeedController extends ChangeNotifier {
   /// Newer articles waiting on the server, shown as a pill instead of moving the list.
   int newCount = 0;
 
+  /// The last "load more" failed (offline); the end of the list offers a retry instead of retrying on every scroll.
+  bool loadMoreFailed = false;
+
+  /// Bumped by every refresh, so a page that was still loading for an older feed is dropped.
+  int _generation = 0;
+  bool _disposed = false;
+
   bool get hasMore => _cursor != null;
+
+  @override
+  void notifyListeners() {
+    // A request can finish after the screen has gone away.
+    if (!_disposed) super.notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
 
   /// Shows the feed saved on the phone at once, then asks for the fresh one.
   Future<void> start() async {
     _store = await _openStore();
-    readIds = _store!.readIds();
+    // Articles opened before the store was ready are kept and saved now.
+    final stored = _store!.readIds();
+    for (final id in readIds.difference(stored)) {
+      await _store!.markRead(id);
+    }
+    readIds = {...stored, ...readIds};
     final saved = _store!.lastPage();
     if (saved != null) {
       _show(saved);
@@ -66,18 +90,24 @@ class FeedController extends ChangeNotifier {
     }
   }
 
-  Future<void> loadMore() async {
+  /// The next page; `retry` is the user tapping "Try again" after a failure.
+  Future<void> loadMore({bool retry = false}) async {
     final cursor = _cursor;
-    if (cursor == null || loadingMore) return;
+    if (cursor == null || loadingMore || (loadMoreFailed && !retry)) return;
+    final generation = _generation;
     loadingMore = true;
+    loadMoreFailed = false;
     notifyListeners();
     try {
       final page = await api.fetchArticles(cursor: cursor);
+      if (generation != _generation) {
+        return; // a refresh replaced the feed meanwhile
+      }
       final known = items.map((a) => a.id).toSet();
       items = [...items, ...page.items.where((a) => !known.contains(a.id))];
       _cursor = page.nextCursor;
     } catch (_) {
-      // The cursor stays, so the next scroll to the end tries again.
+      if (generation == _generation) loadMoreFailed = true;
     } finally {
       loadingMore = false;
       notifyListeners();
@@ -110,6 +140,8 @@ class FeedController extends ChangeNotifier {
   }
 
   void _show(ArticlesPage page) {
+    _generation++;
+    loadMoreFailed = false;
     top = page.top;
     items = page.items;
     _cursor = page.nextCursor;
