@@ -33,8 +33,22 @@ const ARTICLE_COLUMNS = `
 
 const FROM_ARTICLES = "FROM articles a JOIN sources s ON s.id = a.source_id";
 
-/** The feed shows official decisions from the last 7 days (docs/contract.md). */
-const FEED_WINDOW = "a.published_at >= strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-7 days')";
+/**
+ * A feed page: official decisions from the last 7 days (docs/contract.md), in feed order.
+ * The page walks articles_feed_seq newest first: the unary + keeps SQLite from using the
+ * (is_news, published_at) index instead, which would read the whole window and sort. The
+ * lower bound stops the walk at the 7-day edge (added_at >= published_at always, and
+ * added_at rises with feed_seq), so even the last page reads only what it shows.
+ */
+export const PAGE_CONDITIONS = [
+  "+a.is_news = 1",
+  "a.feed_seq IS NOT NULL",
+  "+a.published_at >= strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-7 days')",
+  `a.feed_seq >= COALESCE((SELECT b.feed_seq FROM articles b
+                           WHERE b.feed_seq IS NOT NULL
+                             AND b.added_at >= strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-7 days')
+                           ORDER BY b.added_at, b.feed_seq LIMIT 1), 0)`,
+];
 
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 50;
@@ -156,7 +170,7 @@ async function listArticles(url: URL, env: Env): Promise<Response> {
     }
   }
 
-  const where = ["a.is_news = 1", "a.feed_seq IS NOT NULL", FEED_WINDOW];
+  const where = [...PAGE_CONDITIONS];
   const binds: (string | number)[] = [];
 
   const afterParam = params.get("after");
@@ -173,11 +187,13 @@ async function listArticles(url: URL, env: Env): Promise<Response> {
     if (Number.isNaN(since.getTime())) return badRequest("since must be an ISO 8601 time");
     // Builds before #39 send the publication time of the first article they show. In
     // the feed's order that article is the newest to appear, so "new" means a higher
-    // feed_seq than any article published by then, not a later publication time (which
-    // would count late articles further down as new, again on every refresh).
+    // feed_seq than that article's: found as the newest published at or before `since`.
+    // (Not the highest feed_seq published by then: a late article that arrived after
+    // the app loaded would hide everything that came before it.)
     where.push(
-      `a.feed_seq > COALESCE((SELECT MAX(b.feed_seq) FROM articles b
-                              WHERE b.is_news = 1 AND b.published_at <= ? AND b.feed_seq IS NOT NULL), 0)`,
+      `a.feed_seq > COALESCE((SELECT b.feed_seq FROM articles b
+                              WHERE b.is_news = 1 AND b.feed_seq IS NOT NULL AND b.published_at <= ?
+                              ORDER BY b.published_at DESC, b.feed_seq ASC LIMIT 1), 0)`,
     );
     binds.push(toStoredTime(since));
   }

@@ -1,5 +1,6 @@
 import { env, exports } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
+import { PAGE_CONDITIONS } from "../src/api";
 
 interface Article {
   id: string;
@@ -39,6 +40,8 @@ interface TestArticle {
   isNews?: number | null;
   importance?: number | null;
   topics?: string;
+  /** When it appeared in the feed; defaults to now, as the summarizer stamps it. */
+  addedAt?: string;
 }
 
 async function insertArticles(articles: TestArticle[]) {
@@ -50,7 +53,7 @@ async function insertArticles(articles: TestArticle[]) {
                                headline, is_news, importance, topics, decision_type, feed_seq, added_at)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 'decision',
                  CASE WHEN ?8 = 1 THEN (SELECT COALESCE(MAX(feed_seq), 0) + 1 FROM articles WHERE feed_seq IS NOT NULL) END,
-                 CASE WHEN ?8 = 1 THEN ?6 END)`,
+                 CASE WHEN ?8 = 1 THEN ?11 END)`,
       ).bind(
         a.id,
         a.sourceId ?? "de-federal-government",
@@ -62,6 +65,7 @@ async function insertArticles(articles: TestArticle[]) {
         a.isNews === undefined ? 1 : a.isNews,
         a.importance ?? null,
         a.topics ?? '["economy"]',
+        a.addedAt ?? hoursAgo(0),
       ),
     ),
   );
@@ -156,12 +160,12 @@ describe("GET /articles", () => {
     expect(new Set(seen).size).toBe(seen.length);
   });
 
-  it("with since, returns only articles published after that time", async () => {
-    await insertArticles([
-      { id: "older", publishedAt: hoursAgo(5) },
-      { id: "newer", publishedAt: hoursAgo(1) },
-    ]);
-    const page = await getPage(`/articles?since=${encodeURIComponent(hoursAgo(2))}`);
+  it("with since, returns what appeared after the article the app showed first", async () => {
+    await insertArticles([{ id: "older", publishedAt: hoursAgo(5) }]);
+    const top = (await getPage("/articles")).items[0];
+    expect(top.id).toBe("older");
+    await insertArticles([{ id: "newer", publishedAt: hoursAgo(1) }]);
+    const page = await getPage(`/articles?since=${encodeURIComponent(top.publishedAt)}`);
     expect(page.items.map((a) => a.id)).toEqual(["newer"]);
     expect(page.top).toEqual([]);
   });
@@ -176,6 +180,42 @@ describe("GET /articles", () => {
     expect((await getPage(since)).items).toEqual([]);
     await insertArticles([{ id: "fresh", publishedAt: hoursAgo(0.5) }]);
     expect((await getPage(since)).items.map((a) => a.id)).toEqual(["fresh"]);
+  });
+
+  it("with since from a build before #39, counts a late article and the fresh ones before it", async () => {
+    await insertArticles([{ id: "seen", publishedAt: hoursAgo(1) }]);
+    const top = (await getPage("/articles")).items[0];
+    // After the app loaded: one fresh decision, then one published 40 hours ago.
+    await insertArticles([
+      { id: "fresh", publishedAt: hoursAgo(0.5) },
+      { id: "late", publishedAt: hoursAgo(40) },
+    ]);
+    const page = await getPage(`/articles?since=${encodeURIComponent(top.publishedAt)}`);
+    expect(page.items.map((a) => a.id)).toEqual(["late", "fresh"]);
+  });
+
+  it("walks the feed index and stops at the 7-day edge instead of reading older rows", async () => {
+    // As in the live table: older rows have lower numbers and appeared earlier. The seed
+    // rows' numbers are dropped so the 60 old rows can come first.
+    await env.DB.prepare("UPDATE articles SET feed_seq = NULL, added_at = NULL").run();
+    await insertArticles(
+      Array.from({ length: 60 }, (_, i) => {
+        const at = hoursAgo(10 * 24 + i);
+        return { id: `old-${i}`, publishedAt: at, addedAt: at };
+      }).reverse(),
+    );
+    await insertArticles(Array.from({ length: 3 }, (_, i) => ({ id: `now-${i}`, publishedAt: hoursAgo(1) })));
+    const sql = `SELECT a.id FROM articles a JOIN sources s ON s.id = a.source_id
+                 WHERE ${PAGE_CONDITIONS.join(" AND ")} ORDER BY a.feed_seq DESC LIMIT 21`;
+    const plan = await env.DB.prepare(`EXPLAIN QUERY PLAN ${sql}`).all<{ detail: string }>();
+    const details = plan.results.map((r) => r.detail).join(" | ");
+    expect(details).toContain("articles_feed_seq");
+    expect(details).not.toContain("TEMP B-TREE FOR ORDER BY");
+    const { results, meta } = await env.DB.prepare(sql).all<{ id: string }>();
+    expect(results.map((r) => r.id)).toEqual(expect.arrayContaining(["now-0", "now-1", "now-2"]));
+    expect(results.some((r) => r.id.startsWith("old-"))).toBe(false);
+    // The 3 new rows (and their sources), not the 60 older ones.
+    expect(meta.rows_read).toBeLessThan(20);
   });
 
   it("continues an old cursor whose article is gone instead of ending the feed", async () => {

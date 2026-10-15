@@ -166,6 +166,22 @@ describe("runSummarizer", () => {
     expect((await row("a"))?.feed_seq).toBe(base + 2);
   });
 
+  it("numbers an article an older Worker made visible during a deploy, one per run", async () => {
+    // What main's summarizer writes after migration 0006 and before the new code is live.
+    for (const id of ["raced-1", "raced-2"]) {
+      await insertUnsummarized(id, now());
+      await env.DB.prepare("UPDATE articles SET is_news = 1, summarized_at = ?, headline = 'H' WHERE id = ?").bind(now(), id).run();
+    }
+    await runSummarizer(env, { maxArticles: 5 }, fakeModel().summarize);
+    const numbered = [await row("raced-1"), await row("raced-2")].filter((r) => r?.feed_seq != null);
+    expect(numbered).toHaveLength(1);
+    expect(numbered[0]?.added_at).toBeTruthy();
+    await runSummarizer(env, { maxArticles: 5 }, fakeModel().summarize);
+    const seqs = [(await row("raced-1"))?.feed_seq, (await row("raced-2"))?.feed_seq];
+    expect(seqs.every((n) => typeof n === "number")).toBe(true);
+    expect(seqs[0]).not.toBe(seqs[1]);
+  });
+
   it("reads the highest feed_seq from its index, not the whole table", async () => {
     const { results } = await env.DB.prepare(
       "EXPLAIN QUERY PLAN SELECT COALESCE(MAX(feed_seq), 0) + 1 FROM articles WHERE feed_seq IS NOT NULL",

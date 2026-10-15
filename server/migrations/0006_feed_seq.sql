@@ -23,4 +23,14 @@ SET feed_seq = (
 WHERE is_news = 1;
 
 -- One number per article; a duplicate would be a bug, so the database refuses it.
+-- A feed page walks this index newest first.
 CREATE UNIQUE INDEX articles_feed_seq ON articles (feed_seq) WHERE feed_seq IS NOT NULL;
+
+-- added_at rises with feed_seq, so the first number given at or after the 7-day edge
+-- bounds a page's walk from below: one row read instead of every older one.
+CREATE INDEX articles_added_at ON articles (added_at, feed_seq) WHERE feed_seq IS NOT NULL;
+
+-- Visible articles without a number: normally none. An older Worker can still mark
+-- articles visible after this migration and before the new code is live (the deploy
+-- runs migrations first); the summarizer numbers them through this small index.
+CREATE INDEX articles_unnumbered ON articles (id) WHERE is_news = 1 AND feed_seq IS NULL;

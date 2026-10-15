@@ -109,6 +109,17 @@ export async function runSummarizer(
   summarize: Summarize = workersAi(env),
 ): Promise<SummaryResult[]> {
   const now = new Date();
+  // A visible article without a number (made visible by an older Worker during a deploy)
+  // gets one now, and added_at = now, as it enters the feed now. One row per statement:
+  // MAX + 1 is read once per statement. Usually nothing, found through a partial index.
+  await env.DB.prepare(
+    `UPDATE articles
+     SET feed_seq = (SELECT COALESCE(MAX(feed_seq), 0) + 1 FROM articles WHERE feed_seq IS NOT NULL), added_at = ?1
+     WHERE id = (SELECT id FROM articles WHERE is_news = 1 AND feed_seq IS NULL ORDER BY id LIMIT 1)`,
+  )
+    .bind(toStoredTime(now))
+    .run();
+
   // Claim before calling the model, in one statement (as the fetcher claims its sources).
   const { results: claimed } = await env.DB.prepare(
     `UPDATE articles SET summary_claimed_at = ?1
