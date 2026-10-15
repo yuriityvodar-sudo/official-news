@@ -54,7 +54,9 @@ const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 50;
 
 /** Top today: last 24 hours, highest importance, at most 2 per country, up to 5. */
+// Picked by importance, shown newest first (feed order), so times only go down here too.
 const TOP_QUERY = `
+  SELECT * FROM (
   SELECT * FROM (
     SELECT ${ARTICLE_COLUMNS},
            ROW_NUMBER() OVER (
@@ -66,7 +68,8 @@ const TOP_QUERY = `
   )
   WHERE country_rank <= 2
   ORDER BY importance DESC, published_at DESC, id DESC
-  LIMIT 5`;
+  LIMIT 5
+  ) ORDER BY feed_seq DESC`;
 
 /** A JSON array of strings stored in D1; anything else reads as empty. */
 function parseStringArray(value: string | null): string[] {

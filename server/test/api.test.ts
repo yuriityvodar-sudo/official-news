@@ -249,7 +249,8 @@ describe("GET /articles", () => {
       { id: "it-5-old", publishedAt: hoursAgo(30), importance: 5, sourceId: "it-government-pm-meloni" },
     ]);
     const top = (await getPage("/articles")).top;
-    expect(top.map((a) => a.id)).toEqual(["de-5", "us-5", "fr-4", "de-4", "jp-3"]);
+    // Picked by importance (de-3, gb-2 and the 30-hour-old it-5 left out), shown newest first.
+    expect(top.map((a) => a.id)).toEqual(["jp-3", "fr-4", "us-5", "de-4", "de-5"]);
   });
 
   it("reads broken JSON in topics as an empty list instead of failing the feed", async () => {
