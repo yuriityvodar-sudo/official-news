@@ -30,8 +30,8 @@ export const TRANSLATORS: Record<Lang, readonly string[]> = {
 
 /**
  * Unusable answers for one article, language and English text; then that
- * language does without the article (it never shows there) until its English
- * changes.
+ * English is not tried again (a new article never shows in that language, a
+ * re-summarized one keeps its old translation) until the English changes.
  */
 export const MAX_ATTEMPTS = 3;
 
@@ -102,9 +102,10 @@ export const isLang = (value: string): value is Lang => (LANGS as readonly strin
  * rate limited or out of quota is skipped for the rest of the run; when none
  * answers, the translation waits for a later run (claim freed, no attempt
  * counted). An unusable answer counts an attempt and keeps the claim, so the
- * next try waits CLAIM_MINUTES; after MAX_ATTEMPTS the article does not show in
- * that language. When the English is summarized again, the translation is made
- * again, and the old one is served until the new one is stored.
+ * next try waits CLAIM_MINUTES; after MAX_ATTEMPTS that English is not tried
+ * again (a new article does not show in that language; a re-summarized one keeps
+ * its old translation). When the English is summarized again, the translation
+ * is made again, and the old one is served until the new one is stored.
  *
  * The run claims its translations first, in one statement, so an overlapping
  * run takes other ones and nothing is translated twice.
