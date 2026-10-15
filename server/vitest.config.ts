@@ -10,6 +10,8 @@ export default defineConfig(async () => {
     plugins: [
       cloudflareTest({
         wrangler: { configPath: "./wrangler.jsonc" },
+        // Workers AI only runs remotely; tests pass their own summarize function instead.
+        remoteBindings: false,
         miniflare: { bindings: { TEST_MIGRATIONS: migrations } },
       }),
     ],
