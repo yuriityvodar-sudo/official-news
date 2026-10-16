@@ -1,6 +1,18 @@
 import type { Env } from "../env";
-import { health } from "../health";
+import { REAL_SOURCE, health } from "../health";
+import { TOPICS, type Topic } from "../summarizer/schema";
 import { LANGS, type Lang, SHOWN, isLang, queueStatus, releaseStatus } from "../translator";
+import {
+  BLOCS,
+  COUNTRY_ERROR,
+  TOPIC_ERROR,
+  TOPIC_NAMES,
+  byName,
+  countryName,
+  localCountries,
+  readCountry,
+  readTopic,
+} from "./filters";
 
 /** A row of `articles` joined with its source, as stored in D1. */
 interface ArticleRow {
@@ -75,7 +87,49 @@ const topQuery = (columns: string, from: string, where: string) => `
   LIMIT 5
   ) ORDER BY feed_seq DESC`;
 
-const TOP_QUERY = topQuery(ARTICLE_COLUMNS, FROM_ARTICLES, "a.is_news = 1 AND a.feed_seq IS NOT NULL");
+/** The top stories among the feed's articles that pass `filters` (their values are bound first). */
+const englishTop = (filters: Filters) =>
+  topQuery(ARTICLE_COLUMNS, FROM_ARTICLES, ["a.is_news = 1", "a.feed_seq IS NOT NULL", ...filters.where].join(" AND "));
+
+// Filters (#67, #68): `country` (Local) and `topic`, the same on every page, in
+// `after=`, in top and in every language, so a cursor continues within its filter.
+
+/** The feed's filters as conditions on the article (`a`), with the values they bind, in order. */
+export interface Filters {
+  where: string[];
+  binds: string[];
+}
+
+/**
+ * An article's topics as a JSON list for json_each: anything that is not a
+ * list reads as none, as in toArticle, instead of failing the query (CASE
+ * tries json_type only on valid JSON).
+ */
+const TOPIC_LIST = `CASE WHEN NOT json_valid(a.topics) THEN '[]' WHEN json_type(a.topics) = 'array' THEN a.topics ELSE '[]' END`;
+
+/**
+ * Local (`country`): the articles of that country's sources, and of every bloc
+ * it belongs to (BLOCS: an EU member also gets the EU's). `topic`: articles the
+ * AI gave that topic. Neither: the whole feed (Global, all topics).
+ *
+ * The country is checked on the article's source_id against the matching
+ * sources, read once (a few dozen rows), so a page skips another country's
+ * article without reading its source: about 270 rows read for a page of a
+ * country with few articles, against about 360 with `s.country` (live D1, 16 Oct).
+ */
+export function feedFilters(country: string | null, topic: Topic | null): Filters {
+  const filters: Filters = { where: [], binds: [] };
+  if (country) {
+    const countries = localCountries(country);
+    filters.where.push(`a.source_id IN (SELECT id FROM sources WHERE country IN (${countries.map(() => "?").join(", ")}))`);
+    filters.binds.push(...countries);
+  }
+  if (topic) {
+    filters.where.push(`EXISTS (SELECT 1 FROM json_each(${TOPIC_LIST}) WHERE value = ?)`);
+    filters.binds.push(topic);
+  }
+  return filters;
+}
 
 /** A JSON array of strings stored in D1; anything else reads as empty. */
 function parseStringArray(value: string | null): string[] {
@@ -173,6 +227,10 @@ function nonNegativeInteger(value: string): number | null {
  * appears in all languages at once, except where a translation failed or the
  * language is paused). `translationsDelayed` says the language is paused or
  * off, so its newest articles may be missing for a while.
+ *
+ * With `country` and/or `topic` (#67, #68), the same feed keeping only the
+ * articles that pass the filters (feedFilters): items, cursors, `after` and
+ * top alike.
  */
 async function listArticles(url: URL, env: Env): Promise<Response> {
   const params = url.searchParams;
@@ -188,10 +246,15 @@ async function listArticles(url: URL, env: Env): Promise<Response> {
 
   const lang = readLang(params);
   if (lang === undefined) return badRequest(LANG_ERROR);
+  const country = readCountry(params);
+  if (country === undefined) return badRequest(COUNTRY_ERROR);
+  const topic = readTopic(params);
+  if (topic === undefined) return badRequest(TOPIC_ERROR);
+  const filters = feedFilters(country, topic);
 
-  const where = [...PAGE_CONDITIONS, ...(lang ? TRANSLATED_CONDITIONS : [])];
-  // The language is bound in the join (FROM_TRANSLATED).
-  const binds: (string | number)[] = lang ? [lang] : [];
+  const where = [...PAGE_CONDITIONS, ...(lang ? TRANSLATED_CONDITIONS : []), ...filters.where];
+  // The language is bound in the join (FROM_TRANSLATED), before the conditions.
+  const binds: (string | number)[] = [...(lang ? [lang] : []), ...filters.binds];
 
   const afterParam = params.get("after");
   if (afterParam !== null) {
@@ -249,7 +312,11 @@ async function listArticles(url: URL, env: Env): Promise<Response> {
   ).bind(...binds, limit + 1);
 
   const firstPage = cursorParam === null && sinceParam === null && afterParam === null;
-  const topQuery = firstPage ? (lang ? env.DB.prepare(TRANSLATED_TOP_QUERY).bind(lang) : env.DB.prepare(TOP_QUERY)) : null;
+  const topQuery = firstPage
+    ? lang
+      ? env.DB.prepare(translatedTop(filters)).bind(...filters.binds, lang)
+      : env.DB.prepare(englishTop(filters)).bind(...filters.binds)
+    : null;
   const switchQuery = lang ? env.DB.prepare(LANG_SWITCH).bind(lang) : null;
   const [page, ...more] = await env.DB.batch<TranslatedRow & { delayed?: number }>(
     [pageQuery, topQuery, switchQuery].filter((q): q is D1PreparedStatement => q !== null),
@@ -310,12 +377,13 @@ export const TRANSLATED_CONDITIONS = ["t.headline IS NOT NULL", SHOWN];
 
 /**
  * A language's top stories: the English top stories (same selection, same
- * order) that have a shown translation into it, so the language never gets a
- * top story the English feed does not have.
+ * order, same filters) that have a shown translation into it, so the language
+ * never gets a top story the English feed does not have. Binds the filters'
+ * values, then the language.
  */
-const TRANSLATED_TOP_QUERY = `
+const translatedTop = (filters: Filters) => `
   SELECT top.*, t.headline AS t_headline, t.short_summary AS t_short_summary, t.summary AS t_summary
-  FROM (${TOP_QUERY}) top JOIN article_translations t ON t.article_id = top.id AND t.lang = ?
+  FROM (${englishTop(filters)}) top JOIN article_translations t ON t.article_id = top.id AND t.lang = ?
   WHERE ${TRANSLATED_CONDITIONS.join(" AND ")}
   ORDER BY top.feed_seq DESC`;
 
@@ -357,11 +425,77 @@ async function getTranslated(id: string, lang: Lang, env: Env): Promise<Response
   return row ? json(toTranslatedArticle(row, lang)) : json({ error: "Not found" }, 404);
 }
 
+/**
+ * The topics of the feed's articles that pass `filters`, one row per article.
+ * Counted in the Worker: a GROUP BY over json_each would also count every
+ * article's topics, in its temporary table, as rows read (about 850 instead of
+ * 180 for the whole feed, live D1, 16 Oct).
+ */
+export const feedTopics = (filters: Filters) => `
+  SELECT a.topics FROM articles a
+  WHERE ${[...PAGE_CONDITIONS, ...filters.where].join(" AND ")}`;
+
+/**
+ * `GET /topics?lang=&country=` (#67): the topics with at least one article in
+ * the feed's 7 days (in that country's Local feed, with `country`), busiest
+ * first (ties in the order of TOPICS), named in `lang`. The app builds its
+ * Topics menu from it, so a topic with no posts is never offered. Counted on
+ * the feed's articles, the same in every language (release together), read as
+ * toArticle reads them. Walks the feed's 7 days through articles_feed_seq:
+ * about as many rows as the feed holds (150 to 250).
+ */
+async function listTopics(url: URL, env: Env): Promise<Response> {
+  const lang = readLang(url.searchParams);
+  if (lang === undefined) return badRequest(LANG_ERROR);
+  const country = readCountry(url.searchParams);
+  if (country === undefined) return badRequest(COUNTRY_ERROR);
+  const filters = feedFilters(country, null);
+
+  const { results } = await env.DB.prepare(feedTopics(filters))
+    .bind(...filters.binds)
+    .all<{ topics: string | null }>();
+
+  const counts = new Map<string, number>();
+  for (const row of results) {
+    for (const topic of new Set(parseStringArray(row.topics))) counts.set(topic, (counts.get(topic) ?? 0) + 1);
+  }
+  const names = TOPIC_NAMES[lang ?? "en"];
+  const topics = TOPICS.filter((topic) => counts.has(topic))
+    // Stable: equal counts keep the order of TOPICS.
+    .sort((a, b) => (counts.get(b) ?? 0) - (counts.get(a) ?? 0))
+    .map((id) => ({ id, name: names[id] }));
+  return json({ topics });
+}
+
+/**
+ * `GET /countries?lang=` (#68): the countries the app can show a Local feed
+ * for, the countries of active sources (real ones, not the Kickoff seed),
+ * without blocs (BLOCS: the EU), named in `lang` and sorted by that name. The
+ * sources table holds a few dozen rows.
+ */
+async function listCountries(url: URL, env: Env): Promise<Response> {
+  const lang = readLang(url.searchParams);
+  if (lang === undefined) return badRequest(LANG_ERROR);
+  const nameLang = lang ?? "en";
+
+  const { results } = await env.DB.prepare(
+    `SELECT DISTINCT country FROM sources WHERE status = 'active' AND ${REAL_SOURCE}`,
+  ).all<{ country: string }>();
+
+  const countries = results
+    .map((r) => r.country)
+    .filter((code) => /^[A-Z]{2}$/.test(code) && !(code in BLOCS))
+    .map((code) => ({ code, name: countryName(code, nameLang) }));
+  return json({ countries: byName(countries, nameLang) });
+}
+
 async function route(request: Request, env: Env): Promise<Response> {
   if (request.method !== "GET") return json({ error: "Method not allowed" }, 405, { allow: "GET" });
 
   const url = new URL(request.url);
   if (url.pathname === "/articles") return listArticles(url, env);
+  if (url.pathname === "/topics") return listTopics(url, env);
+  if (url.pathname === "/countries") return listCountries(url, env);
 
   const match = url.pathname.match(/^\/articles\/([^/]+)$/);
   if (match) {
