@@ -65,6 +65,12 @@ export interface SourceConfig {
   encoding?: string;
   /** false: never open item pages (robots.txt forbids it, or they are built by JavaScript); `fullText` is still read when set. */
   itemPages?: boolean;
+  /**
+   * false: never take og:image/twitter:image from item pages (the site's only
+   * picture is its emblem, which its terms forbid with adaptations: the ILO).
+   * The item page is then opened only for a teaser's text, never for a picture.
+   */
+  pageImage?: boolean;
   /** CSS selector of the main text on item pages (and on the last page of `fullText`); default: main, then article, then body. */
   textSelector?: string;
   /**

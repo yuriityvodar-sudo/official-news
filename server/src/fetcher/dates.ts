@@ -4,6 +4,7 @@ import { toStoredTime } from "./text";
 export interface DateSpec {
   /**
    * Numeric pattern with yyyy, mm, dd, HH, MM, e.g. "dd/mm/yyyy" or "yyyy. mm. dd."; "fr" for "14 octobre 2026";
+   * "en" for "7 September 2026" or "7 Sep 2026", also after other words ("Record of decisions | 7 September 2026");
    * "uk" for "16 жовтня 2026", "15 жовтня 17:34" or "12:31, 16 жовтня" (no year: the latest such date).
    */
   format?: string;
@@ -20,6 +21,7 @@ export interface ParsedDate {
   dateOnly: boolean;
 }
 
+const ENGLISH_MONTHS = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
 const FRENCH_MONTHS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
 /** Genitive, as a date writes them ("16 жовтня"). */
 const UKRAINIAN_MONTHS = ["січня", "лютого", "березня", "квітня", "травня", "червня", "липня", "серпня", "вересня", "жовтня", "листопада", "грудня"];
@@ -72,6 +74,12 @@ export function parseDate(raw: string | null | undefined, spec: DateSpec = {}, n
     const m = text.toLowerCase().match(/(\d{1,2})(?:er)?\s+([a-zéû]+)\s+(\d{4})/);
     const month = m ? FRENCH_MONTHS.indexOf(m[2]) + 1 : 0;
     return m ? build({ y: Number(m[3]), mo: month, d: Number(m[1]) }, spec, now) : null;
+  }
+  if (spec.format === "en") {
+    // The month's full name or its first three letters ("Sep."); the date may follow other words.
+    const m = text.toLowerCase().match(/\b(\d{1,2})\s+([a-z]+)\.?\s+(\d{4})\b/);
+    const month = m ? ENGLISH_MONTHS.findIndex((name) => name === m[2] || name.slice(0, 3) === m[2]) + 1 : 0;
+    return m && month ? build({ y: Number(m[3]), mo: month, d: Number(m[1]) }, spec, now) : null;
   }
   if (spec.format === "uk") {
     const lower = text.toLowerCase();
