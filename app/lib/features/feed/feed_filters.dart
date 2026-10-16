@@ -15,7 +15,6 @@ class FeedFilterBar extends StatelessWidget {
     required this.scope,
     required this.localName,
     required this.topic,
-    required this.topicName,
     required this.topics,
     required this.onScope,
     required this.onTopic,
@@ -27,9 +26,8 @@ class FeedFilterBar extends StatelessWidget {
   /// country to offer, so Global is all there is).
   final String? localName;
 
-  /// The chosen topic's id and name, or null for all topics.
+  /// The chosen topic's id, or null for all topics.
   final String? topic;
-  final String? topicName;
 
   /// The Topics menu, busiest first; null hides the Topics chip (a server
   /// without topics) unless a topic is chosen, so it can always be cleared.
@@ -45,6 +43,7 @@ class FeedFilterBar extends StatelessWidget {
     final menu = topics;
     final chosen = topic;
     final showTopics = menu != null || chosen != null;
+    String name(String id) => topicName(id, menu, l10n);
     if (local == null && !showTopics) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.only(top: 10),
@@ -79,9 +78,7 @@ class FeedFilterBar extends StatelessWidget {
             _Pulldown(
               key: const ValueKey('filter-topic'),
               icon: CupertinoIcons.square_grid_2x2,
-              label: chosen == null
-                  ? l10n.filterAllTopics
-                  : (topicName ?? chosen),
+              label: chosen == null ? l10n.filterAllTopics : name(chosen),
               active: chosen != null,
               items: [
                 _Item(
@@ -93,9 +90,9 @@ class FeedFilterBar extends StatelessWidget {
                 // The chosen topic stays in the menu, checked, when it has no
                 // articles under the other filter now.
                 if (chosen != null && !(menu ?? []).any((t) => t.id == chosen))
-                  _Item(topicName ?? chosen, null, true, () => onTopic(chosen)),
+                  _Item(name(chosen), null, true, () => onTopic(chosen)),
                 for (final t in menu ?? const <FeedTopic>[])
-                  _Item(t.name, null, t.id == chosen, () => onTopic(t.id)),
+                  _Item(name(t.id), null, t.id == chosen, () => onTopic(t.id)),
               ],
             ),
         ],

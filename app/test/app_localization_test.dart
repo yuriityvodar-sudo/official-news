@@ -12,6 +12,7 @@ import 'package:official_news/core/decision_types.dart';
 import 'package:official_news/core/feed_language.dart';
 import 'package:official_news/core/languages.dart';
 import 'package:official_news/core/news_widgets.dart';
+import 'package:official_news/core/topics.dart';
 import 'package:official_news/features/feed/feed_controller.dart';
 import 'package:official_news/main.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -59,7 +60,7 @@ Map<String, dynamic> _article(
 /// The longest topic name in each language, for the Topics chip (#67).
 const _longTopic = {
   'en': 'Security and defence',
-  'uk': 'Безпека й оборона',
+  'uk': 'Безпека та оборона',
   'ru': 'Безопасность и оборона',
   'es': 'Seguridad y defensa',
   'de': 'Sicherheit und Verteidigung',
@@ -225,6 +226,14 @@ void main() {
         final l10n = l10nFor(lang);
         for (final type in decisionTypes) {
           expect(decisionTypeLabel(type, l10n), isNotNull, reason: type);
+        }
+        for (final id in topicIds) {
+          expect(topicLabel(id, l10n), isNotNull, reason: id);
+        }
+        // Ukraine and every EU member can be Local's country (#68).
+        for (final code in ['UA', 'PL', 'ES', 'NL', 'CZ', 'GR', 'SK']) {
+          expect(hasCountryName(code), isTrue, reason: code);
+          expect(countryName(code, l10n), isNot(code), reason: code);
         }
         expect(countryName('DE', l10n), isNot('DE'));
         expect(languageName('de', l10n), isNot('DE'));

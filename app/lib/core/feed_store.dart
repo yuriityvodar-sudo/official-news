@@ -27,6 +27,7 @@ class FeedStore {
   static const _topicKey = 'feed.topic';
   static const _topicsKey = 'feed.topics';
   static const _countriesKey = 'feed.countries';
+  static const _noCountriesKey = 'feed.noCountries';
   static const _maxRead = 500;
 
   /// English keeps the key it had before there were languages: 'feed.lastPage'.
@@ -128,6 +129,14 @@ class FeedStore {
         '$_countriesKey.${lang.code}',
         jsonEncode([for (final c in list) c.toJson()]),
       );
+
+  /// True once a server without `GET /countries` answered (404), so the next
+  /// launch offers no Local from the start; false again once it lists them.
+  bool noCountries() => _prefs.getBool(_noCountriesKey) ?? false;
+
+  Future<void> saveNoCountries(bool none) => none
+      ? _prefs.setBool(_noCountriesKey, true)
+      : _prefs.remove(_noCountriesKey);
 
   Set<String> readIds() => (_prefs.getStringList(_readKey) ?? const []).toSet();
 

@@ -148,13 +148,74 @@
     "description": "Decision type: what an official meeting decided."
   },
 
+  "topicForeignAffairs": "Foreign affairs",
+  "@topicForeignAffairs": {
+    "description": "A topic from the fixed list (foreign-affairs), on the Topics chip and in its menu (#67)."
+  },
+  "topicEconomy": "Economy",
+  "@topicEconomy": {
+    "description": "A topic from the fixed list (economy), on the Topics chip and in its menu (#67)."
+  },
+  "topicSecurityDefence": "Security and defence",
+  "@topicSecurityDefence": {
+    "description": "A topic from the fixed list (security-defence), on the Topics chip and in its menu (#67)."
+  },
+  "topicHealth": "Health",
+  "@topicHealth": {
+    "description": "A topic from the fixed list (health), on the Topics chip and in its menu (#67)."
+  },
+  "topicClimate": "Climate",
+  "@topicClimate": {
+    "description": "A topic from the fixed list (climate), on the Topics chip and in its menu (#67)."
+  },
+  "topicTrade": "Trade",
+  "@topicTrade": {
+    "description": "A topic from the fixed list (trade), on the Topics chip and in its menu (#67)."
+  },
+  "topicTechnology": "Technology",
+  "@topicTechnology": {
+    "description": "A topic from the fixed list (technology), on the Topics chip and in its menu (#67)."
+  },
+  "topicEnergy": "Energy",
+  "@topicEnergy": {
+    "description": "A topic from the fixed list (energy), on the Topics chip and in its menu (#67)."
+  },
+  "topicMigration": "Migration",
+  "@topicMigration": {
+    "description": "A topic from the fixed list (migration), on the Topics chip and in its menu (#67)."
+  },
+  "topicElections": "Elections",
+  "@topicElections": {
+    "description": "A topic from the fixed list (elections), on the Topics chip and in its menu (#67)."
+  },
+  "topicHumanRights": "Human rights",
+  "@topicHumanRights": {
+    "description": "A topic from the fixed list (human-rights), on the Topics chip and in its menu (#67)."
+  },
+  "topicScience": "Science",
+  "@topicScience": {
+    "description": "A topic from the fixed list (science), on the Topics chip and in its menu (#67)."
+  },
+
   "countryAR": "Argentina",
   "@countryAR": {
     "description": "Country name after the publisher: \"Federal Government · Germany\"."
   },
+  "countryAT": "Austria",
+  "@countryAT": {
+    "description": "Country name: an EU member state, so its Local feed has the EU's decisions (#68)."
+  },
   "countryAU": "Australia",
   "@countryAU": {
     "description": "Country name."
+  },
+  "countryBE": "Belgium",
+  "@countryBE": {
+    "description": "Country name: an EU member state, so its Local feed has the EU's decisions (#68)."
+  },
+  "countryBG": "Bulgaria",
+  "@countryBG": {
+    "description": "Country name: an EU member state, so its Local feed has the EU's decisions (#68)."
   },
   "countryBR": "Brazil",
   "@countryBR": {
@@ -168,13 +229,37 @@
   "@countryCN": {
     "description": "Country name."
   },
+  "countryCY": "Cyprus",
+  "@countryCY": {
+    "description": "Country name: an EU member state, so its Local feed has the EU's decisions (#68)."
+  },
+  "countryCZ": "Czechia",
+  "@countryCZ": {
+    "description": "Country name: an EU member state, so its Local feed has the EU's decisions (#68)."
+  },
   "countryDE": "Germany",
   "@countryDE": {
     "description": "Country name."
   },
+  "countryDK": "Denmark",
+  "@countryDK": {
+    "description": "Country name: an EU member state, so its Local feed has the EU's decisions (#68)."
+  },
+  "countryEE": "Estonia",
+  "@countryEE": {
+    "description": "Country name: an EU member state, so its Local feed has the EU's decisions (#68)."
+  },
+  "countryES": "Spain",
+  "@countryES": {
+    "description": "Country name: an EU member state, so its Local feed has the EU's decisions (#68)."
+  },
   "countryEU": "European Union",
   "@countryEU": {
     "description": "Shown like a country name, for the EU's institutions."
+  },
+  "countryFI": "Finland",
+  "@countryFI": {
+    "description": "Country name: an EU member state, so its Local feed has the EU's decisions (#68)."
   },
   "countryFR": "France",
   "@countryFR": {
@@ -184,9 +269,25 @@
   "@countryGB": {
     "description": "Country name."
   },
+  "countryGR": "Greece",
+  "@countryGR": {
+    "description": "Country name: an EU member state, so its Local feed has the EU's decisions (#68)."
+  },
+  "countryHR": "Croatia",
+  "@countryHR": {
+    "description": "Country name: an EU member state, so its Local feed has the EU's decisions (#68)."
+  },
+  "countryHU": "Hungary",
+  "@countryHU": {
+    "description": "Country name: an EU member state, so its Local feed has the EU's decisions (#68)."
+  },
   "countryID": "Indonesia",
   "@countryID": {
     "description": "Country name."
+  },
+  "countryIE": "Ireland",
+  "@countryIE": {
+    "description": "Country name: an EU member state, so its Local feed has the EU's decisions (#68)."
   },
   "countryIN": "India",
   "@countryIN": {
@@ -204,9 +305,41 @@
   "@countryKR": {
     "description": "Country name."
   },
+  "countryLT": "Lithuania",
+  "@countryLT": {
+    "description": "Country name: an EU member state, so its Local feed has the EU's decisions (#68)."
+  },
+  "countryLU": "Luxembourg",
+  "@countryLU": {
+    "description": "Country name: an EU member state, so its Local feed has the EU's decisions (#68)."
+  },
+  "countryLV": "Latvia",
+  "@countryLV": {
+    "description": "Country name: an EU member state, so its Local feed has the EU's decisions (#68)."
+  },
+  "countryMT": "Malta",
+  "@countryMT": {
+    "description": "Country name: an EU member state, so its Local feed has the EU's decisions (#68)."
+  },
   "countryMX": "Mexico",
   "@countryMX": {
     "description": "Country name."
+  },
+  "countryNL": "Netherlands",
+  "@countryNL": {
+    "description": "Country name: an EU member state, so its Local feed has the EU's decisions (#68)."
+  },
+  "countryPL": "Poland",
+  "@countryPL": {
+    "description": "Country name: an EU member state, so its Local feed has the EU's decisions (#68)."
+  },
+  "countryPT": "Portugal",
+  "@countryPT": {
+    "description": "Country name: an EU member state, so its Local feed has the EU's decisions (#68)."
+  },
+  "countryRO": "Romania",
+  "@countryRO": {
+    "description": "Country name: an EU member state, so its Local feed has the EU's decisions (#68)."
   },
   "countryRU": "Russia",
   "@countryRU": {
@@ -216,9 +349,25 @@
   "@countrySA": {
     "description": "Country name."
   },
+  "countrySE": "Sweden",
+  "@countrySE": {
+    "description": "Country name: an EU member state, so its Local feed has the EU's decisions (#68)."
+  },
+  "countrySI": "Slovenia",
+  "@countrySI": {
+    "description": "Country name: an EU member state, so its Local feed has the EU's decisions (#68)."
+  },
+  "countrySK": "Slovakia",
+  "@countrySK": {
+    "description": "Country name: an EU member state, so its Local feed has the EU's decisions (#68)."
+  },
   "countryTR": "Türkiye",
   "@countryTR": {
     "description": "Country name."
+  },
+  "countryUA": "Ukraine",
+  "@countryUA": {
+    "description": "Country name, for Local (#68)."
   },
   "countryUS": "United States",
   "@countryUS": {
@@ -432,7 +581,7 @@
   "@country": {
     "description": "A Settings row (Reading section) and the title of its page: the country the Local feed shows."
   },
-  "countryFooter": "“{local}” in the feed shows this country's decisions, and for EU member states the EU's too.",
+  "countryFooter": "“{local}” in the feed shows the chosen country's decisions, and for an EU member state the EU's as well.",
   "@countryFooter": {
     "description": "Under the list of countries in Settings. {local} is filterLocal, in quotation marks of the language.",
     "placeholders": {
@@ -441,9 +590,9 @@
       }
     }
   },
-  "countriesLoadFailed": "Couldn't load the list of countries.",
+  "countriesLoadFailed": "Couldn't load the list of countries. Tap to try again.",
   "@countriesLoadFailed": {
-    "description": "On the Country page in Settings when the list of countries could not be loaded (offline)."
+    "description": "On the Country page in Settings when the list of countries could not be loaded (offline). Tapping it asks again."
   },
 
   "publisher": "{name}, Slovakia",

@@ -21,6 +21,7 @@ class SettingsScreen extends StatelessWidget {
     required this.onLanguage,
     required this.country,
     required this.onCountry,
+    required this.loadCountries,
     this.openLink = openOfficialPage,
   });
 
@@ -32,6 +33,10 @@ class SettingsScreen extends StatelessWidget {
   /// one (the feed reloads in it while it shows Local).
   final ValueListenable<CountryMenu> country;
   final ValueChanged<String> onCountry;
+
+  /// Asks for the list of countries when there is none yet (offline): the
+  /// Country page calls it when it opens and when its failure text is tapped.
+  final VoidCallback loadCountries;
 
   /// Opens a link (the support e-mail); tests pass their own.
   final OpenLink openLink;
@@ -83,6 +88,8 @@ class SettingsScreen extends StatelessWidget {
                     ValueListenableBuilder(
                       valueListenable: country,
                       builder: (context, menu, _) {
+                        // A server without countries: no Local, no row.
+                        if (!menu.available) return const SizedBox.shrink();
                         final current = menu.current;
                         return CupertinoListTile(
                           leading: const _Icon(CupertinoIcons.location),
@@ -111,6 +118,7 @@ class SettingsScreen extends StatelessWidget {
                               builder: (_) => _CountryPage(
                                 country: country,
                                 onCountry: onCountry,
+                                loadCountries: loadCountries,
                               ),
                             ),
                           ),
@@ -328,12 +336,35 @@ class _LanguagePage extends StatelessWidget {
 }
 
 /// The countries that have sources, in the app's language, a checkmark on the
-/// one Local shows (#68): the phone's region until one is chosen here.
-class _CountryPage extends StatelessWidget {
-  const _CountryPage({required this.country, required this.onCountry});
+/// one Local shows (#68): the phone's region until one is chosen here. The
+/// phone's region and the current country stay at the top when the list does
+/// not have them (no sources of their own, or no list yet).
+class _CountryPage extends StatefulWidget {
+  const _CountryPage({
+    required this.country,
+    required this.onCountry,
+    required this.loadCountries,
+  });
 
   final ValueListenable<CountryMenu> country;
   final ValueChanged<String> onCountry;
+  final VoidCallback loadCountries;
+
+  @override
+  State<_CountryPage> createState() => _CountryPageState();
+}
+
+class _CountryPageState extends State<_CountryPage> {
+  @override
+  void initState() {
+    super.initState();
+    // After the first frame: asking redraws Settings too, which is not done
+    // while this page is being built. The feed asks only when it has no list
+    // in the app's language yet.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) widget.loadCountries();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -357,22 +388,29 @@ class _CountryPage extends StatelessWidget {
         type: MaterialType.transparency,
         child: SafeArea(
           child: ValueListenableBuilder(
-            valueListenable: country,
+            valueListenable: widget.country,
             builder: (context, menu, _) {
               final current = menu.current;
-              // Without a list (offline), the country shown now stays listed.
-              final codes = [
-                for (final c in menu.countries ?? const <FeedCountry>[]) c.code,
-                if (menu.countries == null && current != null) current,
-              ];
+              final codes = menu.choices;
               return ListView(
                 children: [
                   if (menu.countries == null)
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(36, 20, 36, 0),
+                      padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
                       child: menu.loading
-                          ? const CupertinoActivityIndicator()
-                          : Text(l10n.countriesLoadFailed, style: note),
+                          ? const Padding(
+                              padding: EdgeInsets.only(top: 8),
+                              child: CupertinoActivityIndicator(),
+                            )
+                          // A 44-pt target and a button role for VoiceOver.
+                          : CupertinoButton(
+                              onPressed: widget.loadCountries,
+                              child: Text(
+                                l10n.countriesLoadFailed,
+                                textAlign: TextAlign.center,
+                                style: note.copyWith(color: AppColors.accent),
+                              ),
+                            ),
                     ),
                   if (codes.isNotEmpty)
                     CupertinoListSection.insetGrouped(
@@ -393,7 +431,7 @@ class _CountryPage extends StatelessWidget {
                                     color: AppColors.accent,
                                   )
                                 : null,
-                            onTap: () => onCountry(code),
+                            onTap: () => widget.onCountry(code),
                           ),
                       ],
                     ),

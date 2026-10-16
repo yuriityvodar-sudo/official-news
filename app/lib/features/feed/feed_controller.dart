@@ -6,10 +6,10 @@ import 'package:flutter/foundation.dart';
 import '../../core/analytics.dart';
 import '../../core/api_client.dart';
 import '../../core/article.dart';
+import '../../core/countries.dart' show hasCountryName;
 import '../../core/feed_language.dart';
 import '../../core/feed_store.dart';
 import '../../core/filters.dart';
-import '../../core/topics.dart' show topicLabel;
 
 /// The feed's state: its language and filters, articles, paging, errors, read
 /// articles and the check for new ones. The screen only draws it.
@@ -59,22 +59,35 @@ class FeedController extends ChangeNotifier {
   FeedScope _scope = FeedScope.global;
 
   /// The country Local shows: the one chosen in Settings; until one is, the
-  /// phone's region when it has sources, else the first country that has
-  /// some. With no list of countries (offline on the first launch, or a
-  /// server without `GET /countries`), the phone's region. Null when there is
-  /// none: only Global is offered.
+  /// phone's region, also when it has no sources of its own: an EU member's
+  /// Local still has the EU's decisions (the server adds them), and a country
+  /// with nothing shows the empty feed with "Show all countries". Never taken
+  /// from the list's order, so the language does not change it. Null, and
+  /// only Global is offered, for a server without `GET /countries` (it would
+  /// ignore `country=`), and for a region the app cannot name, so the chip
+  /// never shows a bare code.
   String? get localCountry {
-    final chosen = _chosenCountry;
-    if (chosen != null) return chosen;
-    final region = _phoneRegion()?.toUpperCase();
-    final valid = region != null && RegExp(r'^[A-Z]{2}$').hasMatch(region);
-    final list = _countries;
-    if (list == null) return valid ? region : null;
-    if (valid && list.any((c) => c.code == region)) return region;
-    return list.isEmpty ? null : list.first.code;
+    if (_noCountries) return null;
+    return _chosenCountry ?? _region;
   }
 
   String? _chosenCountry;
+
+  /// The phone's region when it can be Local's country: two letters that the
+  /// app or the server's list can name.
+  String? get _region {
+    final region = _phoneRegion()?.toUpperCase();
+    if (region == null || !_twoLetters.hasMatch(region)) return null;
+    if (hasCountryName(region)) return region;
+    final listed = _countries?.any((c) => c.code == region) ?? false;
+    return listed ? region : null;
+  }
+
+  static final _twoLetters = RegExp(r'^[A-Z]{2}$');
+
+  /// A server without `GET /countries` answered (404, or an answer of
+  /// another shape): no Local. Saved, so the next launch starts without it.
+  bool _noCountries = false;
 
   /// The `country` the feed asks for: Local's country, null for Global.
   String? get feedCountry => scope == FeedScope.local ? localCountry : null;
@@ -87,7 +100,8 @@ class FeedController extends ChangeNotifier {
   bool get filtered => feedCountry != null || _topic != null;
 
   /// The countries that have sources, named in the feed's language
-  /// (`GET /countries`, or the list saved last time); null while unknown.
+  /// (`GET /countries`, or the list saved last time); null while unknown, and
+  /// for a server without them.
   List<FeedCountry>? get countries => _countries;
   List<FeedCountry>? _countries;
 
@@ -97,14 +111,6 @@ class FeedController extends ChangeNotifier {
   /// first answer on a first launch.
   List<FeedTopic>? get topics => _topics;
   List<FeedTopic>? _topics;
-
-  /// Every topic name seen, for a chosen topic that is not in the menu now
-  /// (no articles under the other Where choice).
-  final Map<String, String> _topicNames = {};
-
-  /// Topic [id]'s name in the feed's language; the English one from the
-  /// fixed list until the server has named it.
-  String topicName(String id) => _topicNames[id] ?? topicLabel(id);
 
   /// What Settings shows for Local: the country now and the list to choose
   /// from, kept current as either changes.
@@ -150,7 +156,9 @@ class FeedController extends ChangeNotifier {
     _countryMenu.value = CountryMenu(
       current: localCountry,
       countries: _countries,
+      region: _region,
       loading: _countriesLoading != null,
+      available: !_noCountries,
     );
     super.notifyListeners();
   }
@@ -181,8 +189,9 @@ class FeedController extends ChangeNotifier {
     _scope = store.scope();
     _chosenCountry = store.country();
     _topic = store.topic();
-    _countries = store.countries(language);
-    _useTopics(store.topics(language));
+    _noCountries = store.noCountries();
+    _countries = _noCountries ? null : store.countries(language);
+    _topics = store.topics(language);
     languageKnown = true;
     notifyListeners();
   }
@@ -214,9 +223,10 @@ class FeedController extends ChangeNotifier {
     unawaited(_store?.saveLanguage(lang));
     if (lang == language) return;
     _language.value = lang;
-    // The menus as saved in that language, until the server names them in it.
-    _countries = _store?.countries(lang) ?? _countries;
-    _useTopics(_store?.topics(lang) ?? _topics);
+    // The menus as saved in that language, until the server answers in it;
+    // the app names their countries and topics in it either way.
+    if (!_noCountries) _countries = _store?.countries(lang) ?? _countries;
+    _topics = _store?.topics(lang) ?? _topics;
     await _reload();
   }
 
@@ -297,7 +307,8 @@ class FeedController extends ChangeNotifier {
   FeedLanguage? _countriesLoadingLang;
 
   /// Asks for the countries in the feed's language: once per language, and
-  /// again after a failure (offline). Settings asks too when it has no list.
+  /// again after a failure (offline). Settings asks too, when it opens and
+  /// when its "Tap to try again" is tapped.
   /// True when Local moved to another country and the feed is reloading.
   Future<bool> loadCountries() {
     final lang = language;
@@ -318,12 +329,16 @@ class FeedController extends ChangeNotifier {
         _countries = list;
         _countriesLang = lang;
         unawaited(_store?.saveCountries(lang, list));
+        if (_noCountries) {
+          _noCountries = false;
+          unawaited(_store?.saveNoCountries(false));
+        }
       }
     } on ApiException catch (e) {
-      // A server without countries: Local follows the phone's region.
-      if (e.statusCode == 404 && lang == language) _noCountries(lang);
+      // A server without countries ignores `country=`: no Local.
+      if (e.statusCode == 404 && lang == language) _serverHasNoCountries(lang);
     } on FormatException {
-      if (lang == language) _noCountries(lang);
+      if (lang == language) _serverHasNoCountries(lang);
     } catch (_) {
       // Offline: asked again at the next refresh.
     } finally {
@@ -334,7 +349,8 @@ class FeedController extends ChangeNotifier {
       notifyListeners();
     }
     if (_disposed || lang != language) return false;
-    // The phone's region has no sources, say: Local is another country.
+    // A Local feed asked before the answer: a server without countries makes
+    // it Global, and a list that names the phone's region makes it Local.
     if (_scope == FeedScope.local && feedCountry != _askedCountry) {
       unawaited(_reload());
       return true;
@@ -342,9 +358,11 @@ class FeedController extends ChangeNotifier {
     return false;
   }
 
-  void _noCountries(FeedLanguage lang) {
+  void _serverHasNoCountries(FeedLanguage lang) {
     _countries = null;
     _countriesLang = lang;
+    _noCountries = true;
+    unawaited(_store?.saveNoCountries(true));
   }
 
   /// The language and country the Topics menu was last asked for.
@@ -359,7 +377,7 @@ class FeedController extends ChangeNotifier {
       final list = await api.fetchTopics(lang: lang.code, country: country);
       // Another language or Where choice asked meanwhile.
       if (_topicsAsked != asked) return;
-      _useTopics(list);
+      _topics = list;
       unawaited(_store?.saveTopics(lang, list));
     } on ApiException catch (e) {
       if (e.statusCode == 404 && _topicsAsked == asked) _noTopics(lang);
@@ -369,13 +387,6 @@ class FeedController extends ChangeNotifier {
       // Offline: the menu stays as it was.
     } finally {
       notifyListeners();
-    }
-  }
-
-  void _useTopics(List<FeedTopic>? list) {
-    _topics = list;
-    for (final t in list ?? const <FeedTopic>[]) {
-      _topicNames[t.id] = t.name;
     }
   }
 

@@ -66,7 +66,9 @@ final _week = [
   _article('us2', country: 'US', topics: ['economy'], feedSeq: 5),
 ];
 
-const _eu = {'DE', 'FR'};
+/// EU members, whose Local feed has the EU's articles too; Poland has no
+/// sources of its own.
+const _eu = {'DE', 'FR', 'PL'};
 
 const _topicNames = {
   'en': {'economy': 'Economy', 'health': 'Health', 'trade': 'Trade'},
@@ -74,8 +76,18 @@ const _topicNames = {
 };
 
 const _countryNames = {
-  'en': {'DE': 'Germany', 'FR': 'France', 'US': 'United States'},
-  'uk': {'DE': 'Німеччина', 'FR': 'Франція', 'US': 'США'},
+  'en': {
+    'DE': 'Germany',
+    'FR': 'France',
+    'US': 'United States',
+    'NZ': 'New Zealand',
+  },
+  'uk': {
+    'DE': 'Німеччина',
+    'FR': 'Франція',
+    'US': 'США',
+    'NZ': 'Нова Зеландія',
+  },
 };
 
 http.Response _ok(Object body) => http.Response.bytes(
@@ -86,7 +98,8 @@ http.Response _ok(Object body) => http.Response.bytes(
 
 /// A server that follows the contract for the filters: `?country=` (with the
 /// EU's articles for EU members) and `?topic=` on every article request,
-/// `GET /topics` busiest first under the country, `GET /countries`. Without
+/// `GET /topics` busiest first under the country, `GET /countries` (the
+/// countries with sources, no bloc, by name in the language asked). Without
 /// [menus], a server from before them: both answer 404 and the filters are
 /// ignored. Pages of [pageSize]; the cursor is the next offset.
 class _Server {
@@ -118,11 +131,11 @@ class _Server {
       switch (request.url.path) {
         case '/countries':
           if (!menus) return http.Response('{"error":"Not found"}', 404);
+          final names = _countryNames[lang]!;
           return _ok({
             'countries': [
-              for (final c in countries)
-                {'code': c, 'name': _countryNames[lang]![c]},
-            ],
+              for (final c in countries) {'code': c, 'name': names[c]!},
+            ]..sort((a, b) => a['name']!.compareTo(b['name']!)),
           });
         case '/topics':
           if (!menus) return http.Response('{"error":"Not found"}', 404);
@@ -540,34 +553,97 @@ void main() {
       expect(feed.localCountry, 'US');
     });
 
-    test('else the first country that has sources', () async {
-      final feed = FeedController(api: _Server().api, phoneRegion: () => 'UA');
-      await feed.start();
-      await _settle();
-      expect(feed.localCountry, 'DE');
-    });
+    testWidgets(
+      "an EU member without sources: its own country, with the EU's decisions",
+      (tester) async {
+        final server = _Server();
+        await _pump(tester, server, region: 'PL');
+        await _pick(tester, _where, 'Local');
+        expect(_label(tester, _where), 'Poland');
+        expect(server.feedRequests.last.queryParameters['country'], 'PL');
+        expect(_shown(tester), ['eu1']);
+      },
+    );
 
-    test('a Local feed opened before the countries arrive moves to it', () async {
+    testWidgets(
+      'a country with no sources: its own, empty, with the way back',
+      (tester) async {
+        final server = _Server();
+        await _pump(tester, server, region: 'UA');
+        await tester.tap(find.byKey(_where));
+        await tester.pumpAndSettle();
+        expect(find.text('Ukraine'), findsOneWidget); // under Local
+        await tester.tapAt(const Offset(20, 20));
+        await tester.pumpAndSettle();
+        await _pick(tester, _where, 'Local');
+        expect(_label(tester, _where), 'Ukraine');
+        expect(server.feedRequests.last.queryParameters['country'], 'UA');
+        expect(_shown(tester), isEmpty);
+        expect(
+          find.text('No decisions here in the last 7 days.'),
+          findsOneWidget,
+        );
+        expect(find.text('Show all countries'), findsOneWidget);
+      },
+    );
+
+    test(
+      'a Local feed asks once, before and after the countries arrive',
+      () async {
+        SharedPreferences.setMockInitialValues({'feed.scope': 'local'});
+        final server = _Server();
+        final feed = FeedController(api: server.api, phoneRegion: () => 'UA');
+        await feed.start();
+        await _settle();
+        expect(server.feedRequests.map((u) => u.queryParameters['country']), [
+          'UA',
+        ]);
+        expect(feed.localCountry, 'UA');
+      },
+    );
+
+    test('a language change keeps the country and asks once', () async {
       SharedPreferences.setMockInitialValues({'feed.scope': 'local'});
       final server = _Server();
       final feed = FeedController(api: server.api, phoneRegion: () => 'UA');
       await feed.start();
       await _settle();
-      // UA first (no list yet), then DE once the server says UA has no sources.
-      expect(server.feedRequests.map((u) => u.queryParameters['country']), [
-        'UA',
-        'DE',
-      ]);
-      expect(feed.items.map((a) => a.id), ['de1', 'eu1', 'de2']);
-      // The list is saved: the next launch asks for DE at once.
       server.log.clear();
-      final next = FeedController(api: server.api, phoneRegion: () => 'UA');
-      await next.start();
+      await feed.setLanguage(FeedLanguage.uk);
       await _settle();
-      expect(server.feedRequests.map((u) => u.queryParameters['country']), [
-        'DE',
-      ]);
+      expect(feed.localCountry, 'UA');
+      expect(
+        server.feedRequests.map(
+          (u) => (u.queryParameters['lang'], u.queryParameters['country']),
+        ),
+        [('uk', 'UA')],
+      );
     });
+
+    testWidgets('a region the app cannot name: Global only, never a code', (
+      tester,
+    ) async {
+      final feed = await _pump(tester, _Server(), region: 'CH');
+      expect(feed.localCountry, isNull);
+      expect(find.byKey(_where), findsNothing);
+      expect(find.text('CH'), findsNothing);
+    });
+
+    test(
+      "a region only the server names: Local, with the server's name",
+      () async {
+        final server = _Server(countries: const ['DE', 'FR', 'US', 'NZ']);
+        final feed = FeedController(api: server.api, phoneRegion: () => 'NZ');
+        await feed.start();
+        expect(feed.localCountry, isNull); // no list yet
+        await _settle();
+        expect(feed.localCountry, 'NZ');
+        expect(
+          feed.countryChanges.value.nameOf('NZ', l10nFor()),
+          'New Zealand',
+        );
+      },
+    );
 
     testWidgets('no country at all: no Where chip, Global only', (
       tester,
@@ -579,21 +655,59 @@ void main() {
   });
 
   group('a server without /topics and /countries', () {
-    testWidgets('the Topics chip hides; Local is still the phone region', (
+    testWidgets('no Where or Topics chip, and no Country in Settings', (
       tester,
     ) async {
       final server = _Server(menus: false);
       final feed = await _pump(tester, server);
       expect(find.byKey(_topics), findsNothing);
       expect(feed.topics, isNull);
-      await tester.tap(find.byKey(_where));
+      // Such a server ignores country=: Local would show every country.
+      expect(find.byKey(_where), findsNothing);
+      expect(feed.localCountry, isNull);
+      expect(
+        server.feedRequests.where((u) => u.queryParameters['country'] != null),
+        isEmpty,
+      );
+      await tester.tap(find.byIcon(CupertinoIcons.gear_alt));
       await tester.pumpAndSettle();
-      // The app's own name for the phone's region.
-      expect(find.text('Germany'), findsOneWidget);
-      await tester.tap(find.text('Local'));
-      await tester.pumpAndSettle();
-      expect(server.feedRequests.last.queryParameters['country'], 'DE');
-      expect(_label(tester, _where), 'Germany');
+      expect(find.text('Language'), findsOneWidget);
+      expect(find.text('Country'), findsNothing);
+    });
+
+    test('a Local feed turns Global, and the next launch starts so', () async {
+      SharedPreferences.setMockInitialValues({'feed.scope': 'local'});
+      final server = _Server(menus: false);
+      final feed = FeedController(api: server.api, phoneRegion: () => 'DE');
+      await feed.start();
+      await _settle();
+      // DE before the answer, every country after it.
+      expect(server.feedRequests.map((u) => u.queryParameters['country']), [
+        'DE',
+        null,
+      ]);
+      expect(feed.scope, FeedScope.global);
+
+      server.log.clear();
+      final next = FeedController(api: server.api, phoneRegion: () => 'DE');
+      await next.start();
+      await _settle();
+      expect(server.feedRequests.map((u) => u.queryParameters['country']), [
+        null,
+      ]);
+
+      // A server with the filters again: Local is back, as it was chosen.
+      final updated = _Server();
+      final later = FeedController(api: updated.api, phoneRegion: () => 'DE');
+      await later.start();
+      await _settle();
+      expect(updated.feedRequests.map((u) => u.queryParameters['country']), [
+        null,
+        'DE',
+      ]);
+      expect(later.scope, FeedScope.local);
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getBool('feed.noCountries'), isNull);
     });
 
     testWidgets('a topic chosen before stays, so it can be cleared', (
@@ -602,9 +716,53 @@ void main() {
       SharedPreferences.setMockInitialValues({'feed.topic': 'health'});
       final server = _Server(menus: false);
       await _pump(tester, server);
-      expect(_label(tester, _topics), 'Health'); // the fixed list's name
+      expect(_label(tester, _topics), 'Health'); // the app's own name
       await _pick(tester, _topics, 'All topics');
       expect(find.byKey(_topics), findsNothing);
+    });
+  });
+
+  group("topic names in the app's language", () {
+    testWidgets('a topic not in the menu, also after a restart', (
+      tester,
+    ) async {
+      SharedPreferences.setMockInitialValues({'feed.lang': 'uk'});
+      final server = _Server();
+      await _pump(tester, server, region: 'US', words: FeedLanguage.uk);
+      await _pick(tester, _topics, 'Торгівля');
+      // The US has no trade decisions: the menu under Local has none.
+      await _pick(tester, _where, 'Моя країна');
+      expect(_label(tester, _topics), 'Торгівля');
+
+      await tester.pumpWidget(const SizedBox());
+      await _pump(
+        tester,
+        _Server()..offline = true,
+        region: 'US',
+        words: FeedLanguage.uk,
+      );
+      expect(_label(tester, _topics), 'Торгівля');
+    });
+
+    test('another language, offline: names in it, not the old one', () async {
+      SharedPreferences.setMockInitialValues({'feed.lang': 'uk'});
+      final server = _Server();
+      final feed = FeedController(api: server.api, phoneRegion: () => 'DE');
+      await feed.start();
+      await _settle();
+      await feed.setTopic('economy');
+      await feed.setScope(FeedScope.local);
+      await _settle();
+      server.offline = true;
+      await feed.setLanguage(FeedLanguage.de);
+      await _settle();
+      final de = l10nFor(FeedLanguage.de);
+      expect(topicName('economy', feed.topics, de), 'Wirtschaft');
+      expect(
+        [for (final t in feed.topics!) topicName(t.id, feed.topics, de)],
+        ['Wirtschaft', 'Handel', 'Gesundheit'],
+      );
+      expect(feed.countryChanges.value.nameOf('DE', de), 'Deutschland');
     });
   });
 
@@ -662,8 +820,8 @@ void main() {
       );
       expect(
         find.text(
-          '“Local” in the feed shows this country\'s decisions, and for EU '
-          'member states the EU\'s too.',
+          '“Local” in the feed shows the chosen country\'s decisions, and for '
+          'an EU member state the EU\'s as well.',
         ),
         findsOneWidget,
       );
@@ -726,15 +884,62 @@ void main() {
       expect(events.where((e) => e.$1 == 'filter_changed'), isEmpty);
     });
 
-    testWidgets('offline with no list: says so, and keeps the country shown', (
+    testWidgets('offline with no list: says so, keeps the country, retries', (
       tester,
     ) async {
       final server = _Server()..offline = true;
       await _pump(tester, server);
       await openCountry(tester);
-      expect(find.text("Couldn't load the list of countries."), findsOneWidget);
+      const failed = "Couldn't load the list of countries. Tap to try again.";
+      expect(find.text(failed), findsOneWidget);
       expect(find.text('Germany'), findsOneWidget);
       expect(find.byIcon(CupertinoIcons.checkmark_alt), findsOneWidget);
+      // Back online: a tap on the message loads the list.
+      server.offline = false;
+      await tester.tap(find.text(failed));
+      await tester.pumpAndSettle();
+      expect(find.text(failed), findsNothing);
+      for (final name in ['Germany', 'France', 'United States']) {
+        expect(find.text(name), findsOneWidget, reason: name);
+      }
+    });
+
+    testWidgets('the page asks again when it opens, after a failure', (
+      tester,
+    ) async {
+      final server = _Server()..offline = true;
+      await _pump(tester, server);
+      await openCountry(tester);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      server.offline = false;
+      await tester.tap(find.text('Country'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining("Couldn't load"), findsNothing);
+      expect(find.text('United States'), findsOneWidget);
+    });
+
+    testWidgets('the phone region without sources is first, and stays', (
+      tester,
+    ) async {
+      final server = _Server();
+      await _pump(tester, server, region: 'UA');
+      await openCountry(tester);
+      expect(
+        tester.getSemantics(find.text('Ukraine')),
+        isSemantics(label: 'Ukraine', isSelected: true),
+      );
+      expect(
+        tester.getTopLeft(find.text('Ukraine')).dy,
+        lessThan(tester.getTopLeft(find.text('France')).dy),
+      );
+      await tester.tap(find.text('Germany'));
+      await tester.pumpAndSettle();
+      expect(find.text('Ukraine'), findsOneWidget);
+      await tester.tap(find.text('Ukraine'));
+      await tester.pumpAndSettle();
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getString('feed.country'), 'UA');
     });
   });
 }

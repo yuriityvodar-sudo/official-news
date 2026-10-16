@@ -118,6 +118,7 @@ class _FeedScreenState extends State<FeedScreen> {
           onLanguage: _chooseLanguage,
           country: _feed.countryChanges,
           onCountry: _chooseCountry,
+          loadCountries: () => unawaited(_feed.loadCountries()),
         ),
       ),
     );
@@ -217,9 +218,6 @@ class _FeedScreenState extends State<FeedScreen> {
                               ? null
                               : _feed.countryChanges.value.nameOf(local, l10n),
                           topic: topic,
-                          topicName: topic == null
-                              ? null
-                              : _feed.topicName(topic),
                           topics: _feed.topics,
                           onScope: _chooseScope,
                           onTopic: _chooseTopic,
