@@ -108,6 +108,7 @@ The MVP is a Kickoff plus 8 items, 4 each. This is our suggested split: Yurii ow
 | 7 | AI summaries, noise filter and tags | Roman | 4 | New articles get all summary fields within an hour |
 | 8 | Source health and cleanup of old texts | Roman | 2 | Each source shows its status; expired texts are cleared |
 | 9 | Translations, after the MVP: Ukrainian, Russian, Spanish and German | Yurii | 3 | News in the feed gets its text in each language through a queue we can see and manage, and the API returns only translated articles with `lang` |
+| 10 | Push notifications, after the MVP: breaking decisions only | Yurii | 3 | A breaking decision reaches a test iPhone in its feed language, at most 2 a day and never at night, and a tap opens it |
 
 **Order:** Kickoff first, then item 1 (it gives everyone real data from Cloudflare). Items 2, 5 and 7 start at the same time; 3 and 4 follow the design; 6 follows 5; 8 comes last.
 
@@ -255,6 +256,15 @@ Agreed on #46 (15 Oct): a second AI call per article, one per language; the summ
 - **Must, the queue (Yurii: the centre of the design; migration `0009`, `docs/queue.md`):** an explicit state per article and language (`queued` → `translating` → `published`; `retrying` with `next_attempt_at` and a growing wait; `failed` after 3 unusable answers, with the reason; `updating` while a re-summarized article is redone, the old text visible; `skipped` when it left the feed), every change timestamped; nothing lost (every news article queued for every enabled language, stale claims back to `queued`, an outage never counts a try); a switch per language (enabled, paused by hand or automatically); `GET /queue` per language and the articles waiting for release; `server/scripts/queue.mjs` to list, requeue one item or a whole language, pause and resume, and enable a language with its 7-day backlog.
 - **Suggested:** the app's language setting: a small language icon next to the date at the top of the feed opens a native language menu (a local iOS Simulator run shown to Yurii before it is built); an editor pass that corrects grammar and wording before publishing (#54); Polish and Czech once a model writes them well enough; Workers AI as a provider if the free limits are not enough.
 - **Done when:** with the secrets set, new news articles get their text in each enabled language, `GET /articles?lang=uk` (or `ru`, `es`) lists the same articles in the same order as English, and `GET /queue` shows nothing waiting for long.
+
+### 10. Push notifications, after the MVP (Yurii)
+
+Yurii, 16 Oct (#62): pushes exist to bring a reader back to the app with something useful, so breaking decisions only, few, and none at night. Firebase Cloud Messaging in the project `official-news-48e16`, one topic per feed language; the rules are in `docs/contract.md` (Push notifications).
+
+- **Must, server (#62):** the translator's run ends with a push step: a released decision of importance 4 or 5 from the last 24 hours, never pushed before in that language (another language only with its translation published, and in that language); at most 2 a local day per language and at least 1 (the day's top story from 18:00 local); none from 21:00 to 08:00 in the language's main time zone; 3 hours apart. `push_log` (migration `0012`) is written before each send, so nothing goes out twice. Sent as the service account `fcm-sender` (role Firebase Cloud Messaging API Admin only), its key only the Worker secret `FCM_SERVICE_ACCOUNT`.
+- **Must, app:** subscribes to `breaking_<feed language>` and moves to the new topic when the language changes; asks for permission at a good moment (after a few articles read), not on first launch; a tap opens the article (`data.articleId` in `data.lang`); `push_open` in analytics. The APNs key uploaded to Firebase Cloud Messaging (`docs/setup.md`).
+- **Before an App Store release:** the privacy policy and the App Store privacy answers mention the push token.
+- **Done when:** with the secret and the APNs key set, a breaking decision reaches a test iPhone subscribed to its language's topic, and a tap opens it.
 
 ## How we work together
 
