@@ -41,8 +41,13 @@ export interface FullTextStep {
   from?: string;
   /** What to read; default `{0}`, the whole match (the previous step's result as it is). */
   url?: string;
-  /** The answer is JSON: dotted path to the result (HTML or plain text in the last step). */
-  json?: string;
+  /**
+   * The answer is JSON: dotted path to the result (HTML or plain text in the
+   * last step). A list of paths joins what each finds, in order, in the last
+   * step (the first found is used before it); `*` goes through a list, and
+   * after `*.` a `{path}` template is filled from each entry.
+   */
+  json?: string | string[];
   /** The answer is a page: the result is the link of the first element matching this selector (`selector@attr`, default `href`). */
   link?: string;
   /** Character set of the answer when the server does not say it, e.g. "iso-8859-1". */
@@ -57,7 +62,7 @@ export interface SourceConfig {
   exclude?: Partial<Record<"title" | "category", string>>;
   /** Character set when the server does not say it, e.g. "iso-8859-1". */
   encoding?: string;
-  /** false: never open item pages (robots.txt forbids it); use the list text only. */
+  /** false: never open item pages (robots.txt forbids it, or they are built by JavaScript); `fullText` is still read when set. */
   itemPages?: boolean;
   /** CSS selector of the main text on item pages (and on the last page of `fullText`); default: main, then article, then body. */
   textSelector?: string;

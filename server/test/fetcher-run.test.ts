@@ -298,7 +298,8 @@ describe("runFetcher: whole texts (#71)", () => {
     const [check] = await runFetcher(env, { fetch, now: NOW });
     expect(check).toMatchObject({ ok: true, saved: 2, waiting: 0 });
     const [teaser, full] = await articlesOf("xx-de");
-    expect(teaser.text).toBe(deBody.join("\n"));
+    // The feed's lead is not in the article body, so it stays in front of it.
+    expect(teaser.text).toBe([deTeaser, ...deBody].join("\n"));
     // The feed's picture stays; the page only adds one when the feed has none.
     expect(teaser.image_url).toBe("https://www.bundesregierung.de/resource/blob/975228/cyberresilienz-2426502-data.jpg");
     expect(full.text).toBe(fullText.trim());
@@ -319,6 +320,23 @@ describe("runFetcher: whole texts (#71)", () => {
     expect((await runFetcher(env, { fetch, now: new Date("2026-10-14T15:20:00Z") }))[0]).toMatchObject({ saved: 1, waiting: 0 });
     const saved = await articlesOf("xx-de");
     expect(saved.map((a) => a.text?.split("\n").at(-1))).toEqual(slugs);
+    expect(saved.every((a) => a.text?.startsWith(`${deTeaser}\n`))).toBe(true);
+  });
+
+  it("reads at most one text as long as the stored maximum per run: reading it takes the most CPU", async () => {
+    await addSource("xx-de", DE_FEED, "rss", DE_CONFIG);
+    const long = Array.from({ length: 400 }, (_, i) => `Absatz ${i}: Die Bundesregierung hat die Verordnung beschlossen.`);
+    const { fetch } = fakeFetch({
+      "https://www.bundesregierung.de/robots.txt": { status: 404, body: "" },
+      [DE_FEED]: { body: deFeed(deItem("long-2", "Wed, 14 Oct 2026 10:00:00 GMT"), deItem("long-1", "Wed, 14 Oct 2026 09:00:00 GMT")) },
+      "https://www.bundesregierung.de/breg-de/aktuelles/long-2": { body: dePage(long) },
+      "https://www.bundesregierung.de/breg-de/aktuelles/long-1": { body: dePage(long) },
+    });
+    expect((await runFetcher(env, { fetch, now: NOW }))[0]).toMatchObject({ saved: 1, waiting: 1 });
+    const [first] = await articlesOf("xx-de");
+    expect(first.text).toHaveLength(LIMITS.maxText);
+    expect(first.text?.startsWith(`${deTeaser}\nAbsatz 0:`)).toBe(true);
+    expect((await runFetcher(env, { fetch, now: new Date("2026-10-14T15:20:00Z") }))[0]).toMatchObject({ saved: 1, waiting: 0 });
   });
 
   it("asks a busy site (429) again on a later check, and not again in the same run", async () => {
@@ -365,13 +383,88 @@ describe("runFetcher: whole texts (#71)", () => {
     expect(newest.text).toBe(`Autor\nJosé Medeiros - PL/MT\nApresentação\n14/10/2026\nEmenta\n${ementa(5576)}`);
   });
 
+  it("lets only the item wait when its own page fails (5xx): older items' pages are read in the same run", async () => {
+    await addSource("xx-de", DE_FEED, "rss", DE_CONFIG);
+    const pageOf = (slug: string) => `https://www.bundesregierung.de/breg-de/aktuelles/${slug}`;
+    const { fetch, requests } = fakeFetch({
+      "https://www.bundesregierung.de/robots.txt": { status: 404, body: "" },
+      [DE_FEED]: {
+        body: deFeed(
+          deItem("broken-1", "Wed, 14 Oct 2026 14:00:00 GMT"),
+          deItem("broken-2", "Wed, 14 Oct 2026 13:00:00 GMT"),
+          deItem("works-3", "Wed, 14 Oct 2026 10:00:00 GMT"),
+        ),
+      },
+      // gov.za did this on 16 Oct: 500 for some notice pages while the rest of the site answered.
+      [pageOf("broken-1")]: { status: 500, body: "The website encountered an unexpected error." },
+      [pageOf("broken-2")]: { status: 500, body: "The website encountered an unexpected error." },
+      [pageOf("works-3")]: { body: dePage(deBody) },
+    });
+
+    // The failed pages do not use the run's page budget either.
+    expect((await runFetcher(env, { fetch, now: NOW }))[0]).toMatchObject({ saved: 1, waiting: 2 });
+    expect((await articlesOf("xx-de")).map((a) => [a.url, a.text])).toEqual([[pageOf("works-3"), [deTeaser, ...deBody].join("\n")]]);
+
+    // Asked again on later checks while new; after 24 hours saved with the teaser.
+    expect((await runFetcher(env, { fetch, now: new Date("2026-10-14T15:20:00Z") }))[0]).toMatchObject({ saved: 0, waiting: 2 });
+    expect((await runFetcher(env, { fetch, now: new Date("2026-10-15T13:30:00Z") }))[0]).toMatchObject({ saved: 1, waiting: 1 });
+    expect((await runFetcher(env, { fetch, now: new Date("2026-10-15T14:30:00Z") }))[0]).toMatchObject({ saved: 1, waiting: 0 });
+    expect((await articlesOf("xx-de")).map((a) => a.text)).toEqual([deTeaser, deTeaser, [deTeaser, ...deBody].join("\n")]);
+    expect(requests.filter((r) => r.url === pageOf("broken-1"))).toHaveLength(4);
+    expect(requests.filter((r) => r.url === pageOf("works-3"))).toHaveLength(1);
+  });
+
+  it("leaves a site alone for the rest of the run after a 503, or after three failed pages", async () => {
+    await addSource("xx-de", DE_FEED, "rss", DE_CONFIG);
+    const slugs = ["a-5", "b-4", "c-3", "d-2", "e-1"];
+    const pageOf = (slug: string) => `https://www.bundesregierung.de/breg-de/aktuelles/${slug}`;
+    let answer: (slug: string) => Response = () => new Response("", { status: 503 });
+    const site: Site = {
+      "https://www.bundesregierung.de/robots.txt": { status: 404, body: "" },
+      [DE_FEED]: { body: deFeed(...slugs.map((slug, i) => deItem(slug, `Wed, 14 Oct 2026 1${4 - i}:00:00 GMT`))) },
+    };
+    for (const slug of slugs) site[pageOf(slug)] = () => answer(slug);
+    const { fetch, requests } = fakeFetch(site);
+    const pageRequests = () => requests.filter((r) => r.url.includes("/aktuelles/")).length;
+
+    // 503: the site asks us to wait, so no other page of it is asked in this run.
+    expect((await runFetcher(env, { fetch, now: NOW }))[0]).toMatchObject({ saved: 0, waiting: 5 });
+    expect(pageRequests()).toBe(1);
+
+    // A 500, no answer in time, a 502: three pages of the site failed, so it counts as busy.
+    answer = (slug) => {
+      if (slug === "a-5") return new Response("error", { status: 500 });
+      if (slug === "b-4") throw new DOMException("The operation was aborted due to timeout", "TimeoutError");
+      if (slug === "c-3") return new Response("bad gateway", { status: 502 });
+      return new Response(dePage([...deBody, slug]), { headers: { "content-type": "text/html" } });
+    };
+    expect((await runFetcher(env, { fetch, now: new Date("2026-10-14T15:20:00Z") }))[0]).toMatchObject({ saved: 0, waiting: 5 });
+    expect(pageRequests()).toBe(1 + 3);
+
+    // Back to normal: the page budget again decides.
+    answer = (slug) => new Response(dePage([...deBody, slug]), { headers: { "content-type": "text/html" } });
+    expect((await runFetcher(env, { fetch, now: new Date("2026-10-14T15:40:00Z") }))[0]).toMatchObject({ saved: LIMITS.pagesPerRun, waiting: 5 - LIMITS.pagesPerRun });
+  });
+
+  it("does not repeat a cut list text that the page already starts with", async () => {
+    await addSource("xx-de", DE_FEED, "rss", DE_CONFIG);
+    const cut = `${deBody[0].slice(0, 120)}...`;
+    const { fetch } = fakeFetch({
+      "https://www.bundesregierung.de/robots.txt": { status: 404, body: "" },
+      [DE_FEED]: { body: deFeed(deItem("cut-1", "Wed, 14 Oct 2026 09:00:00 GMT", cut)) },
+      "https://www.bundesregierung.de/breg-de/aktuelles/cut-1": { body: dePage(deBody) },
+    });
+    expect((await runFetcher(env, { fetch, now: NOW }))[0]).toMatchObject({ saved: 1 });
+    expect((await articlesOf("xx-de"))[0].text).toBe(deBody.join("\n"));
+  });
+
   it("reads the text from a JSON endpoint (fullText) instead of a script-built item page", async () => {
     const feed = "https://ec.europa.eu/commission/presscorner/api/rss?language=en&documenttype=1&pagesize=40";
     await addSource("xx-eu", feed, "rss", {
       fullText: {
         from: "/detail/en/ip_(\\d+)_(\\d+)$",
         url: "https://ec.europa.eu/commission/presscorner/api/documents?reference=IP/{1}/{2}&language=en",
-        json: "docuLanguageResource.htmlContent",
+        json: ["docuLanguageResource.htmlContent", "docuLanguageResource.dolaQuoteResources.*.{author.authorName}: {extract}"],
       },
     });
     const item = (ref: string, title: string) =>
@@ -385,7 +478,16 @@ describe("runFetcher: whole texts (#71)", () => {
       },
       "https://ec.europa.eu/commission/presscorner/api/documents?reference=IP/26/2153&language=en": {
         type: "application/json",
-        body: JSON.stringify({ docuLanguageResource: { title: "Commission disburses €2.86 billion to Ukraine", htmlContent, pdfContent: null }, refCd: "IP/26/2153" }),
+        body: JSON.stringify({
+          docuLanguageResource: {
+            title: "Commission disburses €2.86 billion to Ukraine",
+            htmlContent,
+            pdfContent: null,
+            // The page shows these under "Quote(s)"; they are not in htmlContent.
+            dolaQuoteResources: [{ author: { authorName: "Ursula von der Leyen, President of the European Commission" }, extract: "Europe stands with Ukraine.", orderNb: 1 }],
+          },
+          refCd: "IP/26/2153",
+        }),
       },
       // Bigger than LIMITS.fullTextBytes: not read, the teaser stays.
       "https://ec.europa.eu/commission/presscorner/api/documents?reference=IP/26/2175&language=en": {
@@ -398,7 +500,8 @@ describe("runFetcher: whole texts (#71)", () => {
     expect(check).toMatchObject({ ok: true, saved: 3, waiting: 0 });
     const byRef = Object.fromEntries((await articlesOf("xx-eu")).map((a) => [a.url.split("/").at(-1), a]));
     expect(byRef.ip_26_2153.text).toBe(
-      "Today, the European Commission disbursed €2.86 billion to Ukraine under the defence component of the Ukraine Facility .\nThe funds will finance drones, missiles and urgent battlefield needs.\nNext steps\nA second payment is planned for December.",
+      // The feed's "European Commission Press release Brussels, <date>" teaser ends with the first paragraph, so it is not added again.
+      "Today, the European Commission disbursed €2.86 billion to Ukraine under the defence component of the Ukraine Facility .\nThe funds will finance drones, missiles and urgent battlefield needs.\nNext steps\nA second payment is planned for December.\nUrsula von der Leyen, President of the European Commission: Europe stands with Ukraine.",
     );
     expect(byRef.ip_26_2175.text).toMatch(/^European Commission Press release/);
     expect(byRef.statement_26_2131.text).toMatch(/^European Commission Press release/);
@@ -470,7 +573,8 @@ describe("runFetcher: whole texts (#71)", () => {
     expect(first).toMatchObject({ ok: true, saved: 2, waiting: 1 });
     expect(requests.some((r) => r.url.includes("mirror.example.com"))).toBe(false);
     const [plan, other] = await articlesOf("xx-ar");
-    expect(plan.text).toMatch(/^MINISTERIO DE SALUD\nResolución 1445\/2026\nRESOL-2026-1445-APN-MS\nCiudad de Buenos Aires, 14\/10\/2026\nVISTO el Expediente N° EX-2026/);
+    // SAIJ's plain-language summary stays in front of the norm's text.
+    expect(plan.text).toMatch(/^El Ministerio de Salud aprobó plan nacional de salud vascular\.\nMINISTERIO DE SALUD\nResolución 1445\/2026\nRESOL-2026-1445-APN-MS\nCiudad de Buenos Aires, 14\/10\/2026\nVISTO el Expediente N° EX-2026/);
     expect(plan.text).toContain("ARTÍCULO 1°.- Apruébase el Plan Nacional");
     expect(other.text).toBe("El Ministerio de Salud aprobó otra norma.");
 

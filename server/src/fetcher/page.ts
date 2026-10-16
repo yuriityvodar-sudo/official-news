@@ -25,8 +25,17 @@ function splitSpec(spec: string, defaultAttr: string | null): Target {
   return { selector: spec.trim(), attr: defaultAttr };
 }
 
+/** HTML elements that never have an end tag. */
+const VOID = new Set(["area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"]);
+
 /** Runs `fn` at the element's end tag; elements that cannot have one (br, img) end at once. */
 function atEnd(el: Element, fn: () => void): void {
+  // Known void elements skip the exception onEndTag throws for them: on a page of
+  // 2,400 <br> (an Argentine norm) the exceptions were a large part of the CPU (#71).
+  if (VOID.has(el.tagName)) {
+    fn();
+    return;
+  }
   try {
     el.onEndTag(fn);
   } catch {
@@ -35,6 +44,9 @@ function atEnd(el: Element, fn: () => void): void {
 }
 
 const SKIPPED = "script, style, noscript, template, svg";
+
+/** Item pages are handed to the HTML reader in pieces this big, so reading can stop early. */
+const PIECE_BYTES = 8192;
 
 function absolute(link: string | undefined, baseUrl: string): string | null {
   if (!link?.trim()) return null;
@@ -167,7 +179,14 @@ export async function findLink(html: string, baseUrl: string, spec: string): Pro
   return absolute(found ?? undefined, baseUrl);
 }
 
-export async function extractContent(html: string, baseUrl: string, textSelector?: string): Promise<PageContent> {
+/**
+ * The main text of an item page: `textSelector`, else the first of `main`,
+ * `article`, `body` with 200 characters. Reading stops once the text kept is
+ * `maxChars` long, since the rest would be cut anyway: the work is bounded by
+ * the text, not by the size of the page (#71: an Argentine norm of 198 KB took
+ * about 25 ms locally to read whole, its first 20,000 characters about 3).
+ */
+export async function extractContent(html: string, baseUrl: string, textSelector?: string, maxChars = Infinity): Promise<PageContent> {
   const containers = textSelector ? [textSelector] : ["main", "article", "body"];
   const buffers = containers.map(() => "");
   const depth = containers.map(() => 0);
@@ -176,12 +195,36 @@ export async function extractContent(html: string, baseUrl: string, textSelector
   };
   let skipping = 0;
   let image: string | null = null;
-  // With a text selector only the elements inside it matter, so the handlers below
-  // watch only those: on a 130 KB page the handlers for every div and svg of the
-  // page were most of the CPU (#71, measured locally: 4.8 ms a page, 1.1 to 1.5 ms
-  // after, same text). A selector list ("a, b") keeps the page-wide handlers.
+  // With a single text selector only the elements inside it matter, so the handlers
+  // below watch only those (#71, measured locally on a 122 KB Bundesregierung page:
+  // about 17 ms with the default containers, under 1 ms with the selector). A
+  // selector list ("a, b") works, but keeps the page-wide handlers and their CPU.
   const inside = (selectors: string) =>
     textSelector && !textSelector.includes(",") ? selectors.split(", ").map((s) => `${textSelector} ${s}`).join(", ") : selectors;
+
+  const length = (raw: string) => cleanText(decodeEntities(raw)).length;
+  // Raw text has more spaces than clean text, so the clean length is checked when the
+  // raw one passes the mark, and the mark moves by what is still missing.
+  const nextCheck = containers.map(() => maxChars);
+  let enough = false;
+  const isEnough = (i: number): boolean => {
+    if (buffers[i].length < nextCheck[i]) return false;
+    // A container earlier in the list is used when it has 200 characters: then this one
+    // no longer matters, and while that one is open it can still get them.
+    for (let j = 0; j < i; j++) {
+      if (length(buffers[j]) >= 200) {
+        nextCheck[i] = Infinity;
+        return false;
+      }
+      if (depth[j] > 0) {
+        nextCheck[i] = buffers[i].length + 4096;
+        return false;
+      }
+    }
+    const n = length(buffers[i]);
+    nextCheck[i] = buffers[i].length + Math.max(maxChars - n, 1024);
+    return n >= maxChars;
+  };
 
   const rewriter = new HTMLRewriter()
     .on('meta[property="og:image"], meta[name="twitter:image"]', {
@@ -189,7 +232,8 @@ export async function extractContent(html: string, baseUrl: string, textSelector
         image ??= el.getAttribute("content");
       },
     })
-    .on(inside(`${SKIPPED}, nav, header, footer, aside`), {
+    // Picture captions and credits ("Foto: …") are not the article's text.
+    .on(inside(`${SKIPPED}, nav, header, footer, aside, figcaption`), {
       element(el) {
         skipping++;
         atEnd(el, () => {
@@ -214,12 +258,31 @@ export async function extractContent(html: string, baseUrl: string, textSelector
         });
       },
       text(chunk) {
-        if (skipping === 0 && depth[i] > 0) buffers[i] += chunk.text;
+        if (skipping === 0 && depth[i] > 0) {
+          buffers[i] += chunk.text;
+          if (!enough && isEnough(i)) enough = true;
+        }
       },
     });
   });
 
-  await rewriter.transform(new Response(html)).arrayBuffer();
+  // The page goes in piece by piece, and no more once there is enough text.
+  const bytes = new TextEncoder().encode(html);
+  let offset = 0;
+  const input = new ReadableStream<Uint8Array>(
+    {
+      pull(controller) {
+        if (enough || offset >= bytes.length) {
+          controller.close();
+          return;
+        }
+        controller.enqueue(bytes.subarray(offset, offset + PIECE_BYTES));
+        offset += PIECE_BYTES;
+      },
+    },
+    { highWaterMark: 0 },
+  );
+  await rewriter.transform(new Response(input)).arrayBuffer();
 
   const texts = buffers.map((b) => cleanText(decodeEntities(b)));
   const text = texts.find((t) => t.length >= 200) ?? texts.reduce((a, b) => (b.length > a.length ? b : a), "");

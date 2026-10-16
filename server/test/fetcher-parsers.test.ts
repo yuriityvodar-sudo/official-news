@@ -5,7 +5,7 @@ import { parseDate } from "../src/fetcher/dates";
 import { parseFeed } from "../src/fetcher/feed";
 import { extractContent, findLink, parsePage } from "../src/fetcher/page";
 import { isAllowed, parseRobots, robotsFromResponse } from "../src/fetcher/robots";
-import { decodeEntities, fillTemplate, getPath, htmlToText } from "../src/fetcher/text";
+import { decodeBody, decodeEntities, fillTemplate, getPath, getStrings, htmlToText } from "../src/fetcher/text";
 
 const NOW = new Date("2026-10-14T15:00:00Z");
 
@@ -96,6 +96,12 @@ describe("text helpers", () => {
     expect(htmlToText("&lt;p&gt;Tomorrow I will join&lt;/p&gt;&lt;p&gt;counterparts&lt;/p&gt;")).toBe("Tomorrow I will join\ncounterparts");
   });
 
+  it("decodes ISO-8859-1 byte for byte, also 0x80 to 0x9F", () => {
+    const bytes = Uint8Array.from({ length: 256 }, (_, i) => i);
+    expect(decodeBody(bytes.buffer, "ISO-8859-1")).toBe(String.fromCharCode(...bytes));
+    expect(decodeBody(Uint8Array.from([0x52, 0x65, 0x73, 0x6f, 0x6c, 0x75, 0x63, 0x69, 0xf3, 0x6e]).buffer, "latin1")).toBe("Resolución");
+  });
+
   it("collapses Windows and old Mac line ends like any other", () => {
     expect(htmlToText("Ementa\r\n\r\n\t Institui mecanismos\r\rpara a saúde ")).toBe("Ementa\nInstitui mecanismos\npara a saúde");
   });
@@ -105,6 +111,26 @@ describe("text helpers", () => {
     expect(getPath(item, "abs.document.content.title")).toBe("Decreto 1177");
     expect(fillTemplate("PL {n}: {abs.document.content.title}", item)).toBe("PL 5: Decreto 1177");
     expect(fillTemplate("missing.path", item)).toBe("");
+  });
+
+  it("collects strings through lists (*), with a template per entry", () => {
+    // Trimmed from the Commission's Press Corner API answer for IP/26/2175.
+    const answer = {
+      docuLanguageResource: {
+        htmlContent: "<p>Today, the Commission launched RAISE.</p>",
+        dolaQuoteResources: [
+          { author: { authorName: "Ekaterina Zaharieva, Commissioner for Startups, Research and Innovation" }, extract: "Our ambition for AI in science can only become reality together." },
+          { author: {}, extract: "" },
+        ],
+      },
+    };
+    expect(getStrings(answer, "docuLanguageResource.htmlContent")).toEqual(["<p>Today, the Commission launched RAISE.</p>"]);
+    expect(getStrings(answer, "docuLanguageResource.dolaQuoteResources.*.extract")).toEqual(["Our ambition for AI in science can only become reality together."]);
+    expect(getStrings(answer, "docuLanguageResource.dolaQuoteResources.*.{author.authorName}: {extract}")).toEqual([
+      "Ekaterina Zaharieva, Commissioner for Startups, Research and Innovation: Our ambition for AI in science can only become reality together.",
+    ]);
+    expect(getStrings(answer, "docuLanguageResource.missing.*.extract")).toEqual([]);
+    expect(getStrings({ a: '{"b":"from a JSON string"}' }, "a.b")).toEqual(["from a JSON string"]);
   });
 });
 
@@ -221,22 +247,76 @@ describe("extractContent", () => {
     const base = "https://www.bundesregierung.de/breg-de/aktuelles/cyberresilienz-2426502";
     expect((await extractContent(html, base)).text).toContain("per Facebook teilen");
     const content = await extractContent(html, base, "div.bpa-article .bpa-richtext");
+    // The picture's caption and credit are not the article's text.
     expect(content.text).toBe(
-      "Foto: picture alliance / Westend61\nDer sogenannte Cyber Resilience Act (CRA) legt erstmalig ein Mindestmaß an Cybersicherheit für alle vernetzten Produkte fest.\nWann tritt der CRA in Kraft?\nDie Umsetzung erfolgt in verschiedenen Etappen, bis Ende 2027.",
+      "Der sogenannte Cyber Resilience Act (CRA) legt erstmalig ein Mindestmaß an Cybersicherheit für alle vernetzten Produkte fest.\nWann tritt der CRA in Kraft?\nDie Umsetzung erfolgt in verschiedenen Etappen, bis Ende 2027.",
     );
     expect(content.imageUrl).toBe("https://www.bundesregierung.de/resource/image/2427030/og.jpg");
   });
 
-  it("keeps a gov.za document page's menus out, so a page without a body gives no text", async () => {
+  it("keeps a gov.za notice's fields, with the public-comment deadline, and leaves the menus out", async () => {
+    // Trimmed from /documents/notices/standards-act-standards-matters-comments-invited-09-oct-2026 (16 Oct).
     const html = `<html><body><a href="#main-content">Skip to main content</a><form><label>Search gov.za</label><button>Search</button></form>
       <aside><div class="field--name-body"><p>The Government Gazette is published on the Government Printing Works' website</p></div></aside>
-      <main role="main"><h1 class="page-title"><span>Customs and Excise Act: Amendment to Rules (DAR281)</span></h1>
-      <article data-history-node-id="846485" class="node"><div class="node-content"><div class="field field--name-field-gcisdoc-files"><div class="field__label">Files</div>
-      <table><thead><tr><th>Attachment</th><th>Size</th></tr></thead><tbody><tr><td><a href="/sites/default/files/gcis_document/202610/55506rg12055gon7992.pdf" type="application/pdf">55506rg12055gon7992.pdf</a></td><td>112.06 KB</td></tr></tbody></table>
-      </div></div></article><div class="share">Share this page Facebook Twitter WhatsApp</div></main></body></html>`;
-    const base = "https://www.gov.za/documents/notices/customs-and-excise-act-amendment-rules-dar281-09-oct-2026";
+      <main role="main"><h1 class="page-title"><span>Standards Act: Standards Matters: Comments invited</span></h1>
+      <article data-history-node-id="846491" class="node"><div class="node-content"><div class="field field--name-field-gcisdoc-files"><div class="field__label">Files</div>
+      <table><thead><tr>
+        <th>Attachment</th>
+        <th>Size</th>
+      </tr></thead><tbody><tr>
+        <td><a href="/sites/default/files/gcis_document/202610/55525gen4190.pdf" type="application/pdf">55525gen4190.pdf</a></td>
+        <td>389.25 KB</td>
+      </tr></tbody></table></div>
+      <div class="field field--name-field-comment-by"><div class="field__label">Comment by</div><div class="field__item"><time datetime="2026-12-08T12:00:00Z">Tuesday, December 8, 2026 - 12:00</time></div></div>
+      <div class="grid"><h3>Share this page</h3><a class="social-link facebook"><div class="inline">Facebook</div></a></div>
+      </div></article></main></body></html>`;
+    const base = "https://www.gov.za/documents/notices/standards-act-standards-matters-comments-invited-09-oct-2026";
     expect((await extractContent(html, base)).text).toContain("Skip to main content");
-    expect(await extractContent(html, base, "article.node .field--name-body")).toEqual({ text: "", imageUrl: null });
+    expect(await extractContent(html, base, "article.node .field")).toEqual({
+      text: "Files\nAttachment\nSize\n55525gen4190.pdf\n389.25 KB\nComment by\nTuesday, December 8, 2026 - 12:00",
+      imageUrl: null,
+    });
+  });
+
+  it("keeps the Grand National Assembly's news text without the site footer", async () => {
+    // Trimmed from /Haber/Detay?Id=377f1763-9427-47f8-b58e-01a13a00ae7c (16 Oct).
+    const html = `<html><body><div class="page-content"><div id="content-title-type"><a href="/meclis-haber/meclis-baskani">MECLİS HABERLERİ</a></div>
+      <div id="detay-content"><div class="blog-content"><div id="haber-detay-baslik"><div id="haber-detay-saat-dakika"> 2026-10-14 - 13:41</div>
+      <div class="mobile-social-media"><a class="a-whatsapp" href="whatsapp://send"><img src="/images/yeni_tasarim/whatsapp.png"></a></div>
+      &#x130;Y&#x130; PART&#x130; TBMM GRUP TOPLANTISI</div>
+      <div id="haber-detay-ozet">İYİ Parti Genel Başkanı Müsavat Dervişoğlu, fon soruşturmalarına ilişkin açıklama yaptı.</div>
+      <div id="haber-detay-aciklama"><p>Dervişoğlu, partisinin TBMM Grup Toplantısı'nda konuştu.</p></div></div></div></div>
+      <div class="footer-area"><a href="/cerez-politikasi">Çerez Politikası</a><h4>BİZE ULAŞIN</h4><p>Atatürk Bulvarı TBMM 06543</p><p>0 (312) 420 50 00</p></div></body></html>`;
+    const base = "https://www.tbmm.gov.tr/Haber/Detay?Id=377f1763-9427-47f8-b58e-01a13a00ae7c";
+    expect((await extractContent(html, base)).text).toContain("BİZE ULAŞIN");
+    expect((await extractContent(html, base, "#detay-content")).text).toBe(
+      "2026-10-14 - 13:41\nİYİ PARTİ TBMM GRUP TOPLANTISI\nİYİ Parti Genel Başkanı Müsavat Dervişoğlu, fon soruşturmalarına ilişkin açıklama yaptı.\nDervişoğlu, partisinin TBMM Grup Toplantısı'nda konuştu.",
+    );
+  });
+
+  it("stops reading a page once its text is long enough, whatever the page's size", async () => {
+    // An Argentine norm is mostly <br> and text: 198 KB took about 25 ms locally to read whole (#71 review).
+    const line = "ARTÍCULO 1°.- Apruébase el Plan Nacional de Abordaje Integral de Salud Vascular 2026-2030.<br>";
+    const html = `<html><head><meta property="og:image" content="/og.jpg"></head><body><p>${line.repeat(3000)}</p><p>LAST LINE</p></body></html>`;
+    const whole = await extractContent(html, "https://servicios.infoleg.gob.ar/x");
+    expect(whole.text).toContain("LAST LINE");
+    const cut = await extractContent(html, "https://servicios.infoleg.gob.ar/x", undefined, 20_000);
+    expect(cut.text.length).toBeGreaterThanOrEqual(20_000);
+    expect(cut.text.length).toBeLessThan(30_000);
+    expect(cut.text).not.toContain("LAST LINE");
+    expect(whole.text.startsWith(cut.text)).toBe(true);
+    expect(cut.imageUrl).toBe("https://servicios.infoleg.gob.ar/og.jpg");
+    // A short page is read whole.
+    expect((await extractContent(`<body><main>${"<p>Short decree text.</p>".repeat(20)}</main></body>`, "https://x.gov/", undefined, 20_000)).text).toHaveLength(
+      20 * "Short decree text.".length + 19,
+    );
+  });
+
+  it("with a cap, still prefers main over body while main is being read", async () => {
+    const html = `<body><div>${"Menu entry that is not a nav element. ".repeat(10)}</div><main><p>${"Decision of the cabinet. ".repeat(100)}</p></main><div>${"Footer text. ".repeat(500)}</div></body>`;
+    const content = await extractContent(html, "https://x.gov/", undefined, 1000);
+    expect(content.text.startsWith("Decision of the cabinet.")).toBe(true);
+    expect(content.text).not.toContain("Menu entry");
   });
 
   it("reads a Chamber of Deputies bill record without menus, also with CRLF line ends", async () => {
