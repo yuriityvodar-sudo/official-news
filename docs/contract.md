@@ -76,7 +76,7 @@ Base URL: `https://api.officialnews.workers.dev` (deployed), `http://localhost:8
 
 ## Website (#88)
 
-Base URL: `https://site.officialnews.workers.dev` (deployed; temporary until the domain, so never in App Store Connect or a share), `http://localhost:8788` (local, `npm run dev:site` in `server/`). The Worker `site`, `server/src/site/`. Plain HTML, the same for everyone, in `en`, `uk`, `ru`, `es` and `de`.
+Base URL: `https://site.officialnews.workers.dev` (once deployed: `deploy.yml` deploys it only while the repository variable `SITE_DEPLOY` is `true`, `docs/setup.md`; temporary until the domain, so never in App Store Connect or a share), `http://localhost:8788` (local, `npm run dev:site` in `server/`). The Worker `site`, `server/src/site/`. Plain HTML, the same for everyone, in `en`, `uk`, `ru`, `es` and `de`.
 
 | Path | Page | Status |
 | --- | --- | --- |
@@ -92,7 +92,7 @@ Base URL: `https://site.officialnews.workers.dev` (deployed; temporary until the
 
 What it reads: only through the API's own handler (`handleApi`, in the same request): `GET /articles?limit=20&lang=<lang>&cursor=<c>` (no `lang` for English; the cursor is the API's `encodeCursor(before)`) and `GET /articles/:id` with each `lang` of the site. No SQL of its own, no other binding than D1, no AI. So the site shows exactly what the API shows, and a change to the API's rules reaches the site with its next deploy (after the api's). It relies on `GET /articles/:id` serving a released article of any age (no 7-day limit): article pages are permanent because of it.
 
-Every response: `X-Robots-Tag: noindex` (and the robots meta tag in every page), `Content-Security-Policy: default-src 'none'; style-src '<sha256 of the inline CSS>'; img-src data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`, `X-Content-Type-Options: nosniff`, `Content-Language` on pages, `Cache-Control` and `Cloudflare-CDN-Cache-Control` per kind of page (`server/src/site/respond.ts`), no cookie and no `Vary`. Every absolute URL starts with `SITE_ORIGIN`, never the request's host. A page loads nothing else: one request per page view.
+Every response: `X-Robots-Tag: noindex` (a page's robots meta tag always has the same value, from `robotsFor()`; robots.txt disallows every path, so crawlers read neither until the domain), `Content-Security-Policy: default-src 'none'; style-src '<sha256 of the inline CSS>'; img-src data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`, `X-Content-Type-Options: nosniff`, `Content-Language` on pages, `Cache-Control` and `Cloudflare-CDN-Cache-Control` per kind of page (`server/src/site/respond.ts`), no cookie and no `Vary`. Every absolute URL starts with `SITE_ORIGIN`, never the request's host. A page loads nothing else: one request per page view.
 
 ## Database (D1)
 
