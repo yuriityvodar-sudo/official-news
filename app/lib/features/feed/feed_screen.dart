@@ -3,12 +3,14 @@ import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
+import '../../core/analytics.dart';
 import '../../core/article.dart';
 import '../../core/feed_language.dart';
 import '../../core/news_widgets.dart';
 import '../../core/pictures.dart';
 import '../../core/router.dart';
 import '../../core/theme.dart';
+import '../settings/settings_screen.dart';
 import 'feed_controller.dart';
 
 /// Item 3: the feed (docs/design/mvp.png). Top stories, then the latest
@@ -33,6 +35,11 @@ class _FeedScreenState extends State<FeedScreen> {
   final _scroll = ScrollController();
   Timer? _newCheck;
 
+  /// Analytics (#60): the deepest Latest row shown this visit, and whether the
+  /// feed's first page failed last time it changed.
+  int _deepest = 0;
+  bool _failed = false;
+
   @override
   void initState() {
     super.initState();
@@ -56,6 +63,10 @@ class _FeedScreenState extends State<FeedScreen> {
   }
 
   void _changed() {
+    _language.value = _feed.language;
+    final failed = _feed.error != null;
+    if (failed && !_failed) unawaited(analytics.feedFailed());
+    _failed = failed;
     setState(() {});
     // A page dropped because a refresh replaced the feed leaves the list at its end:
     // look again once the new feed is drawn.
@@ -81,15 +92,47 @@ class _FeedScreenState extends State<FeedScreen> {
     }
   }
 
-  void _open(Article article) {
+  void _open(
+    Article article, {
+    required String section,
+    required int position,
+  }) {
+    unawaited(
+      analytics.articleOpened(article, section: section, position: position),
+    );
     unawaited(_feed.markRead(article));
     // The article as the feed has it, so a translated one opens translated.
     Navigator.of(context).pushNamed(Routes.detail, arguments: article);
   }
 
-  /// A language picked in the menu: another language is another feed, from the top.
+  /// The feed's language for the settings screen, kept in step with the feed.
+  late final _language = ValueNotifier(_feed.language);
+
+  void _openSettings() {
+    Navigator.of(context).push(
+      CupertinoPageRoute(
+        settings: const RouteSettings(name: '/settings'),
+        builder: (_) =>
+            SettingsScreen(language: _language, onLanguage: _chooseLanguage),
+      ),
+    );
+  }
+
+  /// The first time this visit a Latest row at a depth of [feedDepths] is drawn.
+  void _shownRow(int row) {
+    if (row <= _deepest) return;
+    for (final depth in feedDepths) {
+      if (_deepest < depth && row >= depth) {
+        unawaited(analytics.feedDepth(depth));
+      }
+    }
+    _deepest = row;
+  }
+
+  /// A language picked in Settings: another language is another feed, from the top.
   Future<void> _chooseLanguage(FeedLanguage chosen) async {
     if (chosen == _feed.language) return;
+    unawaited(analytics.languageChosen(chosen, from: _feed.language));
     if (_scroll.hasClients) _scroll.jumpTo(0);
     await _feed.setLanguage(chosen);
   }
@@ -116,33 +159,20 @@ class _FeedScreenState extends State<FeedScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Official News', style: text.masthead),
-                        // The language at the right of the date, or under it when
-                        // large text needs the whole line, so no word of the date is split.
-                        SizedBox(
-                          width: double.infinity,
-                          child: Wrap(
-                            alignment: WrapAlignment.spaceBetween,
-                            crossAxisAlignment: WrapCrossAlignment.center,
-                            children: [
-                              Text(
-                                longDay(DateTime.now()),
-                                style: text.dateLine,
+                        // Settings at the top right (#64); the language is chosen there.
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                'Official News',
+                                style: text.masthead,
                               ),
-                              // Hidden, keeping its place, until the saved language is read.
-                              Visibility(
-                                visible: _feed.languageKnown,
-                                maintainSize: true,
-                                maintainAnimation: true,
-                                maintainState: true,
-                                child: _LanguageMenu(
-                                  language: _feed.language,
-                                  onSelected: _chooseLanguage,
-                                ),
-                              ),
-                            ],
-                          ),
+                            ),
+                            _SettingsButton(onPressed: _openSettings),
+                          ],
                         ),
+                        Text(longDay(DateTime.now()), style: text.dateLine),
                       ],
                     ),
                   ),
@@ -236,12 +266,18 @@ class _FeedScreenState extends State<FeedScreen> {
             _TopCard(
               article: first,
               read: _feed.readIds.contains(first.id),
-              onTap: () => _open(first),
+              onTap: () => _open(first, section: 'top', position: 0),
             ),
           ),
         );
       }
-      slivers.add(_rows(rest.toList()));
+      slivers.add(
+        _rows(
+          rest.toList(),
+          section: 'top',
+          first: first.imageUrl != null ? 1 : 0,
+        ),
+      );
     }
 
     // One "Latest" list in the order articles appeared, with no day headings: an
@@ -256,7 +292,7 @@ class _FeedScreenState extends State<FeedScreen> {
           ),
         ),
       );
-      slivers.add(_rows(latest));
+      slivers.add(_rows(latest, section: 'latest'));
     }
 
     slivers.add(
@@ -289,18 +325,24 @@ class _FeedScreenState extends State<FeedScreen> {
   );
 
   /// Every card shows its own date ("2h ago", or the day for date-only articles).
-  Widget _rows(List<Article> articles) => SliverPadding(
+  /// [section] and [first] (the position of the first row) are for analytics.
+  Widget _rows(
+    List<Article> articles, {
+    required String section,
+    int first = 0,
+  }) => SliverPadding(
     padding: const EdgeInsets.symmetric(horizontal: 20),
     sliver: SliverList.separated(
       itemCount: articles.length,
       separatorBuilder: (_, _) => const Divider(),
       itemBuilder: (context, index) {
         final a = articles[index];
+        if (section == 'latest') _shownRow(index + 1);
         return _ArticleRow(
           article: a,
           read: _feed.readIds.contains(a.id),
           showDay: true,
-          onTap: () => _open(a),
+          onTap: () => _open(a, section: section, position: first + index),
         );
       },
     ),
@@ -474,89 +516,33 @@ class _Picture extends StatelessWidget {
   }
 }
 
-/// The feed's language next to the date: a globe and "EN", "УКР" or "РУС", in the
-/// accent colour like the feed's other tappable text, with a 44-pt target.
-class _LanguageButton extends StatelessWidget {
-  const _LanguageButton({required this.language, required this.onPressed});
+/// The settings button at the top right of the feed: a round, tinted symbol
+/// like the account button in Apple's apps, with a 44-pt target.
+class _SettingsButton extends StatelessWidget {
+  const _SettingsButton({required this.onPressed});
 
-  final FeedLanguage language;
   final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
-    final style = NewsText.from(
-      context,
-    ).dateLine.copyWith(fontSize: 15, color: AppColors.accent);
+    final scheme = Theme.of(context).colorScheme;
     return CupertinoButton(
       padding: EdgeInsets.zero,
       minimumSize: const Size(44, 44),
       onPressed: onPressed,
-      child: Semantics(
-        label: 'Language: ${language.nativeName}',
-        child: ExcludeSemantics(
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Grows with the text, like an SF Symbol.
-              const Icon(
-                CupertinoIcons.globe,
-                size: 17,
-                color: AppColors.accent,
-                applyTextScaling: true,
-              ),
-              const SizedBox(width: 4),
-              Text(language.shortLabel, style: style),
-            ],
-          ),
+      child: Container(
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(
+          color: scheme.surfaceContainerHighest,
+          shape: BoxShape.circle,
         ),
-      ),
-    );
-  }
-}
-
-/// The iOS pull-down menu at the language button (as in Apple's apps): the
-/// languages in their own names, a checkmark on the current one. It opens from the
-/// button and stays on screen on any device size, iPad included.
-class _LanguageMenu extends StatefulWidget {
-  const _LanguageMenu({required this.language, required this.onSelected});
-
-  final FeedLanguage language;
-  final ValueChanged<FeedLanguage> onSelected;
-
-  @override
-  State<_LanguageMenu> createState() => _LanguageMenuState();
-}
-
-class _LanguageMenuState extends State<_LanguageMenu> {
-  // Follows the animation, not MenuController.isOpen: while the menu is closing,
-  // isOpen is still true, and a tap then would "close" it again instead of opening.
-  AnimationStatus _status = AnimationStatus.dismissed;
-
-  @override
-  Widget build(BuildContext context) {
-    return CupertinoMenuAnchor(
-      onAnimationStatusChanged: (status) => _status = status,
-      menuChildren: [
-        for (final lang in FeedLanguage.values)
-          CupertinoMenuItem(
-            onPressed: () => widget.onSelected(lang),
-            trailing: lang == widget.language
-                ? const Icon(
-                    CupertinoIcons.checkmark_alt,
-                    color: AppColors.accent,
-                  )
-                : null,
-            child: Semantics(
-              selected: lang == widget.language,
-              child: Text(lang.nativeName),
-            ),
-          ),
-      ],
-      builder: (context, controller, _) => _LanguageButton(
-        language: widget.language,
-        onPressed: () => _status.isForwardOrCompleted
-            ? controller.close()
-            : controller.open(),
+        child: Icon(
+          CupertinoIcons.gear_alt,
+          size: 21,
+          color: CupertinoColors.label.resolveFrom(context),
+          semanticLabel: 'Settings',
+        ),
       ),
     );
   }

@@ -29,6 +29,8 @@ Last updated: 2026-10-15 (#46, translations)
 | Mistral account (translation test) | Created 2026-10-15 | Yurii | Free plan, Yurii's own account at console.mistral.ai. No key: the free plan no longer allows API keys |
 | Google Play app | Not yet | Open decision | Whose account is still to decide |
 | Bundle ID and package name | Created 2026-10-14 | Roman | `com.officialnews.app` on both platforms: the iOS App ID is registered on the RS Elite Pro team (explicit, no extra capabilities yet), and it is the Android `applicationId`. Permanent |
+| Firebase project and Google Analytics | Created 2026-10-16 | Yurii | Firebase project `official-news` (id `official-news-48e16`, Spark plan, free) in Yurii's Google account, linked to a new Google Analytics account "Official News" (location Kenya; Google data sharing settings off). iOS app `com.officialnews.app` (nickname "Official News iOS", App Store ID `6822820350`) registered in it. Used only for Analytics (#60). Roman gets access in Firebase (Project settings, Users and permissions) and Analytics when he needs it |
+| GitHub secret `GOOGLE_SERVICE_INFO_PLIST` | Created 2026-10-16 | Yurii | Base64 of the iOS config file `GoogleService-Info.plist` from the Firebase project above, put there by Yurii (`base64 -i … \| gh secret set`). The TestFlight workflow reads its four values into `--dart-define`s; the file itself is never in the repo or the app bundle. Without it a build sends no analytics. A new config file (another Firebase app) replaces it the same way |
 
 ## Developer machines
 
