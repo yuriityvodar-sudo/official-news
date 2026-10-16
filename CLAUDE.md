@@ -34,6 +34,19 @@ We start with these owners and can change them as we go (agreed 14 Oct 2026). To
 | 6 Fetcher | Yurii |
 | 7 AI summaries | Roman |
 | 8 Source health and cleanup | Roman |
+| 9 Translations | Yurii |
+
+After the MVP, towards the App Store release (call, 16 Oct; each is an issue assigned to its owner, details in `docs/plan.md`):
+
+| Item | Owner |
+| --- | --- |
+| #63 Better AI headlines and summaries (prompt), backward compatible | Roman |
+| #56 Article text layout | Roman |
+| #64 Settings screen (no login) | Yurii |
+| #65 Domain and app name | Yurii |
+| #66 Feed redesign (cards, font, UI) | Yurii |
+| #60 Analytics, #62 Push notifications | Yurii |
+| #67 Categories, #68 Global / Local switch | To agree |
 
 ## Fixed principles (change only by agreement, in a pull request)
 
