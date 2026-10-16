@@ -2,7 +2,10 @@ import { toStoredTime } from "./text";
 
 /** How a source writes its dates (the `date` entry of a source's config). */
 export interface DateSpec {
-  /** Numeric pattern with yyyy, mm, dd, HH, MM, e.g. "dd/mm/yyyy" or "yyyy. mm. dd."; "fr" for "14 octobre 2026". */
+  /**
+   * Numeric pattern with yyyy, mm, dd, HH, MM, e.g. "dd/mm/yyyy" or "yyyy. mm. dd."; "fr" for "14 octobre 2026";
+   * "uk" for "16 жовтня 2026", "15 жовтня 17:34" or "12:31, 16 жовтня" (no year: the latest such date).
+   */
   format?: string;
   /** Offset of the source's local time when the date has no zone, e.g. "+03:00". Default UTC. */
   utcOffset?: string;
@@ -18,6 +21,8 @@ export interface ParsedDate {
 }
 
 const FRENCH_MONTHS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
+/** Genitive, as a date writes them ("16 жовтня"). */
+const UKRAINIAN_MONTHS = ["січня", "лютого", "березня", "квітня", "травня", "червня", "липня", "серпня", "вересня", "жовтня", "листопада", "грудня"];
 
 function offsetMinutes(offset: string | undefined): number {
   const m = offset?.match(/^([+-])(\d{2}):?(\d{2})$/);
@@ -67,6 +72,19 @@ export function parseDate(raw: string | null | undefined, spec: DateSpec = {}, n
     const m = text.toLowerCase().match(/(\d{1,2})(?:er)?\s+([a-zéû]+)\s+(\d{4})/);
     const month = m ? FRENCH_MONTHS.indexOf(m[2]) + 1 : 0;
     return m ? build({ y: Number(m[3]), mo: month, d: Number(m[1]) }, spec, now) : null;
+  }
+  if (spec.format === "uk") {
+    const lower = text.toLowerCase();
+    const m = lower.match(/(\d{1,2})\s+([а-яіїєґ]+)(?:\s+(\d{4}))?/);
+    const month = m ? UKRAINIAN_MONTHS.indexOf(m[2]) + 1 : 0;
+    if (!m || !month) return null;
+    // The time may come before or after the date ("12:31, 16 жовтня", "15 жовтня  17:34").
+    const time = lower.match(/(\d{1,2}):(\d{2})/);
+    const parts = { mo: month, d: Number(m[1]), h: time ? Number(time[1]) : undefined, mi: time ? Number(time[2]) : undefined };
+    let y = m[3] ? Number(m[3]) : now.getUTCFullYear();
+    // No year: this year, unless that is more than a day ahead (31 December read on 1 January).
+    if (!m[3] && Date.UTC(y, month - 1, parts.d) > now.getTime() + 86_400_000) y--;
+    return build({ y, ...parts }, spec, now);
   }
   if (spec.format) {
     const p = fromPattern(text, spec.format);
