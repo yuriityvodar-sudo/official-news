@@ -35,7 +35,7 @@ export const CSS = `:root{color-scheme:light dark;--bg:#fff;--text:#000;--second
 @media (prefers-color-scheme:dark){:root{--bg:#000;--text:#fff;--secondary:#98989f;--separator:#38383a;--accent:#fa2d48;--fill:rgba(118,118,128,.24);--on:#ff3b55;--chip:#2c2c2e;--card:#1c1c1e;--menu:#1c1c1e;--band:#000;--shadow:rgba(0,0,0,.6)}}
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
-body{margin:0;background:var(--bg);color:var(--text);font:16px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;overflow-wrap:break-word}
+body{margin:0;display:flex;flex-direction:column;min-height:100vh;min-height:100dvh;background:var(--bg);color:var(--text);font:16px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;overflow-wrap:break-word}
 a{color:var(--accent)}
 a:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
 .wrap{max-width:680px;margin:0 auto;padding:0 16px}
@@ -110,6 +110,7 @@ body:has(main :focus-visible:not(.filters *),footer :focus-visible) .pick[open] 
 .choose{list-style:none;margin:16px 0;padding:0}
 .choose li{border-bottom:.5px solid var(--separator)}
 .choose a{display:flex;justify-content:space-between;gap:12px;min-height:48px;align-items:center;color:var(--text);text-decoration:none;font-weight:600}
+main{flex:1 0 auto}
 footer{border-top:.5px solid var(--separator);padding:8px 0 40px;font-size:13px;color:var(--secondary)}
 footer nav{display:flex;flex-wrap:wrap;column-gap:18px}
 footer nav a{display:inline-flex;align-items:center;min-height:44px;color:var(--text);text-decoration:none}

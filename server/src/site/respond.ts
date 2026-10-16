@@ -22,9 +22,10 @@ export const CACHE = {
    * 45–65 rows plus about 6 per article of the last 24 hours, and a language
    * with few or no translations (German while it is off) about 2 more per
    * article of the 7 days, on every page. So the cache bounds renders per URL
-   * (288 a day per cache tier), not rows.
+   * (144 a day per cache tier), not rows. 600 s (Yurii, 16 Oct, #89: cache the
+   * lists 10 minutes and measure real traffic before anything stricter).
    */
-  list: { browser: "public, max-age=60", edge: "max-age=300, stale-while-revalidate=600, stale-if-error=86400" },
+  list: { browser: "public, max-age=60", edge: "max-age=600, stale-while-revalidate=600, stale-if-error=86400" },
   /** The landing page, information pages, robots.txt: change only with a deploy. */
   fixed: { browser: "public, max-age=3600", edge: "max-age=86400" },
   /** An unknown page, or an article not released yet: short, it may appear soon. */
