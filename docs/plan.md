@@ -118,8 +118,8 @@ The MVP is a Kickoff plus 8 items, 4 each. This is our suggested split: Yurii ow
 | #64 | Settings screen from the top-right corner (language, notifications, privacy, terms, support, about, version); no login | Yurii (design and build) | Yurii approves it on the phone |
 | #65 | Domain (Cloudflare Registrar) and app name | Yurii | Name decided, domain bought |
 | #66 | Feed redesign: article cards, font, UI fixes | Yurii (design and build) | Yurii approves it on the phone |
-| #67 | News categories | To agree | Categories agreed in the issue, then built |
-| #68 | Global / Local feed switch | To agree | Agreed in the issue, then built |
+| #67 | News categories: a Topics chip under the date, one topic at a time, busiest first, from the server | Yurii (design and build) | Server filters and `GET /topics` (Proposed, `docs/decisions.md`), then the app's chip; Yurii approves it on the phone |
+| #68 | Global / Local feed switch: Local is the phone's region (plus its blocs, such as the EU), changeable in Settings | Yurii (design and build) | Server filters and `GET /countries` (Proposed, `docs/decisions.md`), then the app's chip and Settings row; Yurii approves it on the phone |
 | #60 | Analytics (Google Analytics through Firebase) | Yurii | Events arrive in GA from TestFlight; release checklist done |
 | #62 | Push notifications, breaking decisions (importance 4+, max 2 a day) | Yurii | A breaking decision reaches a phone in its language |
 | #88 | Website: a page per article in each language it is shown in, the latest list per language, the app's information pages; noindex until the domain (#65) | Yurii | Every API article is served in each language it is shown in, with the AI label, credit line and official link, in one request per page view |

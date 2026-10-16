@@ -1,6 +1,6 @@
 # Contract
 
-The shared definitions both the app and the backend build against. Changed only by agreement, in a pull request that also updates `docs/decisions.md`. The code that implements it: `app/lib/core/article.dart`, `app/lib/core/decision_types.dart`, `app/lib/core/topics.dart`, `server/src/api/index.ts`, `server/src/site/` (the website), `server/src/translator/languages.ts` (languages), `server/src/translator/queue.ts` (the translation queue), `server/migrations/`.
+The shared definitions both the app and the backend build against. Changed only by agreement, in a pull request that also updates `docs/decisions.md`. The code that implements it: `app/lib/core/article.dart`, `app/lib/core/decision_types.dart`, `app/lib/core/topics.dart`, `server/src/api/index.ts`, `server/src/api/filters.ts` (the feed's filters: blocs, topic and country names), `server/src/site/` (the website), `server/src/translator/languages.ts` (languages), `server/src/translator/queue.ts` (the translation queue), `server/migrations/`.
 
 ## Article
 
@@ -29,7 +29,7 @@ What the API returns and both screens read.
 }
 ```
 
-- The feed card reads `headline`, `shortSummary` and `imageUrl`; both show `decisionType` as a red label above the headline ("DECISION"); the detail screen reads `summary`. `topics` is set by the AI; the MVP app does not use it yet.
+- The feed card reads `headline`, `shortSummary` and `imageUrl`; both show `decisionType` as a red label above the headline ("DECISION"); the detail screen reads `summary`. `topics` is set by the AI; the feed's Topics filter (#67) uses it. `country` is the source's: Local (#68) filters on it.
 - `feedSeq` is the article's place in the feed: a number given when it is released (the AI marked it an official decision, and every enabled language has its translation: release together, below), only ever rising and never changed afterwards. `addedAt` is when that happened (column `added_at`, set with `feed_seq` and, like it, never changed by a later re-summary). The card shows `publishedAt`; the feed order follows `feedSeq`, so an article that appears late lands on top, not among the ones already read (docs/research/2026-10-15 Feed ordering for late items.md).
 - Before the AI step has run, `headline`, `shortSummary`, `summary`, `decisionType` and `importance` are `null` and `topics` is `[]`; the app shows `originalTitle` instead.
 - `publishedAt` is UTC. `dateOnly: true` means the source gave no time.
@@ -44,7 +44,7 @@ A fixed list. The AI gives each news article one of them; the app shows its labe
 
 ## Topics
 
-A fixed list. The AI gives each article 1 to 3 of them; topic features (onboarding, a topic feed) come after the MVP.
+A fixed list. The AI gives each article 1 to 3 of them. The feed's Topics filter (#67) reads them (`GET /topics`, `GET /articles?topic=`); its names in each language are `TOPIC_NAMES` in `server/src/api/filters.ts`, so a new topic needs that list, the AI's (`TOPICS` in `server/src/summarizer/schema.ts`) and this one. Onboarding and a "For you" feed come later.
 
 `foreign-affairs`, `economy`, `security-defence`, `health`, `climate`, `trade`, `technology`, `energy`, `migration`, `elections`, `human-rights`, `science`
 
@@ -59,7 +59,14 @@ Base URL: `https://api.officialnews.workers.dev` (deployed), `http://localhost:8
 - `lang` (#46) on both: `en`, `uk`, `ru`, `es` or `de` (the list is `LANGS` in `server/src/translator/languages.ts`, plus `en`). `en`, or no `lang`, is the English feed above, unchanged. With any other, consistency comes first: an article shows in that language only when its translation is finished, never as English mixed in.
   - `GET /articles?lang=uk&limit=20&cursor=<c>` → `{ "items": [Article], "nextCursor": "…" | null, "top": [Article], "translationsDelayed": false }`: the English feed above, the same articles in the same order (`feedSeq`), keeping those with a shown translation into that language. `cursor`, `nextCursor`, `after=<feedSeq>` and `since` work exactly as in English, and a cursor is valid in every language (the same positions). `top` (first page only) is the English top stories that are translated into that language, in the same order, so it may have fewer. `translationsDelayed` is `true` while the language is paused (automatically, its provider down for more than 2 hours, or by hand) or turned off: its newest articles may be missing for a while, and the app can say so. It is only in language feeds.
   - `GET /articles/:id?lang=uk` → the translated `Article`, or 404 when the article is not released or not translated into that language: not yet, never (after 3 unusable answers), or no longer (its English was summarized again and the new English got 3 unusable answers, so the old translation no longer matches it).
-- `GET /health` → `{ "sources": { "<status>": <count> }, "lastFetcherRun": "<ISO time>" | null }`.
+- Filters on `GET /articles` (#67, #68), each optional, combinable with each other and with `lang`, `limit`, `cursor`, `after` and `since`. Without them the feed is Global, all topics, exactly as above.
+  - `country=XX` (2 capital letters, ISO 3166-1 alpha-2, as the phone's region gives it): the Local feed, the articles whose `country` is `XX`, plus those whose `country` is `EU` when `XX` is an EU member (Germany: `DE` and `EU`; Ukraine: `UA` only). The blocs and their members are `BLOCS` in `server/src/api/filters.ts`. `country=EU` is the EU's own articles; a code with no sources gives an empty feed (an EU member without sources of its own still gets the EU's).
+  - `topic=<id>`: one id of the topic list below; the articles the AI gave that topic.
+  - The filters apply to the whole answer: `items` (same order, `feedSeq`), `top` (picked among the articles that pass them, as above: at most 2 per country, up to 5), `nextCursor` and `after=` (the "N new" check counts only new articles that pass them), and in every language. Send a page's `nextCursor` back with the same filters: a cursor is a place in the feed, so the next page continues within the filter, without gaps or repeats.
+  - A page with a filter reads at most the feed's 7 days (150 to 250 articles) and the sources table once per query (a few dozen rows); live on 16 Oct, Germany's Local feed with one topic read about 270 rows, its top stories about 90.
+- `GET /topics?lang=xx&country=XX` (#67) → `{ "topics": [ { "id": "economy", "name": "Economy" } ] }`: the topics that have at least one released article in the feed's 7 days (with `country`, in that country's Local feed, as above), busiest first (equal ones in the order of the topic list), without counts, named in `lang` (`en` by default, or `uk`, `ru`, `es`, `de`; the names are `TOPIC_NAMES` in `server/src/api/filters.ts`). Counted on the feed of `lang`: with a language other than `en`, only its articles with a shown translation, as `GET /articles?lang=` lists them, since an article can be released without a language's translation (the language paused or off, or the translation failed), so a topic with posts in English may have none in that language. The app builds its Topics menu from it, so a topic without posts is never offered and a topic name needs no app release. It reads about as many rows as the feed holds (180 on 16 Oct), plus one translation per article in a language.
+- `GET /countries?lang=xx` (#68) → `{ "countries": [ { "code": "UA", "name": "Україна" } ] }`: the countries the app offers for Local (the Country row in Settings): the countries of sources whose `status` is `active` (Kickoff seed rows left out; a stale, broken, moved or blocked source does not count), without blocs (`EU`), named in `lang` (`en` by default) and sorted alphabetically by that name. The names are a constant in `server/src/api/filters.ts`, the same as the app's (`app/lib/l10n`), and a test checks that every country of `docs/sources.csv` has one; a code without a name is shown as it is. The list follows the sources' health, so a country can leave it and come back; `country=` accepts any code, listed or not.
+- `GET /health` → `{ "sources": { "<status>": <count> }, "lastFetcherRun": "<ISO time>" | null, "articles": { "fetchedLast24h": <n>, "waitingForSummary": <n>, "inFeed": <n> } }`: real sources only (seed rows skipped); `lastFetcherRun` is the latest `last_checked_at`; `inFeed` counts official decisions of the last 7 days. Open in a browser to see whether the fetcher and the AI step are running.
 - `GET /queue` (#46) → the translation queue per language, read-only, no secrets, `cache-control: no-store`:
   ```json
   { "languages": { "uk": { "enabled": true, "paused": false, "pausedReason": null, "downSince": null,
@@ -69,10 +76,7 @@ Base URL: `https://api.officialnews.workers.dev` (deployed), `http://localhost:8
     "release": { "waiting": 2, "oldestWaitingAgeMinutes": 3, "translatorRanAt": "2026-10-16T08:14:00Z" } }
   ```
   One entry per language of `LANGS`, with its switch (`pausedReason`: `"manual"`, or `"auto: provider down since <time>"` for an automatic pause; `downSince`: since when its providers have not answered, or `null`), the count of translations in each state (below), how many were published in the last 24 hours, the minutes since the oldest one still waiting (`queued`, `updating`, `translating` or `retrying`) was queued (`null` when none waits), and when the last one was published. `release`: how many summarized decisions wait for their release (their translations), and the minutes since the oldest of them was summarized. It reads about 20 D1 rows, however many translations exist: the counts come from `translation_counts`, the rest through partial indexes. Managing the queue is `server/scripts/queue.mjs` (`docs/queue.md`).
-- Errors are JSON `{ "error": "<message>" }`: 400 for a bad `limit`, `cursor`, `after`, `since` or `lang`, 404, 405 for any method other than GET, 500.
-- `GET /articles/:id` → `Article` shown in the feed, or 404 (hidden articles too).
-- `GET /health` → `{ "sources": { "<status>": <count> }, "lastFetcherRun": "<ISO time>" | null, "articles": { "fetchedLast24h": <n>, "waitingForSummary": <n>, "inFeed": <n> } }`: real sources only (seed rows skipped); `lastFetcherRun` is the latest `last_checked_at`; `inFeed` counts official decisions of the last 7 days. Open in a browser to see whether the fetcher and the AI step are running.
-- Errors are JSON `{ "error": "<message>" }`: 400 for a bad `limit`, `cursor`, `after` or `since`, 404, 405 for any method other than GET, 500.
+- Errors are JSON `{ "error": "<message>" }`: 400 for a bad `limit`, `cursor`, `after`, `since`, `lang`, `country` (not 2 capital letters: `de`, `DEU`) or `topic` (not one of the list), the message saying what is expected, 404, 405 for any method other than GET, 500.
 
 ## Website (#88)
 
