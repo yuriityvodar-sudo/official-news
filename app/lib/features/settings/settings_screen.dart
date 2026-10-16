@@ -169,8 +169,9 @@ class SettingsScreen extends StatelessWidget {
 }
 
 /// PROTOTYPE (#66): switches the feed between today's look and the design
-/// options, plays the splash styles, and switches how read articles look, to
-/// compare them in one build. English only; not for release.
+/// options, plays the splash styles, switches how read articles look and how
+/// many topic tags a card shows, to compare them in one build. English only;
+/// not for release.
 class _DesignSection extends StatelessWidget {
   const _DesignSection();
 
@@ -265,6 +266,30 @@ class _DesignSection extends StatelessWidget {
               ReadStyle.blue: Text('Blue'),
               ReadStyle.red: Text('Red'),
             },
+          ),
+        ),
+      ),
+      // How many topic tags a card shows at most (Yurii, 16 Oct: "we can try
+      // one, two, three"), in every design.
+      ValueListenableBuilder(
+        valueListenable: topicTagCount,
+        builder: (context, count, _) => CupertinoListTile(
+          leading: const _Icon(CupertinoIcons.tag),
+          title: const Text('Topics'),
+          subtitle: const Text('tags on a card'),
+          trailing: CupertinoSlidingSegmentedControl<int>(
+            groupValue: count,
+            onValueChanged: (n) {
+              if (n == null || n == count) return;
+              topicTagCount.value = n;
+              // Back to the feed to show it, once the segment has slid over.
+              Future.delayed(const Duration(milliseconds: 250), () {
+                if (context.mounted) {
+                  Navigator.of(context).popUntil((route) => route.isFirst);
+                }
+              });
+            },
+            children: const {1: Text('One'), 2: Text('Two'), 3: Text('Three')},
           ),
         ),
       ),

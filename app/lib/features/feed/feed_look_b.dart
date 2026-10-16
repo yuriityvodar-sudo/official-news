@@ -13,8 +13,8 @@ import 'feed_look_b_cards.dart';
 /// grey in dark mode), one list of cards of one size (no section titles and
 /// no bigger top-story cards since Yurii's review, 16 Oct). A card reads top
 /// to bottom: who decided (the country and ministry), the serif headline,
-/// what it means in three lines, then the decision type, the topic and when
-/// it arrived. Pictures run across the top of their card; a card without one
+/// what it means in three lines, then its topics (grey tags, where the
+/// decision type stood until 16 Oct) and when it arrived. Pictures run across the top of their card; a card without one
 /// is complete as it is. The filters and the settings button stay at the top
 /// while reading; the "N new" pill floats just under them.
 class BLook extends FeedLook {
@@ -55,7 +55,7 @@ class BLook extends FeedLook {
           child: BCard(
             article: a,
             mark: list.markOf(a),
-            topic: list.topic,
+            topics: list.topicsOf(a),
             onTap: () => list.open(i),
           ),
         );

@@ -48,7 +48,7 @@ Map<String, dynamic> _article(
   'decisionType': 'cabinet-decision',
   'originalTitle': 'Original $id',
   'originalLanguage': 'de',
-  'topics': <String>[],
+  'topics': ['economy'],
   'tags': <String>[],
   'importance': 3,
   'imageUrl': null,
@@ -398,7 +398,9 @@ void main() {
       final log = <Uri>[];
       await _launch(tester, log: log);
       expect(find.text('All topics'), findsOneWidget);
-      expect(find.text('CABINET DECISION'), findsNWidgets(2));
+      // The cards' topic tags (the decision type is on the article screen).
+      expect(find.text('Economy'), findsNWidgets(2));
+      expect(find.text('CABINET DECISION'), findsNothing);
       expect(find.text(longDay(DateTime.now(), l10nFor())), findsOneWidget);
 
       await _chooseInSettings(tester, 'Українська', 'Language');
@@ -443,7 +445,8 @@ void main() {
         find.text(longDay(DateTime.now(), l10nFor(FeedLanguage.uk))),
         findsOneWidget,
       );
-      expect(find.text('РІШЕННЯ УРЯДУ'), findsNWidgets(2));
+      expect(find.text('Економіка'), findsNWidgets(2));
+      expect(find.text('РІШЕННЯ УРЯДУ'), findsNothing);
       expect(find.text('Federal Government · Німеччина'), findsNWidgets(2));
       expect(find.text('5 хв тому'), findsNWidgets(2));
       expect(find.bySemanticsLabel('Параметри'), findsOneWidget);
@@ -453,6 +456,8 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Сьогодні'), findsOneWidget);
       expect(find.text('Офіційне джерело'), findsOneWidget);
+      // The decision type, in Ukrainian, inside the article.
+      expect(find.text('РІШЕННЯ УРЯДУ'), findsOneWidget);
       await tester.pageBack();
       await tester.pumpAndSettle();
 

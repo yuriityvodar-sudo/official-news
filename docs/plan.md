@@ -162,7 +162,7 @@ official-news/
 }
 ```
 
-The feed card reads `headline`, `shortSummary` and `imageUrl`; the detail screen reads `summary`. `topics` holds 1 to 3 values from the fixed topic list; the MVP app does not use it yet. Before item 7 is live, `headline` falls back to `originalTitle` and the summary fields are empty.
+The feed card reads `headline`, `shortSummary`, `imageUrl` and `topics` (shown as up to three tags, decision 2026-10-16); the detail screen reads `summary` and shows `decisionType`. `topics` holds 1 to 3 values from the fixed topic list. Before item 7 is live, `headline` falls back to `originalTitle` and the summary fields are empty.
 
 **API**
 

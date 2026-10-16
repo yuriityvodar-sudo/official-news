@@ -33,6 +33,18 @@
   "@feedUnread": {
     "description": "What VoiceOver says for an article in the feed that has not been opened yet (it shows a small dot)."
   },
+  "feedCardTopics": "{count, plural, =1{Topic: {names}} other{Topics: {names}}}",
+  "@feedCardTopics": {
+    "description": "What VoiceOver says for the topic tags on a feed card (1 to 3). {names} is the topics' names, as in the Topics menu, joined by commas: \"Topics: Economy, Trade\".",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "names": {
+        "type": "String"
+      }
+    }
+  },
   "feedEmpty": "No decisions yet today.",
   "@feedEmpty": {
     "description": "The English feed is empty."

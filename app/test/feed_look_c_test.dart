@@ -101,7 +101,7 @@ void main() {
     return feed;
   }
 
-  testWidgets('VoiceOver hears the kind of act, importance and opened rows', (
+  testWidgets('VoiceOver hears importance, the topics and opened rows', (
     tester,
   ) async {
     final handle = tester.ensureSemantics();
@@ -111,18 +111,22 @@ void main() {
     ], []);
 
     final important = find.bySemanticsLabel(
-      RegExp(r'^Important\. Decision a1\. Bill\. Germany, Federal Government'),
+      RegExp(
+        r'^Important\. Decision a1\. Germany, Federal Government'
+        r'.*Short summary a1\. Topic: Economy\. ',
+      ),
     );
     expect(important, findsOneWidget);
     expect(
-      find.bySemanticsLabel(RegExp(r'^Decision a2\. Proposal\. Germany')),
+      find.bySemanticsLabel(RegExp(r'^Decision a2\. Germany')),
       findsOneWidget,
     );
-    // The kind is on screen too, at the start of the summary.
-    expect(
-      find.textContaining('Proposal\u00A0· Short summary a2.'),
-      findsOneWidget,
-    );
+    // The kind of act is on the article screen now (Yurii, 16 Oct): the
+    // summary line is the summary alone, the topics under it.
+    expect(find.textContaining('Proposal'), findsNothing);
+    expect(find.textContaining('Bill'), findsNothing);
+    expect(find.text('Short summary a2.'), findsOneWidget);
+    expect(find.text('Economy'), findsNWidgets(2));
 
     await tester.tap(find.text('Decision a2'));
     await tester.pumpAndSettle();

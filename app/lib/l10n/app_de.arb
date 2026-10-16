@@ -9,6 +9,7 @@
   "feedLoadMoreFailed": "Laden fehlgeschlagen. Zum Wiederholen tippen.",
   "feedEnd": "Sie sind auf dem neuesten Stand",
   "feedUnread": "Ungelesen",
+  "feedCardTopics": "{count, plural, =1{Thema: {names}} other{Themen: {names}}}",
   "feedEmpty": "Heute noch keine Entscheidungen.",
   "feedNoTranslations": "Noch keine übersetzten Entscheidungen.",
   "feedTranslationsComing": "Übersetzungen erscheinen hier, sobald sie verfügbar sind.",

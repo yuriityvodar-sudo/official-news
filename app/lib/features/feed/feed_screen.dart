@@ -70,6 +70,7 @@ class _FeedScreenState extends State<FeedScreen> {
     _feed.addListener(_changed);
     feedDesign.addListener(_designChanged);
     readStyle.addListener(_designChanged);
+    topicTagCount.addListener(_designChanged);
     _scroll.addListener(_nearEnd);
     unawaited(_feed.start());
     _newCheck = Timer.periodic(widget.newCheckEvery, (_) {
@@ -85,14 +86,15 @@ class _FeedScreenState extends State<FeedScreen> {
     _feed.removeListener(_changed);
     feedDesign.removeListener(_designChanged);
     readStyle.removeListener(_designChanged);
+    topicTagCount.removeListener(_designChanged);
     if (widget.controller == null) _feed.dispose();
     _scroll.dispose();
     _masthead.dispose();
     super.dispose();
   }
 
-  /// Another look, or another way to show read articles, chosen in Settings
-  /// (#66, prototype): the feed redraws in it.
+  /// Another look, another way to show read articles or another number of
+  /// topic tags, chosen in Settings (#66, prototype): the feed redraws in it.
   void _designChanged() => setState(() {});
 
   void _changed() {
@@ -413,6 +415,7 @@ class _FeedScreenState extends State<FeedScreen> {
             open: (i) => _open(shown[i], section: 'feed', position: i),
             shown: (i) => _shownRow(i + 1),
             topic: _topic,
+            maxTopics: topicTagCount.value,
           ),
         ),
       );

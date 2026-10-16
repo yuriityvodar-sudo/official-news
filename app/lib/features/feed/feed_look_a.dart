@@ -3,13 +3,13 @@ import 'package:flutter/material.dart';
 
 import '../../core/article.dart';
 import '../../core/countries.dart';
-import '../../core/decision_types.dart';
 import '../../core/news_widgets.dart';
 import '../../core/pictures.dart';
 import '../../core/read_mark.dart';
 import '../../l10n/app_localizations.dart';
 import 'feed_look.dart';
 import 'feed_look_now.dart';
+import 'feed_topic_tags.dart';
 
 /// Design option A (#66), prototype: "Refined editorial".
 ///
@@ -17,8 +17,10 @@ import 'feed_look_now.dart';
 /// picture on the right (no section titles and no lead story since Yurii's
 /// review, 16 Oct). Every row reads
 /// in the same order, top to bottom: where it comes from (country,
-/// institution), the headline in a reading serif, then what it is and when
-/// ("Bill · 8m ago"). Red is kept for the brand's few accents only.
+/// institution), the headline in a reading serif and when ("8m ago"), then
+/// its topics as small grey tags across the whole row (the decision type,
+/// which stood before the time until 16 Oct, is on the article screen). Red
+/// is kept for the brand's few accents only.
 class ALook extends NowLook {
   @override
   Widget masthead(BuildContext context, FeedMasthead masthead) {
@@ -96,6 +98,7 @@ class ALook extends NowLook {
         final row = _Row(
           article: a,
           mark: list.markOf(a),
+          topics: list.topicsOf(a),
           onTap: () => list.open(i),
         );
         if (i == 0) return row;
@@ -175,12 +178,6 @@ class _AType {
         fontSize: 13,
         height: 1.3,
         color: scheme.onSurfaceVariant,
-      ),
-      kind = TextStyle(
-        fontSize: 13,
-        height: 1.3,
-        fontWeight: FontWeight.w600,
-        color: scheme.onSurface,
       );
 
   factory _AType.of(BuildContext context) =>
@@ -188,8 +185,8 @@ class _AType {
 
   final Color ink;
 
-  /// The grey of everything but the headline and the decision type, 5.2:1
-  /// on white and 7.3:1 on black.
+  /// The grey of everything but the headline, the topic tags too: 5.2:1 on
+  /// white and 7.3:1 on black.
   final Color muted;
   final TextStyle nameplate;
   final TextStyle compactTitle;
@@ -198,17 +195,13 @@ class _AType {
   /// "BRAZIL  Chamber of Deputies": the country in grey capitals, like a
   /// wire dateline, the institution in grey. The country is the field that
   /// repeats (one source gives several decisions in a row), so it is not in
-  /// ink: the headline and the decision type are.
+  /// ink: the headline is.
   final TextStyle country;
   final TextStyle kicker;
   final TextStyle headline;
 
-  /// "Bill · 8m ago": the time.
+  /// "8m ago", under the headline.
   final TextStyle footer;
-
-  /// "Bill · 8m ago": what the decision is, in ink, because "Proposal" and
-  /// "Law" are what tells a reader whether the headline is already in force.
-  final TextStyle kind;
 
   /// A read article's ink text turns grey; text that is grey already stays
   /// as it is, so a read card stays readable (5.2:1 on white).
@@ -285,45 +278,31 @@ class _Kicker extends StatelessWidget {
   }
 }
 
-/// What it is and when: "Bill · 8m ago".
+/// When: "8m ago", where "Bill · 8m ago" was until the decision type moved
+/// to the article screen (16 Oct).
 class _Footer extends StatelessWidget {
-  const _Footer(this.article, {required this.read});
+  const _Footer(this.article);
 
   final Article article;
-  final bool read;
 
   @override
-  Widget build(BuildContext context) {
-    final type = _AType.of(context);
-    final l10n = AppLocalizations.of(context);
-    final kind = decisionTypeLabel(article.decisionType, l10n);
-    final time = feedTime(article, l10n);
-    return Text.rich(
-      TextSpan(
-        style: type.footer,
-        children: [
-          if (kind != null) ...[
-            TextSpan(text: kind, style: type.read(type.kind, read)),
-            const TextSpan(text: ' · '),
-          ],
-          TextSpan(text: time),
-        ],
-      ),
-    );
-  }
+  Widget build(BuildContext context) => Text(
+    feedTime(article, AppLocalizations.of(context)),
+    style: _AType.of(context).footer,
+  );
 }
 
 /// What VoiceOver reads for a card, once: the headline first, then where it
-/// comes from, what it is and when.
-String _spoken(BuildContext context, Article a) {
+/// comes from, its topics and when.
+String _spoken(BuildContext context, Article a, List<String> topics) {
   final l10n = AppLocalizations.of(context);
-  final kind = decisionTypeLabel(a.decisionType, l10n);
   // One sentence each; a text that already ends in a full stop keeps one.
   String sentence(String s) => RegExp(r'[.!?…]$').hasMatch(s) ? s : '$s.';
   return [
     a.headline,
     '${countryName(a.country, l10n)}, ${a.source.name}',
-    [?kind, feedTime(a, l10n)].join(', '),
+    ?spokenTopics(topics, l10n),
+    feedTime(a, l10n),
   ].map(sentence).join(' ');
 }
 
@@ -425,13 +404,21 @@ TextScaler _damped(BuildContext context, double? size) {
 bool _hugeText(BuildContext context) =>
     MediaQuery.textScalerOf(context).scale(10) > 15;
 
-/// One decision: where from, the headline with a small picture on its right,
-/// and what it is and when.
+/// One decision: where from, the headline and when with a small picture on
+/// their right, then its topics.
 class _Row extends StatelessWidget {
-  const _Row({required this.article, required this.mark, required this.onTap});
+  const _Row({
+    required this.article,
+    required this.mark,
+    required this.topics,
+    required this.onTap,
+  });
 
   final Article article;
   final ReadMark mark;
+
+  /// The topic tags, in order ([FeedList.topicsOf]).
+  final List<String> topics;
   final VoidCallback onTap;
 
   @override
@@ -442,7 +429,7 @@ class _Row extends StatelessWidget {
     // At the accessibility sizes the headline needs the whole width.
     final url = huge ? null : _pictureOf(article);
     return _Card(
-      label: _spoken(context, article),
+      label: _spoken(context, article, topics),
       mark: mark,
       onTap: onTap,
       child: Padding(
@@ -465,7 +452,7 @@ class _Row extends StatelessWidget {
                         maxLines: huge ? 9 : 6,
                       ),
                       const SizedBox(height: 6),
-                      _Footer(article, read: read),
+                      _Footer(article),
                     ],
                   ),
                 ),
@@ -473,6 +460,14 @@ class _Row extends StatelessWidget {
                   _Thumb(url: url, size: 76, gap: 16, dimmed: read),
               ],
             ),
+            // The topics last, across the whole row, under the picture too:
+            // three long names ("Sicherheit und Verteidigung") take two
+            // lines at most. Grey, read or not (grey text stays as it is on a
+            // read row).
+            if (topics.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              TopicTags(topics, color: type.muted),
+            ],
           ],
         ),
       ),

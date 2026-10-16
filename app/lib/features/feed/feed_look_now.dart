@@ -8,6 +8,7 @@ import '../../core/read_mark.dart';
 import '../../core/theme.dart';
 import '../../l10n/app_localizations.dart';
 import 'feed_look.dart';
+import 'feed_topic_tags.dart';
 
 /// The feed as it looks today (docs/design/mvp.png): the Apple News look, a
 /// big serif masthead, then one list of rows with a thumbnail on the right
@@ -107,6 +108,7 @@ class NowLook extends FeedLook {
         return NowArticleRow(
           article: a,
           mark: list.markOf(a),
+          topics: list.topicsOf(a),
           showDay: true,
           onTap: () => list.open(i),
         );
@@ -115,17 +117,23 @@ class NowLook extends FeedLook {
   );
 }
 
-/// One decision: label, publisher, serif headline, time, thumbnail on the right.
+/// One decision: its topics, publisher, serif headline, time, thumbnail on
+/// the right. The topic tags stand where the red decision type stood until
+/// Yurii's review (16 Oct); the type is on the article screen.
 class NowArticleRow extends StatelessWidget {
   const NowArticleRow({
     super.key,
     required this.article,
     required this.mark,
     required this.onTap,
+    this.topics = const [],
     this.showDay = true,
   });
 
   final Article article;
+
+  /// The topic tags to show, in order ([FeedList.topicsOf]); none, no row.
+  final List<String> topics;
 
   /// Read or not, and how that shows (prototype): dimmed, or the unread dot.
   final ReadMark mark;
@@ -146,49 +154,72 @@ class NowArticleRow extends StatelessWidget {
         // Opened articles stay in the feed, dimmed (or without the unread dot).
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 16),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    KindLabel(article, dimmed: read),
-                    PublisherLine(article, dimmed: read, mark: mark),
-                    const SizedBox(height: 4),
-                    Text(
-                      article.headline,
-                      style: dim(text.headline, read),
-                      maxLines: 4,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    if (showDay ||
-                        !article.dateOnly ||
-                        article.addedAt != null) ...[
-                      const SizedBox(height: 6),
-                      Text(
-                        feedTime(article, AppLocalizations.of(context)),
-                        style: dim(text.meta, read),
+              // The topics across the whole row, over the picture too: three
+              // long names ("Безпека та оборона") take two lines at most.
+              if (topics.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: TopicTags(
+                    topics,
+                    color: dim(text.meta, read).color!,
+                    fill: dim(
+                      TextStyle(
+                        color: CupertinoColors.quaternarySystemFill.resolveFrom(
+                          context,
+                        ),
                       ),
-                    ],
-                  ],
+                      read,
+                    ).color,
+                  ),
                 ),
-              ),
-              if (article.imageUrl != null) ...[
-                const SizedBox(width: 14),
-                FeedPicture(
-                  url: article.imageUrl!,
-                  width: 84,
-                  height: 84,
-                  dimmed: read,
-                ),
-              ],
+              _body(context, text, read),
             ],
           ),
         ),
       ),
     );
   }
+
+  /// The publisher, headline and time, the picture on their right.
+  Widget _body(BuildContext context, NewsText text, bool read) => Row(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            PublisherLine(article, dimmed: read, mark: mark),
+            const SizedBox(height: 4),
+            Text(
+              article.headline,
+              style: dim(text.headline, read),
+              maxLines: 4,
+              overflow: TextOverflow.ellipsis,
+            ),
+            if (showDay || !article.dateOnly || article.addedAt != null) ...[
+              const SizedBox(height: 6),
+              Text(
+                feedTime(article, AppLocalizations.of(context)),
+                style: dim(text.meta, read),
+              ),
+            ],
+          ],
+        ),
+      ),
+      if (article.imageUrl != null) ...[
+        const SizedBox(width: 14),
+        FeedPicture(
+          url: article.imageUrl!,
+          width: 84,
+          height: 84,
+          dimmed: read,
+        ),
+      ],
+    ],
+  );
 }
 
 /// A picture from the official page; it simply disappears if it cannot be

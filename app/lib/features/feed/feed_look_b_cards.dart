@@ -5,13 +5,13 @@ import 'package:flutter/material.dart';
 
 import '../../core/article.dart';
 import '../../core/countries.dart';
-import '../../core/decision_types.dart';
 import '../../core/news_widgets.dart';
 import '../../core/pictures.dart';
 import '../../core/read_mark.dart';
 import '../../core/theme.dart';
 import '../../l10n/app_localizations.dart';
 import 'feed_look_b_words.dart';
+import 'feed_topic_tags.dart';
 
 /// Design option B (#66), prototype: the cards and the styles they use.
 
@@ -44,7 +44,8 @@ bool bLargeText(BuildContext context) =>
 
 /// The largest a card's text grows, so that at the largest sizes each text
 /// keeps its rank: the headline stops at 40 pt (from about AX2), what it
-/// means at 36 pt and the labels (who decided, the topic and time) at 30 pt.
+/// means at 36 pt and the labels (who decided and the time) at 30 pt; the
+/// topic tags stop at 24 pt (TopicTags).
 /// A headline then keeps two or three words a line.
 enum _Largest {
   headline(40),
@@ -221,14 +222,6 @@ class BStyle {
     color: secondary,
   );
 
-  TextStyle get kind => TextStyle(
-    fontSize: 11,
-    fontWeight: FontWeight.w700,
-    letterSpacing: 0.4,
-    height: 1.25,
-    color: secondary,
-  );
-
   TextStyle headline(double size, double height) => TextStyle(
     fontFamily: _serif,
     fontFamilyFallback: _serifFallback,
@@ -285,19 +278,20 @@ abstract final class _Size {
 /// Lines for the country and ministry: two, four at the Accessibility sizes.
 int _placeLines(bool large) => large ? 4 : 2;
 
-/// Lines for the topic and time beside the type tag.
+/// Lines for the time after the topic tags.
 int _footerLines(bool large) => large ? 3 : 1;
 
 /// One decision in its own card: picture (when the page has one), country and
-/// ministry, the serif headline, what it means, then the decision type, the
-/// topic and when it arrived.
+/// ministry, the serif headline, what it means, then its topics and when it
+/// arrived. The topic tags stand where the decision type's grey tag stood
+/// until Yurii's review (16 Oct); the type is on the article screen.
 class BCard extends StatefulWidget {
   const BCard({
     super.key,
     required this.article,
     required this.mark,
     required this.onTap,
-    this.topic,
+    this.topics = const [],
   });
 
   final Article article;
@@ -307,9 +301,8 @@ class BCard extends StatefulWidget {
   /// opened has the unread dot in place of the official-source seal.
   final ReadMark mark;
 
-  /// The topic the feed is filtered by: the card names it rather than the
-  /// article's main topic ([FeedSection.topic]).
-  final String? topic;
+  /// The topic tags, in order: the filtered topic first ([FeedList.topicsOf]).
+  final List<String> topics;
   final VoidCallback onTap;
 
   @override
@@ -334,8 +327,7 @@ class _BCardState extends State<BCard> {
     final large = bLargeText(context);
     final padding = large ? 16.0 : _Size.padding;
     final country = countryName(a.country, l10n);
-    final kind = decisionTypeLabel(a.decisionType, l10n);
-    final topic = bTopicName(a, l10n, prefer: widget.topic);
+    final topics = widget.topics;
     final time = feedTime(a, l10n);
     final summary = a.shortSummary?.trim();
     final hasSummary = summary != null && summary.isNotEmpty;
@@ -415,25 +407,24 @@ class _BCardState extends State<BCard> {
       ),
     );
 
-    // The decision type leads the footer, the topic and time beside it; they
-    // move under it when a long type and topic do not fit on one line.
+    // The topic tags lead the footer, the time after them; it moves under
+    // them when it does not fit beside the last one. Grey, faded a little
+    // once read, as the card's other grey text.
     final footerText = Text(
-      [?topic, time].join('  ·  '),
+      time,
       maxLines: _footerLines(large),
       overflow: TextOverflow.ellipsis,
       style: _fadeGrey(s.footer, read),
       textScaler: _capped(scaler, 13, _Largest.label),
     );
-    final footer = kind == null
+    final quiet = CupertinoColors.quaternarySystemFill.resolveFrom(context);
+    final footer = topics.isEmpty
         ? footerText
-        : Wrap(
-            spacing: 8,
-            runSpacing: 6,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              _KindTag(kind, read: read, large: large),
-              footerText,
-            ],
+        : TopicTags(
+            topics,
+            color: _fadeGrey(s.footer, read).color!,
+            fill: read ? quiet.withValues(alpha: quiet.a * _readGrey) : quiet,
+            trailing: footerText,
           );
 
     final text = Padding(
@@ -465,15 +456,14 @@ class _BCardState extends State<BCard> {
     );
 
     // One VoiceOver stop per card. The headline first, as it is the news,
-    // then the card's own order: who, what it means, what kind, the topic,
-    // when; "Read" after a card already opened (in the dot styles,
-    // "Unread" after one not opened yet).
+    // then the card's own order: who, what it means, the topics ("Topics:
+    // Economy, Trade"), when; "Read" after a card already opened (in the dot
+    // styles, "Unread" after one not opened yet).
     final spoken = _sentences([
       a.headline,
       '$country, ${a.source.name}',
       if (hasSummary) summary,
-      ?kind,
-      ?topic,
+      ?spokenTopics(topics, l10n),
       time,
     ]);
 
@@ -514,39 +504,6 @@ class _BCardState extends State<BCard> {
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-/// The decision type as a small grey tag: "BILL", "РІШЕННЯ УРЯДУ".
-class _KindTag extends StatelessWidget {
-  const _KindTag(this.kind, {required this.read, required this.large});
-
-  final String kind;
-  final bool read;
-  final bool large;
-
-  @override
-  Widget build(BuildContext context) {
-    final s = BStyle.of(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: ShapeDecoration(
-        color: read ? s.fill.withValues(alpha: s.fill.a * _readGrey) : s.fill,
-        // A pill on one line; at the Accessibility sizes a long type may take
-        // two, and a pill's round ends would cut into them.
-        shape: large
-            ? RoundedSuperellipseBorder(borderRadius: BorderRadius.circular(10))
-            : const StadiumBorder(),
-      ),
-      child: Text(
-        kind.toUpperCase(),
-        maxLines: large ? 2 : 1,
-        overflow: TextOverflow.ellipsis,
-        style: _fadeGrey(s.kind, read),
-        // A label: it grows to twice its size (22 pt), not with the text.
-        textScaler: MediaQuery.textScalerOf(context).clamp(maxScaleFactor: 2.0),
       ),
     );
   }

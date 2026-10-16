@@ -14,6 +14,7 @@ import 'package:official_news/core/router.dart';
 import 'package:official_news/features/feed/feed_controller.dart';
 import 'package:official_news/features/feed/feed_filters.dart';
 import 'package:official_news/features/feed/feed_screen.dart';
+import 'package:official_news/features/feed/feed_topic_tags.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'test_app.dart';
@@ -207,7 +208,10 @@ void main() {
     // No day heading: the older article shows its own time on the card.
     expect(find.text('Yesterday'), findsNothing);
     expect(find.text('Decree on visas'), findsOneWidget);
-    expect(find.text('CABINET DECISION'), findsNWidgets(3));
+    // The decision type is on the article screen, not on the cards (Yurii,
+    // 16 Oct): these articles have no topics, so no tags either.
+    expect(find.text('CABINET DECISION'), findsNothing);
+    expect(find.byType(TopicTags), findsNothing);
     expect(find.text('Federal Government · Germany'), findsNWidgets(3));
     await tester.dragUntilVisible(
       find.text("You're all caught up"),

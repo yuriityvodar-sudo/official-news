@@ -128,7 +128,8 @@ String topicName(String id, AppLocalizations l10n) => switch (id) {
 
 /// What the Topics chip shows instead of the name once a topic is chosen:
 /// an SF Symbols-style glyph per topic; the Topics menu shows each beside its
-/// name, so the reader learns them. None means something else in the app
+/// name, so the reader learns them, and the feed's cards show each beside
+/// its name too (feed_topic_tags.dart). None means something else in the app
 /// (no heart, which reads as a favourite; no ticked box, which reads as
 /// chosen; no weather). One map, for the real build too.
 const topicIcons = <String, IconData>{
@@ -148,6 +149,10 @@ const topicIcons = <String, IconData>{
 
 /// A topic the app has no icon for: a neutral grid.
 const _otherTopicIcon = CupertinoIcons.square_grid_2x2;
+
+/// Topic [id]'s icon: the one its chip, its menu item and the feed's cards
+/// show ([topicIcons]); a neutral grid for an id the app does not know.
+IconData topicIcon(String id) => topicIcons[id] ?? _otherTopicIcon;
 
 /// The red that says a filter is on: the chip's label, icon and chevron, the
 /// menu's checkmark and the buttons that undo a filter. On the grey chip it
@@ -297,7 +302,7 @@ class FeedFilterBar extends StatelessWidget {
     final topics = _Pulldown(
       key: const ValueKey('filter-topic'),
       label: l10n.filterAllTopics,
-      icon: chosen == null ? null : topicIcons[chosen] ?? _otherTopicIcon,
+      icon: chosen == null ? null : topicIcon(chosen),
       active: chosen != null,
       semanticLabel: chosen == null
           ? l10n.filterAllTopics
@@ -313,14 +318,14 @@ class FeedFilterBar extends StatelessWidget {
               topicName(chosen, l10n),
               true,
               () => onTopic(chosen),
-              icon: topicIcons[chosen] ?? _otherTopicIcon,
+              icon: topicIcon(chosen),
             ),
           for (final e in topicCounts)
             _Item(
               topicName(e.key, l10n),
               e.key == chosen,
               () => onTopic(e.key),
-              icon: topicIcons[e.key] ?? _otherTopicIcon,
+              icon: topicIcon(e.key),
             ),
         ],
       ],

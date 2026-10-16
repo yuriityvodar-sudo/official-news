@@ -8,13 +8,14 @@ import 'decision_types.dart';
 import 'read_mark.dart';
 import 'theme.dart';
 
-/// The red decision type above a headline ("CABINET DECISION", "РІШЕННЯ
-/// УРЯДУ"); nothing when the article has no known type yet.
+/// The red decision type above the article screen's headline ("CABINET
+/// DECISION", "РІШЕННЯ УРЯДУ"); nothing when the article has no known type
+/// yet. The feed's cards show the article's topics instead (Yurii, 16 Oct:
+/// the type stays inside the article).
 class KindLabel extends StatelessWidget {
-  const KindLabel(this.article, {super.key, this.dimmed = false});
+  const KindLabel(this.article, {super.key});
 
   final Article article;
-  final bool dimmed;
 
   @override
   Widget build(BuildContext context) {
@@ -25,10 +26,7 @@ class KindLabel extends StatelessWidget {
     if (label == null) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),
-      child: Text(
-        label.toUpperCase(),
-        style: dim(NewsText.from(context).kindLabel, dimmed),
-      ),
+      child: Text(label.toUpperCase(), style: NewsText.from(context).kindLabel),
     );
   }
 }

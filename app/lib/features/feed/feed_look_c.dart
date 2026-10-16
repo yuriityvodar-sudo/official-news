@@ -6,11 +6,11 @@ import 'package:intl/intl.dart';
 
 import '../../core/article.dart';
 import '../../core/countries.dart';
-import '../../core/decision_types.dart';
 import '../../core/news_widgets.dart';
 import '../../core/read_mark.dart';
 import '../../l10n/app_localizations.dart';
 import 'feed_look.dart';
+import 'feed_topic_tags.dart';
 
 /// Design option C (#66), prototype: "Briefing".
 ///
@@ -20,9 +20,10 @@ import 'feed_look.dart';
 /// 16 Oct). A narrow left column holds the time, as a briefing's log
 /// ("16:20", "Thu 16:20"). Next to it, three lines answer the reader's three
 /// questions: who decided (the country and the whole name of the
-/// institution, on up to two lines), what (the headline), and what kind of
-/// act it is and why it matters (the decision type in bold, then one line of
-/// the short summary). A red rule in the margin marks importance 4 and 5.
+/// institution, on up to two lines), what (the headline), and why it matters
+/// (one line of the short summary), then the topics as small grey tags (the
+/// decision type, which led the summary line until 16 Oct, is on the article
+/// screen). A red rule in the margin marks importance 4 and 5.
 /// No pictures: many official pages have none, and the ones they have are
 /// often a logo.
 class CLook extends FeedLook {
@@ -116,7 +117,12 @@ class CLook extends FeedLook {
     itemBuilder: (context, i) {
       final a = list.articles[i];
       list.shown(i);
-      return _Item(article: a, mark: list.markOf(a), onTap: () => list.open(i));
+      return _Item(
+        article: a,
+        mark: list.markOf(a),
+        topics: list.topicsOf(a),
+        onTap: () => list.open(i),
+      );
     },
   );
 }
@@ -197,10 +203,6 @@ class _Styles {
   /// The short summary.
   TextStyle get summary =>
       TextStyle(fontSize: 15, height: 1.3, color: secondary);
-
-  /// "Bill", "Proposal" at the start of the summary: what kind of act it is.
-  TextStyle get kind =>
-      summary.copyWith(fontWeight: FontWeight.w600, color: ink);
 }
 
 /// Lays out [child] only to measure the masthead's sizes: never shown, never
@@ -458,15 +460,23 @@ String _capitalized(String text) =>
     };
 
 /// One decision: the left column (the time); who decided; the headline; the
-/// kind of act and the short summary.
+/// short summary; its topics.
 class _Item extends StatelessWidget {
-  const _Item({required this.article, required this.mark, required this.onTap});
+  const _Item({
+    required this.article,
+    required this.mark,
+    required this.topics,
+    required this.onTap,
+  });
 
   final Article article;
 
   /// Opened or not, and how that shows (prototype): greyed in Dim, or the
   /// unread dot after the country in the dot styles.
   final ReadMark mark;
+
+  /// The topic tags, in order ([FeedList.topicsOf]).
+  final List<String> topics;
   final VoidCallback onTap;
 
   @override
@@ -475,7 +485,6 @@ class _Item extends StatelessWidget {
     final read = mark.dimmed;
     final l10n = AppLocalizations.of(context);
     final country = countryName(article.country, l10n);
-    final kind = decisionTypeLabel(article.decisionType, l10n);
     final summary = article.shortSummary?.trim() ?? '';
     final stamp = _stamp(article, l10n);
     final important = (article.importance ?? 0) >= 4;
@@ -487,13 +496,14 @@ class _Item extends StatelessWidget {
         read ? style.copyWith(color: t.secondary) : style;
 
     // One VoiceOver label, read as sentences: "Important. Chamber proposes
-    // …. Bill. Brazil, Chamber of Deputies. The Chamber …. 8m ago."
+    // …. Brazil, Chamber of Deputies. The Chamber …. Topics: Economy, Trade.
+    // 8m ago."
     final spoken = [
       if (important) _words(l10n).important,
       article.headline,
-      ?kind,
       '$country, ${article.source.name}',
       if (summary.isNotEmpty) summary,
+      ?spokenTopics(topics, l10n),
       feedTime(article, l10n),
       if (read) _words(l10n).opened,
       if (mark.unread) l10n.feedUnread,
@@ -594,24 +604,12 @@ class _Item extends StatelessWidget {
       );
     }
 
-    // What kind of act, then why it matters: "Proposal · The EU proposes …".
-    // The kind says what the headline may not (a proposal is not yet a
-    // rule); the summary gets one line, two with large text.
-    final brief = kind == null && summary.isEmpty
+    // Why it matters: one line of the summary, two with large text.
+    final brief = summary.isEmpty
         ? null
-        : Text.rich(
-            TextSpan(
-              children: [
-                if (kind != null)
-                  TextSpan(
-                    // Never a line that starts with the dot.
-                    text: summary.isEmpty ? kind : '$kind\u00A0· ',
-                    style: inked(t.kind),
-                  ),
-                if (summary.isNotEmpty)
-                  TextSpan(text: summary, style: t.summary),
-              ],
-            ),
+        : Text(
+            summary,
+            style: t.summary,
             maxLines: large ? 2 : 1,
             overflow: TextOverflow.ellipsis,
           );
@@ -623,6 +621,12 @@ class _Item extends StatelessWidget {
         const SizedBox(height: 4),
         headline,
         if (brief != null) ...[const SizedBox(height: 3), brief],
+        // The topics last, as small grey tags: secondary to the three lines
+        // above. Grey stays grey on an opened row, as the summary does.
+        if (topics.isNotEmpty) ...[
+          const SizedBox(height: 6),
+          TopicTags(topics, color: t.secondary),
+        ],
       ],
     );
 

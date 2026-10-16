@@ -8,7 +8,6 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:official_news/core/analytics.dart';
 import 'package:official_news/core/api_client.dart';
-import 'package:official_news/core/article.dart';
 import 'package:official_news/core/feed_language.dart';
 import 'package:official_news/core/router.dart';
 import 'package:official_news/features/feed/feed_controller.dart';
@@ -299,34 +298,10 @@ void main() {
     expect(tester.getSize(box).height, closeTo((402 - 32) / 2.4, 0.5));
   });
 
-  test('topics are named in every language, and "read" too', () {
-    final article = Article.fromJson(_article('a1'));
-    expect(bTopicName(article, l10nFor()), 'Economy');
-    expect(bTopicName(article, l10nFor(FeedLanguage.uk)), 'Економіка');
-    expect(bTopicName(article, l10nFor(FeedLanguage.de)), 'Wirtschaft');
-    for (final language in FeedLanguage.values) {
-      for (final id in [
-        'foreign-affairs',
-        'economy',
-        'security-defence',
-        'health',
-        'climate',
-        'trade',
-        'technology',
-        'energy',
-        'migration',
-        'elections',
-        'human-rights',
-        'science',
-      ]) {
-        final named = Article.fromJson({
-          ..._article('a1'),
-          'topics': [id],
-        });
-        expect(bTopicName(named, l10nFor(language)), isNotNull);
-      }
-    }
+  test('"read" is said in the reader\'s language', () {
+    expect(bReadWord(l10nFor()), 'Read');
     expect(bReadWord(l10nFor(FeedLanguage.uk)), 'Прочитано');
+    expect(bReadWord(l10nFor(FeedLanguage.de)), 'Gelesen');
   });
 
   testWidgets('the large layout starts at the Accessibility sizes', (

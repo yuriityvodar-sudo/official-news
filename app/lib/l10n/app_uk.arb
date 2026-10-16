@@ -9,6 +9,7 @@
   "feedLoadMoreFailed": "Не вдалося завантажити більше новин. Торкніться, щоб повторити.",
   "feedEnd": "Ви переглянули все",
   "feedUnread": "Непрочитане",
+  "feedCardTopics": "{count, plural, =1{Тема: {names}} other{Теми: {names}}}",
   "feedEmpty": "Сьогодні рішень ще немає.",
   "feedNoTranslations": "Перекладених рішень ще немає.",
   "feedTranslationsComing": "Переклади з’являться тут, щойно будуть готові.",

@@ -243,6 +243,9 @@ void main() {
           200,
           scrollable: find.byType(Scrollable).first,
         );
+        // Wholly on screen: scrolling may stop with only its top in view.
+        await tester.ensureVisible(find.text('Decision t2'));
+        await tester.pumpAndSettle();
         await tester.tap(find.text('Decision t2'));
         await tester.pumpAndSettle();
         expect(

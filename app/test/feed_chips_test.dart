@@ -17,6 +17,7 @@ import 'package:official_news/features/feed/feed_look_b_cards.dart';
 import 'package:official_news/features/feed/feed_filters.dart';
 import 'package:official_news/features/feed/feed_look.dart';
 import 'package:official_news/features/feed/feed_screen.dart';
+import 'package:official_news/features/feed/feed_topic_tags.dart';
 import 'package:official_news/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -365,7 +366,13 @@ void main() {
         matching: find.byIcon(CupertinoIcons.chart_bar_alt_fill),
       ),
     );
-    final name = tester.getRect(find.text('Економіка'));
+    // (The cards show it too, as a topic tag: the menu's is the one here.)
+    final name = tester.getRect(
+      find.descendant(
+        of: find.byType(CupertinoMenuItem),
+        matching: find.text('Економіка'),
+      ),
+    );
     expect(icon.right, lessThan(name.left));
     expect(icon.center.dy, closeTo(name.center.dy, 2));
   });
@@ -478,28 +485,34 @@ void main() {
     expect(groupShort('G20', l10nFor(FeedLanguage.uk)), 'G20');
   });
 
-  testWidgets('B\'s cards name the chosen topic, not another of theirs', (
+  testWidgets('B\'s cards show the chosen topic first, then their others', (
     tester,
   ) async {
     await _pump(tester, [
       _article('gb', 'GB', topics: ['technology', 'economy'], seq: 2),
       _article('de', 'DE', topics: ['health', 'economy'], seq: 1),
     ], screen: _tall);
-    Finder footer(String id, String topic) => find.descendant(
-      of: find.ancestor(
-        of: find.text('Decision $id'),
-        matching: find.byType(BCard),
-      ),
-      matching: find.textContaining(topic),
-    );
-    // No topic chosen: each card's main topic.
-    expect(footer('gb', 'Technology'), findsOne);
-    expect(footer('de', 'Health'), findsOne);
+    // The names of card [id]'s topic tags, in the order shown.
+    List<String> tags(String id) => [
+      for (final tag in tester.widgetList<TopicTag>(
+        find.descendant(
+          of: find.ancestor(
+            of: find.text('Decision $id'),
+            matching: find.byType(BCard),
+          ),
+          matching: find.byType(TopicTag),
+        ),
+      ))
+        tag.name,
+    ];
+
+    // No topic chosen: each card's topics in their own order.
+    expect(tags('gb'), ['Technology', 'Economy']);
+    expect(tags('de'), ['Health', 'Economy']);
     await _choose(tester, _topics, 'Economy');
-    expect(footer('gb', 'Economy'), findsOne);
-    expect(footer('gb', 'Technology'), findsNothing);
-    expect(footer('de', 'Economy'), findsOne);
-    expect(footer('de', 'Health'), findsNothing);
+    // The chosen topic first, so a card agrees with the Topics chip.
+    expect(tags('gb'), ['Economy', 'Technology']);
+    expect(tags('de'), ['Economy', 'Health']);
   });
 
   testWidgets(

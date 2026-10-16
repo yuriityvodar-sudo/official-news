@@ -11,6 +11,11 @@ Future<ValueNotifier<FeedLanguage>> _pump(
   List<FeedLanguage>? chosen,
   FeedLanguage words = FeedLanguage.en,
 }) async {
+  // The test's screen, 100 pt taller: the prototype's rows (Design, Splash,
+  // Play, Read, Topics) take the top of the list, the pages' rows under them.
+  tester.view.physicalSize = const Size(800, 700);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.reset);
   final language = ValueNotifier(FeedLanguage.en);
   await tester.pumpWidget(
     testApp(

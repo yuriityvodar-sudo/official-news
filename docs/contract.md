@@ -29,7 +29,7 @@ What the API returns and both screens read.
 }
 ```
 
-- The feed card reads `headline`, `shortSummary` and `imageUrl`; both show `decisionType` as a red label above the headline ("DECISION"); the detail screen reads `summary`. `topics` is set by the AI; the MVP app does not use it yet.
+- The feed card reads `headline`, `shortSummary` and `imageUrl`; the detail screen reads `summary` and shows `decisionType` as a red label above the headline ("DECISION"). `topics` is set by the AI; the feed card shows them as tags, up to three (decision 2026-10-16, prototype), and the feed's Topics filter uses them.
 - `feedSeq` is the article's place in the feed: a number given when it is released (the AI marked it an official decision, and every enabled language has its translation: release together, below), only ever rising and never changed afterwards. `addedAt` is when that happened (column `added_at`, set with `feed_seq` and, like it, never changed by a later re-summary). The card shows `publishedAt`; the feed order follows `feedSeq`, so an article that appears late lands on top, not among the ones already read (docs/research/2026-10-15 Feed ordering for late items.md).
 - Before the AI step has run, `headline`, `shortSummary`, `summary`, `decisionType` and `importance` are `null` and `topics` is `[]`; the app shows `originalTitle` instead.
 - `publishedAt` is UTC. `dateOnly: true` means the source gave no time.

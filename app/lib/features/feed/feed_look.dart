@@ -7,6 +7,7 @@ import 'feed_look_a.dart';
 import 'feed_look_b.dart';
 import 'feed_look_c.dart';
 import 'feed_look_now.dart';
+import 'feed_topic_tags.dart';
 
 /// PROTOTYPE (#66): the feed's looks, to compare design options in one build.
 ///
@@ -38,6 +39,20 @@ final readStyle = ValueNotifier<ReadStyle>(
 ReadStyle readStyleNamed(String name) =>
     ReadStyle.values.asNameMap()[name.trim().toLowerCase()] ?? ReadStyle.blue;
 
+/// PROTOTYPE (Yurii, 16 Oct): how many of its topics a card shows at most,
+/// 1, 2 or 3 ("we can try one, two, three"), in every design. Settings
+/// switches it (the "Topics" row); the preview starts with 3, and a build can
+/// start with another: `--dart-define=TOPIC_TAGS=1`.
+final topicTagCount = ValueNotifier<int>(
+  topicTagCountNamed(const String.fromEnvironment('TOPIC_TAGS')),
+);
+
+/// `1`, `2` or `3`; anything else is [maxCardTopics].
+int topicTagCountNamed(String name) => switch (int.tryParse(name.trim())) {
+  final n? when n >= 1 && n <= maxCardTopics => n,
+  _ => maxCardTopics,
+};
+
 /// The look for [design]. Looks are created for each build of the feed, so
 /// they keep no state: a look that needs some keeps it in a StatefulWidget
 /// of its own.
@@ -64,7 +79,7 @@ abstract class FeedLook {
   Color background(BuildContext context);
 
   /// The theme the feed is drawn with: [base] is the app's. Returning another
-  /// one changes the shared pieces at once (NewsText styles used by KindLabel,
+  /// one changes the shared pieces at once (NewsText styles used by
   /// PublisherLine and the loading, error and empty texts; the divider colour).
   /// Returning [base] itself changes nothing.
   ThemeData theme(BuildContext context, ThemeData base) => base;
@@ -171,14 +186,21 @@ class FeedList {
     this.shown = _nothing,
     this.readStyle = ReadStyle.dim,
     this.topic,
+    this.maxTopics = maxCardTopics,
   });
 
   final List<Article> articles;
 
   /// The topic the feed is filtered by (an id, as [Article.topics] has it),
-  /// or null for every topic. A card that names one topic names this one, so
-  /// it agrees with the Topics chip: every article here has it.
+  /// or null for every topic. Every article here has it, and its card shows
+  /// it first among its topic tags, so the card agrees with the Topics chip
+  /// ([cardTopics]).
   final String? topic;
+
+  /// How many topic tags a card shows at most (prototype: 1, 2 or 3,
+  /// [topicTagCount]). Give each card `cardTopics(article, first: topic,
+  /// max: maxTopics)`, or [topicsOf].
+  final int maxTopics;
 
   /// Articles already opened: they stay in the feed, dimmed or without the
   /// unread dot ([readStyle]).
@@ -205,6 +227,12 @@ class FeedList {
   /// unread dot in place of the official-source tick (Blue, Red).
   ReadMark markOf(Article article) =>
       ReadMark(readStyle, read: isRead(article));
+
+  /// The topics the card of [article] shows as tags, in order: the filtered
+  /// topic first, then the article's own order, at most [maxTopics]; none for
+  /// an article without topics (its card then has no tag row at all).
+  List<String> topicsOf(Article article) =>
+      cardTopics(article, first: topic, max: maxTopics);
 }
 
 /// What the bottom of the feed shows for [FeedLook.feedEnd].
