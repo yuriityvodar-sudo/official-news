@@ -4,10 +4,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'article.dart';
 import 'feed_language.dart';
+import 'filters.dart';
 
-/// What the phone keeps between launches: the feed's language, the last first
-/// page in each language, so the app opens instantly, and the articles already
-/// opened, shown dimmed (by id, so in every language).
+/// What the phone keeps between launches: the feed's language and filters, the
+/// last first page of the unfiltered feed in each language, so the app opens
+/// instantly (offline too), the articles already opened, shown dimmed (by id,
+/// so in every language), and the last menus of topics and countries in each
+/// language, so the filters show their names at once.
 class FeedStore {
   FeedStore(this._prefs);
 
@@ -19,6 +22,11 @@ class FeedStore {
   static const _pageKey = 'feed.lastPage';
   static const _readKey = 'feed.readIds';
   static const _langKey = 'feed.lang';
+  static const _scopeKey = 'feed.scope';
+  static const _countryKey = 'feed.country';
+  static const _topicKey = 'feed.topic';
+  static const _topicsKey = 'feed.topics';
+  static const _countriesKey = 'feed.countries';
   static const _maxRead = 500;
 
   /// English keeps the key it had before there were languages: 'feed.lastPage'.
@@ -58,6 +66,68 @@ class FeedStore {
     ArticlesPage page, [
     FeedLanguage lang = FeedLanguage.en,
   ]) => _prefs.setString(_pageKeyFor(lang), jsonEncode(page.toJson()));
+
+  /// Global or Local, Global until one is chosen (#68).
+  FeedScope scope() => FeedScope.fromName(_prefs.getString(_scopeKey));
+
+  Future<void> saveScope(FeedScope scope) =>
+      _prefs.setString(_scopeKey, scope.name);
+
+  /// The country chosen in Settings for Local; null until one is chosen, and
+  /// Local follows the phone's region meanwhile.
+  String? country() => _prefs.getString(_countryKey);
+
+  Future<void> saveCountry(String code) => _prefs.setString(_countryKey, code);
+
+  /// The one topic the feed shows, or null for all topics (#67).
+  String? topic() => _prefs.getString(_topicKey);
+
+  Future<void> saveTopic(String? id) =>
+      id == null ? _prefs.remove(_topicKey) : _prefs.setString(_topicKey, id);
+
+  /// The last Topics menu in [lang], so the chip and its names show at once
+  /// on the next launch; null if none was saved.
+  List<FeedTopic>? topics(FeedLanguage lang) {
+    final raw = _prefs.getString('$_topicsKey.${lang.code}');
+    if (raw == null) return null;
+    try {
+      return [
+        for (final t in jsonDecode(raw) as List)
+          FeedTopic(t['id'] as String, t['name'] as String),
+      ];
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Null forgets it: a server without topics.
+  Future<void> saveTopics(FeedLanguage lang, List<FeedTopic>? list) =>
+      list == null
+      ? _prefs.remove('$_topicsKey.${lang.code}')
+      : _prefs.setString(
+          '$_topicsKey.${lang.code}',
+          jsonEncode([for (final t in list) t.toJson()]),
+        );
+
+  /// The last list of countries in [lang], or null if none was saved.
+  List<FeedCountry>? countries(FeedLanguage lang) {
+    final raw = _prefs.getString('$_countriesKey.${lang.code}');
+    if (raw == null) return null;
+    try {
+      return [
+        for (final c in jsonDecode(raw) as List)
+          FeedCountry(c['code'] as String, c['name'] as String),
+      ];
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> saveCountries(FeedLanguage lang, List<FeedCountry> list) =>
+      _prefs.setString(
+        '$_countriesKey.${lang.code}',
+        jsonEncode([for (final c in list) c.toJson()]),
+      );
 
   Set<String> readIds() => (_prefs.getStringList(_readKey) ?? const []).toSet();
 

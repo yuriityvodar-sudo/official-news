@@ -7,6 +7,7 @@ import 'package:flutter/widgets.dart';
 
 import 'article.dart';
 import 'feed_language.dart';
+import 'filters.dart';
 
 /// Sends one event: its name and parameters (Google Analytics limits: names
 /// up to 40 characters, text values up to 100).
@@ -77,6 +78,20 @@ class Analytics {
     });
     await feedLanguage(chosen);
   }
+
+  /// The reader changed a filter (#67, #68), from the chips or the Country in
+  /// Settings: the filters as they are now. `scope` is `global` or `local`;
+  /// `country` is Local's country (also while Global is shown), `none` when
+  /// there is none; `topic` is the topic's id or `all`.
+  Future<void> filterChanged({
+    required FeedScope scope,
+    String? country,
+    String? topic,
+  }) => _event('filter_changed', {
+    'scope': scope.name,
+    'country': country ?? 'none',
+    'topic': topic ?? 'all',
+  });
 
   /// An article opened from the feed: from `top` (Top stories) or `latest`.
   Future<void> articleOpened(

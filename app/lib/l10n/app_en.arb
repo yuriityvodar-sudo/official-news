@@ -86,6 +86,35 @@
     }
   },
 
+  "filterGlobal": "Global",
+  "@filterGlobal": {
+    "description": "The Where chip under the date while the feed shows every country, and the first item of its pull-down menu."
+  },
+  "filterGlobalDetail": "All countries",
+  "@filterGlobalDetail": {
+    "description": "Under filterGlobal in the Where menu."
+  },
+  "filterLocal": "Local",
+  "@filterLocal": {
+    "description": "The second item of the Where menu: the reader's country (its name shows under the item and on the chip), plus the EU's decisions for EU members."
+  },
+  "filterAllTopics": "All topics",
+  "@filterAllTopics": {
+    "description": "The Topics chip under the date while no topic is chosen, and the first item of its menu."
+  },
+  "filterEmpty": "No decisions here in the last 7 days.",
+  "@filterEmpty": {
+    "description": "The feed is empty under the chosen Where or topic (the feed shows the last 7 days)."
+  },
+  "filterShowGlobal": "Show all countries",
+  "@filterShowGlobal": {
+    "description": "A button under filterEmpty: shows the feed for every country again."
+  },
+  "filterShowAllTopics": "Show all topics",
+  "@filterShowAllTopics": {
+    "description": "A button under filterEmpty: shows every topic again."
+  },
+
   "decisionTypeLaw": "Law",
   "@decisionTypeLaw": {
     "description": "Decision type, shown in red capitals above a headline."
@@ -399,6 +428,24 @@
     "description": "Under the list of languages."
   },
 
+  "country": "Country",
+  "@country": {
+    "description": "A Settings row (Reading section) and the title of its page: the country the Local feed shows."
+  },
+  "countryFooter": "“{local}” in the feed shows this country's decisions, and for EU member states the EU's too.",
+  "@countryFooter": {
+    "description": "Under the list of countries in Settings. {local} is filterLocal, in quotation marks of the language.",
+    "placeholders": {
+      "local": {
+        "type": "String"
+      }
+    }
+  },
+  "countriesLoadFailed": "Couldn't load the list of countries.",
+  "@countriesLoadFailed": {
+    "description": "On the Country page in Settings when the list of countries could not be loaded (offline)."
+  },
+
   "publisher": "{name}, Slovakia",
   "@publisher": {
     "description": "Who publishes the app: the company's name, never translated, and its country.",
@@ -462,7 +509,7 @@
   "@privacyPhoneHeading": {
     "description": "Privacy policy, heading."
   },
-  "privacyPhone": "Your language, the articles you have read, the last feed you saw and the pictures you have viewed are kept on your phone, so the app opens quickly and works offline. Deleting the app deletes them.",
+  "privacyPhone": "Your language and feed filters, the articles you have read, the last feed you saw and the pictures you have viewed are kept on your phone, so the app opens quickly and works offline. Deleting the app deletes them.",
   "@privacyPhone": {
     "description": "Privacy policy, under privacyPhoneHeading."
   },
@@ -486,7 +533,7 @@
   "@privacyAnalyticsHeading": {
     "description": "Privacy policy, heading."
   },
-  "privacyAnalytics": "To understand how the app is used, for example how many people read which kind of decision, the app sends usage events to Google Analytics for Firebase: screens opened, articles opened and read, links tapped, the chosen language, and technical details such as the app version, device model, country and an app instance ID. It does not use the advertising identifier and does not track you across other apps.",
+  "privacyAnalytics": "To understand how the app is used, for example how many people read which kind of decision, the app sends usage events to Google Analytics for Firebase: screens opened, articles opened and read, links tapped, the chosen language and feed filters, and technical details such as the app version, device model, country and an app instance ID. It does not use the advertising identifier and does not track you across other apps.",
   "@privacyAnalytics": {
     "description": "Privacy policy, under privacyAnalyticsHeading. Google Analytics for Firebase is a product's name: never translated."
   },

@@ -53,7 +53,15 @@ Map<String, dynamic> _article(
   'originalUrl': 'https://www.bundesregierung.de/$id',
 };
 
-/// A fake API: answers /articles from `pages` (keyed by cursor, '' for the first page).
+/// A server from before the filters (#67, #68): no `GET /topics` or
+/// `GET /countries`. Null for the article requests the fakes answer.
+http.Response? _noMenus(http.BaseRequest request) =>
+    request.url.path.startsWith('/articles')
+    ? null
+    : http.Response('{"error":"Not found"}', 404);
+
+/// A fake API: answers /articles from `pages` (keyed by cursor, '' for the
+/// first page); `log` has the article requests.
 ApiClient _api(
   Map<String, Map<String, dynamic>> pages, {
   List<Uri>? log,
@@ -61,6 +69,8 @@ ApiClient _api(
 }) => ApiClient(
   baseUrl: 'https://api.test',
   client: MockClient((request) async {
+    final menus = _noMenus(request);
+    if (menus != null) return menus;
     log?.add(request.url);
     final query = request.url.queryParameters;
     if (query.containsKey('since') || query.containsKey('after')) {
@@ -108,6 +118,8 @@ ApiClient _langApi(
 }) => ApiClient(
   baseUrl: 'https://api.test',
   client: MockClient((request) async {
+    final menus = _noMenus(request);
+    if (menus != null) return menus;
     log?.add(request.url);
     final query = request.url.queryParameters;
     final lang = query['lang'] ?? 'en';
@@ -645,7 +657,9 @@ void main() {
             }),
           ),
         );
-        expect(find.byIcon(CupertinoIcons.globe), findsNothing);
+        // No language button by the date any more: a globe there now is the
+        // Where chip (#68).
+        expect(find.text('EN'), findsNothing);
         final button = find.ancestor(
           of: find.byIcon(CupertinoIcons.gear_alt),
           matching: find.byType(CupertinoButton),
@@ -1104,6 +1118,8 @@ void main() {
           api: ApiClient(
             baseUrl: 'https://api.test',
             client: MockClient((request) async {
+              final menus = _noMenus(request);
+              if (menus != null) return menus;
               calls++;
               return calls == 1 ? http.Response('offline', 503) : second.future;
             }),

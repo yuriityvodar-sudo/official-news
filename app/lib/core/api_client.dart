@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 
 import 'article.dart';
 import 'config.dart';
+import 'filters.dart';
 
 class ApiException implements Exception {
   ApiException(this.statusCode, this.message);
@@ -35,12 +36,18 @@ class ApiClient {
   /// without the parameter.
   /// An article that is not in `lang` is dropped here, whatever the server sends
   /// ([ArticlesPage.inLanguage]).
+  /// With `country` (two letters, #68) only that country's articles, and the
+  /// EU's for an EU member; with `topic` (#67) only that topic's. Pages,
+  /// cursors, `after` and `top` all follow them, so every request for one feed
+  /// sends the same ones.
   Future<ArticlesPage> fetchArticles({
     String? cursor,
     DateTime? since,
     int? after,
     int limit = 20,
     String? lang,
+    String? country,
+    String? topic,
   }) async {
     final param = _langParam(lang);
     final uri = Uri.parse('$_baseUrl/articles').replace(
@@ -50,6 +57,8 @@ class ApiClient {
         if (since != null) 'since': since.toUtc().toIso8601String(),
         if (after != null) 'after': '$after',
         'lang': ?param,
+        'country': ?country,
+        'topic': ?topic,
       },
     );
     final page = ArticlesPage.fromJson(await _getJson(uri));
@@ -70,6 +79,63 @@ class ApiClient {
       throw ApiException(404, 'Not translated into $param');
     }
     return article;
+  }
+
+  /// `GET /topics` (#67): the topics with at least one article in the feed's
+  /// 7 days, under `country` when given, busiest first, named in `lang`.
+  /// A server without it answers 404 ([ApiException]); an answer of another
+  /// shape is a [FormatException].
+  Future<List<FeedTopic>> fetchTopics({String? lang, String? country}) async {
+    final json = await _getJson(
+      _withQuery('$_baseUrl/topics', {
+        'lang': ?_langParam(lang),
+        'country': ?country,
+      }),
+    );
+    return [
+      for (final t in _list(json, 'topics'))
+        FeedTopic(_string(t, 'id'), _string(t, 'name')),
+    ];
+  }
+
+  /// `GET /countries` (#68): the countries that have sources, named in `lang`,
+  /// in the server's order. Blocs such as the EU are not in it.
+  Future<List<FeedCountry>> fetchCountries({String? lang}) async {
+    final json = await _getJson(
+      _withQuery('$_baseUrl/countries', {'lang': ?_langParam(lang)}),
+    );
+    return [
+      for (final c in _list(json, 'countries'))
+        FeedCountry(_string(c, 'code'), _string(c, 'name')),
+    ];
+  }
+
+  static Uri _withQuery(String url, Map<String, String> query) {
+    final uri = Uri.parse(url);
+    return query.isEmpty ? uri : uri.replace(queryParameters: query);
+  }
+
+  static List<Map<String, dynamic>> _list(
+    Map<String, dynamic> json,
+    String key,
+  ) {
+    final list = json[key];
+    if (list is! List) throw FormatException('No "$key" in the answer');
+    return [
+      for (final item in list)
+        if (item is Map<String, dynamic>)
+          item
+        else
+          throw FormatException('An item of "$key" is not an object'),
+    ];
+  }
+
+  static String _string(Map<String, dynamic> json, String key) {
+    final value = json[key];
+    if (value is! String || value.isEmpty) {
+      throw FormatException('No "$key" in $json');
+    }
+    return value;
   }
 
   /// English is the API without `lang`, so its requests stay as they were.

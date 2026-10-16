@@ -18,6 +18,14 @@
   "hoursAgo": "hace {hours} h",
   "daysAgo": "{days, plural, one{hace {days} día} other{hace {days} días}}",
 
+  "filterGlobal": "Global",
+  "filterGlobalDetail": "Todos los países",
+  "filterLocal": "Mi país",
+  "filterAllTopics": "Todos los temas",
+  "filterEmpty": "No hay decisiones aquí en los últimos 7 días.",
+  "filterShowGlobal": "Mostrar todos los países",
+  "filterShowAllTopics": "Mostrar todos los temas",
+
   "decisionTypeLaw": "Ley",
   "decisionTypeBill": "Proyecto de ley",
   "decisionTypeAmendment": "Enmienda",
@@ -90,6 +98,10 @@
   "version": "Versión {version}",
   "languageFooter": "Las noticias y la app se muestran en este idioma.",
 
+  "country": "País",
+  "countryFooter": "«{local}» muestra las decisiones de este país y, en los países de la UE, también las de la Unión Europea.",
+  "countriesLoadFailed": "No se pudo cargar la lista de países.",
+
   "publisher": "{name}, Eslovaquia",
   "lastUpdated": "Última actualización: {date}",
   "aboutIntro": "Official News muestra lo que han decidido los gobiernos y los organismos internacionales en pocas frases, con un tono sereno y un enlace a la página oficial.",
@@ -102,13 +114,13 @@
 
   "privacyIntro": "Official News no usa cuentas de usuario: no te pedimos tu nombre, tu correo electrónico ni tu número de teléfono, y no vendemos ni compartimos datos personales con fines publicitarios.",
   "privacyPhoneHeading": "En tu teléfono",
-  "privacyPhone": "El idioma elegido, los artículos que leíste, la última lista de noticias que viste y las imágenes ya vistas se guardan en tu teléfono para que la app se abra rápido y funcione sin conexión. Si eliminas la app, se eliminan con ella.",
+  "privacyPhone": "El idioma y los filtros elegidos, los artículos que leíste, la última lista de noticias que viste y las imágenes ya vistas se guardan en tu teléfono para que la app se abra rápido y funcione sin conexión. Si eliminas la app, se eliminan con ella.",
   "privacyLoadingHeading": "Cuando la app carga noticias",
   "privacyLoadingServer": "La app carga las noticias desde nuestro servidor, alojado en Cloudflare. Como cualquier sitio web, nuestro servidor recibe tu dirección IP y datos técnicos básicos para responder a la solicitud; no los usamos para identificarte.",
   "privacyLoadingPictures": "Las imágenes de los artículos se cargan directamente desde el sitio web oficial que las publicó, así que ese sitio recibe tu dirección IP cuando se carga una imagen. Después de verlas por primera vez, las imágenes se guardan en tu teléfono.",
   "privacyLoadingPages": "Cuando abres una página oficial, se abre en un navegador dentro de la app y se aplica la política de privacidad de ese sitio web.",
   "privacyAnalyticsHeading": "Analítica",
-  "privacyAnalytics": "Para entender cómo se usa (por ejemplo, cuántas personas leen cada tipo de decisión), la app envía eventos de uso a Google Analytics for Firebase: pantallas abiertas, artículos abiertos y leídos, enlaces tocados, el idioma elegido y datos técnicos como la versión de la app, el modelo del dispositivo, el país y un ID de instancia de la app. No usa el identificador de publicidad ni te rastrea en otras apps.",
+  "privacyAnalytics": "Para entender cómo se usa (por ejemplo, cuántas personas leen cada tipo de decisión), la app envía eventos de uso a Google Analytics for Firebase: pantallas abiertas, artículos abiertos y leídos, enlaces tocados, el idioma y los filtros elegidos, y datos técnicos como la versión de la app, el modelo del dispositivo, el país y un ID de instancia de la app. No usa el identificador de publicidad ni te rastrea en otras apps.",
   "privacyNotificationsHeading": "Notificaciones",
   "privacyNotifications": "Si activas las notificaciones, tu teléfono recibe un token de notificaciones de Apple y Google Firebase para que podamos enviarte alertas de noticias. Puedes desactivar las notificaciones en cualquier momento en los ajustes de tu teléfono.",
   "privacyAiHeading": "IA",

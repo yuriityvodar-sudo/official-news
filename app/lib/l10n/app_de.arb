@@ -18,6 +18,14 @@
   "hoursAgo": "vor {hours} Std.",
   "daysAgo": "{days, plural, one{vor {days} Tag} other{vor {days} Tagen}}",
 
+  "filterGlobal": "Weltweit",
+  "filterGlobalDetail": "Alle Länder",
+  "filterLocal": "Mein Land",
+  "filterAllTopics": "Alle Themen",
+  "filterEmpty": "In den letzten 7 Tagen gab es hier keine Entscheidungen.",
+  "filterShowGlobal": "Alle Länder anzeigen",
+  "filterShowAllTopics": "Alle Themen anzeigen",
+
   "decisionTypeLaw": "Gesetz",
   "decisionTypeBill": "Gesetzentwurf",
   "decisionTypeAmendment": "Änderung",
@@ -90,6 +98,10 @@
   "version": "Version {version}",
   "languageFooter": "Nachrichten und App werden in dieser Sprache angezeigt.",
 
+  "country": "Land",
+  "countryFooter": "„{local}“ im Feed zeigt die Entscheidungen dieses Landes, bei EU-Mitgliedstaaten auch die der Europäischen Union.",
+  "countriesLoadFailed": "Die Länderliste konnte nicht geladen werden.",
+
   "publisher": "{name}, Slowakei",
   "lastUpdated": "Stand: {date}",
   "aboutIntro": "Official News zeigt, was Regierungen und internationale Organisationen beschlossen haben – in wenigen sachlichen Sätzen und mit einem Link zur offiziellen Seite.",
@@ -102,13 +114,13 @@
 
   "privacyIntro": "Official News verwendet keine Benutzerkonten: Wir fragen nicht nach Ihrem Namen, Ihrer E-Mail-Adresse oder Telefonnummer, und wir verkaufen oder teilen keine personenbezogenen Daten zu Werbezwecken.",
   "privacyPhoneHeading": "Auf Ihrem Gerät",
-  "privacyPhone": "Die gewählte Sprache, die gelesenen Artikel, der zuletzt angezeigte Feed und die angesehenen Bilder werden auf Ihrem Gerät gespeichert, damit die App schnell startet und offline funktioniert. Wenn Sie die App löschen, werden sie mitgelöscht.",
+  "privacyPhone": "Die gewählte Sprache und die Feed-Filter, die gelesenen Artikel, der zuletzt angezeigte Feed und die angesehenen Bilder werden auf Ihrem Gerät gespeichert, damit die App schnell startet und offline funktioniert. Wenn Sie die App löschen, werden sie mitgelöscht.",
   "privacyLoadingHeading": "Wenn die App Nachrichten lädt",
   "privacyLoadingServer": "Die App lädt die Nachrichten von unserem Server, der bei Cloudflare gehostet wird. Wie bei jeder Website erhält er Ihre IP-Adresse und grundlegende technische Angaben, um die Anfrage zu beantworten; wir nutzen sie nicht, um Sie zu identifizieren.",
   "privacyLoadingPictures": "Bilder zu Artikeln werden direkt von der offiziellen Website geladen, die sie veröffentlicht hat; diese Website erhält daher Ihre IP-Adresse, wenn ein Bild geladen wird. Nach dem ersten Ansehen werden Bilder auf Ihrem Gerät gespeichert.",
   "privacyLoadingPages": "Wenn Sie eine offizielle Seite öffnen, wird sie in einem In-App-Browser geöffnet, und es gilt die Datenschutzerklärung dieser Website.",
   "privacyAnalyticsHeading": "Analyse",
-  "privacyAnalytics": "Um zu verstehen, wie die App genutzt wird, etwa wie viele Menschen welche Art von Entscheidung lesen, sendet die App Nutzungsereignisse an Google Analytics for Firebase: aufgerufene Bildschirme, geöffnete und gelesene Artikel, angetippte Links, die gewählte Sprache sowie technische Angaben wie App-Version, Gerätemodell, Land und eine App-Instanz-ID. Die App verwendet die Werbe-ID nicht und verfolgt Sie nicht über andere Apps hinweg.",
+  "privacyAnalytics": "Um zu verstehen, wie die App genutzt wird, etwa wie viele Menschen welche Art von Entscheidung lesen, sendet die App Nutzungsereignisse an Google Analytics for Firebase: aufgerufene Bildschirme, geöffnete und gelesene Artikel, angetippte Links, die gewählte Sprache und die Feed-Filter sowie technische Angaben wie App-Version, Gerätemodell, Land und eine App-Instanz-ID. Die App verwendet die Werbe-ID nicht und verfolgt Sie nicht über andere Apps hinweg.",
   "privacyNotificationsHeading": "Mitteilungen",
   "privacyNotifications": "Wenn Sie Mitteilungen aktivieren, erhält Ihr Gerät ein Mitteilungs-Token von Apple und Google Firebase, damit wir Ihnen Hinweise auf Nachrichten senden können. Sie können Mitteilungen jederzeit in den Einstellungen Ihres Geräts deaktivieren.",
   "privacyAiHeading": "KI",
