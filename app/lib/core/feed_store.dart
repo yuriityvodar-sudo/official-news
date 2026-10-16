@@ -25,7 +25,14 @@ class FeedStore {
   static String _pageKeyFor(FeedLanguage lang) =>
       lang == FeedLanguage.en ? _pageKey : '$_pageKey.${lang.code}';
 
-  FeedLanguage language() => FeedLanguage.fromCode(_prefs.getString(_langKey));
+  /// The language chosen in Settings. Until one is chosen (the first launch),
+  /// [phone]: the phone's language when the app has it, else English (#52).
+  /// That one is not saved, so the app follows the phone until a choice is
+  /// made. An unknown saved code reads as English, as before.
+  FeedLanguage language({FeedLanguage phone = FeedLanguage.en}) {
+    final saved = _prefs.getString(_langKey);
+    return saved == null ? phone : FeedLanguage.fromCode(saved);
+  }
 
   Future<void> saveLanguage(FeedLanguage lang) =>
       _prefs.setString(_langKey, lang.code);

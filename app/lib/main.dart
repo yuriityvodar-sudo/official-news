@@ -2,24 +2,44 @@ import 'package:flutter/material.dart';
 
 import 'core/router.dart';
 import 'core/theme.dart';
+import 'features/feed/feed_controller.dart';
+import 'l10n/app_localizations.dart';
 
-void main() {
-  runApp(const OfficialNewsApp());
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  // The language is read before the first frame (#52), so no word shows in
+  // another language first; the launch screen stays up meanwhile.
+  final feed = FeedController();
+  await feed.open();
+  runApp(OfficialNewsApp(feed: feed));
 }
 
+/// The app. One language setting drives everything (#52): the feed's language
+/// is also the language of every word the app shows, its dates and the system's
+/// own words (the back button, VoiceOver hints), so changing it in Settings
+/// redraws the whole app in it at once.
 class OfficialNewsApp extends StatelessWidget {
-  const OfficialNewsApp({super.key});
+  const OfficialNewsApp({super.key, required this.feed});
+
+  /// The feed lives as long as the app: its language is the app's language.
+  final FeedController feed;
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Official News',
-      debugShowCheckedModeBanner: false,
-      theme: buildTheme(Brightness.light),
-      darkTheme: buildTheme(Brightness.dark),
-      themeMode: ThemeMode.system,
-      onGenerateRoute: onGenerateRoute,
-      initialRoute: Routes.feed,
+    return ValueListenableBuilder(
+      valueListenable: feed.languageChanges,
+      builder: (context, language, _) => MaterialApp(
+        title: 'Official News',
+        debugShowCheckedModeBanner: false,
+        locale: language.locale,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        theme: buildTheme(Brightness.light),
+        darkTheme: buildTheme(Brightness.dark),
+        themeMode: ThemeMode.system,
+        onGenerateRoute: (settings) => onGenerateRoute(settings, feed: feed),
+        initialRoute: Routes.feed,
+      ),
     );
   }
 }

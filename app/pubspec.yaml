@@ -12,7 +12,10 @@ dependencies:
   flutter:
     sdk: flutter
   flutter_cache_manager: ^3.4.5
+  flutter_localizations:
+    sdk: flutter
   http: ^1.6.0
+  intl: ^0.20.2
   share_plus: ^13.3.1
   shared_preferences: ^2.5.6
   url_launcher: ^6.3.3
@@ -24,3 +27,5 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  # The app's words in each language (#52): l10n.yaml, lib/l10n/*.arb.
+  generate: true

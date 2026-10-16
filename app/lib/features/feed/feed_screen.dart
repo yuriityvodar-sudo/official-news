@@ -9,6 +9,7 @@ import '../../core/news_widgets.dart';
 import '../../core/pictures.dart';
 import '../../core/router.dart';
 import '../../core/theme.dart';
+import '../../l10n/app_localizations.dart';
 import '../settings/settings_screen.dart';
 import 'feed_controller.dart';
 
@@ -57,7 +58,6 @@ class _FeedScreenState extends State<FeedScreen> {
   }
 
   void _changed() {
-    _language.value = _feed.language;
     setState(() {});
     // A page dropped because a refresh replaced the feed leaves the list at its end:
     // look again once the new feed is drawn.
@@ -89,20 +89,20 @@ class _FeedScreenState extends State<FeedScreen> {
     Navigator.of(context).pushNamed(Routes.detail, arguments: article);
   }
 
-  /// The feed's language for the settings screen, kept in step with the feed.
-  late final _language = ValueNotifier(_feed.language);
-
   void _openSettings() {
     Navigator.of(context).push(
       CupertinoPageRoute(
         settings: const RouteSettings(name: '/settings'),
-        builder: (_) =>
-            SettingsScreen(language: _language, onLanguage: _chooseLanguage),
+        builder: (_) => SettingsScreen(
+          language: _feed.languageChanges,
+          onLanguage: _chooseLanguage,
+        ),
       ),
     );
   }
 
-  /// A language picked in the menu: another language is another feed, from the top.
+  /// A language picked in Settings: another language is another feed, from the
+  /// top, and the app's words change with it (#52).
   Future<void> _chooseLanguage(FeedLanguage chosen) async {
     if (chosen == _feed.language) return;
     if (_scroll.hasClients) _scroll.jumpTo(0);
@@ -112,6 +112,7 @@ class _FeedScreenState extends State<FeedScreen> {
   @override
   Widget build(BuildContext context) {
     final text = NewsText.from(context);
+    final l10n = AppLocalizations.of(context);
     return Scaffold(
       body: SafeArea(
         bottom: false,
@@ -136,6 +137,7 @@ class _FeedScreenState extends State<FeedScreen> {
                           crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
                             Expanded(
+                              // The app's name, the same in every language.
                               child: Text(
                                 'Official News',
                                 style: text.masthead,
@@ -144,7 +146,10 @@ class _FeedScreenState extends State<FeedScreen> {
                             _SettingsButton(onPressed: _openSettings),
                           ],
                         ),
-                        Text(longDay(DateTime.now()), style: text.dateLine),
+                        Text(
+                          longDay(DateTime.now(), l10n),
+                          style: text.dateLine,
+                        ),
                       ],
                     ),
                   ),
@@ -169,6 +174,7 @@ class _FeedScreenState extends State<FeedScreen> {
 
   List<Widget> _content(BuildContext context) {
     final text = NewsText.from(context);
+    final l10n = AppLocalizations.of(context);
     if (_feed.items.isEmpty && _feed.top.isEmpty) {
       if (_feed.loading) {
         return const [
@@ -183,25 +189,19 @@ class _FeedScreenState extends State<FeedScreen> {
           child: Padding(
             padding: const EdgeInsets.all(20),
             child: _feed.error != null
-                ? Text(
-                    "Couldn't load the news. Pull down to retry.",
-                    style: text.meta,
-                  )
+                ? Text(l10n.feedLoadFailed, style: text.meta)
                 : _feed.language == FeedLanguage.en
-                ? Text('No decisions yet today.', style: text.meta)
+                ? Text(l10n.feedEmpty, style: text.meta)
                 // The server lists only finished translations; they come in over the day.
                 : Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'No translated decisions yet.',
+                        l10n.feedNoTranslations,
                         style: text.meta.copyWith(fontWeight: FontWeight.w600),
                       ),
                       const SizedBox(height: 4),
-                      Text(
-                        'Translations appear here as they are ready.',
-                        style: text.meta,
-                      ),
+                      Text(l10n.feedTranslationsComing, style: text.meta),
                     ],
                   ),
           ),
@@ -214,11 +214,7 @@ class _FeedScreenState extends State<FeedScreen> {
     final slivers = <Widget>[];
 
     if (_feed.error != null) {
-      slivers.add(
-        _padded(
-          Text("Couldn't refresh. Pull down to retry.", style: text.meta),
-        ),
-      );
+      slivers.add(_padded(Text(l10n.feedRefreshFailed, style: text.meta)));
     }
 
     if (_feed.top.isNotEmpty) {
@@ -226,7 +222,7 @@ class _FeedScreenState extends State<FeedScreen> {
         _padded(
           Padding(
             padding: const EdgeInsets.only(top: 16, bottom: 4),
-            child: Text('Top stories', style: text.section),
+            child: Text(l10n.topStories, style: text.section),
           ),
         ),
       );
@@ -254,7 +250,7 @@ class _FeedScreenState extends State<FeedScreen> {
         _padded(
           Padding(
             padding: const EdgeInsets.only(top: 20, bottom: 4),
-            child: Text('Latest', style: text.section),
+            child: Text(l10n.latest, style: text.section),
           ),
         ),
       );
@@ -271,13 +267,14 @@ class _FeedScreenState extends State<FeedScreen> {
                     // A 44-pt target and a button role for VoiceOver.
                     onPressed: () => unawaited(_feed.loadMore(retry: true)),
                     child: Text(
-                      "Couldn't load more. Tap to try again.",
+                      l10n.feedLoadMoreFailed,
+                      textAlign: TextAlign.center,
                       style: text.meta.copyWith(color: AppColors.accent),
                     ),
                   )
                 : _feed.loadingMore || _feed.hasMore
                 ? const CupertinoActivityIndicator()
-                : Text("You're all caught up", style: text.meta),
+                : Text(l10n.feedEnd, style: text.meta),
           ),
         ),
       ),
@@ -352,7 +349,10 @@ class _ArticleRow extends StatelessWidget {
                       !article.dateOnly ||
                       article.addedAt != null) ...[
                     const SizedBox(height: 6),
-                    Text(feedTime(article), style: dim(text.meta, read)),
+                    Text(
+                      feedTime(article, AppLocalizations.of(context)),
+                      style: dim(text.meta, read),
+                    ),
                   ],
                 ],
               ),
@@ -411,7 +411,10 @@ class _TopCard extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             ),
             const SizedBox(height: 6),
-            Text(feedTime(article), style: dim(text.meta, read)),
+            Text(
+              feedTime(article, AppLocalizations.of(context)),
+              style: dim(text.meta, read),
+            ),
           ],
         ),
       ),
@@ -501,7 +504,7 @@ class _SettingsButton extends StatelessWidget {
           CupertinoIcons.gear_alt,
           size: 21,
           color: CupertinoColors.label.resolveFrom(context),
-          semanticLabel: 'Settings',
+          semanticLabel: AppLocalizations.of(context).settings,
         ),
       ),
     );
@@ -509,6 +512,7 @@ class _SettingsButton extends StatelessWidget {
 }
 
 /// "3 new decisions": shown instead of moving the list while it is being read.
+/// Plural forms per language: "1 нове рішення", "3 нові рішення", "5 нових рішень".
 class _NewPill extends StatelessWidget {
   const _NewPill({required this.count, required this.onTap});
 
@@ -526,7 +530,7 @@ class _NewPill extends StatelessWidget {
           borderRadius: BorderRadius.circular(20),
         ),
         child: Text(
-          '$count new ${count == 1 ? 'decision' : 'decisions'}',
+          AppLocalizations.of(context).newDecisions(count),
           style: const TextStyle(
             color: Colors.white,
             fontWeight: FontWeight.w600,

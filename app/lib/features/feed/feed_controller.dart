@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' show Locale, PlatformDispatcher;
 
 import 'package:flutter/foundation.dart';
 
@@ -10,18 +11,31 @@ import '../../core/feed_store.dart';
 /// The feed's state: its language, articles, paging, errors, read articles and
 /// the check for new ones. The screen only draws it.
 class FeedController extends ChangeNotifier {
-  FeedController({ApiClient? api, Future<FeedStore> Function()? openStore})
-    : api = api ?? ApiClient(),
-      _openStore = openStore ?? FeedStore.open;
+  FeedController({
+    ApiClient? api,
+    Future<FeedStore> Function()? openStore,
+    List<Locale> Function()? phoneLanguages,
+  }) : api = api ?? ApiClient(),
+       _openStore = openStore ?? FeedStore.open,
+       _phoneLanguages = phoneLanguages ?? _systemLanguages;
 
   final ApiClient api;
   final Future<FeedStore> Function() _openStore;
   FeedStore? _store;
 
+  /// The phone's languages, in the order set in its settings; tests pass their own.
+  final List<Locale> Function() _phoneLanguages;
+  static List<Locale> _systemLanguages() => PlatformDispatcher.instance.locales;
+
   /// The language the feed is read in (#46), saved on the phone. Each language is
   /// its own feed on the server, with its own pages, in the English order and
-  /// feed positions (release together).
-  FeedLanguage language = FeedLanguage.en;
+  /// feed positions (release together). The app's own words follow it (#52).
+  FeedLanguage get language => _language.value;
+
+  /// The same language to listen to: the app's MaterialApp follows it, so
+  /// every word changes at once, and Settings shows it.
+  ValueListenable<FeedLanguage> get languageChanges => _language;
+  final _language = ValueNotifier(FeedLanguage.en);
 
   /// False until the saved language is read, so the header never shows English first.
   bool languageKnown = false;
@@ -63,20 +77,36 @@ class FeedController extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _language.dispose();
     super.dispose();
+  }
+
+  /// Opens what the phone keeps and reads the language: the one chosen in
+  /// Settings or, on the first launch, the phone's (#52). `main` waits for it
+  /// before the first frame, so no word shows in another language first;
+  /// [start] calls it too. Opens the store once, however often it is called.
+  Future<void> open() => _opening ??= _open();
+  Future<void>? _opening;
+
+  Future<void> _open() async {
+    final store = await _openStore();
+    _store = store;
+    if (_disposed) return;
+    _language.value = store.language(
+      phone: FeedLanguage.forPhone(_phoneLanguages()),
+    );
+    languageKnown = true;
   }
 
   /// Shows the feed saved on the phone at once, then asks for the fresh one.
   Future<void> start() async {
-    _store = await _openStore();
+    await open();
     // Articles opened before the store was ready are kept and saved now.
     final stored = _store!.readIds();
     for (final id in readIds.difference(stored)) {
       await _store!.markRead(id);
     }
     readIds = {...stored, ...readIds};
-    language = _store!.language();
-    languageKnown = true;
     final saved = _store!.lastPage(language);
     if (saved != null) {
       _show(saved);
@@ -90,7 +120,7 @@ class FeedController extends ChangeNotifier {
   /// then the fresh one. Anything still loading for the previous language is dropped.
   Future<void> setLanguage(FeedLanguage lang) async {
     if (lang == language) return;
-    language = lang;
+    _language.value = lang;
     unawaited(_store?.saveLanguage(lang));
     final saved = _store?.lastPage(lang);
     _show(saved);

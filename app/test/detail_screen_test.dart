@@ -1,9 +1,10 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:official_news/core/article.dart';
-import 'package:official_news/core/theme.dart';
+import 'package:official_news/core/feed_language.dart';
 import 'package:official_news/features/detail/detail_screen.dart';
+
+import 'test_app.dart';
 
 Article _article({
   String? headline = 'Germany\'s cabinet approves the 2027 draft budget',
@@ -42,14 +43,15 @@ Future<void> _pump(
   Article article, {
   OpenLink? openLink,
   ShareArticle? share,
+  FeedLanguage language = FeedLanguage.en,
 }) async {
   await tester.pumpWidget(
-    MaterialApp(
-      theme: buildTheme(Brightness.light),
+    testApp(
+      language: language,
       home: DetailScreen(
         article: article,
         openLink: openLink ?? (_) async {},
-        share: share ?? (_, _) async {},
+        share: share ?? (_, _, _) async {},
       ),
     ),
   );
@@ -181,14 +183,81 @@ void main() {
   });
 
   testWidgets('shares the article', (tester) async {
-    final shared = <Article>[];
+    final shared = <(Article, String)>[];
     await _pump(
       tester,
       _article(),
-      share: (article, _) async => shared.add(article),
+      share: (article, text, _) async => shared.add((article, text)),
     );
 
     await tester.tap(find.byIcon(CupertinoIcons.share));
-    expect(shared.single.id, 'a1');
+    expect(shared.single.$1.id, 'a1');
+    expect(
+      shared.single.$2,
+      "Germany's cabinet approves the 2027 draft budget\n\n"
+      'The cabinet approved the 2027 draft budget.\n\n'
+      'Official source: '
+      'https://www.bundesregierung.de/breg-de/aktuelles/haushalt-2027',
+    );
+  });
+
+  // #52: the article screen in the app's language; the article's own text is
+  // as the feed has it (here English, as the test article is).
+  testWidgets('shows its labels, dates and country in Ukrainian', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    final shared = <String>[];
+    await _pump(
+      tester,
+      _article(imageUrl: 'https://www.bundesregierung.de/image.jpg'),
+      language: FeedLanguage.uk,
+      share: (_, text, _) async => shared.add(text),
+    );
+
+    expect(find.text('Німеччина · '), findsOneWidget);
+    expect(find.text('Офіційне джерело'), findsOneWidget);
+    expect(find.text('РІШЕННЯ УРЯДУ'), findsOneWidget);
+    expect(find.text('14 жовтня 2026\u202Fр. о 11:30'), findsOneWidget);
+    expect(find.text('Зображення: bundesregierung.de'), findsOneWidget);
+    expect(find.bySemanticsLabel('Поділитися'), findsOneWidget);
+    await tester.tap(find.byIcon(CupertinoIcons.share));
+    expect(
+      shared.single,
+      endsWith(
+        '\n\nОфіційне джерело: '
+        'https://www.bundesregierung.de/breg-de/aktuelles/haushalt-2027',
+      ),
+    );
+
+    // Below the picture: built when scrolled to.
+    final label = find.text('Стислий виклад від ШІ · переклад з німецької');
+    await tester.scrollUntilVisible(label, 200);
+    expect(label, findsOneWidget);
+    final link = find.text('Читати офіційне рішення');
+    await tester.scrollUntilVisible(link, 200);
+    expect(link, findsOneWidget);
+    expect(
+      find.bySemanticsLabel('Читати офіційне рішення на bundesregierung.de'),
+      findsOneWidget,
+    );
+    semantics.dispose();
+  });
+
+  testWidgets('says where the summary was translated from in each language', (
+    tester,
+  ) async {
+    for (final (language, label) in [
+      (FeedLanguage.ru, 'Краткое изложение от ИИ · перевод с немецкого'),
+      (FeedLanguage.es, 'Resumen de IA · traducido del alemán'),
+      (FeedLanguage.de, 'KI-Zusammenfassung · aus dem Deutschen übersetzt'),
+    ]) {
+      await _pump(tester, _article(), language: language);
+      expect(find.text(label), findsOneWidget, reason: language.code);
+    }
+    await _pump(tester, _article(dateOnly: true), language: FeedLanguage.de);
+    expect(find.text('14. Oktober 2026'), findsOneWidget);
+    await _pump(tester, _article(), language: FeedLanguage.es);
+    expect(find.text('14 de octubre de 2026, 11:30'), findsOneWidget);
   });
 }
