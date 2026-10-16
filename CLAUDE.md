@@ -46,7 +46,7 @@ After the MVP, towards the App Store release (call, 16 Oct; each is an issue ass
 | #65 Domain and app name | Yurii |
 | #66 Feed redesign (cards, font, UI) | Yurii |
 | #60 Analytics, #62 Push notifications | Yurii |
-| #67 Categories, #68 Global / Local switch | Yurii |
+| #67 Categories, #68 Where filter (all countries, groups, one country) | Yurii |
 
 ## Fixed principles (change only by agreement, in a pull request)
 

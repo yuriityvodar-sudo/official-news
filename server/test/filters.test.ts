@@ -1,9 +1,9 @@
 // The feed's filters (#67, #68): GET /articles with country, group and topic, GET /topics and GET /countries.
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
-import { FROM_TRANSLATED, PAGE_CONDITIONS, TRANSLATED_CONDITIONS, feedFilters, feedTopics } from "../src/api";
+import { FROM_TRANSLATED, PAGE_CONDITIONS, TRANSLATED_CONDITIONS, feedFilters, feedTopics, topStories } from "../src/api";
 import { GROUPS, type GroupId, TOPIC_NAMES, type Where, countryName, groupCountries, hasCountryName } from "../src/api/filters";
-import { TOPICS } from "../src/summarizer/schema";
+import { TOPICS, type Topic } from "../src/summarizer/schema";
 import { LANGS, type Lang } from "../src/translator";
 import { type ArticlesPage, QWEN, get, hideSeed, hoursAgo, ids, minutesAgo, rowsRead } from "./helpers";
 
@@ -408,6 +408,56 @@ describe("GET /articles with filters: paging, after= and top", () => {
     expect(await rowsRead(() => get("/topics?lang=uk&country=DE"))).toBeLessThan(sources + 15);
     expect(await rowsRead(() => get("/topics?lang=uk&group=eu"))).toBeLessThan(sources + 15);
     expect(await rowsRead(() => get("/topics?lang=uk"))).toBeLessThan(15);
+  });
+
+  it("reads the top stories from the last 24 hours only, also with table statistics, fresh or stale", async () => {
+    // Few released articles and many waiting for their release: with statistics of such a
+    // table (ANALYZE), SQLite would rather walk articles_feed_seq, every released article
+    // ever, and keeps doing so as older articles fill the table, since nothing refreshes them.
+    const countries = ["DE", "US", "FR", "EU"] as const;
+    const recent: Item[] = [
+      ...Array.from({ length: 10 }, (_, i) => ({ id: `top-${i}`, country: countries[i % 4], importance: 3 + (i % 3), topics: [i % 2 ? "health" : "economy"] })),
+      ...Array.from({ length: 100 }, (_, i) => ({ id: `waiting-${i}`, released: false })),
+    ];
+    await add(...recent);
+    await translated("top-0", "top-1", "top-2");
+    const top = (where: Where, topic: Topic | null, lang: Lang | null) => ({ ...topStories(feedFilters(where, topic), lang), where, lang });
+    // One country, a small group, the largest (19 source countries), and no Where, in English and in a language.
+    const wheres: Where[] = [{ country: "DE" }, group("nato"), group("g20"), null];
+    const queries = [
+      ...wheres.flatMap((where) => [top(where, null, null), top(where, null, "uk")]),
+      top(group("g20"), "health", null),
+      top(group("g20"), "health", "uk"),
+    ];
+
+    for (const step of ["fresh", "analyzed", "stale"] as const) {
+      if (step === "analyzed") await env.DB.prepare("ANALYZE").run();
+      // Older released articles, after the statistics were taken.
+      if (step === "stale") await add(...Array.from({ length: 300 }, (_, i) => ({ id: `old-${i}`, publishedAt: hoursAgo(8 * 24 + i) })));
+      for (const [i, query] of queries.entries()) {
+        const { results } = await env.DB.prepare(`EXPLAIN QUERY PLAN ${query.sql}`)
+          .bind(...query.binds)
+          .all<{ detail: string }>();
+        const plan = results.map((r) => r.detail).join("; ");
+        const label = `${step} ${i}: ${plan}`;
+        // The (is_news, published_at) index over the 24 hours; the window and its order then sort what it read.
+        expect(plan, label).toMatch(/SEARCH a USING INDEX articles_feed \(is_news=\? AND published_at>\?\)/);
+        expect(plan, label).not.toMatch(/articles_feed_seq|SCAN (a|s|t)\b|AUTOMATIC/);
+        expect(plan, label).toMatch(/SEARCH s USING (COVERING )?INDEX sqlite_autoindex_sources_1 \(id=\?\)/);
+        if (query.where) expect(plan, label).toMatch(/LIST SUBQUERY \d+; SCAN sources\b/);
+        if (query.lang) expect(plan, label).toMatch(/SEARCH t USING INDEX sqlite_autoindex_article_translations_1 \(article_id=\? AND lang=\?\)/);
+      }
+    }
+
+    // The 110 articles of the last 24 hours and the sources table, not the 300 older articles.
+    const sources = (await env.DB.prepare("SELECT COUNT(*) AS n FROM sources").first<{ n: number }>())?.n ?? 0;
+    for (const [i, query] of queries.entries()) {
+      const { meta } = await env.DB.prepare(query.sql).bind(...query.binds).all();
+      expect(meta.rows_read, `${i}`).toBeLessThan(recent.length + 3 * sources + 40);
+    }
+    // And still the right ones.
+    expect(await topIds("/articles")).toEqual(["top-8", "top-7", "top-5", "top-4", "top-2"]);
+    expect(await topIds("/articles?lang=uk")).toEqual(["top-2"]);
   });
 });
 

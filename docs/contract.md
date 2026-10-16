@@ -1,6 +1,6 @@
 # Contract
 
-The shared definitions both the app and the backend build against. Changed only by agreement, in a pull request that also updates `docs/decisions.md`. The code that implements it: `app/lib/core/article.dart`, `app/lib/core/decision_types.dart`, `app/lib/core/topics.dart`, `server/src/api/index.ts`, `server/src/api/filters.ts` (the feed's filters: groups of countries, topic, country and group names), `server/src/translator/languages.ts` (languages), `server/src/translator/queue.ts` (the translation queue), `server/migrations/`.
+The shared definitions both the app and the backend build against. Changed only by agreement, in a pull request that also updates `docs/decisions.md`. The code that implements it: `app/lib/core/article.dart`, `app/lib/core/decision_types.dart`, `app/lib/core/topics.dart`, `server/src/api/index.ts`, `server/src/api/filters.ts` (the feed's filters: groups of countries, topic, country and group names), `server/src/translator/languages.ts` (languages), `server/src/translator/queue.ts` (the translation queue), `server/src/push/` (push notifications), `server/migrations/`.
 
 ## Article
 

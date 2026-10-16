@@ -102,11 +102,23 @@ const topQuery = (columns: string, from: string, where: string) => `
   LIMIT 5
   ) ORDER BY feed_seq DESC`;
 
-const TOP_WHERE = "a.is_news = 1 AND a.feed_seq IS NOT NULL";
+/**
+ * The top stories read the last 24 hours through the (is_news, published_at)
+ * index. The unary + keeps SQLite from walking articles_feed_seq instead, over
+ * every released article, which it picks once the table has statistics
+ * (ANALYZE; test/filters.test.ts checks both).
+ */
+const TOP_WHERE = "a.is_news = 1 AND +a.feed_seq IS NOT NULL";
 /** The top-story conditions plus `filters` (their values are bound first). */
 const topWhere = (filters: Filters) => [TOP_WHERE, ...filters.where].join(" AND ");
 /** The top stories among the feed's articles that pass `filters`. */
 const englishTop = (filters: Filters) => topQuery(ARTICLE_COLUMNS, FROM_ARTICLES, topWhere(filters));
+
+/** The top stories' query among the articles that pass `filters`, in English (`lang` null) or in `lang`, with the values it binds. */
+export const topStories = (filters: Filters, lang: Lang | null) => ({
+  sql: lang ? translatedTop(filters, lang) : englishTop(filters),
+  binds: lang ? [...filters.binds, lang] : filters.binds,
+});
 
 // Filters (#67, #68): Where (`country` or `group`) and `topic`, the same on every
 // page, in `after=`, in top and in every language, so a cursor continues within its filter.
@@ -333,11 +345,8 @@ async function listArticles(url: URL, env: Env): Promise<Response> {
   ).bind(...binds, limit + 1);
 
   const firstPage = cursorParam === null && sinceParam === null && afterParam === null;
-  const topQuery = firstPage
-    ? lang
-      ? env.DB.prepare(translatedTop(filters, lang)).bind(...filters.binds, lang)
-      : env.DB.prepare(englishTop(filters)).bind(...filters.binds)
-    : null;
+  const topSql = topStories(filters, lang);
+  const topQuery = firstPage ? env.DB.prepare(topSql.sql).bind(...topSql.binds) : null;
   const switchQuery = lang ? env.DB.prepare(LANG_SWITCH).bind(lang) : null;
   const [page, ...more] = await env.DB.batch<TranslatedRow & { delayed?: number }>(
     [pageQuery, topQuery, switchQuery].filter((q): q is D1PreparedStatement => q !== null),
@@ -402,11 +411,14 @@ export const TRANSLATED_CONDITIONS = ["t.headline IS NOT NULL", SHOWN];
  * order, same filters) that have a shown translation into it, so the language
  * never gets a top story the English feed does not have. Their sources are
  * named in `lang` (#76). Binds the filters' values, then the language.
+ * CROSS JOIN keeps the 5 top stories the outer loop, each translation found
+ * by its primary key: with table statistics SQLite would otherwise read every
+ * translation into the language first.
  */
 const translatedTop = (filters: Filters, lang: Lang) => `
   SELECT top.*, t.headline AS t_headline, t.short_summary AS t_short_summary, t.summary AS t_summary
   FROM (${topQuery(articleColumns(lang), FROM_ARTICLES, topWhere(filters))}) top
-  JOIN article_translations t ON t.article_id = top.id AND t.lang = ?
+  CROSS JOIN article_translations t ON t.article_id = top.id AND t.lang = ?
   WHERE ${TRANSLATED_CONDITIONS.join(" AND ")}
   ORDER BY top.feed_seq DESC`;
 
