@@ -5,6 +5,9 @@ name: Deploy
 # the API's code and so shows its rules from this deploy on.
 # Needs the repository secret CLOUDFLARE_API_TOKEN (see docs/setup.md). Until
 # it exists, the run ends with a warning instead of failing.
+# The website is deployed only once the repository variable SITE_DEPLOY is
+# `true` (docs/setup.md): a workers.dev site is public as soon as it exists, so
+# Yurii sets it when the privacy and support pages name a working contact.
 
 on:
   push:
@@ -66,6 +69,10 @@ jobs:
       # After the api, so a failing site deploy never holds back the app's API or
       # the crons. The site's texts and credits are generated files in server/
       # (npm run site:texts), so an ARB or credits change reaches here through them.
-      - if: steps.token.outputs.ready == 'true'
+      - if: steps.token.outputs.ready == 'true' && vars.SITE_DEPLOY == 'true'
         name: Deploy the website
         run: npm run deploy:site
+      - if: steps.token.outputs.ready == 'true' && vars.SITE_DEPLOY != 'true'
+        name: Website not deployed yet
+        run: |
+          echo "::notice::The website was not deployed: the repository variable SITE_DEPLOY is not 'true' (see docs/setup.md, #88)."
