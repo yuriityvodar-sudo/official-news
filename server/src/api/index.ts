@@ -24,13 +24,14 @@ interface ArticleRow {
   importance: number | null;
   feed_seq: number | null;
   added_at: string | null;
+  impact: string | null;
 }
 
 const ARTICLE_COLUMNS = `
   a.id, s.country, a.source_id, s.name AS source_name, s.url AS source_url,
   a.url, a.original_title, a.published_at, a.date_only, a.headline, a.short_summary,
   a.summary, a.decision_type, a.image_url, a.original_language, a.topics, a.tags, a.importance,
-  a.feed_seq, a.added_at`;
+  a.feed_seq, a.added_at, a.impact`;
 
 const FROM_ARTICLES = "FROM articles a JOIN sources s ON s.id = a.source_id";
 
@@ -88,6 +89,17 @@ function parseStringArray(value: string | null): string[] {
   }
 }
 
+/** The stored impact JSON (#63), or null when there is none or it cannot be read. */
+function parseImpact(value: string | null): unknown {
+  if (!value) return null;
+  try {
+    const parsed: unknown = JSON.parse(value);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Converts a row to the article format in docs/contract.md. */
 export function toArticle(row: ArticleRow) {
   return {
@@ -109,6 +121,7 @@ export function toArticle(row: ArticleRow) {
     originalUrl: row.url,
     feedSeq: row.feed_seq,
     addedAt: row.added_at,
+    impact: parseImpact(row.impact),
   };
 }
 
@@ -342,6 +355,8 @@ function toTranslatedArticle(row: TranslatedRow, lang: Lang) {
     headline: row.t_headline ?? null,
     shortSummary: row.t_short_summary ?? null,
     summary: row.t_summary ?? null,
+    // Not translated yet: English is never mixed into a language feed (#46).
+    impact: null,
     lang,
   };
 }
