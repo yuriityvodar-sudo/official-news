@@ -2,11 +2,11 @@ import 'dart:async';
 
 import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
 import 'article.dart';
 import 'feed_language.dart';
-import 'feed_store.dart';
 
 /// Sends one event: its name and parameters (Google Analytics limits: names
 /// up to 40 characters, text values up to 100).
@@ -205,7 +205,11 @@ const _projectId = String.fromEnvironment('FIREBASE_PROJECT_ID');
 const _build = String.fromEnvironment('APP_BUILD', defaultValue: 'dev');
 
 /// Turns analytics on when the build has the Firebase values; otherwise it stays off.
-Future<void> startAnalytics() async {
+/// [language] is the feed's ([FeedController.languageChanges]), so the user
+/// property is the language the app is read in, the phone's on a first launch.
+Future<void> startAnalytics({
+  required ValueListenable<FeedLanguage> language,
+}) async {
   if ([_apiKey, _appId, _senderId, _projectId].any((v) => v.isEmpty)) return;
   try {
     await Firebase.initializeApp(
@@ -219,19 +223,33 @@ Future<void> startAnalytics() async {
     );
     final ga = FirebaseAnalytics.instance;
     await ga.setAnalyticsCollectionEnabled(true);
-    analytics = Analytics(
-      (name, parameters) => name == 'screen_view'
-          ? ga.logScreenView(
-              screenName: parameters['screen_name'] as String,
-              screenClass: parameters['screen_class'] as String,
-            )
-          : ga.logEvent(name: name, parameters: parameters),
-      (name, value) => ga.setUserProperty(name: name, value: value),
+    await useAnalytics(
+      Analytics(
+        (name, parameters) => name == 'screen_view'
+            ? ga.logScreenView(
+                screenName: parameters['screen_name'] as String,
+                screenClass: parameters['screen_class'] as String,
+              )
+            : ga.logEvent(name: name, parameters: parameters),
+        (name, value) => ga.setUserProperty(name: name, value: value),
+      ),
+      language: language,
     );
-    await ga.setUserProperty(name: 'build', value: _build);
-    // The saved language; [Analytics.languageChosen] keeps it current.
-    await analytics.feedLanguage((await FeedStore.open()).language());
   } catch (error) {
     debugPrint('analytics: off, Firebase did not start: $error');
   }
+}
+
+/// Makes [instance] the app's analytics and sets this phone's user properties:
+/// the build, and the language the feed is read in now. That is the feed's own
+/// value, not the saved one: with nothing saved the app follows the phone (#52),
+/// and a language chosen while Firebase was starting is counted too.
+/// [Analytics.languageChosen] keeps it current from then on.
+Future<void> useAnalytics(
+  Analytics instance, {
+  required ValueListenable<FeedLanguage> language,
+}) async {
+  analytics = instance;
+  await instance._user('build', _build);
+  await instance.feedLanguage(language.value);
 }
