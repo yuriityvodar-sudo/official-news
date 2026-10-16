@@ -14,72 +14,12 @@ import 'package:official_news/core/push.dart';
 import 'package:official_news/core/router.dart';
 import 'package:official_news/features/detail/detail_screen.dart';
 import 'package:official_news/features/feed/feed_controller.dart';
+import 'package:official_news/l10n/app_localizations.dart';
 import 'package:official_news/main.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'fake_messaging.dart';
 import 'test_app.dart';
-
-/// Firebase Cloud Messaging as the tests want it: iOS answers [answer] when it
-/// asks; topic changes fail while [failTopics] is set.
-class FakeMessaging implements Messaging {
-  FakeMessaging({
-    this.status = PushPermission.notAsked,
-    this.answer = PushPermission.granted,
-    this.initial,
-  });
-
-  PushPermission status;
-  PushPermission answer;
-  PushTap? initial;
-  bool apnsToken = true;
-  Object? failTopics;
-  int asked = 0;
-  bool tokenAllowed = false;
-  bool banners = false;
-  final calls = <String>[];
-  final tapEvents = StreamController<PushTap>.broadcast();
-  final tokenEvents = StreamController<void>.broadcast();
-
-  @override
-  Future<PushPermission> permission() async => status;
-
-  @override
-  Future<PushPermission> requestPermission() async {
-    asked++;
-    if (status == PushPermission.notAsked) status = answer;
-    return status;
-  }
-
-  @override
-  Future<void> allowToken() async => tokenAllowed = true;
-
-  @override
-  Future<bool> ready() async => apnsToken;
-
-  @override
-  Future<void> subscribe(String topic) async {
-    calls.add('subscribe $topic');
-    if (failTopics != null) throw failTopics!;
-  }
-
-  @override
-  Future<void> unsubscribe(String topic) async {
-    calls.add('unsubscribe $topic');
-    if (failTopics != null) throw failTopics!;
-  }
-
-  @override
-  Future<void> showInForeground() async => banners = true;
-
-  @override
-  Future<PushTap?> initialTap() async => initial;
-
-  @override
-  Stream<PushTap> get taps => tapEvents.stream;
-
-  @override
-  Stream<void> get tokenChanges => tokenEvents.stream;
-}
 
 /// Topic changes as the Firebase iOS SDK (13) makes them: one that meets no
 /// network gets no answer, waits in Firebase's own queue (kept across
@@ -153,6 +93,9 @@ Map<String, dynamic> _article(String id, {String? lang}) => {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  /// The app's words in English, the tests' app language unless one says otherwise.
+  final en = l10nFor();
+
   late List<(String, Map<String, Object>)> events;
   late Map<String, String> userProperties;
   late List<Uri> requests;
@@ -206,10 +149,18 @@ void main() {
     return push;
   }
 
-  /// A feed and an article screen, as the app's routes are named.
-  Widget app(GlobalKey<NavigatorState> navigator, Push push) => MaterialApp(
+  /// A feed and an article screen, as the app's routes are named, with the
+  /// app's words in [language].
+  Widget app(
+    GlobalKey<NavigatorState> navigator,
+    Push push, {
+    FeedLanguage language = FeedLanguage.en,
+  }) => MaterialApp(
     navigatorKey: navigator,
     navigatorObservers: [PushOffer(push)],
+    locale: language.locale,
+    localizationsDelegates: AppLocalizations.localizationsDelegates,
+    supportedLocales: AppLocalizations.supportedLocales,
     onGenerateRoute: (settings) => CupertinoPageRoute(
       settings: settings,
       builder: (_) => Scaffold(
@@ -247,7 +198,7 @@ void main() {
       await push.articleRead('a2');
       await push.articleRead('a2'); // the same article read again
       await readAndReturn(tester, navigator);
-      expect(find.text(PushTexts.title), findsNothing);
+      expect(find.text(en.pushOfferTitle), findsNothing);
       expect(push.offerDue, isFalse);
     });
 
@@ -262,15 +213,15 @@ void main() {
           await push.articleRead(id);
         }
         // Not over the article: only once the reader is back on the feed.
-        expect(find.text(PushTexts.title), findsNothing);
+        expect(find.text(en.pushOfferTitle), findsNothing);
         expect(messaging.asked, 0);
 
         await readAndReturn(tester, navigator);
-        expect(find.text(PushTexts.title), findsOneWidget);
-        expect(find.text(PushTexts.body), findsOneWidget);
+        expect(find.text(en.pushOfferTitle), findsOneWidget);
+        expect(find.text(en.pushOfferBody), findsOneWidget);
         expect(messaging.asked, 0, reason: 'iOS asks only after Turn On');
 
-        await tester.tap(find.text(PushTexts.turnOn));
+        await tester.tap(find.text(en.pushOfferTurnOn));
         await tester.pumpAndSettle();
         expect(messaging.asked, 1);
         expect(push.permission.value, PushPermission.granted);
@@ -284,6 +235,50 @@ void main() {
       },
     );
 
+    // #52: the explanation is in the app's language, like every other word.
+    for (final (language, title, body, notNow, turnOn) in [
+      (
+        FeedLanguage.uk,
+        'Важливі рішення',
+        'Отримуйте найважливіші офіційні рішення у сповіщеннях: '
+            'не більше 2 на день, уночі — жодних.',
+        'Не зараз',
+        'Увімкнути',
+      ),
+      (
+        FeedLanguage.ru,
+        'Важные решения',
+        'Получайте самые важные официальные решения в уведомлениях: '
+            'не больше 2 в день, ночью — ни одного.',
+        'Не сейчас',
+        'Включить',
+      ),
+    ]) {
+      testWidgets('the explanation in ${language.nativeName}', (tester) async {
+        final navigator = GlobalKey<NavigatorState>();
+        final messaging = FakeMessaging();
+        final push = await started(
+          messaging,
+          language: language,
+          navigator: navigator,
+        );
+        await tester.pumpWidget(app(navigator, push, language: language));
+        for (final id in ['a1', 'a2', 'a3']) {
+          await push.articleRead(id);
+        }
+        await readAndReturn(tester, navigator);
+        expect(find.text(title), findsOneWidget);
+        expect(find.text(body), findsOneWidget);
+        expect(find.text(notNow), findsOneWidget);
+        expect(find.text(en.pushOfferTitle), findsNothing);
+
+        await tester.tap(find.text(turnOn));
+        await tester.pumpAndSettle();
+        expect(messaging.asked, 1);
+        expect(messaging.calls, ['subscribe breaking_${language.code}']);
+      });
+    }
+
     testWidgets('asks once: not on the next return, nor after a restart', (
       tester,
     ) async {
@@ -295,7 +290,7 @@ void main() {
         await push.articleRead(id);
       }
       await readAndReturn(tester, navigator);
-      await tester.tap(find.text(PushTexts.turnOn));
+      await tester.tap(find.text(en.pushOfferTurnOn));
       await tester.pumpAndSettle();
       expect(push.permission.value, PushPermission.denied);
       expect(sent('push_permission').single['result'], 'denied');
@@ -303,7 +298,7 @@ void main() {
 
       await push.articleRead('a4');
       await readAndReturn(tester, navigator);
-      expect(find.text(PushTexts.title), findsNothing);
+      expect(find.text(en.pushOfferTitle), findsNothing);
       expect(messaging.asked, 1);
 
       // A later launch: iOS says denied, and the app has asked before.
@@ -323,7 +318,7 @@ void main() {
         await push.articleRead(id);
       }
       await readAndReturn(tester, navigator);
-      await tester.tap(find.text(PushTexts.notNow));
+      await tester.tap(find.text(en.pushOfferNotNow));
       await tester.pumpAndSettle();
       expect(messaging.asked, 0);
       expect(push.permission.value, PushPermission.notAsked);
@@ -333,7 +328,7 @@ void main() {
       });
 
       await readAndReturn(tester, navigator);
-      expect(find.text(PushTexts.title), findsNothing);
+      expect(find.text(en.pushOfferTitle), findsNothing);
 
       // After a restart iOS still has not asked, but the app does not offer again.
       push.stop();
@@ -363,7 +358,7 @@ void main() {
         await push.articleRead(id);
       }
       await readAndReturn(tester, navigator);
-      expect(find.text(PushTexts.title), findsNothing);
+      expect(find.text(en.pushOfferTitle), findsNothing);
     });
 
     testWidgets('off without Firebase: no question, no counting', (
@@ -379,7 +374,7 @@ void main() {
       }
       await readAndReturn(tester, navigator);
       expect(push.permission.value, PushPermission.unavailable);
-      expect(find.text(PushTexts.title), findsNothing);
+      expect(find.text(en.pushOfferTitle), findsNothing);
       expect(await push.enable(), PushPermission.unavailable);
       expect(prefs.getKeys(), isEmpty);
     });
@@ -723,6 +718,12 @@ void main() {
       await tester.pump();
       expect(app().locale, const Locale('uk'));
       expect(app().navigatorObservers, same(observers));
+    });
+
+    test('the Settings row opens this app\'s page in the iOS Settings app', () {
+      // The value of UIApplication.openSettingsURLString; launchUrl opens it
+      // with UIApplication.open, which needs no LSApplicationQueriesSchemes.
+      expect(appSettingsPage.toString(), 'app-settings:');
     });
   });
 }

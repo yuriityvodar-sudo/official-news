@@ -350,11 +350,43 @@
   },
   "notifications": "Notifications",
   "@notifications": {
-    "description": "The settings row for news alerts, not built yet."
+    "description": "The settings row for notifications of breaking decisions."
   },
-  "soon": "Soon",
-  "@soon": {
-    "description": "Grey text on the Notifications row: coming in a later version."
+  "notificationsOn": "On",
+  "@notificationsOn": {
+    "description": "Grey text on the Notifications row: notifications are allowed. Short, as the iOS Settings app writes it in its own lists; a tap opens the iOS Settings app."
+  },
+  "notificationsOff": "Off",
+  "@notificationsOff": {
+    "description": "Grey text on the Notifications row: notifications are not allowed (turned off in the iOS Settings app, or \"Don't Allow\"). Short, as the iOS Settings app writes it; a tap opens the iOS Settings app."
+  },
+  "notificationsTurnOn": "Turn On",
+  "@notificationsTurnOn": {
+    "description": "Text in the accent colour on the Notifications row while the phone has not been asked yet: a tap shows the iOS question that allows notifications."
+  },
+  "notificationsUnavailable": "Unavailable",
+  "@notificationsUnavailable": {
+    "description": "Grey text on the Notifications row when this build of the app has no notifications (test and local builds)."
+  },
+  "notificationsOpensSettings": "Opens the Settings app",
+  "@notificationsOpensSettings": {
+    "description": "What VoiceOver adds for the Notifications row when it says On or Off: a tap opens the iOS Settings app, where notifications are turned on or off. \"Settings\" is the name of Apple's Settings app in this language."
+  },
+  "pushOfferTitle": "Breaking decisions",
+  "@pushOfferTitle": {
+    "description": "Title of the app's short question before iOS asks about notifications, shown once after three articles were read."
+  },
+  "pushOfferBody": "Get the most important official decisions as a notification: at most 2 a day, none at night.",
+  "@pushOfferBody": {
+    "description": "Text of that question, under pushOfferTitle: what the notifications are, how many and when."
+  },
+  "pushOfferNotNow": "Not Now",
+  "@pushOfferNotNow": {
+    "description": "Button in that question: no notifications now (the app does not ask again by itself)."
+  },
+  "pushOfferTurnOn": "Turn On",
+  "@pushOfferTurnOn": {
+    "description": "Button in that question, in bold: goes on to the iOS question that allows notifications."
   },
   "settingsAboutHeader": "About",
   "@settingsAboutHeader": {

@@ -4,7 +4,9 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 
+import '../l10n/app_localizations.dart';
 import 'analytics.dart';
 import 'api_client.dart';
 import 'article.dart';
@@ -150,15 +152,27 @@ class FirebaseMessagingLayer implements Messaging {
   Stream<void> get tokenChanges => _fcm.onTokenRefresh;
 }
 
-/// The app's words for the question before iOS asks; kept together for the
-/// translations of the app's own words (#52).
-abstract final class PushTexts {
-  static const title = 'Breaking decisions';
-  static const body =
-      'Get the most important official decisions as a notification: '
-      'at most 2 a day, none at night.';
-  static const notNow = 'Not Now';
-  static const turnOn = 'Turn On';
+/// This app's page in the iOS Settings app (the value of
+/// `UIApplication.openSettingsURLString`). Once iOS has asked, Notifications
+/// is on it: the only place a "Don't Allow" is undone or notifications are
+/// turned off.
+final appSettingsPage = Uri.parse('app-settings:');
+
+/// Opens [appSettingsPage]; the Settings row's opener, tests pass their own.
+typedef OpenAppSettings = Future<void> Function();
+
+/// Opens this app's page in the iOS Settings app. Back in the app, [Push]
+/// reads the permission again, so the Settings row shows what was chosen.
+Future<void> openAppSettings() async {
+  try {
+    final opened = await launchUrl(
+      appSettingsPage,
+      mode: LaunchMode.externalApplication,
+    );
+    if (!opened) debugPrint('push: the Settings app did not open');
+  } catch (error) {
+    debugPrint('push: the Settings app did not open: $error');
+  }
 }
 
 /// Push notifications (#62): the server sends breaking official decisions, at
@@ -174,7 +188,10 @@ abstract final class PushTexts {
 ///   language; the topic is saved, so a start corrects it.
 /// - A tap opens the article in the notification's language, or the feed.
 ///
-/// For the Settings row: [permission] says what to show, [enable] asks.
+/// The Settings row (`SettingsScreen`) shows [permission], live, and asks with
+/// [enable] while iOS has not asked; once it has, the row opens the iOS
+/// Settings app ([openAppSettings]), and the return to the app reads the
+/// permission again.
 class Push with WidgetsBindingObserver {
   Push({this._api, GlobalKey<NavigatorState>? navigator})
     : _navigator = navigator ?? appNavigator;
@@ -221,8 +238,9 @@ class Push with WidgetsBindingObserver {
 
   /// Asks iOS for notifications, then subscribes to the feed language's topic.
   /// After a "Don't Allow", iOS does not ask again and this returns
-  /// [PushPermission.denied] at once: the Settings row should then open the
-  /// iOS Settings app. [trigger] is for analytics: `reads` or `settings`.
+  /// [PushPermission.denied] at once, so the Settings row opens the iOS
+  /// Settings app instead. [trigger] is for analytics: `reads` (the offer
+  /// after three reads) or `settings` (the Settings row).
   Future<PushPermission> enable({String trigger = 'settings'}) async {
     final messaging = _messaging;
     if (messaging == null) return PushPermission.unavailable;
@@ -494,20 +512,24 @@ class PushOffer extends NavigatorObserver {
 class _PushOfferDialog extends StatelessWidget {
   const _PushOfferDialog();
 
+  /// In the app's language (#52), like the rest of the app.
   @override
-  Widget build(BuildContext context) => CupertinoAlertDialog(
-    title: const Text(PushTexts.title),
-    content: const Text(PushTexts.body),
-    actions: [
-      CupertinoDialogAction(
-        onPressed: () => Navigator.of(context).pop(false),
-        child: const Text(PushTexts.notNow),
-      ),
-      CupertinoDialogAction(
-        isDefaultAction: true,
-        onPressed: () => Navigator.of(context).pop(true),
-        child: const Text(PushTexts.turnOn),
-      ),
-    ],
-  );
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return CupertinoAlertDialog(
+      title: Text(l10n.pushOfferTitle),
+      content: Text(l10n.pushOfferBody),
+      actions: [
+        CupertinoDialogAction(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: Text(l10n.pushOfferNotNow),
+        ),
+        CupertinoDialogAction(
+          isDefaultAction: true,
+          onPressed: () => Navigator.of(context).pop(true),
+          child: Text(l10n.pushOfferTurnOn),
+        ),
+      ],
+    );
+  }
 }
