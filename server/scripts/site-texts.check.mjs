@@ -1,0 +1,116 @@
+// Tests for scripts/site-texts.mjs (`node --test`, part of `npm test`): the
+// website's generated texts and credits match the app and the docs they come
+// from, and every source, country, language and decision type has its words.
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { describe, test } from "node:test";
+
+import { parseCsv } from "./sources.mjs";
+import {
+  CREDIT_COLUMNS,
+  SITE_LANGS,
+  build,
+  credits,
+  decisionTypeKey,
+  fromDart,
+  languageKey,
+  paths,
+  readArb,
+  siteTexts,
+} from "./site-texts.mjs";
+
+const read = (path) => readFileSync(path, "utf8");
+const english = () => readArb(read(paths.arb("en")));
+const arbs = () => Object.fromEntries(SITE_LANGS.map((lang) => [lang, readArb(read(paths.arb(lang)))]));
+const sources = () => {
+  const [header, ...rows] = parseCsv(read(paths.sources));
+  return rows.map((cells) => Object.fromEntries(header.map((name, i) => [name, cells[i]])));
+};
+
+describe("the generated files", () => {
+  test("are what the app's texts and docs/source-credits.csv give today (else run `npm run site:texts` in server/)", () => {
+    for (const [path, content] of Object.entries(build())) {
+      assert.equal(read(path), content, `${path} is out of date: run \`npm run site:texts\` in server/ and commit it`);
+    }
+  });
+});
+
+describe("the app's texts", () => {
+  test("every key the site uses is in every language, with the English placeholders", () => {
+    const texts = siteTexts(arbs());
+    for (const lang of SITE_LANGS) assert.deepEqual(Object.keys(texts[lang]), Object.keys(texts.en));
+  });
+
+  test("a missing key, other placeholders or ICU plural syntax are refused, all at once", () => {
+    const all = arbs();
+    delete all.uk.aboutIntro;
+    all.ru.lastUpdated = "Обновлено {when}";
+    all.de.latest = "{count, plural, one{Neueste} other{Neueste}}";
+    assert.throws(
+      () => siteTexts(all),
+      (error) =>
+        /app_uk.arb has no "aboutIntro"/.test(error.message) &&
+        /app_ru.arb "lastUpdated" has placeholders \{when\}/.test(error.message) &&
+        /app_de.arb "latest" uses plural or select/.test(error.message),
+    );
+  });
+
+  test("every country in docs/sources.csv has a name (country<CC>)", () => {
+    const en = english();
+    const missing = [...new Set(sources().map((s) => s.country))].filter((cc) => !(`country${cc}` in en));
+    assert.deepEqual(missing, [], `add country names to app/lib/l10n/app_*.arb: ${missing.join(", ")}`);
+  });
+
+  test("every source language in docs/sources.csv has a name (language<Xx>), or the AI label would show its code", () => {
+    const en = english();
+    const missing = [...new Set(sources().map((s) => s.language))].filter((code) => !(languageKey(code) in en));
+    assert.deepEqual(missing, [], `add language names to app/lib/l10n/app_*.arb: ${missing.join(", ")}`);
+  });
+
+  test("every decision type in docs/contract.md has a label", () => {
+    const contract = read(paths.contract);
+    const section = contract.split("## Decision types")[1].split("\n## ")[0];
+    const types = [...section.matchAll(/`([a-z-]+)` \(/g)].map((m) => m[1]);
+    assert.ok(types.length >= 8, "decision types not found in docs/contract.md");
+    const en = english();
+    assert.deepEqual(
+      types.filter((id) => !(decisionTypeKey(id) in en)),
+      [],
+    );
+  });
+});
+
+describe("the app's code", () => {
+  test("gives the publisher, the policies' date and the five languages", () => {
+    const dart = fromDart(read(paths.infoPages), read(paths.feedLanguage));
+    assert.equal(dart.publisherName, "RS Elite Pro s.r.o.");
+    assert.match(dart.policyUpdated, /^\d{4}-\d{2}-\d{2}$/);
+    assert.deepEqual(Object.keys(dart.languages), SITE_LANGS);
+    assert.equal(dart.languages.uk.nativeName, "Українська");
+  });
+
+  test("fails loudly when the Dart it reads has changed shape", () => {
+    assert.throws(() => fromDart("const name = 'x';", "enum FeedLanguage {}"), /publisherName[\s\S]*policyUpdated[\s\S]*languages are \[\]/);
+  });
+});
+
+describe("docs/source-credits.csv", () => {
+  const header = CREDIT_COLUMNS.join(",");
+  const sourcesCsv = "id,country\nde-cabinet,DE\n";
+
+  test("has a row for every source in docs/sources.csv", () => {
+    const rows = credits(read(paths.credits), read(paths.sources));
+    for (const s of sources()) assert.ok(s.id in rows, s.id);
+  });
+
+  test("refuses a source without a row, a plain-http licence link and wording without its language", () => {
+    assert.throws(() => credits(`${header}\n`, sourcesCsv), /no row for source "de-cabinet"/);
+    assert.throws(() => credits(`${header}\nde-cabinet,CC BY 4.0,http://x.org,,,\n`, sourcesCsv), /licence_url must start with https/);
+    assert.throws(() => credits(`${header}\nde-cabinet,,,Quelle: Bund,,\n`, sourcesCsv), /wording needs wording_lang/);
+  });
+
+  test("keeps a row for a source no longer listed: its articles stay on the site", () => {
+    const rows = credits(`${header}\nde-cabinet,,,,,\nru-kremlin-acts,CC BY 4.0,https://creativecommons.org/licenses/by/4.0/,,,removed\n`, sourcesCsv);
+    assert.equal(rows["ru-kremlin-acts"].licence, "CC BY 4.0");
+  });
+});

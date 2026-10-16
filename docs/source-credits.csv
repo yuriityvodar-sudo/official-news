@@ -1,0 +1,20 @@
+id,licence,licence_url,wording,wording_lang,note
+us-presidential-actions,Public domain,https://www.whitehouse.gov/copyright/,,,US government work (17 U.S.C. §105)
+ca-parliament-bills,,,,,"Parliament of Canada copyright; our own words, nothing reproduced: generic line"
+mx-official-gazette,,,,,"DOF asks for a citation (dof.gob.mx/aviso_legal.html): copy its exact wording here in the legal review"
+br-chamber-bills,,,,,"Open data, free of licences: generic line"
+ar-saij-legislation,,,,,Not stated on saij.gob.ar: generic line
+gb-policy-consultations,Open Government Licence v3.0,https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/,Contains public sector information licensed under the Open Government Licence v3.0.,en,"The OGL's attribution statement. The OGL grants no right to suggest official status: the independence note is on every page"
+de-government-articles,,,,,Not stated (bundesregierung.de/breg-de/impressum): generic line
+fr-council-of-ministers,Licence Ouverte,https://www.elysee.fr/informations-legales-editoriales,,,"Text under the Licence ouverte, photos excluded: check its version and the citation it asks for in the legal review"
+it-council-of-ministers,CC BY 3.0 IT,https://creativecommons.org/licenses/by/3.0/it/,,,governo.it/it/note-legali
+eu-commission-press-releases,CC BY 4.0,https://creativecommons.org/licenses/by/4.0/,,,"Decision 2011/833/EU (commission.europa.eu/legal-notice_en): check whether the Commission asks for ""© European Union"""
+ru-kremlin-acts,CC BY 4.0,https://creativecommons.org/licenses/by/4.0/,,,kremlin.ru/about/copyrights
+tr-parliament-plenary,,,,,Not stated: generic line
+za-government-notices,,,,,"Non-commercial informational use (gov.za terms); our own words, nothing reproduced: generic line"
+au-treasurer-media-releases,CC BY 4.0,https://creativecommons.org/licenses/by/4.0/,,,treasury.gov.au/copyright-disclaimer: check the wording it asks for in the legal review
+cn-state-council-policies,,,,,Decisions of state organs are not protected (PRC Copyright Law art. 5): generic line
+in-parliament-bills,,,,,"Reproducing Acts and bills is allowed (Copyright Act s.52(1)(q)): generic line"
+jp-cabinet-meetings,Public Data License 1.0,https://www.kantei.go.jp/jp/terms.html,,,Copy the exact wording for edited content (加工して作成) from kantei.go.jp/jp/terms.html in the legal review
+kr-legislative-notices,,,,,Korea Open Government Licence: confirm its type (MOLEG copyright policy) before showing it
+id-cabinet-secretariat,,,,,Laws and official speeches are not protected (UU 28/2014 art. 42): generic line
