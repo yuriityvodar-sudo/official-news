@@ -7,6 +7,7 @@ import 'package:flutter/widgets.dart';
 
 import 'article.dart';
 import 'feed_language.dart';
+import 'filters.dart';
 
 /// Sends one event: its name and parameters (Google Analytics limits: names
 /// up to 40 characters, text values up to 100).
@@ -77,6 +78,18 @@ class Analytics {
     });
     await feedLanguage(chosen);
   }
+
+  /// The reader changed a filter (#67, #68) on a chip: the filters as they
+  /// are now. `where` is `all`, `group` or `country`; `place` the group's id
+  /// (`g7`), the country's code (`GB`), or `all`; `topic` the topic's id, or
+  /// `all`. Not `value`: Google Analytics keeps that name for an event's
+  /// number, and drops a text in it (`firebase_error` 18).
+  Future<void> filterChanged({required FeedWhere where, String? topic}) =>
+      _event('filter_changed', {
+        'where': where.kind.name,
+        'place': where.id ?? 'all',
+        'topic': topic ?? 'all',
+      });
 
   /// An article opened from the feed: from `top` (Top stories) or `latest`.
   Future<void> articleOpened(
