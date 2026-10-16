@@ -141,7 +141,10 @@ void main() {
 
   testWidgets('sends the chosen language with the one before', (tester) async {
     await pumpFeed(tester, screens: false);
-    await tester.tap(find.text('EN'));
+    // The language is chosen in Settings (#64).
+    await tester.tap(find.byIcon(CupertinoIcons.gear_alt));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Language'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Українська'));
     await tester.pumpAndSettle();
