@@ -1,6 +1,7 @@
 /// English names for the languages of the sources (docs/sources.csv).
 const _names = {
   'ar': 'Arabic',
+  'cs': 'Czech',
   'de': 'German',
   'en': 'English',
   'es': 'Spanish',

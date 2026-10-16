@@ -82,3 +82,13 @@ test("docs/sources.csv is valid", () => {
   const reserved = seedIds(readFileSync(seedPath, "utf8"));
   assert.ok(toSources(readFileSync(csvPath, "utf8"), { reserved }).length > 0);
 });
+
+test("the app has a name for every country and language in docs/sources.csv", () => {
+  // Cards show "source · country" and "translated from <language>"; a missing name shows the bare code.
+  const names = (file) => new Set([...readFileSync(new URL(`../../app/lib/core/${file}`, import.meta.url), "utf8").matchAll(/^\s*'([A-Za-z]{2})':/gm)].map((m) => m[1]));
+  const countries = names("countries.dart");
+  const languages = names("languages.dart");
+  const sources = toSources(readFileSync(csvPath, "utf8"));
+  assert.deepEqual([...new Set(sources.map((s) => s.country))].filter((c) => !countries.has(c)), [], "add these to app/lib/core/countries.dart");
+  assert.deepEqual([...new Set(sources.map((s) => s.language))].filter((l) => !languages.has(l)), [], "add these to app/lib/core/languages.dart");
+});
