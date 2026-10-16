@@ -152,6 +152,21 @@ export interface PageContent {
   imageUrl: string | null;
 }
 
+/** The first link on a page matching `spec` (`selector@attr`, default `href`), as an absolute URL. */
+export async function findLink(html: string, baseUrl: string, spec: string): Promise<string | null> {
+  const { selector, attr } = splitSpec(spec, "href");
+  let found: string | null = null;
+  await new HTMLRewriter()
+    .on(selector, {
+      element(el) {
+        found ??= el.getAttribute(attr ?? "href");
+      },
+    })
+    .transform(new Response(html))
+    .arrayBuffer();
+  return absolute(found ?? undefined, baseUrl);
+}
+
 export async function extractContent(html: string, baseUrl: string, textSelector?: string): Promise<PageContent> {
   const containers = textSelector ? [textSelector] : ["main", "article", "body"];
   const buffers = containers.map(() => "");
@@ -161,6 +176,12 @@ export async function extractContent(html: string, baseUrl: string, textSelector
   };
   let skipping = 0;
   let image: string | null = null;
+  // With a text selector only the elements inside it matter, so the handlers below
+  // watch only those: on a 130 KB page the handlers for every div and svg of the
+  // page were most of the CPU (#71, measured locally: 4.8 ms a page, 1.1 to 1.5 ms
+  // after, same text). A selector list ("a, b") keeps the page-wide handlers.
+  const inside = (selectors: string) =>
+    textSelector && !textSelector.includes(",") ? selectors.split(", ").map((s) => `${textSelector} ${s}`).join(", ") : selectors;
 
   const rewriter = new HTMLRewriter()
     .on('meta[property="og:image"], meta[name="twitter:image"]', {
@@ -168,7 +189,7 @@ export async function extractContent(html: string, baseUrl: string, textSelector
         image ??= el.getAttribute("content");
       },
     })
-    .on(`${SKIPPED}, nav, header, footer, aside`, {
+    .on(inside(`${SKIPPED}, nav, header, footer, aside`), {
       element(el) {
         skipping++;
         atEnd(el, () => {
@@ -177,7 +198,7 @@ export async function extractContent(html: string, baseUrl: string, textSelector
       },
     })
     // Paragraph breaks, so sentences from different blocks do not run together.
-    .on("p, br, li, h1, h2, h3, h4, h5, h6, tr, div, section", {
+    .on(inside("p, br, li, h1, h2, h3, h4, h5, h6, tr, div, section"), {
       element(el) {
         newline();
         atEnd(el, newline);

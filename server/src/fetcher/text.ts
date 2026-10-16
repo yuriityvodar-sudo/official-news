@@ -42,6 +42,8 @@ export function htmlToText(html: string): string {
 /** Collapses runs of spaces, keeps single line breaks between paragraphs. */
 export function cleanText(text: string): string {
   return text
+    // Windows (CRLF) and old Mac line ends, so they collapse like the rest (#71: Brazil's pages).
+    .replace(/\r\n?/g, "\n")
     .replace(/[ \t\f\v ]+/g, " ")
     .replace(/ *\n[ \n]*/g, "\n")
     .trim();

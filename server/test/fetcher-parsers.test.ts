@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { parseApi } from "../src/fetcher/api";
 import { parseDate } from "../src/fetcher/dates";
 import { parseFeed } from "../src/fetcher/feed";
-import { extractContent, parsePage } from "../src/fetcher/page";
+import { extractContent, findLink, parsePage } from "../src/fetcher/page";
 import { isAllowed, parseRobots, robotsFromResponse } from "../src/fetcher/robots";
 import { decodeEntities, fillTemplate, getPath, htmlToText } from "../src/fetcher/text";
 
@@ -94,6 +94,10 @@ describe("text helpers", () => {
 
   it("strips HTML that a feed escaped", () => {
     expect(htmlToText("&lt;p&gt;Tomorrow I will join&lt;/p&gt;&lt;p&gt;counterparts&lt;/p&gt;")).toBe("Tomorrow I will join\ncounterparts");
+  });
+
+  it("collapses Windows and old Mac line ends like any other", () => {
+    expect(htmlToText("Ementa\r\n\r\n\t Institui mecanismos\r\rpara a saúde ")).toBe("Ementa\nInstitui mecanismos\npara a saúde");
   });
 
   it("follows JSON stored as a string and fills templates", () => {
@@ -191,6 +195,77 @@ describe("extractContent", () => {
   it("uses the source's text selector", async () => {
     const html = `<body><div class="top">首页 | 简 | 繁</div><div id="UCAP-CONTENT"><p>国务院关于发展新质生产力的意见</p></div></body>`;
     expect((await extractContent(html, "https://www.gov.cn/x", "#UCAP-CONTENT")).text).toBe("国务院关于发展新质生产力的意见");
+  });
+
+  it("with a text selector, still skips scripts and menus inside it and breaks between its blocks; a selector list works too", async () => {
+    const html = `<body><div><p>Outside</p></div><div id="c"><nav>Menu</nav><script>track()</script><h2>Title</h2><div>First</div><p>Second<br>Third</p></div>
+      <aside id="d"><p>Sidebar</p></aside></body>`;
+    expect((await extractContent(html, "https://x.gov/", "#c")).text).toBe("Title\nFirst\nSecond\nThird");
+    expect((await extractContent(html, "https://x.gov/", "#c, #d")).text).toBe("Title\nFirst\nSecond\nThird");
+  });
+
+  // #71: trimmed from the real item pages of each source the selector was set for.
+  it("takes the Bundesregierung article body without the share links (textSelector)", async () => {
+    const html = `<html><head><meta property="og:image" content="/resource/image/2427030/og.jpg"></head><body>
+      <nav>Startseite Aktuelles</nav>
+      <main id="main"><div class="bpa-container"><header class="bpa-article-header"><h2><span class="bpa-topline-title">Im Bundestag beschlossen</span>
+        <span class="bpa-teaser-title-text-inner">Mehr Resilienz für Smart-Geräte</span></h2>
+        <div class="bpa-short-text"><p>Mit der Cyberresilienz-Verordnung werden erstmalig Mindeststandards festgelegt.</p></div></header>
+        <div class="bpa-share rs_skip"><ul class="bpa-share-list"><li><a href="mailto:?">E-Mail<br>per E-Mail teilen, Mehr Resilienz für Smart-Geräte</a></li>
+        <li><a href="https://www.facebook.com/sharer">Facebook<br>per Facebook teilen, Mehr Resilienz für Smart-Geräte</a></li></ul></div></div>
+      <div class="bpa-container" id="rs_reading_area_content"><div class="bpa-module-full bpa-article bpa-padded"><div class="bpa-richtext">
+        <figure class="bpa-figure"><img src="/resource/image/2427030/w.webp" alt="Waschmaschine"><figcaption>Foto: picture alliance / Westend61</figcaption></figure>
+        <div class="bpa-richtext"><p><span>Der sogenannte </span><span lang="en-GB">Cyber Resilience Act</span><span> (CRA) legt erstmalig ein Mindestmaß an Cybersicherheit für alle vernetzten Produkte fest.</span></p>
+        <h3>Wann tritt der CRA in Kraft?</h3><p>Die Umsetzung erfolgt in verschiedenen Etappen, bis Ende 2027.</p></div></div></div></div></main>
+      <footer>Impressum</footer></body></html>`;
+    const base = "https://www.bundesregierung.de/breg-de/aktuelles/cyberresilienz-2426502";
+    expect((await extractContent(html, base)).text).toContain("per Facebook teilen");
+    const content = await extractContent(html, base, "div.bpa-article .bpa-richtext");
+    expect(content.text).toBe(
+      "Foto: picture alliance / Westend61\nDer sogenannte Cyber Resilience Act (CRA) legt erstmalig ein Mindestmaß an Cybersicherheit für alle vernetzten Produkte fest.\nWann tritt der CRA in Kraft?\nDie Umsetzung erfolgt in verschiedenen Etappen, bis Ende 2027.",
+    );
+    expect(content.imageUrl).toBe("https://www.bundesregierung.de/resource/image/2427030/og.jpg");
+  });
+
+  it("keeps a gov.za document page's menus out, so a page without a body gives no text", async () => {
+    const html = `<html><body><a href="#main-content">Skip to main content</a><form><label>Search gov.za</label><button>Search</button></form>
+      <aside><div class="field--name-body"><p>The Government Gazette is published on the Government Printing Works' website</p></div></aside>
+      <main role="main"><h1 class="page-title"><span>Customs and Excise Act: Amendment to Rules (DAR281)</span></h1>
+      <article data-history-node-id="846485" class="node"><div class="node-content"><div class="field field--name-field-gcisdoc-files"><div class="field__label">Files</div>
+      <table><thead><tr><th>Attachment</th><th>Size</th></tr></thead><tbody><tr><td><a href="/sites/default/files/gcis_document/202610/55506rg12055gon7992.pdf" type="application/pdf">55506rg12055gon7992.pdf</a></td><td>112.06 KB</td></tr></tbody></table>
+      </div></div></article><div class="share">Share this page Facebook Twitter WhatsApp</div></main></body></html>`;
+    const base = "https://www.gov.za/documents/notices/customs-and-excise-act-amendment-rules-dar281-09-oct-2026";
+    expect((await extractContent(html, base)).text).toContain("Skip to main content");
+    expect(await extractContent(html, base, "article.node .field--name-body")).toEqual({ text: "", imageUrl: null });
+  });
+
+  it("reads a Chamber of Deputies bill record without menus, also with CRLF line ends", async () => {
+    const html = [
+      `<html><body><div id="portal-breadcrumbs">Página Inicial / Atividade Legislativa / PL 5576/2026</div>`,
+      `<div id="content"><span id="barraFuncoesTopo">Versões\r\npara impressão</span>`,
+      `<div id="identificacaoProposicao"><p id="colunaPrimeiroAutor"><strong>Autor</strong><br />\r\n\t\t\tJosé Medeiros - PL/MT\r\n</p>`,
+      `<p><strong>Apresentação</strong><br />15/10/2026</p>`,
+      `<p><strong>Ementa</strong><br /> <span class="textoJustificado">Institui mecanismos para o aproveitamento da capacidade assistencial ociosa dos prestadores privados de serviços de saúde.\r\n\r\n</span></p></div>`,
+      `<div id="informacoesDeTramitacao">Regime de Tramitação\r\n.\r\n</div></div></body></html>`,
+    ].join("\r\n");
+    const content = await extractContent(html, "https://www.camara.leg.br/propostas-legislativas/2647775", "#identificacaoProposicao");
+    expect(content.text).toBe(
+      "Autor\nJosé Medeiros - PL/MT\nApresentação\n15/10/2026\nEmenta\nInstitui mecanismos para o aproveitamento da capacidade assistencial ociosa dos prestadores privados de serviços de saúde.",
+    );
+    expect((await extractContent(html, "https://www.camara.leg.br/x")).text).not.toContain("\r");
+  });
+});
+
+describe("findLink", () => {
+  it("finds the InfoLEG link to a norm's full text, as an absolute URL", async () => {
+    const html = `<div id="Textos_Completos"><p><strong>Resolución&nbsp;1445/2026 MINISTERIO DE SALUD</strong></p>
+      <p><strong> Resumen:</strong><br/>APRUEBASE EL PLAN NACIONAL DE ABORDAJE INTEGRAL DE SALUD VASCULAR 2026-2030.</p>
+      <p><a href='anexos/430000-434999/431253/norma.htm'><b>Texto completo de la norma</b></a></p>
+      <p><a href="/infolegInternet/verVinculos.do?modo=1&amp;id=431253">Esta norma modifica o complementa a 3 norma(s).</a></p></div>`;
+    const base = "https://servicios.infoleg.gob.ar/infolegInternet/verNorma.do?id=431253";
+    expect(await findLink(html, base, "a[href$='norma.htm']")).toBe("https://servicios.infoleg.gob.ar/infolegInternet/anexos/430000-434999/431253/norma.htm");
+    expect(await findLink(html, base, "a[href*='verVinculos']@href")).toBe("https://servicios.infoleg.gob.ar/infolegInternet/verVinculos.do?modo=1&id=431253");
+    expect(await findLink(html, base, "a.missing")).toBeNull();
   });
 });
 

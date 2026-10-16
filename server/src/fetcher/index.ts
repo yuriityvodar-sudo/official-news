@@ -1,9 +1,9 @@
 import type { Env } from "../env";
 import { parseApi } from "./api";
 import { parseFeed } from "./feed";
-import { extractContent, parsePage } from "./page";
+import { extractContent, findLink, parsePage } from "./page";
 import { type Robots, isAllowed, robotsFromResponse } from "./robots";
-import { decodeBody, toStoredTime, ulid } from "./text";
+import { decodeBody, getPath, htmlToText, toStoredTime, ulid } from "./text";
 import { type FoundItem, type SourceConfig, type SourceRow, configRegex, readConfig } from "./types";
 
 export const USER_AGENT = "OfficialNewsBot/0.1 (+https://github.com/yuriityvodar-sudo/official-news)";
@@ -16,13 +16,27 @@ export const LIMITS = {
   itemsPerSource: 20,
   /** New items saved per check; the rest are saved on the next check. */
   newPerSource: 10,
-  /** Item pages opened per run, for text and image. Reading HTML is the heavy part of a run (#40). */
+  /**
+   * Item pages (or `fullText` reads) per run, for text and image. Reading HTML
+   * is the heavy part of a run (#40).
+   */
   pagesPerRun: 2,
   requestsPerRun: 40,
   /** The feed shows 7 days, so older items are never saved. */
   maxAgeDays: 7,
-  /** List text shorter than this is completed from the item page. */
-  minText: 200,
+  /**
+   * List text shorter than this is a teaser (#71: 200 to 500 characters of a
+   * 3,000-character article): the item page, or the source's `fullText`, is
+   * read for the whole text, also when the list has a picture, and the item
+   * waits for page budget instead of being saved with the teaser.
+   */
+  teaserText: 1000,
+  /** A `fullText` read follows at most this many steps. */
+  fullTextSteps: 3,
+  /** Each answer of a `fullText` read is at most this big; a bigger one could take more than the run's CPU to read. */
+  fullTextBytes: 200_000,
+  /** A site that is busy (429, 5xx, no answer) is asked again on later checks while the item is this new; then the teaser is saved. */
+  retryHours: 24,
   maxText: 20_000,
   textDays: 30,
   timeoutMs: 15_000,
@@ -36,7 +50,7 @@ export interface SourceCheck {
   /** Items on the list after the source's filters. */
   found: number;
   saved: number;
-  /** New items left for the next check (no page budget left to read their text). */
+  /** New items left for the next check: no page budget left to read their text, or the site asked us to wait. */
   waiting: number;
   /** Items skipped because they had no date (a broken date selector would otherwise flood the feed as today's news). */
   undated: number;
@@ -61,6 +75,8 @@ interface Run {
   pages: number;
   robots: Map<string, Promise<Robots>>;
   lastRequest: Map<string, number>;
+  /** Hosts that answered 429 or 5xx, or did not answer, in this run: not asked again until the next run. */
+  busy: Set<string>;
 }
 
 async function request(run: Run, url: string, accept: string, crawlDelaySeconds = 0, extraHeaders: Record<string, string> = {}): Promise<Response> {
@@ -109,15 +125,15 @@ function charsetOf(res: Response, config: SourceConfig, bytes: ArrayBuffer): str
 }
 
 /**
- * Keeps an item only when its link stays on the source's own site (same host, or
- * a subdomain of it without "www."), or on a host the config allows, and only over
+ * A link is used only when it stays on the source's own site (same host, or a
+ * subdomain of it without "www."), or on a host the config allows, and only over
  * https: we show the text with the "Official source" mark. http links on those
- * hosts are upgraded, since every source is read over https.
+ * hosts are upgraded, since every source is read over https. Null otherwise.
  */
-function onSourceSite(item: FoundItem, sourceUrl: string, config: SourceConfig): FoundItem | null {
+function onSite(link: string, sourceUrl: string, config: SourceConfig): string | null {
   let url: URL;
   try {
-    url = new URL(item.url);
+    url = new URL(link);
   } catch {
     return null;
   }
@@ -126,7 +142,12 @@ function onSourceSite(item: FoundItem, sourceUrl: string, config: SourceConfig):
   const allowed = host === site || host.endsWith(`.${site}`) || (config.allowedHosts ?? []).includes(host);
   if (!allowed || (url.protocol !== "https:" && url.protocol !== "http:")) return null;
   if (url.protocol === "http:") url.protocol = "https:";
-  return { ...item, url: url.toString() };
+  return url.toString();
+}
+
+function onSourceSite(item: FoundItem, sourceUrl: string, config: SourceConfig): FoundItem | null {
+  const url = onSite(item.url, sourceUrl, config);
+  return url ? { ...item, url } : null;
 }
 
 function passesFilters(item: FoundItem, config: SourceConfig): boolean {
@@ -169,21 +190,131 @@ async function readList(run: Run, source: SourceRow, config: SourceConfig): Prom
   return { items, status: res.status, etag, lastModified };
 }
 
+const pageBudgetLeft = (run: Run) => run.pages < LIMITS.pagesPerRun && run.requests < LIMITS.requestsPerRun;
+
+/**
+ * Text reads (item pages, `fullText`) return null for "try on a later check":
+ * no page budget left, or the site is busy. A busy site is asked again while the
+ * item is new (LIMITS.retryHours); after that the item is saved with what it has.
+ */
+function later(run: Run, item: FoundItem): FoundItem | null {
+  const age = run.now.getTime() - Date.parse(item.publishedAt ?? "");
+  return age < LIMITS.retryHours * 3_600_000 ? null : item;
+}
+
+/** The page's text replaces the list text only when it is longer. */
+function withText(item: FoundItem, text: string, imageUrl: string | null = null): FoundItem {
+  return { ...item, text: (text.length > (item.text?.length ?? 0) ? text : item.text) || null, imageUrl: item.imageUrl ?? imageUrl };
+}
+
+/** What a text read may do with a URL now: read it, never (robots.txt), or later (the site is busy or its robots.txt cannot be read). */
+async function mayRead(run: Run, url: string): Promise<"read" | "blocked" | "later"> {
+  const u = new URL(url);
+  if (run.busy.has(u.host)) return "later";
+  const robots = await robotsFor(run, u);
+  if (robots.kind === "disallowAll") return "later";
+  return isAllowed(robots, u.pathname + u.search) ? "read" : "blocked";
+}
+
+/**
+ * A GET for an item's text: an HTML page, or JSON. "later" when the site is
+ * busy: 429, 5xx or no answer (it is not asked again in this run). null when
+ * the answer cannot be used: another error, not HTML when a page was asked for
+ * (a PDF is not downloaded), or bigger than `maxBytes`.
+ */
+async function getText(
+  run: Run,
+  url: string,
+  kind: "html" | "json",
+  config: SourceConfig,
+  maxBytes = Infinity,
+): Promise<{ res: Response; bytes: ArrayBuffer } | null | "later"> {
+  const host = new URL(url).host;
+  let res: Response;
+  try {
+    res = await request(run, url, kind === "json" ? "application/json" : "text/html", config.crawlDelaySeconds);
+  } catch {
+    run.busy.add(host);
+    return "later";
+  }
+  if (res.status === 429 || res.status >= 500) {
+    run.busy.add(host);
+    await res.body?.cancel();
+    return "later";
+  }
+  const type = res.headers.get("content-type") ?? "";
+  if (!res.ok || (kind === "html" && !type.includes("html")) || Number(res.headers.get("content-length") ?? 0) > maxBytes) {
+    await res.body?.cancel();
+    return null;
+  }
+  const bytes = await res.arrayBuffer();
+  return bytes.byteLength > maxBytes ? null : { res, bytes };
+}
+
 /** Opens an item page for its main text and preview image, if robots.txt and the budget allow. */
 async function readItemPage(run: Run, item: FoundItem, config: SourceConfig): Promise<FoundItem | null> {
-  if (run.pages >= LIMITS.pagesPerRun || run.requests >= LIMITS.requestsPerRun) return null;
-  if (await blockedBy(run, item.url)) return item;
+  if (!pageBudgetLeft(run)) return null;
+  const url = item.url.split("#")[0];
+  const may = await mayRead(run, url);
+  if (may !== "read") return may === "later" ? later(run, item) : item;
   run.pages++;
+  const got = await getText(run, url, "html", config);
+  if (got === "later") return later(run, item);
+  if (!got) return item;
   try {
-    const res = await request(run, item.url.split("#")[0], "text/html", config.crawlDelaySeconds);
-    if (!res.ok || !(res.headers.get("content-type") ?? "").includes("html")) return item;
-    const bytes = await res.arrayBuffer();
-    const content = await extractContent(decodeBody(bytes, charsetOf(res, config, bytes)), res.url || item.url, config.textSelector);
-    const text = (content.text.length > (item.text?.length ?? 0) ? content.text : item.text) || null;
-    return { ...item, text, imageUrl: item.imageUrl ?? content.imageUrl };
+    const content = await extractContent(decodeBody(got.bytes, charsetOf(got.res, config, got.bytes)), got.res.url || url, config.textSelector);
+    return withText(item, content.text, content.imageUrl);
   } catch {
     return item;
   }
+}
+
+/**
+ * Follows a source's `fullText` steps to the item's whole text (#71), for
+ * sources whose item page does not hold it: a JSON data endpoint (European
+ * Commission), or a page that links to the text (Argentina). Counts as one page
+ * of the budget: each answer is at most LIMITS.fullTextBytes, and those read so
+ * far are a few KB, less than one item page.
+ */
+async function readFullText(run: Run, item: FoundItem, sourceUrl: string, config: SourceConfig): Promise<FoundItem | null> {
+  const steps = [config.fullText ?? []].flat().slice(0, LIMITS.fullTextSteps);
+  let value = item.url.split("#")[0];
+  let counted = false;
+  for (const [i, step] of steps.entries()) {
+    const last = i === steps.length - 1;
+    // An item the steps do not fit (another kind of link) is saved as it is, without waiting.
+    const match = step.from ? value.match(configRegex(step.from)) : [value];
+    if (!match) return item;
+    const url = onSite((step.url ?? "{0}").replace(/\{(\d+)\}/g, (_, n: string) => match[Number(n)] ?? ""), sourceUrl, config);
+    if (!url) return item;
+    if (!counted && !pageBudgetLeft(run)) return null;
+    const may = await mayRead(run, url);
+    if (may !== "read") return may === "later" ? later(run, item) : item;
+    if (!counted) run.pages++;
+    counted = true;
+    const got = await getText(run, url, step.json ? "json" : "html", config, LIMITS.fullTextBytes);
+    if (got === "later") return later(run, item);
+    if (!got) return item;
+    try {
+      const body = decodeBody(got.bytes, charsetOf(got.res, { encoding: step.encoding }, got.bytes));
+      const base = got.res.url || url;
+      if (step.json) {
+        const found = getPath(JSON.parse(body), step.json);
+        if (typeof found !== "string" || !found.trim()) return item;
+        if (last) return withText(item, htmlToText(found));
+        value = found.trim();
+      } else if (step.link && !last) {
+        const link = await findLink(body, base, step.link);
+        if (!link) return item;
+        value = link;
+      } else {
+        return withText(item, (await extractContent(body, base, config.textSelector)).text);
+      }
+    } catch {
+      return item;
+    }
+  }
+  return item;
 }
 
 async function checkSource(run: Run, source: SourceRow): Promise<SourceCheck> {
@@ -245,14 +376,18 @@ async function checkSource(run: Run, source: SourceRow): Promise<SourceCheck> {
     const inserts: D1PreparedStatement[] = [];
     for (const found of recent.filter((i) => !known.has(i.url)).slice(0, LIMITS.newPerSource)) {
       let item = found;
-      const shortText = (item.text?.length ?? 0) < LIMITS.minText;
-      if (config.itemPages !== false && (shortText || !item.imageUrl)) {
-        const read = await readItemPage(run, item, config);
-        if (read) item = read;
-        else if (shortText) {
-          check.waiting++;
-          continue;
-        }
+      const teaser = (item.text?.length ?? 0) < LIMITS.teaserText;
+      // undefined: nothing to read; null: read it on a later check.
+      let read: FoundItem | null | undefined;
+      if (config.fullText) {
+        if (teaser) read = await readFullText(run, item, source.url, config);
+      } else if (config.itemPages !== false && (teaser || !item.imageUrl)) {
+        read = await readItemPage(run, item, config);
+      }
+      if (read) item = read;
+      else if (read === null && teaser) {
+        check.waiting++;
+        continue;
       }
       inserts.push(
         run.env.DB.prepare(
@@ -318,6 +453,7 @@ export async function runFetcher(env: Env, options: FetcherOptions = {}): Promis
     pages: 0,
     robots: new Map(),
     lastRequest: new Map(),
+    busy: new Set(),
   };
 
   // Claim the sources before reading them, in one statement: a run that is cut off
