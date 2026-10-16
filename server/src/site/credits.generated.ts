@@ -38,7 +38,9 @@ export const CREDITS: Record<string, Credit> = {
   },
   "eu-commission-press-releases": {
     "licence": "CC BY 4.0",
-    "licenceUrl": "https://creativecommons.org/licenses/by/4.0/"
+    "licenceUrl": "https://creativecommons.org/licenses/by/4.0/",
+    "wording": "© European Union, 1995-2026",
+    "wordingLang": "en"
   },
   "ru-kremlin-acts": {
     "licence": "CC BY 4.0",
@@ -48,7 +50,9 @@ export const CREDITS: Record<string, Credit> = {
   "za-government-notices": {},
   "au-treasurer-media-releases": {
     "licence": "CC BY 4.0",
-    "licenceUrl": "https://creativecommons.org/licenses/by/4.0/"
+    "licenceUrl": "https://creativecommons.org/licenses/by/4.0/",
+    "wording": "© Commonwealth of Australia",
+    "wordingLang": "en"
   },
   "cn-state-council-policies": {},
   "in-parliament-bills": {},

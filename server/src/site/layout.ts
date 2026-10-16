@@ -1,10 +1,10 @@
 // The page around every page of the site (#88): one HTML document with its
 // CSS and icons inline, so a page view is one Worker request (LyFi lesson 2):
 // no stylesheet, script, font or image to fetch, and the data: icon stops the
-// browser's automatic /favicon.ico request. Colours from the app's theme
-// (app/lib/core/theme.dart), light and dark.
+// browser's automatic /favicon.ico request. Colours and the serif from the
+// app's theme (app/lib/core/theme.dart: Georgia, not the system's New York),
+// light and dark; if #66 changes the app's font, change it here too.
 import { type Html, html, raw } from "./html";
-import { robotsFor } from "./respond";
 import { LANGUAGE_NAMES, type SiteLang, publisher, t, text } from "./texts";
 import { INFO_PAGES, type InfoPage, infoPath, listPath } from "./urls";
 
@@ -13,6 +13,9 @@ export const APP_STORE_ID = "6822820350";
 
 export const SITE_NAME = "Official News";
 
+// Headings hyphenate only long words (12+ characters in Chrome, 5 on each
+// side in WebKit, which has no word minimum): "Datenschutzer-klärung" instead
+// of a break with no hyphen, but no hyphen in every other line of a headline.
 // Red small text on white is #D1102F (about 5.5:1), not the app's #FA2D48
 // (about 3.8:1, under WCAG AA); in dark mode the app's red on black.
 export const CSS = `:root{color-scheme:light dark;--bg:#fff;--text:#000;--secondary:#6c6c70;--separator:#e5e5ea;--accent:#d1102f;--chip:#e3e8ef;--card:#f2f2f7;--verified:#1a8cff}
@@ -25,10 +28,11 @@ a:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius
 .wrap{max-width:680px;margin:0 auto;padding:0 16px}
 .skip{position:absolute;left:-9999px;top:8px;background:var(--bg);color:var(--text);padding:10px 14px;border-radius:8px;z-index:1}
 .skip:focus{left:16px}
-.serif,h1,.lead,.body,.item .title{font-family:ui-serif,"New York",Georgia,"Times New Roman",serif}
+.serif,h1,.lead,.body,.item .title{font-family:Georgia,"Times New Roman",serif}
+h1,h2,.item .title{-webkit-hyphens:auto;hyphens:auto;hyphenate-limit-chars:12 5 5;-webkit-hyphenate-limit-before:5;-webkit-hyphenate-limit-after:5}
 .top{border-bottom:.5px solid var(--separator);padding:4px 0 10px}
 .bar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;column-gap:12px}
-.brand{display:inline-flex;align-items:center;gap:8px;min-height:44px;font:700 20px/1.1 ui-serif,"New York",Georgia,serif;color:var(--text);text-decoration:none}
+.brand{display:inline-flex;align-items:center;gap:8px;min-height:44px;font:700 20px/1.1 Georgia,"Times New Roman",serif;color:var(--text);text-decoration:none}
 .brand svg{width:24px;height:24px;color:var(--accent);flex:none}
 .langs{display:flex;flex-wrap:wrap;margin-right:-10px}
 .langs a{display:inline-flex;align-items:center;justify-content:center;min-width:44px;min-height:44px;padding:0 6px;font-size:13px;font-weight:600;letter-spacing:.3px;color:var(--secondary);text-decoration:none}
@@ -113,6 +117,8 @@ export interface Page {
   /** Which page, for robotsFor(). */
   kind: string;
   title: string;
+  /** For link previews when it differs from the title: an article's headline with the AI label. */
+  ogTitle?: string;
   description?: string;
   /** Absolute URLs from SITE_ORIGIN. */
   canonical?: string;
@@ -132,15 +138,13 @@ const footer = (lang: SiteLang) => {
   };
   return html`<footer><div class="wrap">
 <nav aria-label="${SITE_NAME}">${INFO_PAGES.map((page) => html`<a href="${infoPath(lang, page)}">${names[page]}</a>`)}</nav>
-<p>${t(lang, "settingsFooter")}</p>
 <p>${t(lang, "aboutPublishedBy", { publisher: publisher(lang) })}</p>
 </div></footer>`;
 };
 
-/** The whole document. Error pages pass no canonical and no alternates. */
-export function layout(page: Page): Html {
+/** The whole document; `robots` is the page's robotsFor(), also sent as X-Robots-Tag. Error pages pass no canonical and no alternates. */
+export function layout(page: Page, robots: string): Html {
   const { lang } = page;
-  const robots = robotsFor(page.kind);
   const description = page.description ?? text(lang, "aboutIntro");
   const switcher = page.switcher.length
     ? html`<nav class="langs" aria-label="${text(lang, "language")}">${page.switcher.map(
@@ -161,7 +165,7 @@ export function layout(page: Page): Html {
 ${page.canonical ? html`<link rel="canonical" href="${page.canonical}">\n` : ""}${(page.alternates ?? []).map(
     (a) => html`<link rel="alternate" hreflang="${a.hreflang}" href="${a.href}">\n`,
   )}<meta property="og:site_name" content="${SITE_NAME}">
-<meta property="og:title" content="${page.title}">
+<meta property="og:title" content="${page.ogTitle ?? page.title}">
 <meta property="og:description" content="${description}">
 <meta property="og:type" content="${page.ogType ?? "website"}">
 ${page.canonical ? html`<meta property="og:url" content="${page.canonical}">\n` : ""}<meta name="twitter:card" content="summary">

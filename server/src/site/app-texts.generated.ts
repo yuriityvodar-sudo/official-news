@@ -64,7 +64,6 @@ export type AppKey =
   | "privacyPolicy"
   | "termsOfUse"
   | "contactSupport"
-  | "settingsFooter"
   | "publisher"
   | "lastUpdated"
   | "aboutIntro"
@@ -172,7 +171,6 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "privacyPolicy": "Privacy Policy",
     "termsOfUse": "Terms of Use",
     "contactSupport": "Contact & Support",
-    "settingsFooter": "Independent app, not affiliated with any government. Summaries are written by AI from official sources; every article links to the original.",
     "publisher": "{name}, Slovakia",
     "lastUpdated": "Last updated {date}",
     "aboutIntro": "Official News shows what governments and international bodies have decided, in a few calm sentences, with a link to the official page.",
@@ -274,7 +272,6 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "privacyPolicy": "Політика конфіденційності",
     "termsOfUse": "Умови використання",
     "contactSupport": "Контакти й підтримка",
-    "settingsFooter": "Незалежний застосунок, не пов’язаний із жодним урядом. Стислі виклади пише ШІ на основі офіційних джерел, і кожна стаття має посилання на оригінал.",
     "publisher": "{name}, Словаччина",
     "lastUpdated": "Оновлено {date}",
     "aboutIntro": "Official News показує, які рішення ухвалили уряди й міжнародні організації: кілька спокійних речень і посилання на офіційну сторінку.",
@@ -376,7 +373,6 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "privacyPolicy": "Политика конфиденциальности",
     "termsOfUse": "Условия использования",
     "contactSupport": "Контакты и поддержка",
-    "settingsFooter": "Независимое приложение, не связанное ни с одним правительством. Краткие изложения пишет ИИ на основе официальных источников, и каждая статья ссылается на оригинал.",
     "publisher": "{name}, Словакия",
     "lastUpdated": "Обновлено {date}",
     "aboutIntro": "Official News рассказывает о решениях правительств и международных организаций — коротко, спокойно и со ссылкой на официальную страницу.",
@@ -478,7 +474,6 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "privacyPolicy": "Política de privacidad",
     "termsOfUse": "Términos de uso",
     "contactSupport": "Contacto y soporte",
-    "settingsFooter": "App independiente, sin vínculo con ningún gobierno. La IA escribe los resúmenes a partir de fuentes oficiales y cada artículo enlaza al original.",
     "publisher": "{name}, Eslovaquia",
     "lastUpdated": "Última actualización: {date}",
     "aboutIntro": "Official News muestra lo que han decidido los gobiernos y los organismos internacionales en pocas frases, con un tono sereno y un enlace a la página oficial.",
@@ -580,7 +575,6 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "privacyPolicy": "Datenschutzerklärung",
     "termsOfUse": "Nutzungsbedingungen",
     "contactSupport": "Kontakt & Support",
-    "settingsFooter": "Unabhängige App ohne Verbindung zu einer Regierung. Die Zusammenfassungen schreibt eine KI auf Grundlage offizieller Quellen; jeder Artikel verlinkt auf das Original.",
     "publisher": "{name}, Slowakei",
     "lastUpdated": "Stand: {date}",
     "aboutIntro": "Official News zeigt, was Regierungen und internationale Organisationen beschlossen haben – in wenigen sachlichen Sätzen und mit einem Link zur offiziellen Seite.",

@@ -156,8 +156,10 @@ describe("latest lists", () => {
     while (path) {
       const page = await site(path);
       expect(page.status).toBe(200);
-      const [before, after] = page.body.split('id="latest"');
-      pages.push({ top: before.includes('id="top"') ? linkedIds(before) : [], items: linkedIds(after.split("<footer")[0]) });
+      // Top stories are their own section (page 1 only); every other article link is the list's.
+      const main = page.body.split("<footer")[0];
+      const top = /<section aria-labelledby="top">[\s\S]*?<\/section>/.exec(main)?.[0] ?? "";
+      pages.push({ top: linkedIds(top), items: linkedIds(main.replace(top, "")) });
       path = /<a class="more" href="([^"]+)" rel="next">/.exec(page.body)?.[1].replaceAll("&amp;", "&") ?? null;
     }
     return pages;

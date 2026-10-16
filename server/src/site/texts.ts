@@ -10,16 +10,22 @@ export { LANGUAGE_NAMES, SITE_LANGS, type SiteLang };
 export const isSiteLang = (value: string): value is SiteLang => (SITE_LANGS as readonly string[]).includes(value);
 
 interface SiteTexts {
-  /** The EU AI Act Art. 50(4) notice: AI text on public-interest matters, not reviewed by a person. */
+  /**
+   * The EU AI Act Art. 50(4) notice: AI text on public-interest matters, not
+   * reviewed by a person. It is also the change notice the licences ask for
+   * (CC BY: changes indicated; the Japanese PDL 1.0: that the text was edited
+   * and by whom, `{publisher}`), and says it is not the official text (no
+   * official status). Once on a page, above the credit (#88 review).
+   */
   aiNotice: string;
   creditSource: string;
-  /** Marks the change (CC BY, the Japanese PDL) without claiming the official text is someone's (US works are public domain). */
-  creditNote: string;
   published: string;
   added: string;
   originalTitle: string;
   older: string;
   latestLink: string;
+  /** The list page's h1; "Latest" (the app's own word) heads its section. */
+  listTitle: string;
   notInLang: string;
   readIn: string;
   notFound: string;
@@ -40,14 +46,14 @@ interface SiteTexts {
 const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
   en: {
     aiNotice:
-      "Headlines and summaries are written by AI and not reviewed by a person. They can contain mistakes: before you rely on one, read the official text.",
+      "Headlines and summaries are written by AI for Official News ({publisher}) from the official text and are not reviewed by a person. They are not the official text and can contain mistakes: before you rely on one, read the original.",
     creditSource: "Source: {source}",
-    creditNote: "The headline and summary were written by AI from the official text; they are not the official text.",
     published: "Published {date}",
     added: "In Official News since {date}",
     originalTitle: "Original title",
     older: "Older decisions",
     latestLink: "Latest decisions",
+    listTitle: "Official decisions",
     notInLang: "This decision is not available in this language yet.",
     readIn: "Read it in:",
     notFound: "Page not found",
@@ -64,20 +70,20 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
   },
   uk: {
     aiNotice:
-      "Заголовки й стислі виклади пише ШІ, і людина їх не перевіряє. Можливі помилки: перш ніж покладатися на них, прочитайте офіційний текст.",
+      "Заголовки й стислі виклади пише ШІ для Official News ({publisher}) на основі офіційного тексту, і людина їх не перевіряє. Вони не є офіційним текстом і можуть містити помилки: перш ніж покладатися на них, прочитайте оригінал.",
     creditSource: "Джерело: {source}",
-    creditNote: "Заголовок і стислий виклад написав ШІ на основі офіційного тексту; це не офіційний текст.",
     published: "Опубліковано {date}",
     added: "В Official News з {date}",
     originalTitle: "Оригінальна назва",
     older: "Давніші рішення",
     latestLink: "Останні рішення",
+    listTitle: "Офіційні рішення",
     notInLang: "Цього рішення ще немає цією мовою.",
     readIn: "Читати:",
     notFound: "Сторінку не знайдено",
     error: "Щось пішло не так",
     errorText: "Спробуйте ще раз за хвилину.",
-    skip: "Перейти до змісту",
+    skip: "Перейти до вмісту",
     independentNote: "Незалежний сайт, не пов’язаний із жодним урядом.",
     siteHeading: "На цьому сайті",
     siteData:
@@ -88,20 +94,20 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
   },
   ru: {
     aiNotice:
-      "Заголовки и краткие изложения пишет ИИ, и человек их не проверяет. Возможны ошибки: прежде чем полагаться на них, прочитайте официальный текст.",
+      "Заголовки и краткие изложения пишет ИИ для Official News ({publisher}) на основе официального текста, и человек их не проверяет. Они не являются официальным текстом и могут содержать ошибки: прежде чем полагаться на них, прочитайте оригинал.",
     creditSource: "Источник: {source}",
-    creditNote: "Заголовок и краткое изложение написал ИИ на основе официального текста; это не официальный текст.",
     published: "Опубликовано {date}",
     added: "В Official News с {date}",
     originalTitle: "Оригинальное название",
     older: "Более ранние решения",
     latestLink: "Последние решения",
+    listTitle: "Официальные решения",
     notInLang: "Этого решения пока нет на этом языке.",
     readIn: "Читать:",
     notFound: "Страница не найдена",
     error: "Что-то пошло не так",
     errorText: "Попробуйте ещё раз через минуту.",
-    skip: "Перейти к содержанию",
+    skip: "Перейти к содержимому",
     independentNote: "Независимый сайт, не связанный ни с одним правительством.",
     siteHeading: "На этом сайте",
     siteData:
@@ -112,14 +118,14 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
   },
   es: {
     aiNotice:
-      "Los titulares y los resúmenes los escribe una IA y ninguna persona los revisa. Pueden contener errores: antes de fiarte de uno, lee el texto oficial.",
+      "Los titulares y los resúmenes los escribe una IA para Official News ({publisher}) a partir del texto oficial, y ninguna persona los revisa. No son el texto oficial y pueden contener errores: antes de fiarte de uno, lee el original.",
     creditSource: "Fuente: {source}",
-    creditNote: "El titular y el resumen los escribió una IA a partir del texto oficial; no son el texto oficial.",
     published: "Publicado el {date}",
     added: "En Official News desde el {date}",
     originalTitle: "Título original",
     older: "Decisiones anteriores",
     latestLink: "Últimas decisiones",
+    listTitle: "Decisiones oficiales",
     notInLang: "Esta decisión aún no está disponible en este idioma.",
     readIn: "Leer en:",
     notFound: "Página no encontrada",
@@ -131,19 +137,19 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     siteData:
       "Este sitio no usa cookies ni ejecuta scripts, y todo lo que aparece en sus páginas viene de este mismo sitio. Cloudflare, que lo aloja, recibe tu dirección IP y datos técnicos básicos (como la dirección de la página, el navegador y la hora) para mostrar la página; tu navegador también puede enviar a Cloudflare un informe de error si una página no carga. Vemos los registros de solicitudes durante un máximo de 7 días para que el sitio funcione; no los usamos para identificarte.",
     siteBanner: "En iPhone y iPad, Safari puede mostrar un banner de nuestra app con información que obtiene del App Store de Apple.",
-    siteCovers: "La política de privacidad y las condiciones de uso se aplican tanto a la app Official News como a este sitio web.",
+    siteCovers: "La política de privacidad y los términos de uso se aplican tanto a la app Official News como a este sitio web.",
     prevails: "Esto es una traducción; en caso de discrepancia, prevalece la versión en inglés ({link}).",
   },
   de: {
     aiNotice:
-      "Überschriften und Zusammenfassungen schreibt eine KI, und kein Mensch prüft sie. Sie können Fehler enthalten: Lesen Sie den offiziellen Text, bevor Sie sich darauf verlassen.",
+      "Überschriften und Zusammenfassungen schreibt eine KI für Official News ({publisher}) auf Grundlage des offiziellen Textes, und kein Mensch prüft sie. Sie sind nicht der offizielle Text und können Fehler enthalten: Lesen Sie das Original, bevor Sie sich darauf verlassen.",
     creditSource: "Quelle: {source}",
-    creditNote: "Überschrift und Zusammenfassung hat eine KI auf Grundlage des offiziellen Textes geschrieben; sie sind nicht der offizielle Text.",
     published: "Veröffentlicht am {date}",
-    added: "Bei Official News seit {date}",
+    added: "Bei Official News seit dem {date}",
     originalTitle: "Originaltitel",
     older: "Ältere Entscheidungen",
     latestLink: "Neueste Entscheidungen",
+    listTitle: "Offizielle Entscheidungen",
     notInLang: "Diese Entscheidung gibt es in dieser Sprache noch nicht.",
     readIn: "Lesen auf:",
     notFound: "Seite nicht gefunden",
@@ -191,6 +197,10 @@ export function text(lang: SiteLang, key: TextKey, values: Record<string, string
 
 /** "RS Elite Pro s.r.o., Slovakia" in the language, as the app says it. */
 export const publisher = (lang: SiteLang) => text(lang, "publisher", { name: PUBLISHER_NAME });
+
+/** The AI notice, which names us as the text's editor (see SiteTexts.aiNotice). */
+export const aiNotice = (lang: SiteLang) => t(lang, "aiNotice", { publisher: PUBLISHER_NAME });
+export const aiNoticeText = (lang: SiteLang) => text(lang, "aiNotice", { publisher: PUBLISHER_NAME });
 
 const hasAppKey = (key: string): key is AppKey => key in APP_TEXTS.en;
 

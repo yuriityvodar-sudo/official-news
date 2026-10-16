@@ -2,6 +2,7 @@
 // nothing runs after it, and zone rules do not apply to Workers Cache, so the
 // headers set here are the ones readers and the cache get (LyFi lesson 7).
 import type { Html } from "./html";
+import type { Page } from "./layout";
 
 /**
  * What a response is, for its cache headers. `Cache-Control` is for the browser;
@@ -16,8 +17,12 @@ export const CACHE = {
   /** An article page: a re-summarized article shows within about 10 minutes (plus the browser's 5). */
   article: { browser: "public, max-age=300", edge: "max-age=600, stale-while-revalidate=3600, stale-if-error=86400" },
   /**
-   * A latest list: 5 languages × 288 renders a day × about 260 rows ≈ 0.37M of
-   * D1's 5M daily rows at most, whatever the traffic (300 s, not 120 s: #88 review).
+   * A latest list, 300 s (not 120 s: #88 review). Its D1 rows grow with the
+   * news (measured 16 Oct, docs/plan.md "D1 rows read, website"): page 1 about
+   * 45–65 rows plus about 6 per article of the last 24 hours, and a language
+   * with few or no translations (German while it is off) about 2 more per
+   * article of the 7 days, on every page. So the cache bounds renders per URL
+   * (288 a day per cache tier), not rows.
    */
   list: { browser: "public, max-age=60", edge: "max-age=300, stale-while-revalidate=600, stale-if-error=86400" },
   /** The landing page, information pages, robots.txt: change only with a deploy. */
@@ -36,8 +41,19 @@ export const CACHE = {
 
 export type CacheKind = keyof typeof CACHE;
 
-/** Whether search engines may index a page. Nothing is indexed before the domain (#88); the reviewed pages come later, through here only. */
-export const robotsFor = (_page: string) => "noindex";
+/**
+ * Whether search engines may index a page: the one switch, computed once per
+ * page (handler.ts) and used for both the X-Robots-Tag header and the robots
+ * meta tag, so they never disagree (the stricter one would win). Nothing is
+ * indexed before the domain (#88); the reviewed articles come later, by a flag
+ * on the article, through here. While ROBOTS_TXT disallows every path a
+ * crawler never reads this value at all (site-routes.test.ts keeps both
+ * together): with the domain robots.txt must stop disallowing the pages.
+ */
+export const robotsFor = (_page: Page): string => "noindex";
+
+/** What a response that is not a page (robots.txt, a redirect, an icon, a 405) says. */
+export const ROBOTS_DEFAULT = "noindex";
 
 /** The site's Content-Security-Policy: no scripts, no frames, nothing loaded from elsewhere; only our one inline stylesheet (by its hash) and data: icons. */
 export const csp = (styleHash: string) =>
@@ -50,6 +66,8 @@ export interface Reply {
   body: Html | string | null;
   /** The page's language, for Content-Language. */
   lang?: string;
+  /** A page's robotsFor(), the same value as its meta tag; else ROBOTS_DEFAULT. */
+  robots?: string;
   /** For a redirect: an absolute URL made from SITE_ORIGIN. */
   location?: string;
   allow?: string;
@@ -62,7 +80,7 @@ export function respond(reply: Reply, method: string, styleHash: string): Respon
   const headers = new Headers({
     "cache-control": cache.browser,
     "cloudflare-cdn-cache-control": cache.edge,
-    "x-robots-tag": robotsFor("any"),
+    "x-robots-tag": reply.robots ?? ROBOTS_DEFAULT,
     "x-content-type-options": "nosniff",
     "content-security-policy": csp(styleHash),
     "content-type": isText ? "text/plain; charset=utf-8" : "text/html; charset=utf-8",

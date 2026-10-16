@@ -1,13 +1,15 @@
 // An article page (#88), in the order of the app's detail screen
 // (detail_screen.dart): publisher, decision type, headline, the AI label right
-// under it, the summary, the official link, then the credit and the notes.
+// under it, the summary, the one AI notice (also the licences' change notice),
+// the official link, then the credit line. The independence note is in every
+// page's header, so it is not repeated here (#88 review).
 // Never the source's picture (imageUrl): a site makes public, permanent copies.
 import { CREDITS } from "../credits.generated";
 import type { ApiArticle } from "../data";
 import { fullDate, isoTime, parseTime, publishedDate } from "../dates";
 import { type Html, html, safeHttps, siteName } from "../html";
 import { ARROW, type Alternate, type Page, SEAL, SITE_NAME, SPARKLE } from "../layout";
-import { SITE_LANGS, type SiteLang, aiLabel, countryName, decisionLabel, t, text } from "../texts";
+import { LANGUAGE_NAMES, SITE_LANGS, type SiteLang, aiLabel, aiNotice, countryName, decisionLabel, t, text } from "../texts";
 import { articlePath } from "../urls";
 
 /** A language tag for `lang=""`: "de", "pt"; anything else is left out. */
@@ -30,16 +32,22 @@ export function alternates(origin: string, shown: Partial<Record<SiteLang, ApiAr
   return out;
 }
 
-/** "Source: White House · Public domain" and the line that marks the AI's text as ours. */
+/**
+ * "Source: White House · Public domain", "Source: European Commission ·
+ * © European Union, 1995-2026 · CC BY 4.0". A wording that names its licence
+ * (the OGL's statement) is itself the licence link, so the licence is not said twice.
+ */
 function credit(lang: SiteLang, article: ApiArticle): Html {
   const row = CREDITS[article.source.id];
   const licenceUrl = safeHttps(row?.licenceUrl);
-  const licence = row?.licence
-    ? html` · ${licenceUrl ? html`<a href="${licenceUrl}" rel="license">${row.licence}</a>` : row.licence}`
-    : "";
-  const wording = row?.wording ? html` · <span lang="${row.wordingLang ?? ""}">${row.wording}</span>` : "";
-  return html`<p class="small">${t(lang, "creditSource", { source: article.source.name })}${licence}${wording}</p>
-<p class="small">${t(lang, "creditNote")}</p>`;
+  const link = (label: string, attrs: Html | string = "") =>
+    licenceUrl ? html`<a href="${licenceUrl}" rel="license"${attrs}>${label}</a>` : label;
+  const wordingLang = html` lang="${row?.wordingLang ?? ""}"`;
+  const namesLicence = !!(row?.wording && row.licence && row.wording.includes(row.licence));
+  const parts: (Html | string)[] = [];
+  if (row?.wording) parts.push(namesLicence ? link(row.wording, wordingLang) : html`<span${wordingLang}>${row.wording}</span>`);
+  if (row?.licence && !namesLicence) parts.push(link(row.licence));
+  return html`<p class="small">${t(lang, "creditSource", { source: article.source.name })}${parts.map((part) => html` · ${part}`)}</p>`;
 }
 
 /** The article page in `lang`, which the API shows it in. */
@@ -69,7 +77,7 @@ ${
     ? html`<div class="body">${summary.map((p) => html`<p>${p.split("\n").map((line, i) => (i ? html`<br>${line}` : line))}</p>`)}</div>`
     : html`<p class="notice">${t(lang, "summaryComing")}</p>`
 }
-${aiText ? html`<p class="notice">${t(lang, "aiNotice")}</p>` : ""}
+${aiText ? html`<p class="notice">${aiNotice(lang)}</p>` : ""}
 <p class="small">${t(lang, "originalTitle")}: <span${original ? html` lang="${original}"` : ""} dir="auto">${article.originalTitle}</span></p>
 ${
   official
@@ -79,7 +87,6 @@ ${
 }
 ${credit(lang, article)}
 ${added ? html`<p class="small"><time datetime="${isoTime(added)}">${t(lang, "added", { date: fullDate(lang, added) })}</time></p>` : ""}
-<p class="small">${t(lang, "aboutIndependent")}</p>
 </article>`;
 
   // Link previews show these: they are AI text, so they say so (AI Act Art. 50).
@@ -89,6 +96,8 @@ ${added ? html`<p class="small"><time datetime="${isoTime(added)}">${t(lang, "ad
     lang,
     kind: "article",
     title: `${headline} · ${SITE_NAME}`,
+    // iMessage and the iOS share sheet show only the title and the host, no description (LPLinkMetadata).
+    ogTitle: aiText ? `${headline} · ${text(lang, "summaryByAi")}` : undefined,
     description: aiText ? description : headline,
     canonical: origin + articlePath(lang, article),
     alternates: alternates(origin, shown),
@@ -103,8 +112,9 @@ export function notInLanguagePage(lang: SiteLang, shown: Partial<Record<SiteLang
   const languages = shownLanguages(shown);
   const links = languages.map((l) => {
     const a = shown[l]!;
-    return html`<li><a href="${articlePath(l, a)}" hreflang="${l}" lang="${l}"><span>${a.headline ?? a.originalTitle}</span></a></li>`;
+    return html`<li><a href="${articlePath(l, a)}" hreflang="${l}" lang="${l}"><span>${a.headline ?? a.originalTitle}</span><span class="meta">${LANGUAGE_NAMES[l].nativeName}</span></a></li>`;
   });
+  const aiText = languages.some((l) => shown[l]!.headline !== null);
   return {
     lang,
     kind: "not-in-language",
@@ -112,7 +122,8 @@ export function notInLanguagePage(lang: SiteLang, shown: Partial<Record<SiteLang
     switcher: languages.map((l) => ({ lang: l, path: articlePath(l, shown[l]!) })),
     body: html`<div class="info"><h1 class="page-title">${t(lang, "notInLang")}</h1>
 <p>${t(lang, "readIn")}</p>
-<ul class="choose">${links}</ul></div>`,
+<ul class="choose">${links}</ul>
+${aiText ? html`<p class="notice">${aiNotice(lang)}</p>` : ""}</div>`,
   };
 }
 

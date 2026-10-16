@@ -47,7 +47,6 @@ export const KEYS = [
   "dateAndTime",
   "aboutTitle",
   "contactSupport",
-  "settingsFooter",
   "publisher",
   "lastUpdated",
   "aboutIntro",

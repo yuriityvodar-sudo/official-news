@@ -6,7 +6,7 @@ import type { ApiArticle, ApiList } from "../data";
 import { parseTime, publishedDate } from "../dates";
 import { html } from "../html";
 import { type Page, SITE_NAME } from "../layout";
-import { SITE_LANGS, type SiteLang, countryName, decisionLabel, t, text } from "../texts";
+import { SITE_LANGS, type SiteLang, aiNotice, countryName, decisionLabel, t, text } from "../texts";
 import { articlePath, listPath } from "../urls";
 
 function item(lang: SiteLang, article: ApiArticle) {
@@ -31,17 +31,20 @@ export function listPage(lang: SiteLang, origin: string, before: number | null, 
     lang === "en"
       ? html`<p class="meta">${t(lang, "feedEmpty")}</p>`
       : html`<p class="meta"><b>${t(lang, "feedNoTranslations")}</b><br>${t(lang, "feedTranslationsComing")}</p>`;
-  const body = html`<h1 class="page-title">${t(lang, "latestLink")}</h1>
-${list.items.length ? html`<p class="notice">${t(lang, "aiNotice")}</p>` : ""}
+  const items = list.items.length ? html`<ol class="items">${list.items.map((a) => item(lang, a))}</ol>` : empty;
+  // Page 1 has Top stories, then "Latest" (the app's sections); a later page is
+  // one list under the title, with no heading that would repeat it (#88 review).
+  const body = html`<h1 class="page-title">${t(lang, "listTitle")}</h1>
+${list.items.length ? html`<p class="notice">${aiNotice(lang)}</p>` : ""}
 ${
   first && list.top.length
     ? html`<section aria-labelledby="top"><h2 class="section" id="top">${t(lang, "topStories")}</h2>
 <ol class="items">${list.top.map((a) => item(lang, a))}</ol></section>`
     : ""
 }
-<section aria-labelledby="latest"><h2 class="section" id="latest">${t(lang, "latest")}</h2>
-${list.items.length ? html`<ol class="items">${list.items.map((a) => item(lang, a))}</ol>` : empty}
-</section>
+${first ? html`<section aria-labelledby="latest"><h2 class="section" id="latest">${t(lang, "latest")}</h2>
+${items}
+</section>` : items}
 ${next ? html`<a class="more" href="${listPath(lang, next)}" rel="next">${t(lang, "older")} →</a><br>` : ""}
 ${first ? "" : html`<a class="more" href="${listPath(lang)}">${t(lang, "latestLink")}</a>`}`;
 

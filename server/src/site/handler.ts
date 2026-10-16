@@ -14,10 +14,17 @@ import { errorPage, notFoundPage } from "./pages/errors";
 import { infoPage } from "./pages/info";
 import { landingPage } from "./pages/landing";
 import { listPage } from "./pages/list";
-import { type CacheKind, type Reply, respond } from "./respond";
+import { type CacheKind, type Reply, respond, robotsFor } from "./respond";
 import { SITE_LANGS, type SiteLang, isSiteLang } from "./texts";
 import { ARTICLE_ID, INFO_PAGES, type InfoPage, listPath, originOf } from "./urls";
 
+/**
+ * Keeps crawlers out on workers.dev: it saves requests from the account's
+ * 100,000 a day. A crawler then never reads the noindex behind it, so a URL
+ * linked from elsewhere can still be listed, without its content. With the
+ * domain, it must stop disallowing the pages (keep only `/*?before=`), or
+ * robotsFor() is never read (docs/plan.md, open points).
+ */
 export const ROBOTS_TXT = "User-agent: *\nDisallow: /\n";
 
 const LANG_PATH = new RegExp(`^/(${SITE_LANGS.join("|")})(/.*)?$`);
@@ -25,7 +32,11 @@ const INFO_PATH = new RegExp(`^/(${INFO_PAGES.join("|")})$`);
 /** `/de/01JB…`, `/de/01JB…-slug`: the 26-character id, then a hyphen or the end. */
 const ARTICLE_PATH = /^\/([a-z]{2})\/([^/]+)$/;
 
-const page = (p: Page, status: number, kind: CacheKind): Reply => ({ kind, status, body: layout(p), lang: p.lang });
+/** A page's reply: its robots value is worked out once, for its header and its meta tag alike. */
+function page(p: Page, status: number, kind: CacheKind): Reply {
+  const robots = robotsFor(p);
+  return { kind, status, body: layout(p, robots), lang: p.lang, robots };
+}
 const notFound = (lang: SiteLang): Reply => page(notFoundPage(lang), 404, "missing");
 
 /** The site's paging parameter: a feedSeq, a whole number from 1. Anything else is not a page. */

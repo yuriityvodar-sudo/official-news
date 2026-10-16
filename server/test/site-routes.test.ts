@@ -3,6 +3,7 @@
 // nothing from the data or the address ever becoming markup.
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
+import { ROBOTS_TXT } from "../src/site/handler";
 import { CACHE } from "../src/site/respond";
 import { INFO_PAGES } from "../src/site/urls";
 import { SITE_LANGS } from "../src/site/texts";
@@ -105,9 +106,23 @@ describe("every route", () => {
     expect((await site("/robots.txt")).body).toBe("User-agent: *\nDisallow: /\n");
   });
 
-  it("says noindex in every page's head too", async () => {
-    for (const [path] of ROUTES.filter(([p, s]) => s !== 301 && !p.endsWith(".txt") && !p.endsWith(".ico") && !p.endsWith(".png"))) {
-      expect((await site(path)).body, path).toContain('<meta name="robots" content="noindex">');
+  const PAGES = ROUTES.filter(([p, s]) => s !== 301 && !p.endsWith(".txt") && !p.endsWith(".ico") && !p.endsWith(".png"));
+
+  it("says in every page's head exactly what its X-Robots-Tag says (one value, never two that disagree)", async () => {
+    for (const [path] of PAGES) {
+      const { headers, body } = await site(path);
+      const meta = /<meta name="robots" content="([^"]+)">/.exec(body)?.[1];
+      expect(meta, path).toBe(headers.get("x-robots-tag"));
+    }
+  });
+
+  it("keeps every page noindex while robots.txt disallows everything (a crawler would never read anything else)", async () => {
+    expect(ROBOTS_TXT).toMatch(/^Disallow: \/$/m);
+    for (const [path] of PAGES) {
+      const { headers, body } = await site(path);
+      // Letting a page be indexed needs robots.txt to stop disallowing it first (docs/plan.md, open points).
+      expect(headers.get("x-robots-tag"), path).toBe("noindex");
+      expect(body, path).toContain('<meta name="robots" content="noindex">');
     }
   });
 });
