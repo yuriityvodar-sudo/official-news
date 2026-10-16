@@ -13,6 +13,7 @@ import '../../core/theme.dart';
 import '../../l10n/app_localizations.dart';
 import '../settings/settings_screen.dart';
 import 'feed_controller.dart';
+import 'feed_filters.dart';
 
 /// Item 3: the feed (docs/design/mvp.png). Top stories, then the latest
 /// decisions grouped by day; opens instantly from the feed saved on the phone.
@@ -32,6 +33,15 @@ class FeedScreen extends StatefulWidget {
 }
 
 class _FeedScreenState extends State<FeedScreen> {
+  // PROTOTYPE filters (#67, #68).
+  FeedScope _scope = FeedScope.global;
+  String? _topic;
+  final String _country = phoneCountry();
+
+  bool _shown(Article a) =>
+      (_scope == FeedScope.global || isLocal(a, _country)) &&
+      (_topic == null || a.topics.contains(_topic));
+
   late final FeedController _feed = widget.controller ?? FeedController();
   final _scroll = ScrollController();
   Timer? _newCheck;
@@ -181,6 +191,14 @@ class _FeedScreenState extends State<FeedScreen> {
                           longDay(DateTime.now(), l10n),
                           style: text.dateLine,
                         ),
+                        FeedFilterBar(
+                          scope: _scope,
+                          country: _country,
+                          topic: _topic,
+                          topicCounts: _topicCounts(),
+                          onScope: (s) => setState(() => _scope = s),
+                          onTopic: (t) => setState(() => _topic = t),
+                        ),
                       ],
                     ),
                   ),
@@ -201,6 +219,20 @@ class _FeedScreenState extends State<FeedScreen> {
         ),
       ),
     );
+  }
+
+  /// Topics in the feed under the current Global / Local choice, busiest first.
+  List<MapEntry<String, int>> _topicCounts() {
+    final counts = <String, int>{};
+    final seen = <String>{};
+    for (final a in [..._feed.top, ..._feed.items]) {
+      if (!seen.add(a.id)) continue;
+      if (_scope == FeedScope.local && !isLocal(a, _country)) continue;
+      for (final t in a.topics) {
+        counts[t] = (counts[t] ?? 0) + 1;
+      }
+    }
+    return counts.entries.toList()..sort((x, y) => y.value.compareTo(x.value));
   }
 
   List<Widget> _content(BuildContext context) {
@@ -241,14 +273,30 @@ class _FeedScreenState extends State<FeedScreen> {
     }
 
     final topIds = _feed.top.map((a) => a.id).toSet();
-    final latest = _feed.items.where((a) => !topIds.contains(a.id)).toList();
+    final latest = _feed.items
+        .where((a) => !topIds.contains(a.id) && _shown(a))
+        .toList();
+    final top = _feed.top.where(_shown).toList();
     final slivers = <Widget>[];
 
     if (_feed.error != null) {
       slivers.add(_padded(Text(l10n.feedRefreshFailed, style: text.meta)));
     }
 
-    if (_feed.top.isNotEmpty) {
+    if (top.isEmpty && latest.isEmpty) {
+      slivers.add(
+        _padded(
+          Padding(
+            padding: const EdgeInsets.only(top: 24),
+            child: Text(
+              'No decisions here this week. Try Global or All topics.',
+              style: text.meta,
+            ),
+          ),
+        ),
+      );
+    }
+    if (top.isNotEmpty) {
       slivers.add(
         _padded(
           Padding(
@@ -257,8 +305,8 @@ class _FeedScreenState extends State<FeedScreen> {
           ),
         ),
       );
-      final first = _feed.top.first;
-      final rest = first.imageUrl != null ? _feed.top.skip(1) : _feed.top;
+      final first = top.first;
+      final rest = first.imageUrl != null ? top.skip(1) : top;
       if (first.imageUrl != null) {
         slivers.add(
           _padded(
