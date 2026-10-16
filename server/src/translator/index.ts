@@ -28,7 +28,7 @@ import {
 import { DAY_MS, FEED_DAYS, TRANSLATOR_RAN, releaseReady } from "./release";
 
 export { LANGS, LANGUAGES, type Lang, isLang } from "./languages";
-export { FEED_DAYS, RELEASE, RELEASES_PER_BATCH, TRANSLATOR_ALIVE_MINUTES, releaseReady, releaseStatus } from "./release";
+export { FEED_DAYS, RELEASE, RELEASES_PER_BATCH, TRANSLATOR_ALIVE_MINUTES, releaseReady, releaseStatus, translatorRunning } from "./release";
 export {
   AUTO_PAUSE,
   AUTO_PAUSE_HOURS,

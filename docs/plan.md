@@ -149,7 +149,7 @@ official-news/
     src/health/             source status and cleanup (item 8)
     migrations/             D1 SQL: schema and the 20 seed articles
     eval/                   summary test set and results (item 7)
-  docs/  contract.md  style-guide.md  sources.csv  decisions.md
+  docs/  contract.md  style-guide.md  sources.csv  source-names.csv  decisions.md
   CLAUDE.md  README.md  .github/workflows/
 ```
 
@@ -238,7 +238,7 @@ Each item becomes one GitHub issue owned by one person. **Must** is what the ite
 
 ### 5. Source list (Yurii)
 
-- **Must:** `docs/sources.csv` with one source per G20 member (19 since 14 Oct: Saudi Arabia waits for consent), plus Poland, Czechia, Spain and Ukraine (5 sources since 16 Oct, #72), each with kind, URL, language, `verified_by` and licence, preferring pages that publish official decisions (laws, proposals, meeting agendas, minutes and outcomes); loaded into `sources`.
+- **Must:** `docs/sources.csv` with one source per G20 member (19 since 14 Oct: Saudi Arabia waits for consent), plus Poland, Czechia, Spain and Ukraine (5 sources since 16 Oct, #72), each with kind, URL, language, `verified_by` and licence, preferring pages that publish official decisions (laws, proposals, meeting agendas, minutes and outcomes), and each source's name in Ukrainian, Russian, Spanish and German in `docs/source-names.csv` (#76); loaded into `sources`.
 - **Suggested:** grow to about 85 Phase 1 sources once the fetcher is stable.
 - **Done when:** the verified sources are in D1 (19 since 14 Oct: Saudi Arabia waits for the gazette's written consent, see `docs/sources.md`).
 
@@ -270,6 +270,15 @@ Agreed on #46 (15 Oct): a second AI call per article, one per language; the summ
 - **Must, the queue (Yurii: the centre of the design; migration `0009`, `docs/queue.md`):** an explicit state per article and language (`queued` → `translating` → `published`; `retrying` with `next_attempt_at` and a growing wait; `failed` after 3 unusable answers, with the reason; `updating` while a re-summarized article is redone, the old text visible; `skipped` when it left the feed), every change timestamped; nothing lost (every news article queued for every enabled language, stale claims back to `queued`, an outage never counts a try); a switch per language (enabled, paused by hand or automatically); `GET /queue` per language and the articles waiting for release; `server/scripts/queue.mjs` to list, requeue one item or a whole language, pause and resume, and enable a language with its 7-day backlog.
 - **Suggested:** the app's language setting: a small language icon next to the date at the top of the feed opens a native language menu (a local iOS Simulator run shown to Yurii before it is built); an editor pass that corrects grammar and wording before publishing (#54); Polish and Czech once a model writes them well enough; Workers AI as a provider if the free limits are not enough.
 - **Done when:** with the secrets set, new news articles get their text in each enabled language, `GET /articles?lang=uk` (or `ru`, `es`) lists the same articles in the same order as English, and `GET /queue` shows nothing waiting for long.
+
+### 10. Push notifications, after the MVP (Yurii)
+
+Yurii, 16 Oct (#62): pushes exist to bring a reader back to the app with something useful, so breaking decisions only, few, and none at night. Firebase Cloud Messaging in the project `official-news-48e16`, one topic per feed language; the rules are in `docs/contract.md` (Push notifications).
+
+- **Must, server (#62):** the translator's run (the summarizer's, while the translator is not running) ends with a push step: a released decision of importance 4 or 5 from the last 24 hours, never pushed before in that language (another language only with its translation published, and in that language); at most 2 a local day per language and at least 1 (the day's top story from 18:00 local); none from 21:00 to 08:00 in the language's main time zone; 3 hours apart. `push_log` (migration `0012`) is written before each send, so nothing goes out twice. A push FCM cannot take just then is tried again after a 10-minute pause. Sent as the service account `fcm-sender` (one role, Firebase Cloud Messaging API Admin), its key only the Worker secret `FCM_SERVICE_ACCOUNT`.
+- **Must, app:** subscribes to `breaking_<feed language>` and moves to the new topic when the language changes; asks for permission at a good moment (after a few articles read), not on first launch; a tap opens the article (`data.articleId` in `data.lang`); `push_open` in analytics. The APNs key uploaded to Firebase Cloud Messaging (`docs/setup.md`).
+- **Before an App Store release:** the privacy policy and the App Store privacy answers mention the push token.
+- **Done when:** with the secret and the APNs key set, a breaking decision reaches a test iPhone subscribed to its language's topic, and a tap opens it.
 
 ## How we work together
 

@@ -38,11 +38,23 @@ interface ArticleRow {
   added_at: string | null;
 }
 
-const ARTICLE_COLUMNS = `
-  a.id, s.country, a.source_id, s.name AS source_name, s.url AS source_url,
+/**
+ * The source's name (#76): in English, `name`; in a language of LANGS, its
+ * `config.names.<lang>` (loaded from docs/source-names.csv), else the English
+ * name. `lang` is one of LANGS, never text from the request, so it can sit in
+ * the SQL. A config that is not JSON gives the English name instead of failing
+ * the whole feed.
+ */
+const sourceName = (lang: Lang | null) =>
+  lang ? `COALESCE(CASE WHEN json_valid(s.config) THEN json_extract(s.config, '$.names.${lang}') END, s.name)` : "s.name";
+
+const articleColumns = (lang: Lang | null) => `
+  a.id, s.country, a.source_id, ${sourceName(lang)} AS source_name, s.url AS source_url,
   a.url, a.original_title, a.published_at, a.date_only, a.headline, a.short_summary,
   a.summary, a.decision_type, a.image_url, a.original_language, a.topics, a.tags, a.importance,
   a.feed_seq, a.added_at`;
+
+const ARTICLE_COLUMNS = articleColumns(null);
 
 const FROM_ARTICLES = "FROM articles a JOIN sources s ON s.id = a.source_id";
 
@@ -87,9 +99,11 @@ const topQuery = (columns: string, from: string, where: string) => `
   LIMIT 5
   ) ORDER BY feed_seq DESC`;
 
-/** The top stories among the feed's articles that pass `filters` (their values are bound first). */
-const englishTop = (filters: Filters) =>
-  topQuery(ARTICLE_COLUMNS, FROM_ARTICLES, ["a.is_news = 1", "a.feed_seq IS NOT NULL", ...filters.where].join(" AND "));
+const TOP_WHERE = "a.is_news = 1 AND a.feed_seq IS NOT NULL";
+/** The top-story conditions plus `filters` (their values are bound first). */
+const topWhere = (filters: Filters) => [TOP_WHERE, ...filters.where].join(" AND ");
+/** The top stories among the feed's articles that pass `filters`. */
+const englishTop = (filters: Filters) => topQuery(ARTICLE_COLUMNS, FROM_ARTICLES, topWhere(filters));
 
 // Filters (#67, #68): `country` (Local) and `topic`, the same on every page, in
 // `after=`, in top and in every language, so a cursor continues within its filter.
@@ -305,7 +319,7 @@ async function listArticles(url: URL, env: Env): Promise<Response> {
 
   // One extra row tells whether there is a next page.
   const pageQuery = env.DB.prepare(
-    `SELECT ${lang ? TRANSLATED_COLUMNS : ARTICLE_COLUMNS} ${lang ? FROM_TRANSLATED : FROM_ARTICLES}
+    `SELECT ${lang ? translatedColumns(lang) : ARTICLE_COLUMNS} ${lang ? FROM_TRANSLATED : FROM_ARTICLES}
      WHERE ${where.join(" AND ")}
      ORDER BY a.feed_seq DESC
      LIMIT ?`,
@@ -314,7 +328,7 @@ async function listArticles(url: URL, env: Env): Promise<Response> {
   const firstPage = cursorParam === null && sinceParam === null && afterParam === null;
   const topQuery = firstPage
     ? lang
-      ? env.DB.prepare(translatedTop(filters)).bind(...filters.binds, lang)
+      ? env.DB.prepare(translatedTop(filters, lang)).bind(...filters.binds, lang)
       : env.DB.prepare(englishTop(filters)).bind(...filters.binds)
     : null;
   const switchQuery = lang ? env.DB.prepare(LANG_SWITCH).bind(lang) : null;
@@ -357,7 +371,8 @@ interface TranslatedRow extends ArticleRow {
   t_summary?: string;
 }
 
-const TRANSLATED_COLUMNS = `${ARTICLE_COLUMNS},
+/** The columns of a language feed: the article with its source named in `lang`, and the translation. */
+const translatedColumns = (lang: Lang) => `${articleColumns(lang)},
   t.headline AS t_headline, t.short_summary AS t_short_summary, t.summary AS t_summary`;
 
 /**
@@ -378,12 +393,13 @@ export const TRANSLATED_CONDITIONS = ["t.headline IS NOT NULL", SHOWN];
 /**
  * A language's top stories: the English top stories (same selection, same
  * order, same filters) that have a shown translation into it, so the language
- * never gets a top story the English feed does not have. Binds the filters'
- * values, then the language.
+ * never gets a top story the English feed does not have. Their sources are
+ * named in `lang` (#76). Binds the filters' values, then the language.
  */
-const translatedTop = (filters: Filters) => `
+const translatedTop = (filters: Filters, lang: Lang) => `
   SELECT top.*, t.headline AS t_headline, t.short_summary AS t_short_summary, t.summary AS t_summary
-  FROM (${englishTop(filters)}) top JOIN article_translations t ON t.article_id = top.id AND t.lang = ?
+  FROM (${topQuery(articleColumns(lang), FROM_ARTICLES, topWhere(filters))}) top
+  JOIN article_translations t ON t.article_id = top.id AND t.lang = ?
   WHERE ${TRANSLATED_CONDITIONS.join(" AND ")}
   ORDER BY top.feed_seq DESC`;
 
@@ -417,7 +433,7 @@ function toTranslatedArticle(row: TranslatedRow, lang: Lang) {
 /** `GET /articles/:id?lang=uk`: one article shown in the feed, translated into `lang`, or 404 when it is not (yet). */
 async function getTranslated(id: string, lang: Lang, env: Env): Promise<Response> {
   const row = await env.DB.prepare(
-    `SELECT ${TRANSLATED_COLUMNS} ${FROM_TRANSLATED}
+    `SELECT ${translatedColumns(lang)} ${FROM_TRANSLATED}
      WHERE a.id = ? AND a.is_news = 1 AND a.feed_seq IS NOT NULL AND ${TRANSLATED_CONDITIONS.join(" AND ")}`,
   )
     .bind(lang, id)

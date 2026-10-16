@@ -1,0 +1,97 @@
+id,lang,name
+us-presidential-actions,uk,Білий дім
+us-presidential-actions,ru,Белый дом
+us-presidential-actions,es,Casa Blanca
+us-presidential-actions,de,Weißes Haus
+ca-parliament-bills,uk,Парламент Канади (LEGISinfo)
+ca-parliament-bills,ru,Парламент Канады (LEGISinfo)
+ca-parliament-bills,es,Parlamento de Canadá (LEGISinfo)
+ca-parliament-bills,de,Parlament von Kanada (LEGISinfo)
+mx-official-gazette,uk,Офіційний вісник Мексики (DOF)
+mx-official-gazette,ru,Официальный вестник Мексики (DOF)
+mx-official-gazette,es,Diario Oficial de la Federación (DOF)
+mx-official-gazette,de,Mexikanisches Amtsblatt (DOF)
+br-chamber-bills,uk,Палата депутатів Бразилії
+br-chamber-bills,ru,Палата депутатов Бразилии
+br-chamber-bills,es,Cámara de Diputados de Brasil
+br-chamber-bills,de,Brasilianische Abgeordnetenkammer
+ar-saij-legislation,uk,Міністерство юстиції Аргентини (SAIJ)
+ar-saij-legislation,ru,Министерство юстиции Аргентины (SAIJ)
+ar-saij-legislation,es,Ministerio de Justicia de Argentina (SAIJ)
+ar-saij-legislation,de,Argentinisches Justizministerium (SAIJ)
+gb-policy-consultations,uk,Уряд Великої Британії (GOV.UK)
+gb-policy-consultations,ru,Правительство Великобритании (GOV.UK)
+gb-policy-consultations,es,Gobierno del Reino Unido (GOV.UK)
+gb-policy-consultations,de,Britische Regierung (GOV.UK)
+de-government-articles,uk,Федеральний уряд Німеччини
+de-government-articles,ru,Федеральное правительство Германии
+de-government-articles,es,Gobierno Federal de Alemania
+de-government-articles,de,Bundesregierung
+fr-council-of-ministers,uk,Президент Франції (Єлисейський палац)
+fr-council-of-ministers,ru,Президент Франции (Елисейский дворец)
+fr-council-of-ministers,es,Presidencia de Francia (Elíseo)
+fr-council-of-ministers,de,Französisches Präsidialamt (Élysée)
+it-council-of-ministers,uk,Рада міністрів Італії
+it-council-of-ministers,ru,Совет министров Италии
+it-council-of-ministers,es,Consejo de Ministros de Italia
+it-council-of-ministers,de,Italienischer Ministerrat
+eu-commission-press-releases,uk,Європейська комісія
+eu-commission-press-releases,ru,Европейская комиссия
+eu-commission-press-releases,es,Comisión Europea
+eu-commission-press-releases,de,Europäische Kommission
+ru-kremlin-acts,uk,Президент Росії (Кремль)
+ru-kremlin-acts,ru,Президент России (Кремль)
+ru-kremlin-acts,es,Presidente de Rusia (Kremlin)
+ru-kremlin-acts,de,Präsident Russlands (Kreml)
+tr-parliament-plenary,uk,Великі національні збори Туреччини
+tr-parliament-plenary,ru,Великое национальное собрание Турции
+tr-parliament-plenary,es,Gran Asamblea Nacional de Turquía
+tr-parliament-plenary,de,Große Nationalversammlung der Türkei
+za-government-notices,uk,Уряд ПАР
+za-government-notices,ru,Правительство ЮАР
+za-government-notices,es,Gobierno de Sudáfrica
+za-government-notices,de,Südafrikanische Regierung
+au-treasurer-media-releases,uk,Скарбник Австралії
+au-treasurer-media-releases,ru,Казначей Австралии
+au-treasurer-media-releases,es,Tesorero de Australia
+au-treasurer-media-releases,de,Australischer Schatzminister
+cn-state-council-policies,uk,Державна рада КНР (gov.cn)
+cn-state-council-policies,ru,Государственный совет КНР (gov.cn)
+cn-state-council-policies,es,Consejo de Estado de China (gov.cn)
+cn-state-council-policies,de,Chinesischer Staatsrat (gov.cn)
+in-parliament-bills,uk,Парламент Індії
+in-parliament-bills,ru,Парламент Индии
+in-parliament-bills,es,Parlamento de la India
+in-parliament-bills,de,Indisches Parlament
+jp-cabinet-meetings,uk,Канцелярія прем’єр-міністра Японії
+jp-cabinet-meetings,ru,Канцелярия премьер-министра Японии
+jp-cabinet-meetings,es,Oficina del Primer Ministro de Japón
+jp-cabinet-meetings,de,Büro des japanischen Premierministers
+kr-legislative-notices,uk,Міністерство урядового законодавства Південної Кореї
+kr-legislative-notices,ru,Министерство правительственного законодательства Южной Кореи
+kr-legislative-notices,es,Ministerio de Legislación Gubernamental de Corea del Sur
+kr-legislative-notices,de,Südkoreanisches Ministerium für Regierungsgesetzgebung
+id-cabinet-secretariat,uk,Секретаріат кабінету Індонезії
+id-cabinet-secretariat,ru,Секретариат кабинета Индонезии
+id-cabinet-secretariat,es,Secretaría del Gabinete de Indonesia
+id-cabinet-secretariat,de,Kabinettssekretariat Indonesiens
+pl-council-of-ministers,uk,"Рада міністрів Польщі, рішення уряду (gov.pl)"
+pl-council-of-ministers,ru,"Совет министров Польши, решения правительства (gov.pl)"
+pl-council-of-ministers,es,"Consejo de Ministros de Polonia, decisiones del Gobierno (gov.pl)"
+pl-council-of-ministers,de,"Polnischer Ministerrat, Regierungsbeschlüsse (gov.pl)"
+pl-journal-of-laws,uk,Вісник законів Польщі (Dziennik Ustaw)
+pl-journal-of-laws,ru,Вестник законов Польши (Dziennik Ustaw)
+pl-journal-of-laws,es,Diario de Leyes de Polonia (Dziennik Ustaw)
+pl-journal-of-laws,de,Polnisches Gesetzblatt (Dziennik Ustaw)
+cz-government-meetings,uk,"Уряд Чехії, підсумки засідань"
+cz-government-meetings,ru,"Правительство Чехии, итоги заседаний"
+cz-government-meetings,es,"Gobierno de Chequia, resultados de las reuniones"
+cz-government-meetings,de,"Tschechische Regierung, Sitzungsergebnisse"
+es-council-of-ministers,uk,"Рада міністрів Іспанії, підсумки засідань (Монклоа)"
+es-council-of-ministers,ru,"Совет министров Испании, итоги заседаний (Монклоа)"
+es-council-of-ministers,es,"La Moncloa, resúmenes del Consejo de Ministros"
+es-council-of-ministers,de,"La Moncloa, Zusammenfassungen des Ministerrats"
+ua-cabinet-of-ministers,uk,Кабінет Міністрів України
+ua-cabinet-of-ministers,ru,Кабинет министров Украины
+ua-cabinet-of-ministers,es,Gabinete de Ministros de Ucrania
+ua-cabinet-of-ministers,de,Ministerkabinett der Ukraine
