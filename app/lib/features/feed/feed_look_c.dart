@@ -1,9 +1,5 @@
-import 'dart:math' as math;
-
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
-import 'package:flutter/scheduler.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/article.dart';
@@ -38,14 +34,12 @@ class CLook extends FeedLook {
       SliverResizingHeader(
         minExtentPrototype: _Prototype(_Bar(masthead)),
         maxExtentPrototype: _Prototype(_Masthead(masthead, prototype: true)),
-        child: _ReportHeight(
-          child: ClipRect(
-            child: OverflowBox(
-              alignment: Alignment.bottomCenter,
-              minHeight: 0,
-              maxHeight: double.infinity,
-              child: _Masthead(masthead),
-            ),
+        child: ClipRect(
+          child: OverflowBox(
+            alignment: Alignment.bottomCenter,
+            minHeight: 0,
+            maxHeight: double.infinity,
+            child: _Masthead(masthead),
           ),
         ),
       );
@@ -138,35 +132,6 @@ class CLook extends FeedLook {
           );
         },
       );
-}
-
-/// How far down the screen the masthead reaches now: all of it at the top of
-/// the feed, just the bar once the list has scrolled. The "N new" pill sits
-/// right under it, never on the filters. There is one feed screen, so one
-/// value for the file; [_ReportHeight] keeps it up to date.
-final _mastheadBottom = ValueNotifier<double>(0);
-
-/// Reports its height to [_mastheadBottom] after each layout, without
-/// rebuilding anything while the masthead shrinks.
-class _ReportHeight extends SingleChildRenderObjectWidget {
-  const _ReportHeight({required super.child});
-
-  @override
-  RenderObject createRenderObject(BuildContext context) =>
-      _RenderReportHeight();
-}
-
-class _RenderReportHeight extends RenderProxyBox {
-  @override
-  void performLayout() {
-    super.performLayout();
-    final height = size.height;
-    if (height == _mastheadBottom.value) return;
-    // Not during layout: the pill rebuilds in the next frame.
-    SchedulerBinding.instance.addPostFrameCallback(
-      (_) => _mastheadBottom.value = height,
-    );
-  }
 }
 
 /// The look's text styles and colours, from the app's colour scheme: black
@@ -836,70 +801,60 @@ class _NewPill extends StatelessWidget {
     final t = _Styles.of(context);
     final paper = Theme.of(context).scaffoldBackgroundColor;
     final label = AppLocalizations.of(context).newDecisions(count);
-    // The screen puts the pill 12 pt from the top, which would be over the
-    // filters: it moves down to 8 pt under the masthead, as far as the
-    // masthead reaches now (the whole of it at the top of the feed, the bar
-    // once the list has scrolled). The space above it lets taps through.
-    return ValueListenableBuilder<double>(
-      valueListenable: _mastheadBottom,
-      builder: (context, bottom, child) => Padding(
-        padding: EdgeInsets.only(top: math.max(0, bottom - 12) + 8),
-        child: child,
-      ),
-      child: Semantics(
-        button: true,
-        label: label,
-        excludeSemantics: true,
+    // The screen floats it just under the masthead, never on the filters.
+    return Semantics(
+      button: true,
+      label: label,
+      excludeSemantics: true,
+      onTap: onTap,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
         onTap: onTap,
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-            // Grows with the text up to twice the size: past that, a few
-            // words would fill the screen.
-            child: MediaQuery.withClampedTextScaling(
-              maxScaleFactor: 2,
-              child: Builder(
-                builder: (context) => Container(
-                  constraints: const BoxConstraints(minHeight: 36),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    color: t.ink,
-                    borderRadius: BorderRadius.circular(18),
-                    boxShadow: const [
-                      BoxShadow(
-                        color: Color(0x33000000),
-                        blurRadius: 12,
-                        offset: Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        CupertinoIcons.arrow_up,
-                        size: MediaQuery.textScalerOf(context).scale(15),
-                        color: paper,
-                      ),
-                      const SizedBox(width: 6),
-                      Flexible(
-                        child: Text(
-                          label,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: paper,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 15,
-                          ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+          // Grows with the text up to twice the size: past that, a few
+          // words would fill the screen.
+          child: MediaQuery.withClampedTextScaling(
+            maxScaleFactor: 2,
+            child: Builder(
+              builder: (context) => Container(
+                constraints: const BoxConstraints(minHeight: 36),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: t.ink,
+                  borderRadius: BorderRadius.circular(18),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x33000000),
+                      blurRadius: 12,
+                      offset: Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      CupertinoIcons.arrow_up,
+                      size: MediaQuery.textScalerOf(context).scale(15),
+                      color: paper,
+                    ),
+                    const SizedBox(width: 6),
+                    Flexible(
+                      child: Text(
+                        label,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: paper,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 15,
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
             ),

@@ -86,6 +86,54 @@
     }
   },
 
+  "filterGlobalDetail": "All countries",
+  "@filterGlobalDetail": {
+    "description": "The Where chip under the date while the feed shows every country, and the first item of its menu (#68, prototype)."
+  },
+  "filterAllTopics": "All topics",
+  "@filterAllTopics": {
+    "description": "The Topics chip under the date while no topic is chosen, and the first item of its menu."
+  },
+  "filterCountryChip": "Country: {name}",
+  "@filterCountryChip": {
+    "description": "What VoiceOver says for the Where chip while one country is chosen: the chip itself shows only the country's code (GB). {name} is the country's name.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "filterGroupChip": "Countries: {name}",
+  "@filterGroupChip": {
+    "description": "What VoiceOver says for the Where chip while a group of countries is chosen: the chip shows EU, G7 or G20. {name} is the group's name (European Union, G7, G20).",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "filterTopicChip": "Topic: {name}",
+  "@filterTopicChip": {
+    "description": "What VoiceOver says for the Topics chip while a topic is chosen: the chip itself shows only the topic's icon. {name} is the topic's name.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "filterEmpty": "No decisions here in the last 7 days.",
+  "@filterEmpty": {
+    "description": "The feed is empty under the chosen country or topic (the feed shows the last 7 days)."
+  },
+  "filterShowGlobal": "Show all countries",
+  "@filterShowGlobal": {
+    "description": "A button under filterEmpty: shows the feed for every country again."
+  },
+  "filterShowAllTopics": "Show all topics",
+  "@filterShowAllTopics": {
+    "description": "A button under filterEmpty: shows every topic again."
+  },
+
   "decisionTypeLaw": "Law",
   "@decisionTypeLaw": {
     "description": "Decision type, shown in red capitals above a headline."
@@ -119,6 +167,55 @@
     "description": "Decision type: what an official meeting decided."
   },
 
+  "topicForeignAffairs": "Foreign affairs",
+  "@topicForeignAffairs": {
+    "description": "A topic from the fixed list (foreign-affairs), on the Topics chip and in its menu (#67)."
+  },
+  "topicEconomy": "Economy",
+  "@topicEconomy": {
+    "description": "A topic from the fixed list (economy), on the Topics chip and in its menu (#67)."
+  },
+  "topicSecurityDefence": "Security and defence",
+  "@topicSecurityDefence": {
+    "description": "A topic from the fixed list (security-defence), on the Topics chip and in its menu (#67)."
+  },
+  "topicHealth": "Health",
+  "@topicHealth": {
+    "description": "A topic from the fixed list (health), on the Topics chip and in its menu (#67)."
+  },
+  "topicClimate": "Climate",
+  "@topicClimate": {
+    "description": "A topic from the fixed list (climate), on the Topics chip and in its menu (#67)."
+  },
+  "topicTrade": "Trade",
+  "@topicTrade": {
+    "description": "A topic from the fixed list (trade), on the Topics chip and in its menu (#67)."
+  },
+  "topicTechnology": "Technology",
+  "@topicTechnology": {
+    "description": "A topic from the fixed list (technology), on the Topics chip and in its menu (#67)."
+  },
+  "topicEnergy": "Energy",
+  "@topicEnergy": {
+    "description": "A topic from the fixed list (energy), on the Topics chip and in its menu (#67)."
+  },
+  "topicMigration": "Migration",
+  "@topicMigration": {
+    "description": "A topic from the fixed list (migration), on the Topics chip and in its menu (#67)."
+  },
+  "topicElections": "Elections",
+  "@topicElections": {
+    "description": "A topic from the fixed list (elections), on the Topics chip and in its menu (#67)."
+  },
+  "topicHumanRights": "Human rights",
+  "@topicHumanRights": {
+    "description": "A topic from the fixed list (human-rights), on the Topics chip and in its menu (#67)."
+  },
+  "topicScience": "Science",
+  "@topicScience": {
+    "description": "A topic from the fixed list (science), on the Topics chip and in its menu (#67)."
+  },
+
   "countryAR": "Argentina",
   "@countryAR": {
     "description": "Country name after the publisher: \"Federal Government · Germany\"."
@@ -139,6 +236,10 @@
   "@countryCN": {
     "description": "Country name."
   },
+  "countryCZ": "Czechia",
+  "@countryCZ": {
+    "description": "Country name."
+  },
   "countryDE": "Germany",
   "@countryDE": {
     "description": "Country name."
@@ -146,6 +247,10 @@
   "countryEU": "European Union",
   "@countryEU": {
     "description": "Shown like a country name, for the EU's institutions."
+  },
+  "countryES": "Spain",
+  "@countryES": {
+    "description": "Country name."
   },
   "countryFR": "France",
   "@countryFR": {
@@ -179,6 +284,10 @@
   "@countryMX": {
     "description": "Country name."
   },
+  "countryPL": "Poland",
+  "@countryPL": {
+    "description": "Country name."
+  },
   "countryRU": "Russia",
   "@countryRU": {
     "description": "Country name."
@@ -189,6 +298,10 @@
   },
   "countryTR": "Türkiye",
   "@countryTR": {
+    "description": "Country name."
+  },
+  "countryUA": "Ukraine",
+  "@countryUA": {
     "description": "Country name."
   },
   "countryUS": "United States",

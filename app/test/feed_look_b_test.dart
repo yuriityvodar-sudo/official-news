@@ -226,7 +226,7 @@ void main() {
   );
 
   testWidgets(
-    'the new-decisions pill sits at the bottom, clear of the filters',
+    'the new-decisions pill sits under the pinned filters, clear of them',
     (tester) async {
       final feed = await pumpFeed(
         tester,
@@ -235,14 +235,16 @@ void main() {
       );
       await feed.checkForNew();
       await tester.pump();
+      await tester.pump();
       final pill = find.text('2 new decisions');
       expect(pill, findsOneWidget);
       final pillBox = tester.getRect(pill);
-      // 16 pt above the home indicator (34 pt), with the pill's padding.
-      expect(pillBox.bottom, greaterThan(874 - 34 - 16 - 30));
-      expect(pillBox.bottom, lessThan(874 - 34 - 16));
+      // Under the chips, near them (the 44-pt pill's padding and 8 pt).
       final topics = find.text('All topics').hitTestable();
-      expect(pillBox.overlaps(tester.getRect(topics)), isFalse);
+      final chips = tester.getRect(topics);
+      expect(pillBox.overlaps(chips), isFalse);
+      expect(pillBox.top, greaterThan(chips.bottom));
+      expect(pillBox.top - chips.bottom, lessThan(40));
 
       // Taps elsewhere still reach the feed: the filter opens its menu, and
       // the new decisions still wait.
@@ -258,7 +260,7 @@ void main() {
     final gear = tester.getCenter(
       find.byIcon(CupertinoIcons.gear_alt).hitTestable(),
     );
-    final chip = tester.getCenter(find.text('Global').hitTestable());
+    final chip = tester.getCenter(find.text('All countries').hitTestable());
     expect((gear.dy - chip.dy).abs(), lessThan(1));
   });
 

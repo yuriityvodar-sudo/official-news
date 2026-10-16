@@ -646,16 +646,16 @@ void main() {
             }),
           ),
         );
-        // The language moved to Settings (#64): the feed's only globe is the
-        // Global filter (#67, prototype).
+        // The language moved to Settings (#64): no globe in the feed, and
+        // the filters (#67, prototype) say "All countries" in words.
+        expect(find.byIcon(CupertinoIcons.globe), findsNothing);
         expect(
           find.descendant(
             of: find.byType(FeedFilterBar),
-            matching: find.byIcon(CupertinoIcons.globe),
+            matching: find.text('All countries'),
           ),
           findsOneWidget,
         );
-        expect(find.byIcon(CupertinoIcons.globe), findsOneWidget);
         final button = find.ancestor(
           of: find.byIcon(CupertinoIcons.gear_alt),
           matching: find.byType(CupertinoButton),
