@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
+import '../../core/analytics.dart';
 import '../../core/article.dart';
 import '../../core/feed_language.dart';
 import '../../core/news_widgets.dart';
@@ -33,6 +34,11 @@ class _FeedScreenState extends State<FeedScreen> {
   final _scroll = ScrollController();
   Timer? _newCheck;
 
+  /// Analytics (#60): the deepest Latest row shown this visit, and whether the
+  /// feed's first page failed last time it changed.
+  int _deepest = 0;
+  bool _failed = false;
+
   @override
   void initState() {
     super.initState();
@@ -56,6 +62,9 @@ class _FeedScreenState extends State<FeedScreen> {
   }
 
   void _changed() {
+    final failed = _feed.error != null;
+    if (failed && !_failed) unawaited(analytics.feedFailed());
+    _failed = failed;
     setState(() {});
     // A page dropped because a refresh replaced the feed leaves the list at its end:
     // look again once the new feed is drawn.
@@ -81,15 +90,34 @@ class _FeedScreenState extends State<FeedScreen> {
     }
   }
 
-  void _open(Article article) {
+  void _open(
+    Article article, {
+    required String section,
+    required int position,
+  }) {
+    unawaited(
+      analytics.articleOpened(article, section: section, position: position),
+    );
     unawaited(_feed.markRead(article));
     // The article as the feed has it, so a translated one opens translated.
     Navigator.of(context).pushNamed(Routes.detail, arguments: article);
   }
 
+  /// The first time this visit a Latest row at a depth of [feedDepths] is drawn.
+  void _shownRow(int row) {
+    if (row <= _deepest) return;
+    for (final depth in feedDepths) {
+      if (_deepest < depth && row >= depth) {
+        unawaited(analytics.feedDepth(depth));
+      }
+    }
+    _deepest = row;
+  }
+
   /// A language picked in the menu: another language is another feed, from the top.
   Future<void> _chooseLanguage(FeedLanguage chosen) async {
     if (chosen == _feed.language) return;
+    unawaited(analytics.languageChosen(chosen, from: _feed.language));
     if (_scroll.hasClients) _scroll.jumpTo(0);
     await _feed.setLanguage(chosen);
   }
@@ -236,12 +264,18 @@ class _FeedScreenState extends State<FeedScreen> {
             _TopCard(
               article: first,
               read: _feed.readIds.contains(first.id),
-              onTap: () => _open(first),
+              onTap: () => _open(first, section: 'top', position: 0),
             ),
           ),
         );
       }
-      slivers.add(_rows(rest.toList()));
+      slivers.add(
+        _rows(
+          rest.toList(),
+          section: 'top',
+          first: first.imageUrl != null ? 1 : 0,
+        ),
+      );
     }
 
     // One "Latest" list in the order articles appeared, with no day headings: an
@@ -256,7 +290,7 @@ class _FeedScreenState extends State<FeedScreen> {
           ),
         ),
       );
-      slivers.add(_rows(latest));
+      slivers.add(_rows(latest, section: 'latest'));
     }
 
     slivers.add(
@@ -289,18 +323,24 @@ class _FeedScreenState extends State<FeedScreen> {
   );
 
   /// Every card shows its own date ("2h ago", or the day for date-only articles).
-  Widget _rows(List<Article> articles) => SliverPadding(
+  /// [section] and [first] (the position of the first row) are for analytics.
+  Widget _rows(
+    List<Article> articles, {
+    required String section,
+    int first = 0,
+  }) => SliverPadding(
     padding: const EdgeInsets.symmetric(horizontal: 20),
     sliver: SliverList.separated(
       itemCount: articles.length,
       separatorBuilder: (_, _) => const Divider(),
       itemBuilder: (context, index) {
         final a = articles[index];
+        if (section == 'latest') _shownRow(index + 1);
         return _ArticleRow(
           article: a,
           read: _feed.readIds.contains(a.id),
           showDay: true,
-          onTap: () => _open(a),
+          onTap: () => _open(a, section: section, position: first + index),
         );
       },
     ),

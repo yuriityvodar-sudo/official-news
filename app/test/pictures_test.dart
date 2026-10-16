@@ -35,8 +35,8 @@ void main() {
         await tester.pump();
       }
       final asked = (pictureCache as NoPictures).asked;
-    expect(asked, isNotEmpty);
-    expect(asked, everyElement(url));
+      expect(asked, isNotEmpty);
+      expect(asked, everyElement(url));
     },
   );
 }
