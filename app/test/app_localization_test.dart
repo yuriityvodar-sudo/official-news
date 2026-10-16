@@ -111,6 +111,8 @@ Future<FeedController> _launch(
   await tester.pumpWidget(OfficialNewsApp(feed: feed));
   await tester.pump();
   await tester.pump();
+  // Past the splash (prototype), which plays over the feed at start.
+  await tester.pumpAndSettle();
   return feed;
 }
 

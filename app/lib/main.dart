@@ -6,6 +6,7 @@ import 'core/analytics.dart';
 import 'core/router.dart';
 import 'core/theme.dart';
 import 'features/feed/feed_controller.dart';
+import 'features/splash/splash.dart';
 import 'l10n/app_localizations.dart';
 
 Future<void> main() async {
@@ -46,6 +47,8 @@ class OfficialNewsApp extends StatelessWidget {
         onGenerateRoute: (settings) => onGenerateRoute(settings, feed: feed),
         navigatorObservers: [ScreenViews()],
         initialRoute: Routes.feed,
+        // PROTOTYPE: the splash over the feed at start; the feed loads under it.
+        builder: (context, app) => SplashHost(child: app!),
       ),
     );
   }

@@ -7,6 +7,7 @@ import '../../core/theme.dart';
 import '../../l10n/app_localizations.dart';
 import '../detail/detail_screen.dart' show OpenLink, openOfficialPage;
 import '../feed/feed_look.dart';
+import '../splash/splash.dart';
 import 'info_pages.dart';
 
 /// Settings (#64): a plain iOS list opened from the button at the top right of
@@ -160,7 +161,8 @@ class SettingsScreen extends StatelessWidget {
 }
 
 /// PROTOTYPE (#66): switches the feed between today's look and the design
-/// options, to compare them in one build. English only; not for release.
+/// options, and plays the splash styles, to compare them in one build.
+/// English only; not for release.
 class _DesignSection extends StatelessWidget {
   const _DesignSection();
 
@@ -191,6 +193,37 @@ class _DesignSection extends StatelessWidget {
               FeedDesign.b: Text('B'),
               FeedDesign.c: Text('C'),
             },
+          ),
+        ),
+      ),
+      // The splash at start (Yurii, 16 Oct): pick a style, Play shows it now.
+      ValueListenableBuilder(
+        valueListenable: splashStyle,
+        builder: (context, style, _) => CupertinoListTile(
+          leading: const _Icon(CupertinoIcons.sparkles),
+          title: const Text('Splash'),
+          subtitle: const Text('1 rise · 2 sweep · 3 fill'),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CupertinoSlidingSegmentedControl<SplashStyle>(
+                groupValue: style,
+                onValueChanged: (s) {
+                  if (s != null) splashStyle.value = s;
+                },
+                children: const {
+                  SplashStyle.rise: Text('1'),
+                  SplashStyle.sweep: Text('2'),
+                  SplashStyle.fill: Text('3'),
+                },
+              ),
+              CupertinoButton(
+                padding: const EdgeInsets.only(left: 12),
+                minimumSize: const Size(44, 44),
+                onPressed: () => SplashHost.play(context),
+                child: const Text('Play'),
+              ),
+            ],
           ),
         ),
       ),
