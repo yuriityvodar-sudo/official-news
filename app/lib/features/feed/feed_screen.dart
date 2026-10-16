@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
+import '../../core/analytics.dart';
 import '../../core/article.dart';
 import '../../core/feed_language.dart';
 import '../../core/news_widgets.dart';
@@ -81,7 +82,14 @@ class _FeedScreenState extends State<FeedScreen> {
     }
   }
 
-  void _open(Article article) {
+  void _open(
+    Article article, {
+    required String section,
+    required int position,
+  }) {
+    unawaited(
+      analytics.articleOpened(article, section: section, position: position),
+    );
     unawaited(_feed.markRead(article));
     // The article as the feed has it, so a translated one opens translated.
     Navigator.of(context).pushNamed(Routes.detail, arguments: article);
@@ -90,6 +98,7 @@ class _FeedScreenState extends State<FeedScreen> {
   /// A language picked in the menu: another language is another feed, from the top.
   Future<void> _chooseLanguage(FeedLanguage chosen) async {
     if (chosen == _feed.language) return;
+    unawaited(analytics.languageChosen(chosen, from: _feed.language));
     if (_scroll.hasClients) _scroll.jumpTo(0);
     await _feed.setLanguage(chosen);
   }
@@ -236,12 +245,18 @@ class _FeedScreenState extends State<FeedScreen> {
             _TopCard(
               article: first,
               read: _feed.readIds.contains(first.id),
-              onTap: () => _open(first),
+              onTap: () => _open(first, section: 'top', position: 0),
             ),
           ),
         );
       }
-      slivers.add(_rows(rest.toList()));
+      slivers.add(
+        _rows(
+          rest.toList(),
+          section: 'top',
+          first: first.imageUrl != null ? 1 : 0,
+        ),
+      );
     }
 
     // One "Latest" list in the order articles appeared, with no day headings: an
@@ -256,7 +271,7 @@ class _FeedScreenState extends State<FeedScreen> {
           ),
         ),
       );
-      slivers.add(_rows(latest));
+      slivers.add(_rows(latest, section: 'latest'));
     }
 
     slivers.add(
@@ -289,7 +304,12 @@ class _FeedScreenState extends State<FeedScreen> {
   );
 
   /// Every card shows its own date ("2h ago", or the day for date-only articles).
-  Widget _rows(List<Article> articles) => SliverPadding(
+  /// [section] and [first] (the position of the first row) are for analytics.
+  Widget _rows(
+    List<Article> articles, {
+    required String section,
+    int first = 0,
+  }) => SliverPadding(
     padding: const EdgeInsets.symmetric(horizontal: 20),
     sliver: SliverList.separated(
       itemCount: articles.length,
@@ -300,7 +320,7 @@ class _FeedScreenState extends State<FeedScreen> {
           article: a,
           read: _feed.readIds.contains(a.id),
           showDay: true,
-          onTap: () => _open(a),
+          onTap: () => _open(a, section: section, position: first + index),
         );
       },
     ),

@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../core/analytics.dart';
 import '../../core/article.dart';
 import '../../core/countries.dart';
 import '../../core/languages.dart';
@@ -78,7 +81,10 @@ class DetailScreen extends StatelessWidget {
         trailing: Builder(
           builder: (buttonContext) => CupertinoButton(
             padding: EdgeInsets.zero,
-            onPressed: () => share(article, _originOf(buttonContext)),
+            onPressed: () {
+              unawaited(analytics.shared(article));
+              share(article, _originOf(buttonContext));
+            },
             child: const Icon(
               CupertinoIcons.share,
               color: AppColors.accent,
@@ -112,7 +118,9 @@ class DetailScreen extends StatelessWidget {
             article: article,
             onTap: () {
               final page = officialPage(article.originalUrl);
-              if (page != null) openLink(page);
+              if (page == null) return;
+              unawaited(analytics.officialLinkOpened(article));
+              openLink(page);
             },
           ),
         ],

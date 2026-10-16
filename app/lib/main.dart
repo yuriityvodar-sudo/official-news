@@ -1,9 +1,15 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
+import 'core/analytics.dart';
 import 'core/router.dart';
 import 'core/theme.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  // Not awaited: the feed shows at once; events before Firebase is up are not sent.
+  unawaited(startAnalytics());
   runApp(const OfficialNewsApp());
 }
 
@@ -19,6 +25,7 @@ class OfficialNewsApp extends StatelessWidget {
       darkTheme: buildTheme(Brightness.dark),
       themeMode: ThemeMode.system,
       onGenerateRoute: onGenerateRoute,
+      navigatorObservers: [ScreenViews()],
       initialRoute: Routes.feed,
     );
   }

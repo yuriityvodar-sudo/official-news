@@ -40,9 +40,28 @@ jobs:
           ASC_KEY_P8_BASE64: ${{ secrets.ASC_KEY_P8_BASE64 }}
         run: echo "$ASC_KEY_P8_BASE64" | base64 --decode > "$RUNNER_TEMP/asc_key.p8"
 
+      - name: Read the Firebase values for analytics
+        # From the GitHub secret GOOGLE_SERVICE_INFO_PLIST (base64 of the iOS
+        # config file of Firebase project official-news-48e16, #60). Without it
+        # the build works and sends no analytics.
+        env:
+          GOOGLE_SERVICE_INFO_PLIST: ${{ secrets.GOOGLE_SERVICE_INFO_PLIST }}
+        run: |
+          if [ -z "$GOOGLE_SERVICE_INFO_PLIST" ]; then
+            echo "::warning::GOOGLE_SERVICE_INFO_PLIST is not set, so this build sends no analytics (docs/setup.md)."
+            exit 0
+          fi
+          plist="$RUNNER_TEMP/GoogleService-Info.plist"
+          echo "$GOOGLE_SERVICE_INFO_PLIST" | base64 --decode > "$plist"
+          read_key() { /usr/libexec/PlistBuddy -c "Print :$1" "$plist"; }
+          echo "::add-mask::$(read_key API_KEY)"
+          echo "FIREBASE_DEFINES=--dart-define=FIREBASE_API_KEY=$(read_key API_KEY) --dart-define=FIREBASE_APP_ID=$(read_key GOOGLE_APP_ID) --dart-define=FIREBASE_SENDER_ID=$(read_key GCM_SENDER_ID) --dart-define=FIREBASE_PROJECT_ID=$(read_key PROJECT_ID)" >> "$GITHUB_ENV"
+          rm "$plist"
+
       - name: Build the iOS app without signing
-        # The live API, not the laptop default (app/lib/core/config.dart).
-        run: flutter build ios --release --no-codesign --build-number=${{ github.run_number }} --dart-define=API_URL=https://api.officialnews.workers.dev
+        # The live API, not the laptop default (app/lib/core/config.dart), and
+        # the Firebase values when there are any.
+        run: flutter build ios --release --no-codesign --build-number=${{ github.run_number }} --dart-define=API_URL=https://api.officialnews.workers.dev $FIREBASE_DEFINES
 
       - name: Archive with automatic signing
         working-directory: app/ios
