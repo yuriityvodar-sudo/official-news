@@ -159,12 +159,13 @@ export async function runSummarizer(
       }
       const checked = toSummary(parsed);
       if ("problems" in checked) throw new UnusableAnswer(checked.problems.join("; "));
-      // A number the article does not give is never stored (#63); ruled-out words get
-      // another try, and on the last one the summary is stored anyway, so a decision is
-      // not hidden for a word.
+      // A number the article does not give, or a summary not in English, is never
+      // stored (#63); ruled-out words get another try, and on the last one the summary
+      // is stored anyway, so a decision is not hidden for a word.
       const source = `${row.original_title}\n${(row.text ?? "").slice(0, MAX_TEXT)}`;
       const found = checkSummary(checked.summary, source, Number(row.fetched_at.slice(0, 4)));
       if (found.invented.length) throw new UnusableAnswer(`numbers not in the article: ${found.invented.join(", ")}`);
+      if (found.notEnglish) throw new UnusableAnswer("the summary is not in English");
       const lastTry = row.summary_attempts >= MAX_ATTEMPTS - 1;
       if (found.banned.length && !lastTry) throw new UnusableAnswer(`ruled-out words: ${found.banned.join(", ")}`);
       await store(env, row.id, checked.summary, toStoredTime(new Date())).run();

@@ -17,6 +17,28 @@ function numbers(text: string): string[] {
   return (text.match(/\d{1,3}(?:[   ]\d{3})+(?![\d])|\d+(?:[.,]\d+)*/g) ?? []).map((n) => n.replace(/[.,\s  ]/g, ""));
 }
 
+/**
+ * Common English words. They are at least 18% of the words of every English
+ * summary in the 16 Oct test, and 0 to 2% of the 7 of 293 stored summaries the
+ * old model wrote in the article's own language (German, Portuguese,
+ * Indonesian, Turkish), which the app then labelled "translated from".
+ */
+const ENGLISH = new Set(
+  "the of and to in for on with is are was were by from an that this will at as it its be has have not which their or after under new".split(" "),
+);
+
+/** Below this share of ENGLISH words, a summary is not in English. */
+const MIN_ENGLISH_SHARE = 0.1;
+
+/** Too few words to tell the language by its common words. */
+const MIN_WORDS = 20;
+
+function notEnglish(text: string): boolean {
+  const words = text.toLowerCase().match(/\p{L}+/gu) ?? [];
+  if (words.length < MIN_WORDS) return false;
+  return words.filter((w) => ENGLISH.has(w)).length / words.length < MIN_ENGLISH_SHARE;
+}
+
 /** Every text of a summary that readers see. */
 function shown(s: Summary): string {
   const i = s.impact;
@@ -30,6 +52,8 @@ export interface CheckResult {
   invented: string[];
   /** Ruled-out words found, lower case. */
   banned: string[];
+  /** Written in another language, often the article's own. */
+  notEnglish: boolean;
 }
 
 /**
@@ -43,5 +67,5 @@ export function checkSummary(s: Summary, source: string, year: number): CheckRes
   const text = shown(s);
   const invented = [...new Set(numbers(text).filter((n) => n.length >= 2 && !known.has(n)))];
   const banned = [...new Set((text.match(BANNED) ?? []).map((w) => w.toLowerCase()))];
-  return { invented, banned };
+  return { invented, banned, notEnglish: notEnglish(text) };
 }

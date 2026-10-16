@@ -39,4 +39,23 @@ describe("checkSummary", () => {
     const s = summary("The law aims to help. It could change prices. It aims to be fair. Providers may now sell devices.");
     expect(checkSummary(s, "", 2026).banned).toEqual(["aims to", "could"]);
   });
+
+  it("finds a summary written in the article's language instead of English", () => {
+    const german =
+      "Die Bundesregierung will einen staatlichen Zuschuss für die private Altersvorsorge einführen. " +
+      "Sparer mit kleinen Einkommen erhalten eine Zulage, die jedes Jahr von der Rentenversicherung ausgezahlt wird.";
+    const portuguese =
+      "A deputada propõe ampliar as compras da agricultura familiar no Programa Nacional de Alimentação Escolar. " +
+      "O projeto obriga os municípios a comprar ao menos metade dos alimentos de produtores locais.";
+    expect(checkSummary(summary(german), german, 2026).notEnglish).toBe(true);
+    expect(checkSummary(summary(portuguese), portuguese, 2026).notEnglish).toBe(true);
+  });
+
+  it("accepts an English summary that names things in their own language, and a text too short to tell", () => {
+    const english =
+      "The Bundesregierung approved a state subsidy for private pensions (Altersvorsorge). " +
+      "Savers with low incomes get a yearly allowance, paid by the Deutsche Rentenversicherung from 2027.";
+    expect(checkSummary(summary(english), english, 2026).notEnglish).toBe(false);
+    expect(checkSummary(summary("Kabinett beschließt Haushalt."), "", 2026).notEnglish).toBe(false);
+  });
 });

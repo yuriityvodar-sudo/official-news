@@ -309,6 +309,20 @@ describe("what it means and the checks (#63)", () => {
     expect(await row("invented")).toMatchObject({ summarized_at: null, summary_attempts: 1 });
   });
 
+  it("never stores a summary that is not in English", async () => {
+    await insertUnsummarized("german", now());
+    const german = answer({
+      headline: "Bundeskabinett beschließt den Haushaltsentwurf für 2027",
+      shortSummary: "Das Bundeskabinett hat den Entwurf des Bundeshaushalts für 2027 beschlossen.",
+      summary: "Das Bundeskabinett hat den Entwurf des Bundeshaushalts für 2027 beschlossen.\n\nDer Bundestag berät ihn nun.",
+    });
+
+    const [result] = await runSummarizer(env, { maxArticles: 1 }, fakeModel(german).summarize);
+
+    expect(result).toMatchObject({ ok: false, error: "the summary is not in English" });
+    expect(await row("german")).toMatchObject({ summarized_at: null, summary_attempts: 1 });
+  });
+
   it("tries again for a ruled-out word, and stores the last try with a warning", async () => {
     await insertUnsummarized("aims", now());
     await env.DB.prepare("UPDATE articles SET summary_attempts = ? WHERE id = 'aims'").bind(MAX_ATTEMPTS - 2).run();
