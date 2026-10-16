@@ -61,5 +61,19 @@ export const CREDITS: Record<string, Credit> = {
     "licenceUrl": "https://www.kantei.go.jp/jp/terms.html"
   },
   "kr-legislative-notices": {},
-  "id-cabinet-secretariat": {}
+  "id-cabinet-secretariat": {},
+  "pl-council-of-ministers": {
+    "licence": "CC BY-SA 4.0",
+    "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+  },
+  "pl-journal-of-laws": {},
+  "cz-government-meetings": {},
+  "es-council-of-ministers": {
+    "wording": "Origen de los datos: sitio web de lamoncloa.gob.es. Ministerio de la Presidencia.",
+    "wordingLang": "es"
+  },
+  "ua-cabinet-of-ministers": {
+    "licence": "CC BY 4.0",
+    "licenceUrl": "https://creativecommons.org/licenses/by/4.0/"
+  }
 };

@@ -101,7 +101,12 @@ export type AppKey =
   | "termsPublisher"
   | "supportMessages"
   | "supportMistakes"
-  | "supportAppStore";
+  | "supportAppStore"
+  | "countryCZ"
+  | "countryES"
+  | "countryPL"
+  | "countryUA"
+  | "languageCs";
 
 export type SiteLang = "en" | "uk" | "ru" | "es" | "de";
 
@@ -208,7 +213,12 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "termsPublisher": "Published by {publisher}. If these terms change, the new version will be in the app with a new date.",
     "supportMessages": "Found a mistake in a summary, a broken source, or have an idea? We read every message.",
     "supportMistakes": "When you report a mistake, the name of the article and the language you read it in help us find it.",
-    "supportAppStore": "You can reach us through the app's page in the App Store."
+    "supportAppStore": "You can reach us through the app's page in the App Store.",
+    "countryCZ": "Czechia",
+    "countryES": "Spain",
+    "countryPL": "Poland",
+    "countryUA": "Ukraine",
+    "languageCs": "Czech"
   },
   "uk": {
     "topStories": "Головне",
@@ -309,7 +319,12 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "termsPublisher": "Видавець: {publisher}. Якщо ці умови зміняться, нова версія з’явиться в застосунку з новою датою.",
     "supportMessages": "Помітили помилку у викладі, джерело, що не працює, або маєте ідею? Ми читаємо кожне повідомлення.",
     "supportMistakes": "Коли повідомляєте про помилку, назва статті й мова, якою ви її читали, допоможуть нам її знайти.",
-    "supportAppStore": "Зв’язатися з нами можна через сторінку застосунку в App Store."
+    "supportAppStore": "Зв’язатися з нами можна через сторінку застосунку в App Store.",
+    "countryCZ": "Чехія",
+    "countryES": "Іспанія",
+    "countryPL": "Польща",
+    "countryUA": "Україна",
+    "languageCs": "чеської"
   },
   "ru": {
     "topStories": "Главное",
@@ -410,7 +425,12 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "termsPublisher": "Издатель: {publisher}. Если эти условия изменятся, новая версия появится в приложении с новой датой.",
     "supportMessages": "Нашли ошибку в кратком изложении или неработающий источник? Есть идея? Мы читаем каждое сообщение.",
     "supportMistakes": "Сообщая об ошибке, укажите заголовок статьи и язык, на котором вы её читали: так нам будет проще найти ошибку.",
-    "supportAppStore": "Связаться с нами можно через страницу приложения в App Store."
+    "supportAppStore": "Связаться с нами можно через страницу приложения в App Store.",
+    "countryCZ": "Чехия",
+    "countryES": "Испания",
+    "countryPL": "Польша",
+    "countryUA": "Украина",
+    "languageCs": "чешского"
   },
   "es": {
     "topStories": "Destacadas",
@@ -511,7 +531,12 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "termsPublisher": "Publicada por {publisher}. Si estos términos cambian, la nueva versión estará en la app con una nueva fecha.",
     "supportMessages": "¿Encontraste un error en un resumen, una fuente que no funciona o tienes una idea? Leemos todos los mensajes.",
     "supportMistakes": "Si nos informas de un error, el título del artículo y el idioma en que lo leíste nos ayudan a encontrarlo.",
-    "supportAppStore": "Puedes contactarnos a través de la página de la app en el App Store."
+    "supportAppStore": "Puedes contactarnos a través de la página de la app en el App Store.",
+    "countryCZ": "Chequia",
+    "countryES": "España",
+    "countryPL": "Polonia",
+    "countryUA": "Ucrania",
+    "languageCs": "checo"
   },
   "de": {
     "topStories": "Topmeldungen",
@@ -612,7 +637,12 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "termsPublisher": "Herausgeber: {publisher}. Wenn sich diese Bedingungen ändern, steht die neue Fassung mit neuem Datum in der App.",
     "supportMessages": "Sie haben einen Fehler in einer Zusammenfassung oder eine Quelle gefunden, die nicht funktioniert, oder Sie haben eine Idee? Wir lesen jede Nachricht.",
     "supportMistakes": "Wenn Sie einen Fehler melden, helfen uns der Titel des Artikels und die Sprache, in der Sie ihn gelesen haben, bei der Suche.",
-    "supportAppStore": "Sie erreichen uns über die Seite der App im App Store."
+    "supportAppStore": "Sie erreichen uns über die Seite der App im App Store.",
+    "countryCZ": "Tschechien",
+    "countryES": "Spanien",
+    "countryPL": "Polen",
+    "countryUA": "Ukraine",
+    "languageCs": "Tschechischen"
   }
 };
 

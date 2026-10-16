@@ -86,10 +86,12 @@ describe("texts", () => {
     expect(aiLabel("uk", "uk")).toBe(APP_TEXTS.uk.summaryByAi);
     expect(aiLabel("uk", "de")).toBe("Стислий виклад від ШІ · переклад з німецької");
     expect(aiLabel("en", null)).toBe("Summary by AI");
-    expect(aiLabel("en", "cs")).toBe("Summary by AI · translated from CS");
+    expect(aiLabel("en", "cs")).toBe("Summary by AI · translated from Czech");
+    // A source language the app has no name for shows its code.
+    expect(aiLabel("en", "fi")).toBe("Summary by AI · translated from FI");
     expect(countryName("es", "DE")).toBe("Alemania");
     expect(countryName("en", "XX")).toBe("XX");
-    // A country the app's ARB files on this branch do not name yet: the API's name (GET /countries), as in the Where menu.
+    // The countries #72 added, named by the app's ARB files since (the API's names are the same: site-texts.check.mjs).
     expect(countryName("uk", "UA")).toBe("Україна");
     expect(countryName("de", "PL")).toBe("Polen");
     expect(languageName("de", "pt")).toBe("Portugiesischen");
