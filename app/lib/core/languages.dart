@@ -6,6 +6,7 @@ import '../l10n/app_localizations.dart';
 /// unknown code is shown in capitals, as it is.
 String languageName(String code, AppLocalizations l10n) => switch (code) {
   'ar' => l10n.languageAr,
+  'cs' => l10n.languageCs,
   'de' => l10n.languageDe,
   'en' => l10n.languageEn,
   'es' => l10n.languageEs,

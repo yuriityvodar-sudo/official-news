@@ -625,5 +625,16 @@
   "supportWrite": "Write to us",
   "@supportWrite": {
     "description": "Contact & Support page: the button that opens an e-mail to us."
-  }
+  },
+
+  "countryCZ": "Czechia",
+  "@countryCZ": { "description": "Country name." },
+  "countryES": "Spain",
+  "@countryES": { "description": "Country name." },
+  "countryPL": "Poland",
+  "@countryPL": { "description": "Country name." },
+  "countryUA": "Ukraine",
+  "@countryUA": { "description": "Country name." },
+  "languageCs": "Czech",
+  "@languageCs": { "description": "As languageAr." }
 }

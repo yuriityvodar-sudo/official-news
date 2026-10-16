@@ -11,7 +11,7 @@ Built by Yurii and Roman.
 - [`docs/contract.md`](docs/contract.md): article format, topics, API, database: what app and backend build against
 - [`docs/setup.md`](docs/setup.md): which accounts and services exist right now
 - [`CLAUDE.md`](CLAUDE.md): how we work, read automatically by Claude Code
-- `docs/test-feed-2026-10-11.html`: the live source test from 11 Oct 2026 (open it in a browser)
+- [`docs/research/`](docs/research): research and tests, such as the live source test of 11 Oct 2026 (`2026-10-11 Live source test.html`, open it in a browser)
 
 ## Run it locally
 
