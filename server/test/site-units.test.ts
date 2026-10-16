@@ -5,6 +5,7 @@ import { fullDate, publishedDate } from "../src/site/dates";
 import { Html, esc, html, raw, safeHttps } from "../src/site/html";
 import { SITE_LANGS, aiLabel, countryName, decisionLabel, languageName, t, text } from "../src/site/texts";
 import { SLUG_MAX, articlePath, slugify } from "../src/site/urls";
+import { LANGS } from "../src/translator";
 
 const ID = "01JTEST0000000000000000001";
 
@@ -63,6 +64,12 @@ describe("dates", () => {
     expect(publishedDate("en", date, false)).toBe("15 October 2026, 23:05 UTC");
     expect(publishedDate("uk", date, false)).toBe("15 жовтня 2026 р. о 23:05 UTC");
     expect(publishedDate("de", date, true)).toBe("15. Oktober 2026");
+  });
+});
+
+describe("languages", () => {
+  it("are English and the API's LANGS, in the app's order: a language the API refuses would turn every article page into a 500", () => {
+    expect(SITE_LANGS).toEqual(["en", ...LANGS]);
   });
 });
 
