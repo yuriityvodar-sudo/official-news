@@ -8,7 +8,8 @@
     "db:migrate:remote": "wrangler d1 migrations apply official-news --remote",
     "deploy": "wrangler deploy",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run && node --test scripts/sources.check.mjs",
+    "test": "vitest run && node --test scripts/sources.check.mjs scripts/queue.check.mjs",
+    "queue": "node scripts/queue.mjs",
     "sources:local": "mkdir -p .wrangler && node scripts/sources.mjs > .wrangler/sources.sql && wrangler d1 execute official-news --local --file=.wrangler/sources.sql",
     "sources:remote": "mkdir -p .wrangler && node scripts/sources.mjs > .wrangler/sources.sql && wrangler d1 execute official-news --remote --yes --file=.wrangler/sources.sql"
   },

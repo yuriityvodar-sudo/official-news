@@ -54,6 +54,36 @@ The Workers Paid plan costs at least $5 a month, and Neurons above the free 10,0
 
 Mistral Small 3.1 is also on Cloudflare (row above), at more than twice Gemma's cost.
 
+## Round 2: Spanish, German, Polish, Czech and Russian (15 Oct afternoon)
+
+Same prompt, 15 real summaries from the live feed. For the four new languages, all four in one request (the translator itself sends one language per request). Side by side, to open in a browser: `translation-test/openrouter.html`, `translation-test/zai.html` and `translation-test/groq-russian.html`.
+
+| Model | Where | Complete | Time per article | Output tokens per article |
+|---|---|---|---|---|
+| Gemma 4 31B (`google/gemma-4-31b-it:free`) | OpenRouter, free | 0/15 (HTTP 429, rate limited upstream) | – | – |
+| Nemotron 3 Super 120B (`nvidia/nemotron-3-super-120b-a12b:free`) | OpenRouter, free | 6/15 | 70.2 s | 2,504 |
+| Nemotron 3 Ultra 550B (`nvidia/nemotron-3-ultra-550b-a55b:free`) | OpenRouter, free | 5/15 | 73.1 s | 2,589 |
+| **GLM-4.5-Flash** (`glm-4.5-flash`) | Z.ai, free | **15/15** | 39.9 s (4 languages) | 810 (4 languages) |
+| GLM-4.7-Flash (`glm-4.7-flash`) | Z.ai, free | 8/15 | 76.2 s (4 languages) | 812 (4 languages) |
+| GPT-OSS 120B, Russian only | Groq, free | 15/15 | 1.2 s | 181 |
+| Qwen 3.8 27B, Russian only | Groq, free | 15/15 | 0.8 s | 170 |
+
+- **OpenRouter's free models are not usable:** 0 to 6 of 15 complete, from upstream rate limits and overloads.
+- **Z.ai `glm-4.5-flash` completed all 15.** Independent scoring of its answers, 2 reviewers per language, out of 5:
+
+| Language | Accuracy | Fluency | Verdict |
+|---|---|---|---|
+| Spanish | 4.3 | 3.8 | close: 8/15 publishable unchanged |
+| German | 4.4 | 3.3 | facts all right; 2 broken headlines, clumsy phrasing |
+| Polish | 3.8 | 2.9 | non-words, false friends: not publishable |
+| Czech | 4.1 | 3.0 | misspelled ministry names in headlines: not publishable |
+
+Every number, date and name was right; the weak part is grammar and wording.
+
+- **Decided (Yurii, 15 Oct, `docs/decisions.md`):** Spanish and German go in through Z.ai `glm-4.5-flash`, with `glm-4.7-flash` as its fallback. Polish and Czech wait for a better model. An editor pass, a second call that corrects the wording before publishing, is backlog #54.
+- **Russian:** both Groq models completed all 15, so Russian stays on Groq (GPT-OSS first, then Qwen).
+- More options checked the same day (batch APIs, other free tiers, translation-only models, on-device translation): `notes/Free AI for translations/more_translation_options.md`.
+
 ## Open questions for the decision
 
 1. **Which model reads best in Ukrainian:** Yurii's read of the pages.

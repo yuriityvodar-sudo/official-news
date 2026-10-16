@@ -29,3 +29,32 @@ describe("migration 0006 (feed_seq)", () => {
     expect(results.every((r) => r.added_at)).toBe(true);
   });
 });
+
+describe("migration 0010 (release together)", () => {
+  it("turns German off, keeps a manual pause manual, and indexes the articles waiting for release", async () => {
+    const { results } = await env.DB.prepare("SELECT lang, enabled, paused, paused_reason, down_since FROM translation_langs ORDER BY lang").all();
+    expect(results).toEqual([
+      { lang: "de", enabled: 0, paused: 0, paused_reason: null, down_since: null },
+      { lang: "es", enabled: 1, paused: 0, paused_reason: null, down_since: null },
+      { lang: "ru", enabled: 1, paused: 0, paused_reason: null, down_since: null },
+      { lang: "uk", enabled: 1, paused: 0, paused_reason: null, down_since: null },
+    ]);
+    const manual = env.TEST_MIGRATIONS.find((m) => m.name.startsWith("0010"))?.queries.find((q) => q.includes("paused_reason = 'manual'"));
+    expect(manual).toBeDefined();
+    await env.DB.prepare("UPDATE translation_langs SET paused = 1 WHERE lang = 'ru'").run();
+    await env.DB.prepare(manual!).run();
+    expect(await env.DB.prepare("SELECT paused_reason FROM translation_langs WHERE lang = 'ru'").first("paused_reason")).toBe("manual");
+    const indexes = await env.DB.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND name IN ('articles_unreleased', 'articles_unnumbered', 'article_translations_lang_time')").all();
+    expect(indexes.results).toEqual([{ name: "articles_unreleased" }]);
+  });
+
+  it("keeps the migration names in order after #55's 0007_source_health", () => {
+    const names = env.TEST_MIGRATIONS.map((m) => m.name);
+    const ours = ["0006_feed_seq.sql", "0008_translations.sql", "0009_translation_queue.sql", "0010_release_together.sql"];
+    expect(names.filter((n) => ours.includes(n))).toEqual(ours);
+    // Every number once: 0007 is #55's.
+    const numbers = names.map((n) => n.slice(0, 4));
+    expect(new Set(numbers).size).toBe(numbers.length);
+    expect(names.filter((n) => n.startsWith("0007") && n !== "0007_source_health.sql")).toEqual([]);
+  });
+});

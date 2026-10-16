@@ -1,5 +1,6 @@
 import type { Env } from "../env";
 import { health } from "../health";
+import { LANGS, type Lang, SHOWN, isLang, queueStatus, releaseStatus } from "../translator";
 
 /** A row of `articles` joined with its source, as stored in D1. */
 interface ArticleRow {
@@ -53,23 +54,28 @@ export const PAGE_CONDITIONS = [
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 50;
 
-/** Top today: last 24 hours, highest importance, at most 2 per country, up to 5. */
-// Picked by importance, shown newest first (feed order), so times only go down here too.
-const TOP_QUERY = `
+/**
+ * Top today: last 24 hours, highest importance, at most 2 per country, up to 5,
+ * among the articles `where` picks (the feed's, or a language's: #46). Picked by
+ * importance, shown newest first (feed order), so times only go down here too.
+ */
+const topQuery = (columns: string, from: string, where: string) => `
   SELECT * FROM (
   SELECT * FROM (
-    SELECT ${ARTICLE_COLUMNS},
+    SELECT ${columns},
            ROW_NUMBER() OVER (
              PARTITION BY s.country ORDER BY a.importance DESC, a.published_at DESC, a.id DESC
            ) AS country_rank
-    ${FROM_ARTICLES}
-    WHERE a.is_news = 1 AND a.feed_seq IS NOT NULL AND a.importance IS NOT NULL
+    ${from}
+    WHERE ${where} AND a.importance IS NOT NULL
       AND a.published_at >= strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-24 hours')
   )
   WHERE country_rank <= 2
   ORDER BY importance DESC, published_at DESC, id DESC
   LIMIT 5
   ) ORDER BY feed_seq DESC`;
+
+const TOP_QUERY = topQuery(ARTICLE_COLUMNS, FROM_ARTICLES, "a.is_news = 1 AND a.feed_seq IS NOT NULL");
 
 /** A JSON array of strings stored in D1; anything else reads as empty. */
 function parseStringArray(value: string | null): string[] {
@@ -153,13 +159,20 @@ function nonNegativeInteger(value: string): number | null {
 }
 
 /**
- * `GET /articles?limit=&cursor=&after=&since=`: official decisions of the last
- * 7 days in the order they appeared in the feed (`feed_seq`), newest first, so
- * one that appears late lands on top, never between ones already read.
- * `cursor` continues from the previous page; `after` keeps only articles that
- * appeared after a given `feedSeq` (the "N new" check); `since` is the older
- * check by publication time, kept for app builds before `after`. `top` is
- * filled on the first page only.
+ * `GET /articles?limit=&cursor=&after=&since=&lang=`: official decisions of the
+ * last 7 days in the order they appeared in the feed (`feed_seq`), newest
+ * first, so one that appears late lands on top, never between ones already
+ * read. `cursor` continues from the previous page; `after` keeps only articles
+ * that appeared after a given `feedSeq` (the "N new" check); `since` is the
+ * older check by publication time, kept for app builds before `after`. `top`
+ * is filled on the first page only.
+ *
+ * With `lang` other than `en` (#46), the same feed in that language: the same
+ * order, the same cursors and `after`, the same top stories, keeping only the
+ * articles whose translation into it is shown (release together: every article
+ * appears in all languages at once, except where a translation failed or the
+ * language is paused). `translationsDelayed` says the language is paused or
+ * off, so its newest articles may be missing for a while.
  */
 async function listArticles(url: URL, env: Env): Promise<Response> {
   const params = url.searchParams;
@@ -173,8 +186,12 @@ async function listArticles(url: URL, env: Env): Promise<Response> {
     }
   }
 
-  const where = [...PAGE_CONDITIONS];
-  const binds: (string | number)[] = [];
+  const lang = readLang(params);
+  if (lang === undefined) return badRequest(LANG_ERROR);
+
+  const where = [...PAGE_CONDITIONS, ...(lang ? TRANSLATED_CONDITIONS : [])];
+  // The language is bound in the join (FROM_TRANSLATED).
+  const binds: (string | number)[] = lang ? [lang] : [];
 
   const afterParam = params.get("after");
   if (afterParam !== null) {
@@ -225,34 +242,119 @@ async function listArticles(url: URL, env: Env): Promise<Response> {
 
   // One extra row tells whether there is a next page.
   const pageQuery = env.DB.prepare(
-    `SELECT ${ARTICLE_COLUMNS} ${FROM_ARTICLES}
+    `SELECT ${lang ? TRANSLATED_COLUMNS : ARTICLE_COLUMNS} ${lang ? FROM_TRANSLATED : FROM_ARTICLES}
      WHERE ${where.join(" AND ")}
      ORDER BY a.feed_seq DESC
      LIMIT ?`,
   ).bind(...binds, limit + 1);
 
   const firstPage = cursorParam === null && sinceParam === null && afterParam === null;
-  const [page, top] = firstPage
-    ? await env.DB.batch<ArticleRow>([pageQuery, env.DB.prepare(TOP_QUERY)])
-    : [await pageQuery.all<ArticleRow>(), null];
+  const topQuery = firstPage ? (lang ? env.DB.prepare(TRANSLATED_TOP_QUERY).bind(lang) : env.DB.prepare(TOP_QUERY)) : null;
+  const switchQuery = lang ? env.DB.prepare(LANG_SWITCH).bind(lang) : null;
+  const [page, ...more] = await env.DB.batch<TranslatedRow & { delayed?: number }>(
+    [pageQuery, topQuery, switchQuery].filter((q): q is D1PreparedStatement => q !== null),
+  );
+  const top = topQuery ? more.shift() : undefined;
+  const delayed = switchQuery ? more.shift() : undefined;
 
   const rows = page.results.slice(0, limit);
   const last = rows.at(-1);
   const nextCursor = page.results.length > limit && last?.feed_seq != null ? encodeCursor(last.feed_seq) : null;
+  const shape = (row: TranslatedRow) => (lang ? toTranslatedArticle(row, lang) : toArticle(row));
 
   return json({
-    items: rows.map(toArticle),
+    items: rows.map(shape),
     nextCursor,
-    top: top ? top.results.map(toArticle) : [],
+    top: top ? top.results.map(shape) : [],
+    ...(lang ? { translationsDelayed: delayed?.results[0]?.delayed !== 0 } : {}),
   });
 }
 
-/** `GET /articles/:id`: one article shown in the feed, or 404. */
+/** `GET /articles/:id`: one article shown in the feed (released), or 404. */
 async function getArticle(id: string, env: Env): Promise<Response> {
-  const row = await env.DB.prepare(`SELECT ${ARTICLE_COLUMNS} ${FROM_ARTICLES} WHERE a.id = ? AND a.is_news = 1`)
+  const row = await env.DB.prepare(`SELECT ${ARTICLE_COLUMNS} ${FROM_ARTICLES} WHERE a.id = ? AND a.is_news = 1 AND a.feed_seq IS NOT NULL`)
     .bind(id)
     .first<ArticleRow>();
   return row ? json(toArticle(row)) : json({ error: "Not found" }, 404);
+}
+
+// Translated feeds (#46). With `?lang=uk` (any of LANGS) the API shows the
+// English feed's articles that have a shown translation into that language, in
+// the English order (feed_seq), never an English one mixed in. `lang=en`, or no
+// `lang`, is the English feed above, unchanged.
+
+/** A row of `articles` joined with its source and, in a language feed, its translation. */
+interface TranslatedRow extends ArticleRow {
+  t_headline?: string;
+  t_short_summary?: string;
+  t_summary?: string;
+}
+
+const TRANSLATED_COLUMNS = `${ARTICLE_COLUMNS},
+  t.headline AS t_headline, t.short_summary AS t_short_summary, t.summary AS t_summary`;
+
+/**
+ * The feed's articles with their translation into the language bound here. CROSS
+ * JOIN keeps articles the outer loop, so a page walks articles_feed_seq newest
+ * first as the English feed does and finds each translation by its primary key.
+ */
+export const FROM_TRANSLATED = `${FROM_ARTICLES} CROSS JOIN article_translations t ON t.article_id = a.id AND t.lang = ?`;
+
+/**
+ * A translation that is shown: it has a text (the CHECK constraint of
+ * migration 0008 keeps the three fields together), and not one of an older English whose
+ * new English used up its tries (SHOWN: not `failed`, unless its text is of the
+ * English it failed for).
+ */
+export const TRANSLATED_CONDITIONS = ["t.headline IS NOT NULL", SHOWN];
+
+/**
+ * A language's top stories: the English top stories (same selection, same
+ * order) that have a shown translation into it, so the language never gets a
+ * top story the English feed does not have.
+ */
+const TRANSLATED_TOP_QUERY = `
+  SELECT top.*, t.headline AS t_headline, t.short_summary AS t_short_summary, t.summary AS t_summary
+  FROM (${TOP_QUERY}) top JOIN article_translations t ON t.article_id = top.id AND t.lang = ?
+  WHERE ${TRANSLATED_CONDITIONS.join(" AND ")}
+  ORDER BY top.feed_seq DESC`;
+
+/** 0 while the language is translated as it should be; 1 while it is paused (by hand or automatically) or off. */
+const LANG_SWITCH = "SELECT CASE WHEN enabled = 1 AND paused = 0 THEN 0 ELSE 1 END AS delayed FROM translation_langs WHERE lang = ?";
+
+/** `lang`: null for English (absent or `en`), undefined when it is not a language we serve. */
+function readLang(params: URLSearchParams): Lang | null | undefined {
+  const value = params.get("lang");
+  if (value === null || value === "en") return null;
+  return isLang(value) ? value : undefined;
+}
+
+const LANG_ERROR = `lang must be one of: en, ${LANGS.join(", ")}`;
+
+/**
+ * The article in `lang`: its translated headline, short summary and summary,
+ * and the language. `feedSeq` and `addedAt` are the English ones: every
+ * language has the same feed.
+ */
+function toTranslatedArticle(row: TranslatedRow, lang: Lang) {
+  return {
+    ...toArticle(row),
+    headline: row.t_headline ?? null,
+    shortSummary: row.t_short_summary ?? null,
+    summary: row.t_summary ?? null,
+    lang,
+  };
+}
+
+/** `GET /articles/:id?lang=uk`: one article shown in the feed, translated into `lang`, or 404 when it is not (yet). */
+async function getTranslated(id: string, lang: Lang, env: Env): Promise<Response> {
+  const row = await env.DB.prepare(
+    `SELECT ${TRANSLATED_COLUMNS} ${FROM_TRANSLATED}
+     WHERE a.id = ? AND a.is_news = 1 AND a.feed_seq IS NOT NULL AND ${TRANSLATED_CONDITIONS.join(" AND ")}`,
+  )
+    .bind(lang, id)
+    .first<TranslatedRow>();
+  return row ? json(toTranslatedArticle(row, lang)) : json({ error: "Not found" }, 404);
 }
 
 async function route(request: Request, env: Env): Promise<Response> {
@@ -269,11 +371,19 @@ async function route(request: Request, env: Env): Promise<Response> {
     } catch {
       return json({ error: "Not found" }, 404);
     }
-    return getArticle(id, env);
+    const lang = readLang(url.searchParams);
+    if (lang === undefined) return badRequest(LANG_ERROR);
+    return lang === null ? getArticle(id, env) : getTranslated(id, lang, env);
   }
 
   if (url.pathname === "/health") {
     return json(await health(env));
+  }
+
+  // The translation queue per language and the articles waiting for release (#46): read-only counts and times, no secrets.
+  if (url.pathname === "/queue") {
+    const [languages, release] = await Promise.all([queueStatus(env), releaseStatus(env)]);
+    return json({ languages, release }, 200, { "cache-control": "no-store" });
   }
 
   return json({ error: "Not found" }, 404);
