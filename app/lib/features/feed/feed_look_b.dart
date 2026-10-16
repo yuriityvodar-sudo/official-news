@@ -15,7 +15,7 @@ import 'feed_look_b_cards.dart';
 /// Top stories), then the decision type, the topic and when it arrived.
 /// Pictures run across the top of their card; a card without one is complete
 /// as it is. Top stories are bigger cards. The filters and the settings button
-/// stay at the top while reading, so the "N new" pill sits at the bottom.
+/// stay at the top while reading; the "N new" pill floats just under them.
 class BLook extends FeedLook {
   @override
   Color background(BuildContext context) => BStyle.of(context).page;
@@ -95,16 +95,13 @@ class BLook extends FeedLook {
     );
   }
 
-  /// At the bottom of the screen: the top is where B's filters stay pinned,
-  /// and a pill there would cover the "All topics" filter and take its taps.
+  /// The screen floats it just under the pinned filters, clear of them.
   @override
   Widget newPill(
     BuildContext context, {
     required int count,
     required VoidCallback onTap,
-  }) => _AtBottom(
-    child: BNewPill(count: count, onTap: onTap),
-  );
+  }) => BNewPill(count: count, onTap: onTap);
 
   /// "Top stories", "Latest": black, not red, with room above so the
   /// sections read as separate.
@@ -141,6 +138,7 @@ class BLook extends FeedLook {
                 mark: section.markOf(a),
                 kind: kind,
                 lead: kind == BCardKind.top && i == 0,
+                topic: section.topic,
                 onTap: () => section.open(i),
               ),
             );
@@ -280,39 +278,6 @@ class _Toolbar extends StatelessWidget {
   }
 }
 
-/// [child] at the bottom of the screen, centred, above the home indicator.
-///
-/// PROTOTYPE: the feed screen places the pill 12 pt below the top of the safe
-/// area and lets a look draw only the pill, so this reaches from there to the
-/// bottom and puts the pill at its end. Where it holds no pill it lets taps
-/// through to the feed. If B is chosen, the screen should place it instead
-/// (a `newPillAtBottom` on FeedLook), agreed in the pull request.
-class _AtBottom extends StatelessWidget {
-  const _AtBottom({required this.child});
-
-  final Widget child;
-
-  /// Where the screen puts the pill: 12 pt below the top of the safe area.
-  static const _screenTop = 12.0;
-
-  @override
-  Widget build(BuildContext context) {
-    // The safe area's top is taken out of the MediaQuery here, so it is read
-    // from the screen itself.
-    final screen = MediaQueryData.fromView(View.of(context));
-    final room =
-        MediaQuery.sizeOf(context).height -
-        screen.padding.top -
-        _screenTop -
-        16 -
-        MediaQuery.paddingOf(context).bottom;
-    return SizedBox(
-      height: math.max(0, room),
-      child: Align(alignment: Alignment.bottomCenter, child: child),
-    );
-  }
-}
-
 /// Top stories side by side, swiped one at a time, the next card peeking in.
 /// Every card has the carousel's height, worked out from the text size, so the
 /// cards are text only: with pictures, a card without one was half empty.
@@ -381,6 +346,7 @@ class _CarouselState extends State<_Carousel> {
               article: a,
               mark: top.markOf(a),
               kind: k,
+              topic: top.topic,
               onTap: () => top.open(i),
             ),
           );

@@ -889,7 +889,6 @@ class _MastheadDelegate extends SliverPersistentHeaderDelegate {
       0.0,
       1.0,
     );
-    _tellHeaderBottom(maxExtent - shrink);
     return _Snap(
       shrinkOffset: shrinkOffset,
       range: maxExtent - minExtent,
@@ -1029,22 +1028,6 @@ class _MastheadDelegate extends SliverPersistentHeaderDelegate {
   bool shouldRebuild(_MastheadDelegate old) => true;
 }
 
-/// Where the masthead ends now, in points from the top of the feed: the
-/// "N new" pill floats just under it, over the nameplate's place neither
-/// when the masthead is open nor over the bar's title when it is folded.
-/// The screen places every look's pill at one height (12 pt from the top),
-/// so A's pill finds its own from this.
-final _headerBottom = ValueNotifier<double>(_MastheadDelegate._bar);
-
-/// The masthead is built while the feed is laid out, when nothing else may
-/// change; the pill hears of it just after.
-void _tellHeaderBottom(double bottom) {
-  if ((_headerBottom.value - bottom).abs() < 0.5) return;
-  WidgetsBinding.instance.addPostFrameCallback(
-    (_) => _headerBottom.value = bottom,
-  );
-}
-
 /// Settles the masthead open or folded when a scroll stops halfway, like an
 /// iOS large title, so the nameplate is never left cut by the bar's edge.
 class _Snap extends StatefulWidget {
@@ -1161,77 +1144,62 @@ class _NewPill extends StatelessWidget {
   final int count;
   final VoidCallback onTap;
 
-  /// The screen puts the pill 12 pt from the top; the capsule sits 5 pt
-  /// inside its 44-pt target.
-  static const _screenTop = 12.0;
-  static const _inset = 5.0;
-  static const _gap = 8.0;
-
   @override
   Widget build(BuildContext context) {
     final label = AppLocalizations.of(context).newDecisions(count);
-    return ValueListenableBuilder<double>(
-      valueListenable: _headerBottom,
-      builder: (context, bottom, pill) => Padding(
-        // The space above lets taps through to the masthead.
-        padding: EdgeInsets.only(
-          top: (bottom + _gap - _inset - _screenTop).clamp(0.0, 1000.0),
-        ),
-        child: pill,
-      ),
-      child: Semantics(
-        button: true,
-        label: label,
-        excludeSemantics: true,
+    // The screen floats it just under the masthead, open or folded.
+    return Semantics(
+      button: true,
+      label: label,
+      excludeSemantics: true,
+      onTap: onTap,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
         onTap: onTap,
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: onTap,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 44),
-            child: Center(
-              widthFactor: 1,
-              // Grows with the text up to twice the size: past that, three
-              // words would cover the feed.
-              child: MediaQuery.withClampedTextScaling(
-                maxScaleFactor: 2,
-                child: Builder(
-                  builder: (context) => DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: _pillRed,
-                      borderRadius: BorderRadius.circular(18),
-                      boxShadow: const [
-                        BoxShadow(
-                          color: Color(0x33000000),
-                          blurRadius: 10,
-                          offset: Offset(0, 3),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 44),
+          child: Center(
+            widthFactor: 1,
+            // Grows with the text up to twice the size: past that, three
+            // words would cover the feed.
+            child: MediaQuery.withClampedTextScaling(
+              maxScaleFactor: 2,
+              child: Builder(
+                builder: (context) => DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: _pillRed,
+                    borderRadius: BorderRadius.circular(18),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x33000000),
+                        blurRadius: 10,
+                        offset: Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 8,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          CupertinoIcons.arrow_up,
+                          size: MediaQuery.textScalerOf(context).scale(15),
+                          color: Colors.white,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          label,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 15,
+                          ),
                         ),
                       ],
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 8,
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            CupertinoIcons.arrow_up,
-                            size: MediaQuery.textScalerOf(context).scale(15),
-                            color: Colors.white,
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            label,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 15,
-                            ),
-                          ),
-                        ],
-                      ),
                     ),
                   ),
                 ),

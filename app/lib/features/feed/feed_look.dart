@@ -55,7 +55,9 @@ FeedLook lookFor(FeedDesign design) => switch (design) {
 /// The screen lays the page out as, top to bottom: the pull-to-refresh
 /// control, [masthead], a notice when the refresh failed, [topStories] (when
 /// there are top stories), [latest] (when there are later articles) and
-/// [feedEnd]; [newPill] floats near the top while new articles wait.
+/// [feedEnd]. While new articles wait, the screen floats [newPill] just under
+/// the masthead as it is on screen: under the filters at the top of the feed,
+/// under a pinned bar once folded, near the top once the masthead has gone.
 abstract class FeedLook {
   /// The colour behind the whole feed.
   Color background(BuildContext context);
@@ -85,8 +87,9 @@ abstract class FeedLook {
   /// that failed, or the end of the feed. One sliver.
   Widget feedEnd(BuildContext context, FeedEnd end);
 
-  /// "3 new decisions": a plain widget, the screen places it at the top and
-  /// calls [onTap] to show them.
+  /// "3 new decisions": a plain widget, as small as it looks (taps beside it
+  /// reach the feed). The screen places it under the masthead, never on the
+  /// name or the filters, and calls [onTap] to show them.
   Widget newPill(
     BuildContext context, {
     required int count,
@@ -119,39 +122,42 @@ class FeedMasthead {
   /// VoiceOver label. A look may draw its own and call [openSettings].
   Widget get settingsButton => NowSettingsButton(onPressed: openSettings);
 
-  /// Today's filter bar: the Global / Local and topic pull-downs (#67, #68).
+  /// Today's filter bar: the Where and Topics pull-downs (#67, #68).
   Widget get filterBar => FeedFilterBar(
-    scope: filters.scope,
-    country: filters.country,
+    place: filters.place,
+    countries: filters.countries,
     topic: filters.topic,
     topicCounts: filters.topicCounts,
-    onScope: filters.onScope,
+    onPlace: filters.onPlace,
     onTopic: filters.onTopic,
   );
 }
 
-/// The feed's filters (prototype, #67, #68): Global or Local, and a topic.
+/// The feed's filters (prototype, #67, #68): where the articles come from
+/// (every country, a group or one country) and a topic.
 class FeedFilters {
   const FeedFilters({
-    required this.scope,
-    required this.country,
+    required this.place,
+    required this.countries,
     required this.topic,
     required this.topicCounts,
-    required this.onScope,
+    required this.onPlace,
     required this.onTopic,
   });
 
-  final FeedScope scope;
+  final FeedPlace place;
 
-  /// The reader's country (ISO code) from the phone's region: what Local means.
-  final String country;
+  /// The countries with articles in the loaded feed (ISO codes, 'EU' for the
+  /// EU's institutions): the Where menu offers each alone.
+  final Iterable<String> countries;
 
   /// The topic id shown, or null for all topics.
   final String? topic;
 
-  /// Topics with articles in the feed now, busiest first (names: [topicNames]).
+  /// Topics with articles under the Where choice, busiest first (names:
+  /// [topicName]).
   final List<MapEntry<String, int>> topicCounts;
-  final ValueChanged<FeedScope> onScope;
+  final ValueChanged<FeedPlace> onPlace;
   final ValueChanged<String?> onTopic;
 }
 
@@ -165,11 +171,17 @@ class FeedSection {
     required this.open,
     this.shown = _nothing,
     this.readStyle = ReadStyle.dim,
+    this.topic,
   });
 
   /// "Top stories", "Latest", in the reader's language.
   final String title;
   final List<Article> articles;
+
+  /// The topic the feed is filtered by (an id, as [Article.topics] has it),
+  /// or null for every topic. A card that names one topic names this one, so
+  /// it agrees with the Topics chip: every article here has it.
+  final String? topic;
 
   /// Articles already opened: they stay in the feed, dimmed or without the
   /// unread dot ([readStyle]).

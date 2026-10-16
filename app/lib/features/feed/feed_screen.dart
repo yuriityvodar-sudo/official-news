@@ -1,9 +1,10 @@
 import 'dart:async';
-import 'dart:math' show min;
+import 'dart:math' show max, min;
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 
 import '../../core/analytics.dart';
 import '../../core/article.dart';
@@ -37,14 +38,21 @@ class FeedScreen extends StatefulWidget {
 }
 
 class _FeedScreenState extends State<FeedScreen> {
-  // PROTOTYPE filters (#67, #68).
-  FeedScope _scope = FeedScope.global;
-  String? _topic;
-  final String _country = phoneCountry();
+  // PROTOTYPE filters (#67, #68). A build with
+  // `--dart-define=FILTER_DEMO=GB:economy` starts with them chosen, for
+  // screenshots ([demoFilters]).
+  static final _demo = demoFilters(const String.fromEnvironment('FILTER_DEMO'));
+  FeedPlace _place = _demo.place;
+  String? _topic = _demo.topic;
 
   bool _shown(Article a) =>
-      (_scope == FeedScope.global || isLocal(a, _country)) &&
-      (_topic == null || a.topics.contains(_topic));
+      _place.includes(a) && (_topic == null || a.topics.contains(_topic));
+
+  /// The masthead's sliver, wherever it is on screen: all of it at the top
+  /// of the feed, a pinned bar once folded, nothing once a masthead that
+  /// scrolls has gone. The "N new" pill floats just under it, so it never
+  /// covers the name or the filters, in any look.
+  final _masthead = _MastheadLink();
 
   late final FeedController _feed = widget.controller ?? FeedController();
   final _scroll = ScrollController();
@@ -78,6 +86,7 @@ class _FeedScreenState extends State<FeedScreen> {
     readStyle.removeListener(_designChanged);
     if (widget.controller == null) _feed.dispose();
     _scroll.dispose();
+    _masthead.dispose();
     super.dispose();
   }
 
@@ -225,20 +234,23 @@ class _FeedScreenState extends State<FeedScreen> {
               slivers: [
                 // Pull to refresh works in every state, including error and empty.
                 CupertinoSliverRefreshControl(onRefresh: _feed.refresh),
-                look.masthead(
-                  context,
-                  FeedMasthead(
-                    // The app's name, the same in every language.
-                    title: 'Official News',
-                    date: longDay(DateTime.now(), l10n),
-                    openSettings: _openSettings,
-                    filters: FeedFilters(
-                      scope: _scope,
-                      country: _country,
-                      topic: _topic,
-                      topicCounts: _topicCounts(),
-                      onScope: (s) => setState(() => _scope = s),
-                      onTopic: (t) => setState(() => _topic = t),
+                _MastheadEdge(
+                  link: _masthead,
+                  sliver: look.masthead(
+                    context,
+                    FeedMasthead(
+                      // The app's name, the same in every language.
+                      title: 'Official News',
+                      date: longDay(DateTime.now(), l10n),
+                      openSettings: _openSettings,
+                      filters: FeedFilters(
+                        place: _place,
+                        countries: _countries(),
+                        topic: _topic,
+                        topicCounts: _topicCounts(),
+                        onPlace: (p) => setState(() => _place = p),
+                        onTopic: (t) => setState(() => _topic = t),
+                      ),
                     ),
                   ),
                 ),
@@ -246,11 +258,12 @@ class _FeedScreenState extends State<FeedScreen> {
               ],
             ),
             if (_feed.newCount > 0)
-              Positioned(
-                top: 12,
-                left: 0,
-                right: 0,
-                child: Center(
+              Positioned.fill(
+                child: _UnderMasthead(
+                  masthead: _masthead,
+                  scroll: _scroll,
+                  top: _pillTop,
+                  gap: _pillGap,
                   child: look.newPill(
                     context,
                     count: _feed.newCount,
@@ -264,13 +277,24 @@ class _FeedScreenState extends State<FeedScreen> {
     );
   }
 
-  /// Topics in the feed under the current Global / Local choice, busiest first.
+  /// The "N new" pill's place: [_pillGap] under the masthead, and never
+  /// higher than [_pillTop] from the top of the safe area (where it floated
+  /// before, once the masthead has scrolled away).
+  static const _pillTop = 12.0;
+  static const _pillGap = 8.0;
+
+  /// The countries with articles in the loaded feed.
+  Set<String> _countries() => {
+    for (final a in [..._feed.top, ..._feed.items]) a.country,
+  };
+
+  /// Topics in the feed under the current Where choice, busiest first.
   List<MapEntry<String, int>> _topicCounts() {
     final counts = <String, int>{};
     final seen = <String>{};
     for (final a in [..._feed.top, ..._feed.items]) {
       if (!seen.add(a.id)) continue;
-      if (_scope == FeedScope.local && !isLocal(a, _country)) continue;
+      if (!_place.includes(a)) continue;
       for (final t in a.topics) {
         counts[t] = (counts[t] ?? 0) + 1;
       }
@@ -327,13 +351,36 @@ class _FeedScreenState extends State<FeedScreen> {
     }
 
     if (top.isEmpty && latest.isEmpty) {
+      Widget undo(String label, VoidCallback onPressed) => CupertinoButton(
+        padding: EdgeInsets.zero,
+        onPressed: onPressed,
+        child: Text(
+          label,
+          style: text.meta.copyWith(
+            color: filterRed.resolveFrom(context),
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      );
       slivers.add(
         _padded(
           Padding(
             padding: const EdgeInsets.only(top: 24),
-            child: Text(
-              'No decisions here this week. Try Global or All topics.',
-              style: text.meta,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(l10n.filterEmpty, style: text.meta),
+                if (!_place.isAll)
+                  undo(
+                    l10n.filterShowGlobal,
+                    () => setState(() => _place = FeedPlace.all),
+                  ),
+                if (_topic != null)
+                  undo(
+                    l10n.filterShowAllTopics,
+                    () => setState(() => _topic = null),
+                  ),
+              ],
             ),
           ),
         ),
@@ -351,6 +398,7 @@ class _FeedScreenState extends State<FeedScreen> {
             readIds: _feed.readIds,
             readStyle: readStyle.value,
             open: (i) => _open(top[i], section: 'top', position: i),
+            topic: _topic,
           ),
         ),
       );
@@ -366,6 +414,7 @@ class _FeedScreenState extends State<FeedScreen> {
             readStyle: readStyle.value,
             open: (i) => _open(latest[i], section: 'latest', position: i),
             shown: (i) => _shownRow(i + 1),
+            topic: _topic,
           ),
         ),
       );
@@ -391,4 +440,195 @@ class _FeedScreenState extends State<FeedScreen> {
     padding: const EdgeInsets.symmetric(horizontal: 20),
     sliver: SliverToBoxAdapter(child: child),
   );
+}
+
+/// Where the masthead's sliver is, for the "N new" pill: [_MastheadEdge]
+/// registers its render object here and tells each time it is laid out
+/// (scrolling, folding, pull to refresh, a new size), so the pill moves in
+/// the same frame as the masthead, never a frame behind it.
+class _MastheadLink extends ChangeNotifier {
+  _RenderMastheadEdge? _edge;
+
+  /// Where the masthead ends on screen, in [box]'s coordinates: 0 once it
+  /// has scrolled away, or before it is laid out. Read while painting, when
+  /// this frame's layout is done.
+  double bottomIn(RenderBox box) {
+    final edge = _edge;
+    if (edge == null || !edge.attached || !box.attached) return 0;
+    final shown = edge.geometry?.paintExtent ?? 0;
+    if (shown <= 0) return 0;
+    return MatrixUtils.transformPoint(
+      edge.getTransformTo(box),
+      Offset(0, shown),
+    ).dy;
+  }
+
+  void _laidOut() => notifyListeners();
+}
+
+/// The masthead's sliver, any look's, registered with a [_MastheadLink].
+class _MastheadEdge extends SingleChildRenderObjectWidget {
+  const _MastheadEdge({required this.link, required Widget sliver})
+    : super(child: sliver);
+
+  final _MastheadLink link;
+
+  @override
+  RenderObject createRenderObject(BuildContext context) =>
+      _RenderMastheadEdge(link);
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    _RenderMastheadEdge renderObject,
+  ) => renderObject.link = link;
+}
+
+class _RenderMastheadEdge extends RenderProxySliver {
+  _RenderMastheadEdge(this._link);
+
+  _MastheadLink _link;
+  set link(_MastheadLink value) {
+    if (identical(value, _link)) return;
+    if (identical(_link._edge, this)) _link._edge = null;
+    _link = value;
+    if (attached) _link._edge = this;
+  }
+
+  @override
+  void attach(PipelineOwner owner) {
+    super.attach(owner);
+    _link._edge = this;
+  }
+
+  @override
+  void detach() {
+    if (identical(_link._edge, this)) _link._edge = null;
+    super.detach();
+  }
+
+  @override
+  void performLayout() {
+    super.performLayout();
+    // Only marks the pill to be painted again: allowed during layout.
+    _link._laidOut();
+  }
+}
+
+/// Places [child] (the "N new" pill) across the middle, [gap] under where
+/// the masthead ends on screen and never higher than [top]. The place is
+/// worked out while painting, after this frame's layout, so the pill moves
+/// with the masthead in the same frame; taps beside the pill reach the feed.
+class _UnderMasthead extends SingleChildRenderObjectWidget {
+  const _UnderMasthead({
+    required this.masthead,
+    required this.scroll,
+    required this.top,
+    required this.gap,
+    required Widget super.child,
+  });
+
+  final _MastheadLink masthead;
+  final Listenable scroll;
+  final double top;
+  final double gap;
+
+  @override
+  RenderObject createRenderObject(BuildContext context) =>
+      _RenderUnderMasthead(masthead, scroll, top, gap);
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    _RenderUnderMasthead renderObject,
+  ) => renderObject
+    ..masthead = masthead
+    ..scroll = scroll
+    ..top = top
+    ..gap = gap;
+}
+
+class _RenderUnderMasthead extends RenderShiftedBox {
+  _RenderUnderMasthead(this._masthead, this._scroll, this._top, this._gap)
+    : super(null);
+
+  _MastheadLink _masthead;
+  set masthead(_MastheadLink value) {
+    if (identical(value, _masthead)) return;
+    if (attached) _masthead.removeListener(markNeedsPaint);
+    _masthead = value;
+    if (attached) _masthead.addListener(markNeedsPaint);
+    markNeedsPaint();
+  }
+
+  /// The list's scrolling: the pill is painted again as it scrolls, as well
+  /// as each time the masthead is laid out.
+  Listenable _scroll;
+  set scroll(Listenable value) {
+    if (identical(value, _scroll)) return;
+    if (attached) _scroll.removeListener(markNeedsPaint);
+    _scroll = value;
+    if (attached) _scroll.addListener(markNeedsPaint);
+    markNeedsPaint();
+  }
+
+  double _top;
+  set top(double value) {
+    if (value == _top) return;
+    _top = value;
+    markNeedsPaint();
+  }
+
+  double _gap;
+  set gap(double value) {
+    if (value == _gap) return;
+    _gap = value;
+    markNeedsPaint();
+  }
+
+  @override
+  void attach(PipelineOwner owner) {
+    super.attach(owner);
+    _masthead.addListener(markNeedsPaint);
+    _scroll.addListener(markNeedsPaint);
+  }
+
+  @override
+  void detach() {
+    _masthead.removeListener(markNeedsPaint);
+    _scroll.removeListener(markNeedsPaint);
+    super.detach();
+  }
+
+  // Its own layer: moving the pill repaints only the pill.
+  @override
+  bool get isRepaintBoundary => true;
+
+  @override
+  Size computeDryLayout(BoxConstraints constraints) => constraints.biggest;
+
+  @override
+  void performLayout() {
+    size = constraints.biggest;
+    // As small as the pill looks, as high as it likes (as under a Positioned
+    // with only a top): taps beside it reach the feed.
+    child?.layout(
+      BoxConstraints(maxWidth: constraints.maxWidth),
+      parentUsesSize: true,
+    );
+  }
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    final child = this.child;
+    if (child == null) return;
+    (child.parentData! as BoxParentData).offset = Offset(
+      (size.width - child.size.width) / 2,
+      max(_top, _masthead.bottomIn(this) + _gap),
+    );
+    super.paint(context, offset);
+  }
+
+  @override
+  bool hitTestSelf(Offset position) => false;
 }
