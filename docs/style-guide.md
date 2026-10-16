@@ -6,7 +6,7 @@ One AI call per article, run once on the server. The call reads the official tex
 
 ## The rules
 
-1. **Facts only from the article.** No outside knowledge, no opinions, no "experts say". Never add a purpose, cause, consequence or judgement the article does not state: no "aims to", "seeks to", "is intended to", "is expected to", "could", "may", "might", "significant", "routine", "first step", "landmark", "historic". A purpose the article states is attributed: "The ministry says the goal is …". The summarizer checks this (`server/src/summarizer/checks.ts`).
+1. **Facts only from the article.** No outside knowledge, no opinions, no "experts say". Never add a purpose, cause, consequence or judgement the article does not state: no "aims to", "seeks to", "is intended to", "is expected to", "could", "might", "significant", "routine", "first step", "landmark", "historic" ("may" for a permission the decision grants is fine: "providers may now sell the devices"). A purpose the article states is attributed: "The ministry says the goal is …". The summarizer checks this (`server/src/summarizer/checks.ts`).
 2. **Numbers, dates, names and amounts exactly as written.** Never a number the article does not give (checked: such an answer is never stored). Do not round, convert currencies or recalculate.
 3. **The status as the article gives it.** Proposed, adopted, signed, published or in force; never a proposal turned into a law or the other way round. How it was decided in the article's own terms: no meeting unless the article says one was held.
 4. **Plain English.** Short sentences, active voice. Explain a technical term in a few words the first time it appears.

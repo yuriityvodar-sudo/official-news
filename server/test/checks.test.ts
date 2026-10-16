@@ -35,8 +35,8 @@ describe("checkSummary", () => {
     expect(checkSummary(summary("Comments are open until October 19, 2026."), "의견 제출 기한 2026. 10. 19.", 2026).invented).toEqual([]);
   });
 
-  it("finds ruled-out words, once each", () => {
-    const s = summary("The law aims to help. It may change prices. It aims to be fair.");
-    expect(checkSummary(s, "", 2026).banned).toEqual(["aims to", "may"]);
+  it("finds ruled-out words, once each, and lets 'may' for a permission pass", () => {
+    const s = summary("The law aims to help. It could change prices. It aims to be fair. Providers may now sell devices.");
+    expect(checkSummary(s, "", 2026).banned).toEqual(["aims to", "could"]);
   });
 });

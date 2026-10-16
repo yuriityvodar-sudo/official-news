@@ -7,8 +7,10 @@ import type { Summary } from "./schema";
 /**
  * Words that add a purpose, a prediction or a judgement the article did not state
  * (docs/style-guide.md, rule 1). "The ministry says the goal is …" is the allowed form.
+ * "may" is not here: "providers may now sell the devices" is a permission the
+ * decision grants, which the impact part asks for.
  */
-const BANNED = /\b(aims? to|seeks? to|(?:is|are) intended to|(?:is|are) expected to|could|may|might|significant(?:ly)?|routine|first step|landmark|historic)\b/gi;
+const BANNED = /\b(aims? to|seeks? to|(?:is|are) intended to|(?:is|are) expected to|could|might|significant(?:ly)?|routine|first step|landmark|historic)\b/gi;
 
 /** Numbers as written, without thousands separators: "2,500" and "2 500" are "2500". */
 function numbers(text: string): string[] {
