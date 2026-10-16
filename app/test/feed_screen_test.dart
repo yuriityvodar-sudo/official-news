@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -12,10 +11,11 @@ import 'package:official_news/core/article.dart';
 import 'package:official_news/core/feed_language.dart';
 import 'package:official_news/core/news_widgets.dart';
 import 'package:official_news/core/router.dart';
-import 'package:official_news/core/theme.dart';
 import 'package:official_news/features/feed/feed_controller.dart';
 import 'package:official_news/features/feed/feed_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import 'test_app.dart';
 
 final _today = localDay(DateTime.now());
 
@@ -130,10 +130,11 @@ void _screen(WidgetTester tester, Size size) {
 
 const _phone = Size(393, 852);
 
+/// The feed in English, whatever its language: a language's own words are
+/// checked through the whole app in app_localization_test.dart.
 Future<FeedController> _pump(WidgetTester tester, FeedController feed) async {
   await tester.pumpWidget(
-    MaterialApp(
-      theme: buildTheme(Brightness.light),
+    testApp(
       onGenerateRoute: onGenerateRoute,
       home: FeedScreen(
         controller: feed,
@@ -496,9 +497,13 @@ void main() {
   // TZ=Europe/Berlin, where 29 March 2026 has 23 hours.
   test('day labels count calendar days, not 24-hour blocks', () {
     final now = DateTime(2026, 3, 30, 9);
-    expect(dayLabel(DateTime(2026, 3, 29, 12), now: now), 'Yesterday');
-    expect(dayLabel(DateTime(2026, 3, 30, 0, 10), now: now), 'Today');
-    expect(dayLabel(DateTime(2026, 3, 28, 12), now: now), 'Saturday 28 March');
+    final en = l10nFor();
+    expect(dayLabel(DateTime(2026, 3, 29, 12), en, now: now), 'Yesterday');
+    expect(dayLabel(DateTime(2026, 3, 30, 0, 10), en, now: now), 'Today');
+    expect(
+      dayLabel(DateTime(2026, 3, 28, 12), en, now: now),
+      'Saturday 28 March',
+    );
   });
 
   test(
@@ -612,7 +617,7 @@ void main() {
     );
     expect(find.text('Latest'), findsOneWidget);
     // Both appeared just now: the cards say so, not the older publication day.
-    expect(find.text(dayLabel(dated)), findsNothing);
+    expect(find.text(dayLabel(dated, l10nFor())), findsNothing);
     expect(find.text('Today'), findsNothing);
     expect(find.textContaining('m ago'), findsNWidgets(2));
   });
@@ -1133,7 +1138,7 @@ void main() {
             }),
           ),
         );
-        final day = longDay(DateTime.now());
+        final day = longDay(DateTime.now(), l10nFor());
         tester.platformDispatcher.textScaleFactorTestValue = 2;
         await tester.pump();
         final button = tester.getRect(

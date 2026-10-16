@@ -1,0 +1,608 @@
+{
+  "@@locale": "en",
+
+  "today": "Today",
+  "@today": {
+    "description": "The feed's name: the back button from an article to the feed (\"< Today\"), and a card's date for an article from today."
+  },
+  "yesterday": "Yesterday",
+  "@yesterday": {
+    "description": "A card's date for an article from yesterday."
+  },
+  "topStories": "Top stories",
+  "@topStories": {
+    "description": "Red section title at the top of the feed: the day's most important decisions."
+  },
+  "latest": "Latest",
+  "@latest": {
+    "description": "Red section title in the feed: every other decision, newest first."
+  },
+  "settings": "Settings",
+  "@settings": {
+    "description": "The settings screen's title, the back button to it, and what VoiceOver says for the gear button on the feed."
+  },
+  "feedLoadFailed": "Couldn't load the news. Pull down to retry.",
+  "@feedLoadFailed": {
+    "description": "The feed could not load and has nothing saved to show."
+  },
+  "feedRefreshFailed": "Couldn't refresh. Pull down to retry.",
+  "@feedRefreshFailed": {
+    "description": "Above the feed saved on the phone, when the fresh one could not load."
+  },
+  "feedLoadMoreFailed": "Couldn't load more. Tap to try again.",
+  "@feedLoadMoreFailed": {
+    "description": "A button at the end of the feed when the next page could not load."
+  },
+  "feedEnd": "You're all caught up",
+  "@feedEnd": {
+    "description": "At the end of the feed (it shows 7 days)."
+  },
+  "feedEmpty": "No decisions yet today.",
+  "@feedEmpty": {
+    "description": "The English feed is empty."
+  },
+  "feedNoTranslations": "No translated decisions yet.",
+  "@feedNoTranslations": {
+    "description": "A translated feed is empty: translations come in over the day."
+  },
+  "feedTranslationsComing": "Translations appear here as they are ready.",
+  "@feedTranslationsComing": {
+    "description": "Under feedNoTranslations."
+  },
+  "newDecisions": "{count, plural, one{{count} new decision} other{{count} new decisions}}",
+  "@newDecisions": {
+    "description": "A pill at the top of the feed when newer decisions are waiting; tapping it shows them.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "minutesAgo": "{minutes}m ago",
+  "@minutesAgo": {
+    "description": "A card's time, short: 1 to 59 minutes ago.",
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "hoursAgo": "{hours}h ago",
+  "@hoursAgo": {
+    "description": "A card's time, short: 1 to 23 hours ago.",
+    "placeholders": {
+      "hours": {
+        "type": "int"
+      }
+    }
+  },
+  "daysAgo": "{days}d ago",
+  "@daysAgo": {
+    "description": "A card's time, short: 1 or more days ago (the feed shows 7 days).",
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+
+  "decisionTypeLaw": "Law",
+  "@decisionTypeLaw": {
+    "description": "Decision type, shown in red capitals above a headline."
+  },
+  "decisionTypeBill": "Bill",
+  "@decisionTypeBill": {
+    "description": "Decision type: a draft law before parliament."
+  },
+  "decisionTypeAmendment": "Amendment",
+  "@decisionTypeAmendment": {
+    "description": "Decision type: a change to a law or a bill."
+  },
+  "decisionTypeProposal": "Proposal",
+  "@decisionTypeProposal": {
+    "description": "Decision type: a proposal, such as one from the European Commission."
+  },
+  "decisionTypeCabinetDecision": "Cabinet decision",
+  "@decisionTypeCabinetDecision": {
+    "description": "Decision type: a decision of a government's cabinet."
+  },
+  "decisionTypeDecision": "Decision",
+  "@decisionTypeDecision": {
+    "description": "Decision type: any other official decision."
+  },
+  "decisionTypeMeetingAgenda": "Meeting agenda",
+  "@decisionTypeMeetingAgenda": {
+    "description": "Decision type: the agenda of an official meeting."
+  },
+  "decisionTypeMeetingOutcome": "Meeting outcome",
+  "@decisionTypeMeetingOutcome": {
+    "description": "Decision type: what an official meeting decided."
+  },
+
+  "countryAR": "Argentina",
+  "@countryAR": {
+    "description": "Country name after the publisher: \"Federal Government · Germany\"."
+  },
+  "countryAU": "Australia",
+  "@countryAU": {
+    "description": "Country name."
+  },
+  "countryBR": "Brazil",
+  "@countryBR": {
+    "description": "Country name."
+  },
+  "countryCA": "Canada",
+  "@countryCA": {
+    "description": "Country name."
+  },
+  "countryCN": "China",
+  "@countryCN": {
+    "description": "Country name."
+  },
+  "countryDE": "Germany",
+  "@countryDE": {
+    "description": "Country name."
+  },
+  "countryEU": "European Union",
+  "@countryEU": {
+    "description": "Shown like a country name, for the EU's institutions."
+  },
+  "countryFR": "France",
+  "@countryFR": {
+    "description": "Country name."
+  },
+  "countryGB": "United Kingdom",
+  "@countryGB": {
+    "description": "Country name."
+  },
+  "countryID": "Indonesia",
+  "@countryID": {
+    "description": "Country name."
+  },
+  "countryIN": "India",
+  "@countryIN": {
+    "description": "Country name."
+  },
+  "countryIT": "Italy",
+  "@countryIT": {
+    "description": "Country name."
+  },
+  "countryJP": "Japan",
+  "@countryJP": {
+    "description": "Country name."
+  },
+  "countryKR": "South Korea",
+  "@countryKR": {
+    "description": "Country name."
+  },
+  "countryMX": "Mexico",
+  "@countryMX": {
+    "description": "Country name."
+  },
+  "countryRU": "Russia",
+  "@countryRU": {
+    "description": "Country name."
+  },
+  "countrySA": "Saudi Arabia",
+  "@countrySA": {
+    "description": "Country name."
+  },
+  "countryTR": "Türkiye",
+  "@countryTR": {
+    "description": "Country name."
+  },
+  "countryUS": "United States",
+  "@countryUS": {
+    "description": "Country name."
+  },
+  "countryZA": "South Africa",
+  "@countryZA": {
+    "description": "Country name."
+  },
+
+  "languageAr": "Arabic",
+  "@languageAr": {
+    "description": "A source's language, in the form that fills {language} in summaryByAiTranslated (Ukrainian: арабської, Russian: арабского, Spanish: árabe, German: Arabischen)."
+  },
+  "languageDe": "German",
+  "@languageDe": {
+    "description": "As languageAr (Ukrainian: німецької, Russian: немецкого, Spanish: alemán, German: Deutschen)."
+  },
+  "languageEn": "English",
+  "@languageEn": {
+    "description": "As languageAr."
+  },
+  "languageEs": "Spanish",
+  "@languageEs": {
+    "description": "As languageAr."
+  },
+  "languageFr": "French",
+  "@languageFr": {
+    "description": "As languageAr."
+  },
+  "languageHi": "Hindi",
+  "@languageHi": {
+    "description": "As languageAr."
+  },
+  "languageId": "Indonesian",
+  "@languageId": {
+    "description": "As languageAr."
+  },
+  "languageIt": "Italian",
+  "@languageIt": {
+    "description": "As languageAr."
+  },
+  "languageJa": "Japanese",
+  "@languageJa": {
+    "description": "As languageAr."
+  },
+  "languageKo": "Korean",
+  "@languageKo": {
+    "description": "As languageAr."
+  },
+  "languagePl": "Polish",
+  "@languagePl": {
+    "description": "As languageAr."
+  },
+  "languagePt": "Portuguese",
+  "@languagePt": {
+    "description": "As languageAr."
+  },
+  "languageRu": "Russian",
+  "@languageRu": {
+    "description": "As languageAr."
+  },
+  "languageTr": "Turkish",
+  "@languageTr": {
+    "description": "As languageAr."
+  },
+  "languageUk": "Ukrainian",
+  "@languageUk": {
+    "description": "As languageAr."
+  },
+  "languageZh": "Chinese",
+  "@languageZh": {
+    "description": "As languageAr."
+  },
+
+  "summaryByAi": "Summary by AI",
+  "@summaryByAi": {
+    "description": "Above an article's summary, for a source in the language the article is read in."
+  },
+  "summaryByAiTranslated": "Summary by AI · translated from {language}",
+  "@summaryByAiTranslated": {
+    "description": "Above an article's summary, for a source in another language than the one the article is read in.",
+    "placeholders": {
+      "language": {
+        "type": "String",
+        "example": "German"
+      }
+    }
+  },
+  "summaryComing": "The AI summary is on its way. Until then, the headline is the original title, and the official page has the full text.",
+  "@summaryComing": {
+    "description": "On an article the AI has not summarized yet."
+  },
+  "officialSource": "Official source",
+  "@officialSource": {
+    "description": "Next to the blue mark under the publisher on the article screen."
+  },
+  "readOfficialDecision": "Read the official decision",
+  "@readOfficialDecision": {
+    "description": "The card at the end of an article that opens the official page."
+  },
+  "readOfficialDecisionOn": "Read the official decision on {site}",
+  "@readOfficialDecisionOn": {
+    "description": "What VoiceOver says for that card.",
+    "placeholders": {
+      "site": {
+        "type": "String",
+        "example": "bundesregierung.de"
+      }
+    }
+  },
+  "imageCredit": "Image: {site}",
+  "@imageCredit": {
+    "description": "Under an article's picture: where it comes from.",
+    "placeholders": {
+      "site": {
+        "type": "String",
+        "example": "bundesregierung.de"
+      }
+    }
+  },
+  "share": "Share",
+  "@share": {
+    "description": "What VoiceOver says for the share button on an article."
+  },
+  "shareOfficialSource": "Official source: {url}",
+  "@shareOfficialSource": {
+    "description": "The last line of a shared article.",
+    "placeholders": {
+      "url": {
+        "type": "String",
+        "example": "https://www.bundesregierung.de/…"
+      }
+    }
+  },
+  "dateAndTime": "{date}, {time}",
+  "@dateAndTime": {
+    "description": "When an article was published: the date and the time, as \"14 October 2026, 11:30\".",
+    "placeholders": {
+      "date": {
+        "type": "String",
+        "example": "14 October 2026"
+      },
+      "time": {
+        "type": "String",
+        "example": "11:30"
+      }
+    }
+  },
+
+  "settingsReading": "Reading",
+  "@settingsReading": {
+    "description": "Settings section header (shown in capitals) over Language and Notifications."
+  },
+  "language": "Language",
+  "@language": {
+    "description": "The settings row and page that choose the language of the news and the app."
+  },
+  "notifications": "Notifications",
+  "@notifications": {
+    "description": "The settings row for news alerts, not built yet."
+  },
+  "soon": "Soon",
+  "@soon": {
+    "description": "Grey text on the Notifications row: coming in a later version."
+  },
+  "settingsAboutHeader": "About",
+  "@settingsAboutHeader": {
+    "description": "Settings section header (shown in capitals) over the four information pages."
+  },
+  "aboutApp": "About Official News",
+  "@aboutApp": {
+    "description": "The settings row that opens the About page. Official News is the app's name: never translated."
+  },
+  "aboutTitle": "About",
+  "@aboutTitle": {
+    "description": "The About page's title."
+  },
+  "privacyPolicy": "Privacy Policy",
+  "@privacyPolicy": {
+    "description": "The settings row and the page's title."
+  },
+  "termsOfUse": "Terms of Use",
+  "@termsOfUse": {
+    "description": "The settings row and the page's title."
+  },
+  "contactSupport": "Contact & Support",
+  "@contactSupport": {
+    "description": "The settings row and the page's title."
+  },
+  "settingsFooter": "Independent app, not affiliated with any government. Summaries are written by AI from official sources; every article links to the original.",
+  "@settingsFooter": {
+    "description": "Small grey text at the end of Settings, above the version."
+  },
+  "version": "Version {version}",
+  "@version": {
+    "description": "The app's version at the end of Settings.",
+    "placeholders": {
+      "version": {
+        "type": "String",
+        "example": "0.1.0"
+      }
+    }
+  },
+  "languageFooter": "News and the app are shown in this language.",
+  "@languageFooter": {
+    "description": "Under the list of languages."
+  },
+
+  "publisher": "{name}, Slovakia",
+  "@publisher": {
+    "description": "Who publishes the app: the company's name, never translated, and its country.",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "RS Elite Pro s.r.o."
+      }
+    }
+  },
+  "lastUpdated": "Last updated {date}",
+  "@lastUpdated": {
+    "description": "At the top of the privacy policy and the terms.",
+    "placeholders": {
+      "date": {
+        "type": "String",
+        "example": "16 October 2026"
+      }
+    }
+  },
+  "aboutIntro": "Official News shows what governments and international bodies have decided, in a few calm sentences, with a link to the official page.",
+  "@aboutIntro": {
+    "description": "About page, first paragraph."
+  },
+  "aboutSourcesHeading": "Where the news comes from",
+  "@aboutSourcesHeading": {
+    "description": "About page, heading."
+  },
+  "aboutSources1": "Every decision comes from a verified official website: a government, a ministry, a parliament or an international body. We never use media, aggregators or trending lists.",
+  "@aboutSources1": {
+    "description": "About page, under aboutSourcesHeading."
+  },
+  "aboutSources2": "An AI reads the official page and writes the headline and the summary, and translates them. It can make mistakes, so every article links to the original, which is the text that counts.",
+  "@aboutSources2": {
+    "description": "About page, under aboutSourcesHeading."
+  },
+  "aboutIndependentHeading": "Independent",
+  "@aboutIndependentHeading": {
+    "description": "About page, heading."
+  },
+  "aboutIndependent": "Official News is an independent app. It is not affiliated with, endorsed by or speaking for any government or public body.",
+  "@aboutIndependent": {
+    "description": "About page, under aboutIndependentHeading."
+  },
+  "aboutPublishedBy": "Published by {publisher}.",
+  "@aboutPublishedBy": {
+    "description": "About page, last line.",
+    "placeholders": {
+      "publisher": {
+        "type": "String",
+        "example": "RS Elite Pro s.r.o., Slovakia"
+      }
+    }
+  },
+
+  "privacyIntro": "Official News has no accounts: we do not ask for your name, e-mail address or phone number, and we do not sell or share personal data for advertising.",
+  "@privacyIntro": {
+    "description": "Privacy policy, first paragraph. A legal text: translate faithfully, keep the meaning exact."
+  },
+  "privacyPhoneHeading": "On your phone",
+  "@privacyPhoneHeading": {
+    "description": "Privacy policy, heading."
+  },
+  "privacyPhone": "Your language, the articles you have read, the last feed you saw and the pictures you have viewed are kept on your phone, so the app opens quickly and works offline. Deleting the app deletes them.",
+  "@privacyPhone": {
+    "description": "Privacy policy, under privacyPhoneHeading."
+  },
+  "privacyLoadingHeading": "When the app loads news",
+  "@privacyLoadingHeading": {
+    "description": "Privacy policy, heading."
+  },
+  "privacyLoadingServer": "The app loads the news from our server, hosted by Cloudflare. Like any website, it receives your IP address and basic technical details to answer the request; we do not use them to identify you.",
+  "@privacyLoadingServer": {
+    "description": "Privacy policy, under privacyLoadingHeading. Cloudflare is a company's name: never translated."
+  },
+  "privacyLoadingPictures": "Article pictures are loaded directly from the official website that published them, so that website receives your IP address when a picture loads. Pictures are saved on your phone after the first view.",
+  "@privacyLoadingPictures": {
+    "description": "Privacy policy, under privacyLoadingHeading."
+  },
+  "privacyLoadingPages": "When you open an official page, it opens in an in-app browser and that website's own privacy policy applies.",
+  "@privacyLoadingPages": {
+    "description": "Privacy policy, under privacyLoadingHeading."
+  },
+  "privacyAnalyticsHeading": "Analytics",
+  "@privacyAnalyticsHeading": {
+    "description": "Privacy policy, heading."
+  },
+  "privacyAnalytics": "To understand how the app is used, for example how many people read which kind of decision, the app sends usage events to Google Analytics for Firebase: screens opened, articles opened and read, links tapped, the chosen language, and technical details such as the app version, device model, country and an app instance ID. It does not use the advertising identifier and does not track you across other apps.",
+  "@privacyAnalytics": {
+    "description": "Privacy policy, under privacyAnalyticsHeading. Google Analytics for Firebase is a product's name: never translated."
+  },
+  "privacyNotificationsHeading": "Notifications",
+  "@privacyNotificationsHeading": {
+    "description": "Privacy policy, heading."
+  },
+  "privacyNotifications": "If you turn on notifications, your phone gets a notification token from Apple and Google Firebase so we can send news alerts. You can turn notifications off at any time in your phone settings.",
+  "@privacyNotifications": {
+    "description": "Privacy policy, under privacyNotificationsHeading. Apple and Google Firebase are names: never translated."
+  },
+  "privacyAiHeading": "AI",
+  "@privacyAiHeading": {
+    "description": "Privacy policy, heading."
+  },
+  "privacyAi": "Summaries and translations are written by AI services (Cloudflare Workers AI and Groq) from the official texts only. No data about you is sent to them.",
+  "@privacyAi": {
+    "description": "Privacy policy, under privacyAiHeading. Cloudflare Workers AI and Groq are product names: never translated."
+  },
+  "privacyRightsHeading": "Your rights",
+  "@privacyRightsHeading": {
+    "description": "Privacy policy, heading."
+  },
+  "privacyRights": "You can ask us what data we hold about you, and ask us to delete it, by writing to us (see {contactSupport}). Under the GDPR you also have the right to complain to a data protection authority.",
+  "@privacyRights": {
+    "description": "Privacy policy, under privacyRightsHeading. GDPR: use the regulation's usual name in the language (Spanish RGPD, German DSGVO).",
+    "placeholders": {
+      "contactSupport": {
+        "type": "String",
+        "example": "Contact & Support"
+      }
+    }
+  },
+  "privacyController": "Data controller: {publisher}.",
+  "@privacyController": {
+    "description": "Privacy policy, under privacyRightsHeading: the GDPR's term for who is responsible for the data.",
+    "placeholders": {
+      "publisher": {
+        "type": "String",
+        "example": "RS Elite Pro s.r.o., Slovakia"
+      }
+    }
+  },
+  "privacyChangesHeading": "Changes",
+  "@privacyChangesHeading": {
+    "description": "Privacy policy, heading."
+  },
+  "privacyChanges": "If this policy changes, the new version will be in the app with a new date.",
+  "@privacyChanges": {
+    "description": "Privacy policy, under privacyChangesHeading."
+  },
+
+  "termsIntro1": "Official News summarizes official decisions for general information. It is not legal, financial or professional advice.",
+  "@termsIntro1": {
+    "description": "Terms of use, first paragraph. A legal text: translate faithfully, keep the meaning exact."
+  },
+  "termsIntro2": "Summaries and translations are made by AI and can be incomplete or wrong. Before you rely on a decision, read the official page linked in every article: that text is the one that counts.",
+  "@termsIntro2": {
+    "description": "Terms of use, second paragraph."
+  },
+  "termsContentHeading": "Content",
+  "@termsContentHeading": {
+    "description": "Terms of use, heading."
+  },
+  "termsContent": "The official texts belong to their publishers. The app shows a short summary, the publisher and a link to the original.",
+  "@termsContent": {
+    "description": "Terms of use, under termsContentHeading."
+  },
+  "termsNoGuaranteeHeading": "No affiliation, no guarantee",
+  "@termsNoGuaranteeHeading": {
+    "description": "Terms of use, heading."
+  },
+  "termsNoGuarantee": "The app is not affiliated with any government. It is provided as it is, without guarantees that it is complete, correct or always available.",
+  "@termsNoGuarantee": {
+    "description": "Terms of use, under termsNoGuaranteeHeading."
+  },
+  "termsPublisherHeading": "Publisher",
+  "@termsPublisherHeading": {
+    "description": "Terms of use, heading."
+  },
+  "termsPublisher": "Published by {publisher}. If these terms change, the new version will be in the app with a new date.",
+  "@termsPublisher": {
+    "description": "Terms of use, under termsPublisherHeading.",
+    "placeholders": {
+      "publisher": {
+        "type": "String",
+        "example": "RS Elite Pro s.r.o., Slovakia"
+      }
+    }
+  },
+
+  "supportMessages": "Found a mistake in a summary, a broken source, or have an idea? We read every message.",
+  "@supportMessages": {
+    "description": "Contact & Support page, first paragraph."
+  },
+  "supportMistakes": "When you report a mistake, the name of the article and the language you read it in help us find it.",
+  "@supportMistakes": {
+    "description": "Contact & Support page, second paragraph."
+  },
+  "supportAppStore": "You can reach us through the app's page in the App Store.",
+  "@supportAppStore": {
+    "description": "Contact & Support page, while there is no support e-mail address yet. App Store is Apple's name: never translated."
+  },
+  "supportWrite": "Write to us",
+  "@supportWrite": {
+    "description": "Contact & Support page: the button that opens an e-mail to us."
+  },
+
+  "countryCZ": "Czechia",
+  "@countryCZ": { "description": "Country name." },
+  "countryES": "Spain",
+  "@countryES": { "description": "Country name." },
+  "countryPL": "Poland",
+  "@countryPL": { "description": "Country name." },
+  "countryUA": "Ukraine",
+  "@countryUA": { "description": "Country name." },
+  "languageCs": "Czech",
+  "@languageCs": { "description": "As languageAr." }
+}
