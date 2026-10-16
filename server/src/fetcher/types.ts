@@ -1,3 +1,4 @@
+import type { Lang } from "../translator/languages";
 import type { DateSpec } from "./dates";
 
 /** A source row from D1. */
@@ -82,6 +83,12 @@ export interface SourceConfig {
   allowedHosts?: string[];
   /** Days to keep the extracted text (default 30). */
   textDays?: number;
+  /**
+   * The source's name in the app's other languages (#76), from
+   * docs/source-names.csv (never written in docs/sources.csv). Not read by the
+   * fetcher: the API sends it as `source.name` for `?lang=`.
+   */
+  names?: Partial<Record<Lang, string>>;
 
   // Pages
   item?: string;

@@ -4,14 +4,22 @@ The list of official sites the fetcher reads lives in [sources.csv](sources.csv)
 
 ## Changing the list
 
-1. Edit `docs/sources.csv` in a pull request. `npm test` in `server/` checks every row.
+1. Edit `docs/sources.csv` in a pull request, and give a new source its names in the other languages in `docs/source-names.csv` (below). `npm test` in `server/` checks every row of both.
 2. After the merge, the deploy loads it into the live database by itself (`.github/workflows/deploy.yml`). On your laptop run `npm run sources:local`. Loading adds new rows and updates changed ones; it never touches `status` or check times, and removing a row does not delete the source (mark it `blocked` instead).
 
-3. Removing a row stops the source: loading sets it to `blocked` (the row stays, because its articles point to it). Ids of the Kickoff seed sources cannot be reused.
+3. Removing a row stops the source: loading sets it to `blocked` (the row stays, because its articles point to it). Remove its rows in `docs/source-names.csv` too; the check refuses names of a source that is not in the list. The blocked row keeps its last `config`, names included, so its articles still in the feed keep their translated source name. Ids of the Kickoff seed sources cannot be reused.
 
 Never add media, aggregators or trending lists, and never a site that needs a bot check, CAPTCHA or login to read. Sources are read over `https` only: plain `http` can be altered on the way, and we show the text as official.
 
 **Official gazettes are allowed** (that is where decisions take effect), always with a title filter (`exclude`) for routine entries: exchange and interest rates, price indices, court edicts, company notices, tenders, routine appointments, technical standards. They never reach the AI, so they cost nothing.
+
+## Names in the reader's language (#76)
+
+Cards and the article screen show the source's name ("Federal Government (Bundesregierung) · Germany"). The English name is `name` in `sources.csv`; the names in Ukrainian, Russian, Spanish and German are in [source-names.csv](source-names.csv), one row per source and language: `id,lang,name`, with `lang` one of `uk`, `ru`, `es`, `de` (the API's languages, `LANGS` in `server/src/translator/languages.ts`). It is a separate file so that editing a source never conflicts with editing its names.
+
+- **Adding a source:** add its 4 names in the same pull request. `npm test` fails until every source in `sources.csv` has a name in every language (without one, that language shows the English name), and refuses an id that is not in `sources.csv`, another `lang`, an empty name or a language twice.
+- **Changing a name:** edit its row; the deploy loads it (it runs when either file changes). Loading puts a source's names in its `config` as `names` (`{"uk": "…", "ru": "…", "es": "…", "de": "…"}`), and the API sends the one of the reader's language as `source.name` (`docs/contract.md`). Never write `names` in the `config` column of `sources.csv`: the check refuses it, so the names live in one place.
+- **How to write one:** the institution's name as that language usually writes it, short enough for one line on a card (the country follows it there). A generic name takes the country, the way that language says it: "Федеральний уряд Німеччини", "Cámara de Diputados de Brasil"; a name that stands on its own stays as it is: "Білий дім", "Comisión Europea". Keep a bracket of the English name when it helps a reader recognise the source: a site (GOV.UK, gov.pl, gov.cn), a well-known seat (Кремль, Єлисейський палац), or the publication's own short name (DOF, SAIJ, LEGISinfo, Dziennik Ustaw). Leave out one that only repeats the name in the original language or is technical (Bundesregierung, TBMM, Kantei, Sansad, GCIS, Sejm ELI API). Only real institutions, under their real names; Ukrainian uses the apostrophe ’, as the app does.
 
 ## `config`
 
@@ -29,6 +37,7 @@ How the fetcher (item 6) reads a source, as JSON. Types: `server/src/fetcher/typ
 - `conditionalGet`: send `If-Modified-Since` with the last check time; the site answers 304 when nothing changed, so a big list is not downloaded again (China's 266 KB archive).
 - `textDays`: days to keep the extracted text (default 30).
 - `note`: anything else people should know.
+- `names` is not written here: loading adds it from `source-names.csv` (above).
 
 **Feeds (`kind: rss`)**: RSS 2.0, RSS 1.0 and Atom are read without settings. `title`: another element holds the title (e.g. `description`). `date.field`: another element holds the date (e.g. `valueDate`).
 
