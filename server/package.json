@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
-    "dev:site": "wrangler dev -c wrangler.site.jsonc --port 8788",
+    "dev:site": "wrangler dev -c wrangler.site.jsonc --port 8788 --var SITE_ORIGIN:http://localhost:8788",
     "db:migrate:local": "wrangler d1 migrations apply official-news --local",
     "db:migrate:remote": "wrangler d1 migrations apply official-news --remote",
     "deploy": "wrangler deploy",
