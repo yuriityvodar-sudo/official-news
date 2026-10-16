@@ -129,7 +129,6 @@ void _screen(WidgetTester tester, Size size) {
 }
 
 const _phone = Size(393, 852);
-const _iPad = Size(820, 1180);
 
 Future<FeedController> _pump(WidgetTester tester, FeedController feed) async {
   await tester.pumpWidget(
@@ -145,6 +144,21 @@ Future<FeedController> _pump(WidgetTester tester, FeedController feed) async {
   await tester.pump();
   await tester.pump();
   return feed;
+}
+
+/// Chooses the feed language the way a reader does (#64): the settings button
+/// at the top right, Language, the language, then back to the feed.
+Future<void> _chooseLanguage(WidgetTester tester, String name) async {
+  await tester.tap(find.byIcon(CupertinoIcons.gear_alt));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text('Language'));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text(name));
+  await tester.pumpAndSettle();
+  await tester.pageBack();
+  await tester.pumpAndSettle();
+  await tester.pageBack();
+  await tester.pumpAndSettle();
 }
 
 void main() {
@@ -613,39 +627,40 @@ void main() {
       _translated('a1', now, 'Кабінет схвалив бюджет', feedSeq: 2),
     ]);
 
-    testWidgets('the header shows the language, with a VoiceOver label', (
-      tester,
-    ) async {
-      final semantics = tester.ensureSemantics();
-      await _pump(
-        tester,
-        FeedController(
-          api: _langApi({
-            'en': {'': english},
-          }),
-        ),
-      );
-      expect(find.text('EN'), findsOneWidget);
-      expect(find.byIcon(CupertinoIcons.globe), findsOneWidget);
-      expect(
-        tester.getSemantics(find.bySemanticsLabel('Language: English')),
-        isSemantics(
-          label: 'Language: English',
-          isButton: true,
-          hasTapAction: true,
-        ),
-      );
-      // At least the 44-pt target iOS asks for.
-      final target = tester.getSize(
-        find.ancestor(
-          of: find.text('EN'),
+    testWidgets(
+      'the settings button is at the top right, with a VoiceOver label',
+      (tester) async {
+        _screen(tester, _phone);
+        final semantics = tester.ensureSemantics();
+        await _pump(
+          tester,
+          FeedController(
+            api: _langApi({
+              'en': {'': english},
+            }),
+          ),
+        );
+        expect(find.byIcon(CupertinoIcons.globe), findsNothing);
+        final button = find.ancestor(
+          of: find.byIcon(CupertinoIcons.gear_alt),
           matching: find.byType(CupertinoButton),
-        ),
-      );
-      expect(target.height, greaterThanOrEqualTo(44));
-      expect(target.width, greaterThanOrEqualTo(44));
-      semantics.dispose();
-    });
+        );
+        expect(
+          tester.getSemantics(find.bySemanticsLabel('Settings')),
+          isSemantics(label: 'Settings'),
+        );
+        // At the right of the masthead, with at least the 44-pt target iOS asks for.
+        final target = tester.getRect(button);
+        expect(target.height, greaterThanOrEqualTo(44));
+        expect(target.width, greaterThanOrEqualTo(44));
+        expect(target.right, _phone.width - 20);
+        expect(
+          target.top,
+          lessThan(tester.getRect(find.text('Official News')).bottom),
+        );
+        semantics.dispose();
+      },
+    );
 
     testWidgets('opens in the language saved on the phone', (tester) async {
       final semantics = tester.ensureSemantics();
@@ -663,8 +678,6 @@ void main() {
           }, log: log),
         ),
       );
-      expect(find.text('РУС'), findsOneWidget);
-      expect(find.bySemanticsLabel('Language: Русский'), findsOneWidget);
       expect(find.text('Кабинет одобрил бюджет'), findsOneWidget);
       expect(log.single.queryParameters['lang'], 'ru');
       semantics.dispose();
@@ -690,17 +703,13 @@ void main() {
         await tester.pageBack();
         await tester.pumpAndSettle();
 
-        // The pull-down opens from the button; a tap outside closes it and changes nothing.
-        await tester.tap(find.text('EN'));
+        // Settings shows the current language; opening it changes nothing.
+        await tester.tap(find.byIcon(CupertinoIcons.gear_alt));
         await tester.pumpAndSettle();
-        expect(find.text('Українська'), findsOneWidget);
-        await tester.tapAt(const Offset(20, 20));
+        expect(find.text('English'), findsOneWidget);
+        await tester.tap(find.text('Language'));
         await tester.pumpAndSettle();
-        expect(find.text('Українська'), findsNothing);
         expect(log, hasLength(1));
-
-        await tester.tap(find.text('EN'));
-        await tester.pumpAndSettle();
         for (final name in [
           'English',
           'Українська',
@@ -715,7 +724,7 @@ void main() {
           find.descendant(
             of: find.ancestor(
               of: find.text('English'),
-              matching: find.byType(CupertinoMenuItem),
+              matching: find.byType(CupertinoListTile),
             ),
             matching: find.byIcon(CupertinoIcons.checkmark_alt),
           ),
@@ -734,8 +743,22 @@ void main() {
 
         await tester.tap(find.text('Українська'));
         await tester.pumpAndSettle();
-        expect(find.text('Русский'), findsNothing); // the menu closed
-        expect(find.text('УКР'), findsOneWidget);
+        // The checkmark moves at once, and Settings shows the new language.
+        expect(
+          find.descendant(
+            of: find.ancestor(
+              of: find.text('Українська'),
+              matching: find.byType(CupertinoListTile),
+            ),
+            matching: find.byIcon(CupertinoIcons.checkmark_alt),
+          ),
+          findsOneWidget,
+        );
+        await tester.pageBack();
+        await tester.pumpAndSettle();
+        expect(find.text('Українська'), findsOneWidget);
+        await tester.pageBack();
+        await tester.pumpAndSettle();
         expect(log.last.queryParameters['lang'], 'uk');
         expect(find.text('Кабінет схвалив бюджет'), findsOneWidget);
         expect(find.text('Cabinet approves budget'), findsNothing);
@@ -890,7 +913,6 @@ void main() {
 
       unawaited(feed.setLanguage(FeedLanguage.en));
       await tester.pump();
-      expect(find.text('EN'), findsOneWidget);
       expect(find.text('Saved decision'), findsOneWidget);
       expect(find.text('Збережене рішення'), findsNothing);
 
@@ -971,7 +993,6 @@ void main() {
         );
         final feed = await _pump(tester, FeedController(api: api));
         expect(log.first.queryParameters['lang'], 'uk');
-        expect(find.text('УКР'), findsOneWidget);
         expect(find.text('Cabinet approves budget'), findsNothing);
         expect(find.text('Law on water signed'), findsNothing);
         expect(find.text('No translated decisions yet.'), findsOneWidget);
@@ -1100,7 +1121,7 @@ void main() {
     );
 
     testWidgets(
-      'at large text sizes the language moves under the date, so no word is split',
+      'at large text sizes the date keeps whole words and the settings button stays on screen',
       (tester) async {
         _screen(tester, _phone);
         addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
@@ -1113,19 +1134,15 @@ void main() {
           ),
         );
         final day = longDay(DateTime.now());
-        Rect button() => tester.getRect(
+        tester.platformDispatcher.textScaleFactorTestValue = 2;
+        await tester.pump();
+        final button = tester.getRect(
           find.ancestor(
-            of: find.text('EN'),
+            of: find.byIcon(CupertinoIcons.gear_alt),
             matching: find.byType(CupertinoButton),
           ),
         );
-
-        tester.platformDispatcher.textScaleFactorTestValue = 2;
-        await tester.pump();
-        final date = tester.getRect(find.text(day));
-        expect(button().top, greaterThanOrEqualTo(date.bottom));
-        // The globe grows with the text, like an SF Symbol.
-        expect(tester.getSize(find.byIcon(CupertinoIcons.globe)).height, 34);
+        expect(button.right, lessThanOrEqualTo(_phone.width));
         final paragraph = tester.renderObject<RenderParagraph>(find.text(day));
         var start = 0;
         for (final word in day.split(' ')) {
@@ -1142,7 +1159,7 @@ void main() {
       },
     );
 
-    testWidgets('choosing Español asks for lang=es and shows ES', (
+    testWidgets('choosing Español in Settings asks for lang=es', (
       tester,
     ) async {
       _screen(tester, _phone);
@@ -1162,87 +1179,9 @@ void main() {
           }, log: log),
         ),
       );
-      await tester.tap(find.text('EN'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Español'));
-      await tester.pumpAndSettle();
-      expect(find.text('ES'), findsOneWidget);
+      await _chooseLanguage(tester, 'Español');
       expect(log.last.queryParameters['lang'], 'es');
-    });
-
-    testWidgets('a tap while the menu is still closing opens it again', (
-      tester,
-    ) async {
-      _screen(tester, _phone);
-      await _pump(
-        tester,
-        FeedController(
-          api: _langApi({
-            'en': {'': english},
-          }),
-        ),
-      );
-      await tester.tap(find.text('EN'));
-      await tester.pumpAndSettle();
-      expect(find.text('Українська'), findsOneWidget);
-      // Close with a tap outside, and tap the button before the animation ends.
-      await tester.tapAt(const Offset(20, 20));
-      await tester.pump(const Duration(milliseconds: 30));
-      await tester.tap(find.text('EN'));
-      await tester.pumpAndSettle();
-      expect(find.text('Українська'), findsOneWidget);
-    });
-
-    testWidgets('on iPad the pull-down opens at the globe', (tester) async {
-      _screen(tester, _iPad);
-      await _pump(
-        tester,
-        FeedController(
-          api: _langApi({
-            'en': {'': english},
-            'uk': {'': ukrainian},
-          }),
-        ),
-      );
-      final button = tester.getRect(
-        find.ancestor(
-          of: find.text('EN'),
-          matching: find.byType(CupertinoButton),
-        ),
-      );
-      // Where there is room, the language sits beside the date, at the right edge.
-      expect(
-        button.top,
-        lessThan(tester.getRect(find.text(longDay(DateTime.now()))).bottom),
-      );
-      expect(button.right, _iPad.width - 20);
-
-      await tester.tap(find.text('EN'));
-      await tester.pumpAndSettle();
-      final choice = tester.getRect(
-        find.ancestor(
-          of: find.text('English'),
-          matching: find.byType(CupertinoMenuItem),
-        ),
-      );
-      // A small menu under the button, not a sheet across the screen.
-      expect(choice.width, lessThanOrEqualTo(320));
-      expect(choice.top, greaterThanOrEqualTo(button.bottom - 4));
-      expect(choice.right, greaterThanOrEqualTo(button.left));
-      expect(choice.left, lessThanOrEqualTo(button.right));
-      expect(find.byIcon(CupertinoIcons.checkmark_alt), findsOneWidget);
-
-      // A tap outside closes it.
-      await tester.tapAt(const Offset(20, 20));
-      await tester.pumpAndSettle();
-      expect(find.text('Українська'), findsNothing);
-
-      await tester.tap(find.text('EN'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Українська'));
-      await tester.pumpAndSettle();
-      expect(find.text('УКР'), findsOneWidget);
-      expect(find.text('Кабінет схвалив бюджет'), findsOneWidget);
+      expect(find.text('No translated decisions yet.'), findsOneWidget);
     });
   });
 }
