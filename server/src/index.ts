@@ -3,6 +3,7 @@ import type { Env } from "./env";
 import { runFetcher } from "./fetcher";
 import { runCleanup } from "./health/cleanup";
 import { recordChecks } from "./health/status";
+import { runPush } from "./push";
 import { runSummarizer } from "./summarizer";
 import { TRANSLATIONS_PER_RUN, releaseReady, runTranslator } from "./translator";
 
@@ -13,7 +14,8 @@ import { TRANSLATIONS_PER_RUN, releaseReady, runTranslator } from "./translator"
  * minute, the translator (#46) every even one. A newly added Cloudflare
  * schedule can take about an hour to start firing (#50). Both end with the
  * release (translator/release.ts), so a decision reaches the feed also while
- * the translator's trigger is not firing.
+ * the translator's trigger is not firing. The translator's run then sends the
+ * push notifications (push/index.ts, #62): at most one per language.
  */
 export const CRONS = {
   fetcher: "* * * * *",
@@ -44,7 +46,17 @@ export default {
         if (released.length) console.log(JSON.stringify({ message: "summarizer release", released }));
       }
     } else if (step === "translator") {
-      await runTranslator(env, { maxTranslations: TRANSLATIONS_PER_RUN });
+      try {
+        await runTranslator(env, { maxTranslations: TRANSLATIONS_PER_RUN });
+      } finally {
+        // After the release, so a decision released in this run can go out at once. A push
+        // error is logged, never thrown: it never breaks the translator or the release.
+        try {
+          await runPush(env);
+        } catch (error) {
+          console.error(JSON.stringify({ message: "push error", error: error instanceof Error ? error.message : String(error) }));
+        }
+      }
     } else if (step === "cleanup") {
       await runCleanup(env);
     } else {
