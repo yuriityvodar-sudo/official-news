@@ -4,6 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/article.dart';
+import '../../core/feed_language.dart';
 import '../../core/news_widgets.dart';
 import '../../core/router.dart';
 import '../../core/theme.dart';
@@ -81,7 +82,15 @@ class _FeedScreenState extends State<FeedScreen> {
 
   void _open(Article article) {
     unawaited(_feed.markRead(article));
+    // The article as the feed has it, so a translated one opens translated.
     Navigator.of(context).pushNamed(Routes.detail, arguments: article);
+  }
+
+  /// A language picked in the menu: another language is another feed, from the top.
+  Future<void> _chooseLanguage(FeedLanguage chosen) async {
+    if (chosen == _feed.language) return;
+    if (_scroll.hasClients) _scroll.jumpTo(0);
+    await _feed.setLanguage(chosen);
   }
 
   @override
@@ -107,8 +116,32 @@ class _FeedScreenState extends State<FeedScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text('Official News', style: text.masthead),
-                        const SizedBox(height: 4),
-                        Text(longDay(DateTime.now()), style: text.dateLine),
+                        // The language at the right of the date, or under it when
+                        // large text needs the whole line, so no word of the date is split.
+                        SizedBox(
+                          width: double.infinity,
+                          child: Wrap(
+                            alignment: WrapAlignment.spaceBetween,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              Text(
+                                longDay(DateTime.now()),
+                                style: text.dateLine,
+                              ),
+                              // Hidden, keeping its place, until the saved language is read.
+                              Visibility(
+                                visible: _feed.languageKnown,
+                                maintainSize: true,
+                                maintainAnimation: true,
+                                maintainState: true,
+                                child: _LanguageMenu(
+                                  language: _feed.language,
+                                  onSelected: _chooseLanguage,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -146,12 +179,28 @@ class _FeedScreenState extends State<FeedScreen> {
           hasScrollBody: false,
           child: Padding(
             padding: const EdgeInsets.all(20),
-            child: Text(
-              _feed.error != null
-                  ? "Couldn't load the news. Pull down to retry."
-                  : 'No decisions yet today.',
-              style: text.meta,
-            ),
+            child: _feed.error != null
+                ? Text(
+                    "Couldn't load the news. Pull down to retry.",
+                    style: text.meta,
+                  )
+                : _feed.language == FeedLanguage.en
+                ? Text('No decisions yet today.', style: text.meta)
+                // The server lists only finished translations; they come in over the day.
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'No translated decisions yet.',
+                        style: text.meta.copyWith(fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Translations appear here as they are ready.',
+                        style: text.meta,
+                      ),
+                    ],
+                  ),
           ),
         ),
       ];
@@ -417,6 +466,94 @@ class _Picture extends StatelessWidget {
             );
           },
         ),
+      ),
+    );
+  }
+}
+
+/// The feed's language next to the date: a globe and "EN", "УКР" or "РУС", in the
+/// accent colour like the feed's other tappable text, with a 44-pt target.
+class _LanguageButton extends StatelessWidget {
+  const _LanguageButton({required this.language, required this.onPressed});
+
+  final FeedLanguage language;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = NewsText.from(
+      context,
+    ).dateLine.copyWith(fontSize: 15, color: AppColors.accent);
+    return CupertinoButton(
+      padding: EdgeInsets.zero,
+      minimumSize: const Size(44, 44),
+      onPressed: onPressed,
+      child: Semantics(
+        label: 'Language: ${language.nativeName}',
+        child: ExcludeSemantics(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Grows with the text, like an SF Symbol.
+              const Icon(
+                CupertinoIcons.globe,
+                size: 17,
+                color: AppColors.accent,
+                applyTextScaling: true,
+              ),
+              const SizedBox(width: 4),
+              Text(language.shortLabel, style: style),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The iOS pull-down menu at the language button (as in Apple's apps): the
+/// languages in their own names, a checkmark on the current one. It opens from the
+/// button and stays on screen on any device size, iPad included.
+class _LanguageMenu extends StatefulWidget {
+  const _LanguageMenu({required this.language, required this.onSelected});
+
+  final FeedLanguage language;
+  final ValueChanged<FeedLanguage> onSelected;
+
+  @override
+  State<_LanguageMenu> createState() => _LanguageMenuState();
+}
+
+class _LanguageMenuState extends State<_LanguageMenu> {
+  // Follows the animation, not MenuController.isOpen: while the menu is closing,
+  // isOpen is still true, and a tap then would "close" it again instead of opening.
+  AnimationStatus _status = AnimationStatus.dismissed;
+
+  @override
+  Widget build(BuildContext context) {
+    return CupertinoMenuAnchor(
+      onAnimationStatusChanged: (status) => _status = status,
+      menuChildren: [
+        for (final lang in FeedLanguage.values)
+          CupertinoMenuItem(
+            onPressed: () => widget.onSelected(lang),
+            trailing: lang == widget.language
+                ? const Icon(
+                    CupertinoIcons.checkmark_alt,
+                    color: AppColors.accent,
+                  )
+                : null,
+            child: Semantics(
+              selected: lang == widget.language,
+              child: Text(lang.nativeName),
+            ),
+          ),
+      ],
+      builder: (context, controller, _) => _LanguageButton(
+        language: widget.language,
+        onPressed: () => _status.isForwardOrCompleted
+            ? controller.close()
+            : controller.open(),
       ),
     );
   }

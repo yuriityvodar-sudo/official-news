@@ -12,7 +12,8 @@ Article _article({
   String language = 'de',
   bool dateOnly = false,
   String? imageUrl,
-  String originalUrl = 'https://www.bundesregierung.de/breg-de/aktuelles/haushalt-2027',
+  String originalUrl =
+      'https://www.bundesregierung.de/breg-de/aktuelles/haushalt-2027',
 }) => Article.fromJson({
   'id': 'a1',
   'country': 'DE',
@@ -55,45 +56,76 @@ Future<void> _pump(
 }
 
 void main() {
-  testWidgets('shows the ministry, decision, date, AI label and the summary paragraphs', (tester) async {
-    await _pump(tester, _article());
+  testWidgets(
+    'shows the ministry, decision, date, AI label and the summary paragraphs',
+    (tester) async {
+      await _pump(tester, _article());
 
-    expect(find.text('Federal Government'), findsOneWidget);
-    expect(find.text('Germany · '), findsOneWidget);
-    expect(find.text('Official source'), findsOneWidget);
-    expect(find.text('CABINET DECISION'), findsOneWidget);
-    expect(find.text("Germany's cabinet approves the 2027 draft budget"), findsOneWidget);
-    expect(find.text('14 October 2026, 11:30'), findsOneWidget);
-    expect(find.text('Summary by AI · translated from German'), findsOneWidget);
-    expect(find.text('The federal cabinet approved the draft budget for 2027.'), findsOneWidget);
-    expect(find.text('The Bundestag now debates it.'), findsOneWidget);
-    expect(find.text('Read the official decision'), findsOneWidget);
-    expect(
-      find.text('bundesregierung.de · Kabinett beschließt Haushaltsentwurf 2027'),
-      findsOneWidget,
-    );
-  });
+      expect(find.text('Federal Government'), findsOneWidget);
+      expect(find.text('Germany · '), findsOneWidget);
+      expect(find.text('Official source'), findsOneWidget);
+      expect(find.text('CABINET DECISION'), findsOneWidget);
+      expect(
+        find.text("Germany's cabinet approves the 2027 draft budget"),
+        findsOneWidget,
+      );
+      expect(find.text('14 October 2026, 11:30'), findsOneWidget);
+      expect(
+        find.text('Summary by AI · translated from German'),
+        findsOneWidget,
+      );
+      expect(
+        find.text('The federal cabinet approved the draft budget for 2027.'),
+        findsOneWidget,
+      );
+      expect(find.text('The Bundestag now debates it.'), findsOneWidget);
+      expect(find.text('Read the official decision'), findsOneWidget);
+      expect(
+        find.text(
+          'bundesregierung.de · Kabinett beschließt Haushaltsentwurf 2027',
+        ),
+        findsOneWidget,
+      );
+    },
+  );
 
-  testWidgets('says "Summary by AI" without a translation note for English sources', (tester) async {
-    await _pump(tester, _article(language: 'en'));
-    expect(find.text('Summary by AI'), findsOneWidget);
-  });
+  testWidgets(
+    'says "Summary by AI" without a translation note for English sources',
+    (tester) async {
+      await _pump(tester, _article(language: 'en'));
+      expect(find.text('Summary by AI'), findsOneWidget);
+    },
+  );
 
-  testWidgets('shows only the day when the source gave no time', (tester) async {
+  testWidgets('shows only the day when the source gave no time', (
+    tester,
+  ) async {
     await _pump(tester, _article(dateOnly: true));
     expect(find.text('14 October 2026'), findsOneWidget);
   });
 
-  testWidgets('before the AI step: the original title and a note instead of the summary', (tester) async {
-    await _pump(tester, _article(headline: null, summary: null));
+  testWidgets(
+    'before the AI step: the original title and a note instead of the summary',
+    (tester) async {
+      await _pump(tester, _article(headline: null, summary: null));
 
-    expect(find.text('Kabinett beschließt Haushaltsentwurf 2027'), findsOneWidget);
-    expect(find.textContaining('The AI summary is on its way'), findsOneWidget);
-    expect(find.textContaining('Summary by AI'), findsNothing);
-  });
+      expect(
+        find.text('Kabinett beschließt Haushaltsentwurf 2027'),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining('The AI summary is on its way'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('Summary by AI'), findsNothing);
+    },
+  );
 
   testWidgets('shows the picture with where it comes from', (tester) async {
-    await _pump(tester, _article(imageUrl: 'https://www.bundesregierung.de/image.jpg'));
+    await _pump(
+      tester,
+      _article(imageUrl: 'https://www.bundesregierung.de/image.jpg'),
+    );
     expect(find.byType(Image), findsOneWidget);
     expect(find.text('Image: bundesregierung.de'), findsOneWidget);
   });
@@ -104,7 +136,9 @@ void main() {
 
     await tester.tap(find.text('Read the official decision'));
     expect(opened, [
-      Uri.parse('https://www.bundesregierung.de/breg-de/aktuelles/haushalt-2027'),
+      Uri.parse(
+        'https://www.bundesregierung.de/breg-de/aktuelles/haushalt-2027',
+      ),
     ]);
   });
 
@@ -112,12 +146,17 @@ void main() {
     final opened = <Uri>[];
     await _pump(
       tester,
-      _article(originalUrl: 'https://www.parl.ca/legisinfo/en/bill/45-1/C-37#2026-10-09'),
+      _article(
+        originalUrl:
+            'https://www.parl.ca/legisinfo/en/bill/45-1/C-37#2026-10-09',
+      ),
       openLink: (uri) async => opened.add(uri),
     );
 
     await tester.tap(find.text('Read the official decision'));
-    expect(opened, [Uri.parse('https://www.parl.ca/legisinfo/en/bill/45-1/C-37')]);
+    expect(opened, [
+      Uri.parse('https://www.parl.ca/legisinfo/en/bill/45-1/C-37'),
+    ]);
   });
 
   test('officialPage keeps only web pages and drops the fragment', () {
@@ -143,7 +182,11 @@ void main() {
 
   testWidgets('shares the article', (tester) async {
     final shared = <Article>[];
-    await _pump(tester, _article(), share: (article, _) async => shared.add(article));
+    await _pump(
+      tester,
+      _article(),
+      share: (article, _) async => shared.add(article),
+    );
 
     await tester.tap(find.byIcon(CupertinoIcons.share));
     expect(shared.single.id, 'a1');
