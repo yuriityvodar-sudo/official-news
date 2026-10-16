@@ -26,7 +26,6 @@ String countryName(String code, AppLocalizations l10n) => switch (code) {
   'SA' => l10n.countrySA,
   'TR' => l10n.countryTR,
   'UA' => l10n.countryUA,
-  'UN' => l10n.countryUN,
   'US' => l10n.countryUS,
   'ZA' => l10n.countryZA,
   _ => code,

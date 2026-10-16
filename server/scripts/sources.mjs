@@ -76,7 +76,7 @@ export function toSources(text, { reserved = new Set() } = {}) {
     const s = Object.fromEntries(COLUMNS.map((name, i) => [name, (cells[i] ?? "").trim()]));
     const fail = (message) => problems.push(`line ${line} (${s.id || "no id"}): ${message}`);
     if (cells.length !== COLUMNS.length) fail(`has ${cells.length} fields, expected ${COLUMNS.length}`);
-    if (!/^[A-Z]{2}$/.test(s.country)) fail("country must be a 2-letter code such as DE, EU or UN");
+    if (!/^[A-Z]{2}$/.test(s.country)) fail("country must be a 2-letter code such as DE or EU");
     if (!s.id.startsWith(`${s.country.toLowerCase()}-`) || !/^[a-z]{2}-[a-z0-9-]+$/.test(s.id)) {
       fail("id must look like <country>-<short-name>, lower case");
     }
