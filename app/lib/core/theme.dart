@@ -69,7 +69,6 @@ class NewsText extends ThemeExtension<NewsText> {
   const NewsText({
     required this.masthead,
     required this.dateLine,
-    required this.section,
     required this.kindLabel,
     required this.publisher,
     required this.headline,
@@ -93,11 +92,6 @@ class NewsText extends ThemeExtension<NewsText> {
         fontSize: 17,
         fontWeight: FontWeight.w600,
         color: secondary,
-      ),
-      section: const TextStyle(
-        fontSize: 24,
-        fontWeight: FontWeight.w800,
-        color: AppColors.accent,
       ),
       kindLabel: const TextStyle(
         fontSize: 13,
@@ -143,9 +137,6 @@ class NewsText extends ThemeExtension<NewsText> {
   /// "Official News" at the top of the feed.
   final TextStyle masthead;
   final TextStyle dateLine;
-
-  /// Red section titles: "Top stories", "Latest".
-  final TextStyle section;
 
   /// The decision type above a headline, upper case: "CABINET DECISION".
   final TextStyle kindLabel;

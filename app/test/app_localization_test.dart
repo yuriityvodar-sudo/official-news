@@ -139,6 +139,17 @@ Set<String> _placeholders(String message) => RegExp(
   r'\{(\w+)\s*[},]',
 ).allMatches(message).map((m) => m.group(1)!).toSet();
 
+/// The feed's former section titles, "Top stories" and "Latest", as each
+/// language had them until the feed became one list (Yurii, 16 Oct; their
+/// messages are gone from the ARB files).
+const _sectionTitles = {
+  FeedLanguage.en: ['Top stories', 'Latest'],
+  FeedLanguage.uk: ['Головне', 'Останнє'],
+  FeedLanguage.ru: ['Главное', 'Последние решения'],
+  FeedLanguage.es: ['Destacadas', 'Lo último'],
+  FeedLanguage.de: ['Topmeldungen', 'Aktuell'],
+};
+
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
@@ -472,8 +483,9 @@ void main() {
       await _launch(tester);
       expect(find.text(l10n.filterAllTopics), findsOneWidget);
       // One list in every language: no section titles.
-      expect(find.text(l10n.topStories), findsNothing);
-      expect(find.text(l10n.latest), findsNothing);
+      for (final title in _sectionTitles[lang] ?? const <String>[]) {
+        expect(find.text(title), findsNothing, reason: title);
+      }
       await tester.tap(
         find.textContaining(lang == FeedLanguage.en ? 'Law' : 'Закон'),
       );

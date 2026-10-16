@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 
@@ -580,6 +581,101 @@ void main() {
     await tester.pumpAndSettle();
     expect(_shown(tester), {'pl'});
   });
+
+  // The server's top stories can be on a later page (live, 16 Oct: 4 of the
+  // first page's 5). Such a story waits for its page in the one list, but
+  // the menus offer its country and topic at once, as they did with the Top
+  // stories section, and choosing one loads pages until it shows.
+  for (final (chip, item) in [(_where, 'Mexico'), (_topics, 'Elections')]) {
+    testWidgets('$item, only in a top story on page 2: offered at once; '
+        'choosing it loads page 2', (tester) async {
+      // Page 1 fills more than the phone, so nothing loads page 2 by itself.
+      final page1 = [
+        for (var i = 40; i > 20; i--)
+          _article('p$i', i.isEven ? 'GB' : 'DE', seq: i),
+      ];
+      final mx = _article('mx', 'MX', seq: 15, topics: ['elections']);
+      final page2 = [
+        for (var i = 20; i > 0; i--)
+          i == 15 ? mx : _article('p$i', 'PL', seq: i),
+      ];
+      final asked = <String>[];
+      final page2Sent = Completer<void>();
+      final api = ApiClient(
+        baseUrl: 'https://api.test',
+        client: MockClient((request) async {
+          final cursor = request.url.queryParameters['cursor'] ?? '';
+          asked.add(cursor);
+          if (cursor.isNotEmpty) await page2Sent.future;
+          final page = cursor.isEmpty
+              ? {
+                  'items': page1,
+                  'nextCursor': 'c2',
+                  'top': [page1[3], mx],
+                }
+              : {'items': page2, 'nextCursor': null, 'top': <Object>[]};
+          return http.Response.bytes(
+            utf8.encode(jsonEncode(page)),
+            200,
+            headers: {'content-type': 'application/json; charset=utf-8'},
+          );
+        }),
+      );
+      tester.view.physicalSize = const Size(402, 874) * 3;
+      tester.view.devicePixelRatio = 3;
+      addTearDown(tester.view.reset);
+      final feed = FeedController(api: api);
+      await tester.pumpWidget(
+        testApp(
+          onGenerateRoute: onGenerateRoute,
+          home: FeedScreen(
+            controller: feed,
+            newCheckEvery: const Duration(hours: 1),
+          ),
+        ),
+      );
+      // Pumped by time, not settled: the end of the list's spinner, built
+      // just below the screen while more pages are to come, never stops.
+      await tester.pump();
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      expect(asked, ['']);
+      expect(feed.hasMore, isTrue);
+      expect(feed.feed.map((a) => a.id), isNot(contains('mx')));
+
+      await tester.tap(chip);
+      for (var i = 0; i < 10; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      expect(_menu(tester), contains(item));
+      await tester.tap(
+        find.descendant(
+          of: find.byType(CupertinoMenuItem),
+          matching: find.text(item),
+        ),
+      );
+      for (var i = 0; i < 5; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      // Page 2 asked for at once, without a scroll; while it comes, no
+      // "nothing here" (pages are still to come), only the spinner.
+      expect(asked, ['', 'c2']);
+      expect(find.text('No decisions here in the last 7 days.'), findsNothing);
+      expect(find.byType(CupertinoActivityIndicator), findsOneWidget);
+
+      page2Sent.complete();
+      // Page 2 is the last: its spinner goes, so the screen can settle.
+      for (var i = 0; i < 5; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      await tester.pumpAndSettle();
+      expect(feed.hasMore, isFalse);
+
+      expect(asked, ['', 'c2']);
+      expect(find.text('Decision mx'), findsOneWidget);
+      expect(find.text('Decision p40'), findsNothing);
+    });
+  }
 
   test('a demo build names its filters', () {
     expect(demoFilters('GB:economy'), (

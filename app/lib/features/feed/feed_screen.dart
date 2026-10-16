@@ -245,8 +245,8 @@ class _FeedScreenState extends State<FeedScreen> {
                         countries: _countries(),
                         topic: _topic,
                         topicCounts: _topicCounts(),
-                        onPlace: (p) => setState(() => _place = p),
-                        onTopic: (t) => setState(() => _topic = t),
+                        onPlace: (p) => _filter(() => _place = p),
+                        onTopic: (t) => _filter(() => _topic = t),
                       ),
                     ),
                   ),
@@ -280,13 +280,33 @@ class _FeedScreenState extends State<FeedScreen> {
   static const _pillTop = 12.0;
   static const _pillGap = 8.0;
 
-  /// The countries with articles in the loaded feed.
-  Set<String> _countries() => {for (final a in _feed.feed) a.country};
+  /// Another Where or Topics choice. Fewer rows may now fill the screen, or
+  /// none (a country only a top story on a later page has): once drawn, the
+  /// list loads more as at its end, and [_changed] keeps loading pages while
+  /// the filtered list is still short.
+  void _filter(VoidCallback change) {
+    setState(change);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _scroll.hasClients) _nearEnd();
+    });
+  }
+
+  /// What the menus offer: the loaded feed and the server's top stories,
+  /// each once. A top story on a later page waits for it in the list
+  /// ([oneFeed]), but its country and topics are offered at once, as they
+  /// were with the Top stories section; choosing one loads pages until it
+  /// shows ([_filter]).
+  Iterable<Article> _offered() => {
+    for (final a in [..._feed.feed, ..._feed.top]) a.id: a,
+  }.values;
+
+  /// The countries with articles in the loaded feed or its top stories.
+  Set<String> _countries() => {for (final a in _offered()) a.country};
 
   /// Topics in the feed under the current Where choice, busiest first.
   List<MapEntry<String, int>> _topicCounts() {
     final counts = <String, int>{};
-    for (final a in _feed.feed) {
+    for (final a in _offered()) {
       if (!_place.includes(a)) continue;
       for (final t in a.topics) {
         counts[t] = (counts[t] ?? 0) + 1;
@@ -341,7 +361,10 @@ class _FeedScreenState extends State<FeedScreen> {
       slivers.add(_padded(Text(l10n.feedRefreshFailed, style: text.meta)));
     }
 
-    if (shown.isEmpty) {
+    // Nothing under the filters yet, but more pages to come: the end of the
+    // list's spinner (or retry) only, until a page has some or the 7 days
+    // are all loaded ([_filter] keeps loading).
+    if (shown.isEmpty && !_feed.hasMore) {
       Widget undo(String label, VoidCallback onPressed) => CupertinoButton(
         padding: EdgeInsets.zero,
         onPressed: onPressed,
@@ -364,12 +387,12 @@ class _FeedScreenState extends State<FeedScreen> {
                 if (!_place.isAll)
                   undo(
                     l10n.filterShowGlobal,
-                    () => setState(() => _place = FeedPlace.all),
+                    () => _filter(() => _place = FeedPlace.all),
                   ),
                 if (_topic != null)
                   undo(
                     l10n.filterShowAllTopics,
-                    () => setState(() => _topic = null),
+                    () => _filter(() => _topic = null),
                   ),
               ],
             ),

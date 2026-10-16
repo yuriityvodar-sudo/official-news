@@ -22,7 +22,7 @@ import 'test_app.dart';
 /// PROTOTYPE (Yurii, 16 Oct): Settings > Prototype > Read. Dim fades read
 /// articles as before; Blue and Red leave them in their full colours and put
 /// a dot on the unread ones instead of the official-source tick, in every
-/// design, in Top stories and in Latest.
+/// design, on every row of the one list (the server's top stories too).
 
 Map<String, dynamic> _article(
   String id, {
@@ -52,9 +52,10 @@ Map<String, dynamic> _article(
   'originalUrl': 'https://www.bundesregierung.de/$id',
 };
 
-/// Top stories t1 (with a picture) to t3, then Latest a1 and a2 (a1 with a
-/// picture). t1 and a1 were opened before. a1 and a2 are important (C's red
-/// rule), and a2's institution has a long name, cut with "…" in today's rows.
+/// t1 (with a picture) to t3 are the server's top stories, in the items too;
+/// a1 (with a picture) and a2 follow, all in one list. t1 and a1 were opened
+/// before. a1 and a2 are important (C's red rule), and a2's institution has a
+/// long name, cut with "…" in today's rows.
 final _top = [
   _article('t1', imageUrl: 'https://example.test/t1.jpg'),
   _article('t2'),
@@ -235,8 +236,8 @@ void main() {
           }
           for (final id in _read) {
             expect(_dots(_row(id), color), findsNothing, reason: id);
-            // Its words where an unread article's in the same section are:
-            // the dot's room is kept.
+            // Its words where an unread article's are (t2's for t1, a2's for
+            // a1): the dot's room is kept.
             final unread = id.startsWith('t') ? 't2' : 'a2';
             expect(_sourceX(tester, id), _sourceX(tester, unread), reason: id);
             // The designs show a small grey " · " in the dot's room, between

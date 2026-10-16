@@ -25,10 +25,15 @@ import 'test_app.dart';
 /// among the rest, each once, in the order they arrived, with no section
 /// titles and no block of its own for the first articles.
 
-Map<String, dynamic> _article(String id, {String? imageUrl, int? feedSeq}) => {
+Map<String, dynamic> _article(
+  String id, {
+  String? imageUrl,
+  int? feedSeq,
+  String country = 'DE',
+}) => {
   'id': id,
   'feedSeq': feedSeq,
-  'country': 'DE',
+  'country': country,
   'source': {
     'id': 'de-gov',
     'name': 'Federal Government',
@@ -246,6 +251,47 @@ void main() {
         );
       });
 
+      testWidgets('with a filter, the place is in the list as shown', (
+        tester,
+      ) async {
+        // a1 is French: with Germany chosen, t1 is first and t2 fourth.
+        final items = [
+          for (final a in _items)
+            a['id'] == 'a1' ? _article('a1', feedSeq: 6, country: 'FR') : a,
+        ];
+        await pumpFeed(tester, items, _top);
+        await tester.tap(
+          find.byKey(const ValueKey('filter-where')).hitTestable(),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(
+          find.descendant(
+            of: find.byType(CupertinoMenuItem),
+            matching: find.text('Germany'),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('Decision a1'), findsNothing);
+
+        await tester.scrollUntilVisible(
+          find.text('Decision t2'),
+          200,
+          scrollable: find.byType(Scrollable).first,
+        );
+        // Wholly on screen, clear of a pinned masthead.
+        await Scrollable.ensureVisible(
+          tester.element(find.text('Decision t2')),
+          alignment: 0.5,
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Decision t2'));
+        await tester.pumpAndSettle();
+        expect(
+          (lastOpened()['section'], lastOpened()['position']),
+          ('feed', 3),
+        );
+      });
+
       testWidgets('new arrivals: the pill counts them, and a tap shows them '
           'at the top of the same list', (tester) async {
         var newest = 20;
@@ -342,12 +388,16 @@ void main() {
         expect(find.text('Decision p15'), findsOneWidget);
       });
 
-      testWidgets('sends each feed depth once, as the reader scrolls down', (
-        tester,
-      ) async {
-        await pumpFeed(tester, [
-          for (var i = 1; i <= 30; i++) _article('n$i'),
-        ], []);
+      testWidgets('sends each feed depth once, as the reader scrolls down, '
+          'the top stories\' rows counted too', (tester) async {
+        // 27 rows, 5 of them top stories: Latest alone had 22, short of 25.
+        final items = [
+          for (var i = 27; i >= 1; i--) _article('n$i', feedSeq: i),
+        ];
+        final feed = await pumpFeed(tester, items, [
+          for (final i in [26, 20, 14, 8, 2]) items[27 - i],
+        ]);
+        expect(feed.feed, hasLength(27));
         await tester.drag(
           find.byType(CustomScrollView),
           const Offset(0, -20000),

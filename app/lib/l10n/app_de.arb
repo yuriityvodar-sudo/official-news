@@ -3,8 +3,6 @@
 
   "today": "Heute",
   "yesterday": "Gestern",
-  "topStories": "Topmeldungen",
-  "latest": "Aktuell",
   "settings": "Einstellungen",
   "feedLoadFailed": "Nachrichten konnten nicht geladen werden. Zum Wiederholen nach unten ziehen.",
   "feedRefreshFailed": "Aktualisierung fehlgeschlagen. Zum Wiederholen nach unten ziehen.",

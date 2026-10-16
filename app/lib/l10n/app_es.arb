@@ -3,8 +3,6 @@
 
   "today": "Hoy",
   "yesterday": "Ayer",
-  "topStories": "Destacadas",
-  "latest": "Lo último",
   "settings": "Ajustes",
   "feedLoadFailed": "No se pudieron cargar las noticias. Desliza hacia abajo para reintentar.",
   "feedRefreshFailed": "No se pudo actualizar. Desliza hacia abajo para reintentar.",
