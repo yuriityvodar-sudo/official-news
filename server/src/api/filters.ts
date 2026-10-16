@@ -98,6 +98,22 @@ export const TOPIC_NAMES: Record<NameLang, Record<Topic, string>> = {
   },
 };
 
+/**
+ * GET /topics's answer for these articles' topic lists: each topic of TOPICS
+ * that one of them has, busiest first (ties keep the order of TOPICS), named
+ * in `lang`, without counts. An article counts once per topic. The website
+ * uses it too, for a page that already holds every article of its list.
+ */
+export function rankTopics(lists: Iterable<readonly string[]>, lang: NameLang): { id: Topic; name: string }[] {
+  const counts = new Map<string, number>();
+  for (const list of lists) for (const topic of new Set(list)) counts.set(topic, (counts.get(topic) ?? 0) + 1);
+  const names = TOPIC_NAMES[lang];
+  return TOPICS.filter((topic) => counts.has(topic))
+    // Stable: equal counts keep the order of TOPICS.
+    .sort((a, b) => (counts.get(b) ?? 0) - (counts.get(a) ?? 0))
+    .map((id) => ({ id, name: names[id] }));
+}
+
 /** [en, uk, ru, es, de] */
 type Names = readonly [string, string, string, string, string];
 

@@ -89,6 +89,9 @@ describe("texts", () => {
     expect(aiLabel("en", "cs")).toBe("Summary by AI · translated from CS");
     expect(countryName("es", "DE")).toBe("Alemania");
     expect(countryName("en", "XX")).toBe("XX");
+    // A country the app's ARB files on this branch do not name yet: the API's name (GET /countries), as in the Where menu.
+    expect(countryName("uk", "UA")).toBe("Україна");
+    expect(countryName("de", "PL")).toBe("Polen");
     expect(languageName("de", "pt")).toBe("Portugiesischen");
     expect(decisionLabel("ru", "cabinet-decision")).toBe(APP_TEXTS.ru.decisionTypeCabinetDecision);
     expect(decisionLabel("en", "verdict")).toBeNull();

@@ -36,7 +36,10 @@ function sections(lang: SiteLang, page: InfoPage): Section[] {
         { heading: "privacyNotificationsHeading", paragraphs: [p(lang, "privacyNotifications")] },
         { heading: "privacyAiHeading", paragraphs: [p(lang, "privacyAi")] },
         // The website's own part: the ARB texts describe the app.
-        { heading: "siteHeading", paragraphs: [p(lang, "siteData"), p(lang, "siteBanner")] },
+        {
+          heading: "siteHeading",
+          paragraphs: [p(lang, "siteData"), t(lang, "siteLocal", { local: text(lang, "filterLocal") }), p(lang, "siteBanner")],
+        },
         {
           heading: "privacyRightsHeading",
           paragraphs: [

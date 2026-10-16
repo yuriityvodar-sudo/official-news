@@ -18,8 +18,8 @@ export const SITE_NAME = "Official News";
 // of a break with no hyphen, but no hyphen in every other line of a headline.
 // Red small text on white is #D1102F (about 5.5:1), not the app's #FA2D48
 // (about 3.8:1, under WCAG AA); in dark mode the app's red on black.
-export const CSS = `:root{color-scheme:light dark;--bg:#fff;--text:#000;--secondary:#6c6c70;--separator:#e5e5ea;--accent:#d1102f;--chip:#e3e8ef;--card:#f2f2f7;--verified:#1a8cff}
-@media (prefers-color-scheme:dark){:root{--bg:#000;--text:#fff;--secondary:#98989f;--separator:#38383a;--accent:#fa2d48;--chip:#2c2c2e;--card:#1c1c1e}}
+export const CSS = `:root{color-scheme:light dark;--bg:#fff;--text:#000;--secondary:#6c6c70;--separator:#e5e5ea;--accent:#d1102f;--chip:#e3e8ef;--card:#f2f2f7;--verified:#1a8cff;--on:#d1102f;--menu:#fff;--band:#f2f2f7;--shadow:rgba(0,0,0,.16)}
+@media (prefers-color-scheme:dark){:root{--bg:#000;--text:#fff;--secondary:#98989f;--separator:#38383a;--accent:#fa2d48;--chip:#2c2c2e;--card:#1c1c1e;--menu:#1c1c1e;--band:#000;--shadow:rgba(0,0,0,.6)}}
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 body{margin:0;background:var(--bg);color:var(--text);font:16px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;overflow-wrap:break-word}
@@ -58,6 +58,27 @@ h1{margin:0 0 10px;font-size:31px;line-height:1.15;font-weight:700}
 .small a{color:inherit}
 .page-title{margin:0 0 4px;font-size:34px;font-weight:800;line-height:1.1}
 .section{margin:26px 0 0;font-size:22px;font-weight:800;color:var(--accent)}
+.filters{position:relative;display:flex;flex-wrap:wrap;gap:0 8px;margin:8px 0 0}
+.pick>summary{display:flex;align-items:center;min-height:44px;list-style:none;cursor:pointer;border-radius:18px}
+.pick>summary::-webkit-details-marker{display:none}
+.pick>summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+p.filters .chip{margin:4px 0}
+.chip{display:inline-flex;align-items:center;gap:6px;max-width:100%;min-height:34px;padding:0 12px;border-radius:17px;background:var(--chip);color:var(--text);font-size:15px;font-weight:600}
+.chip.on{background:var(--on);color:#fff}
+.chip svg{width:16px;height:16px;flex:none}
+.chip .chev{width:12px;height:12px;margin-left:-2px}
+.chip .label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pick[open] .chev{transform:rotate(180deg)}
+.menu{position:absolute;z-index:2;left:0;right:0;top:100%;max-width:340px;padding:6px 0;background:var(--menu);border:.5px solid var(--separator);border-radius:14px;box-shadow:0 10px 30px var(--shadow)}
+.menu ul{list-style:none;margin:0;padding:0}
+.menu ul+ul{border-top:6px solid var(--band)}
+.menu li+li{border-top:.5px solid var(--separator)}
+.menu a{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:44px;padding:8px 16px;color:var(--text);text-decoration:none;font-size:16px}
+.menu a:hover{background:var(--card)}
+.menu a:focus-visible{outline-offset:-2px}
+.menu small{display:block;font-size:13px;color:var(--secondary)}
+.menu .check{width:18px;height:18px;flex:none;color:var(--accent)}
+.menu-note{margin:6px 16px 10px;font-size:14px;color:var(--secondary)}
 .items{list-style:none;margin:0;padding:0}
 .item{padding:14px 0;border-bottom:.5px solid var(--separator)}
 .item .kind{margin-bottom:2px}
@@ -75,7 +96,7 @@ footer{border-top:.5px solid var(--separator);padding:8px 0 40px;font-size:13px;
 footer nav{display:flex;flex-wrap:wrap;column-gap:18px}
 footer nav a{display:inline-flex;align-items:center;min-height:44px;color:var(--text);text-decoration:none}
 footer p{margin:8px 0 0}
-@media (min-width:720px){h1{font-size:36px}.page-title{font-size:40px}}`;
+@media (min-width:720px){h1{font-size:36px}.page-title{font-size:40px}.pick{position:relative}.menu{right:auto;width:320px}}`;
 
 let styleHash: Promise<string> | undefined;
 

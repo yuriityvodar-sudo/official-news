@@ -36,7 +36,16 @@ const ROUTES: [string, number, keyof typeof CACHE, string | null][] = [
   ["/en/support", 200, "fixed", "en"],
   ["/nowhere", 404, "missing", "en"],
   ["/uk/nowhere", 404, "missing", "uk"],
-  ["/en/de", 404, "missing", "en"],
+  ["/en/de", 200, "list", "en"],
+  ["/uk/de?topic=economy", 200, "list", "uk"],
+  ["/en?topic=economy&before=5", 200, "list", "en"],
+  ["/en?menu=where", 200, "list", "en"],
+  ["/es/ua", 200, "list", "es"],
+  ["/en/zz", 404, "missing", "en"],
+  ["/en?topic=nonsense", 404, "missing", "en"],
+  ["/en/de/economy", 404, "missing", "en"],
+  ["/en/local", 302, "local", null],
+  ["/en/de/", 301, "redirect", null],
   ["/.well-known/apple-app-site-association", 404, "missing", "en"],
   ["/sitemap.xml", 404, "missing", "en"],
   ["/favicon.ico", 404, "icon", null],
@@ -106,7 +115,7 @@ describe("every route", () => {
     expect((await site("/robots.txt")).body).toBe("User-agent: *\nDisallow: /\n");
   });
 
-  const PAGES = ROUTES.filter(([p, s]) => s !== 301 && !p.endsWith(".txt") && !p.endsWith(".ico") && !p.endsWith(".png"));
+  const PAGES = ROUTES.filter(([p, s]) => (s < 300 || s >= 400) && !p.endsWith(".txt") && !p.endsWith(".ico") && !p.endsWith(".png"));
 
   it("says in every page's head exactly what its X-Robots-Tag says (one value, never two that disagree)", async () => {
     for (const [path] of PAGES) {
@@ -130,7 +139,10 @@ describe("every route", () => {
 describe("one request per page view", () => {
   it("no page refers to anything it would have to load: no script, image, stylesheet, font or frame", async () => {
     await env.DB.prepare("UPDATE articles SET image_url = 'https://www.bundesregierung.de/picture.jpg' WHERE id = ?").bind(ID).run();
-    const paths = ["/", "/en", "/uk", `/en/de/${ID}`, `/uk/de/${ID}`, ...SITE_LANGS.flatMap((l) => INFO_PAGES.map((p) => `/${l}/${p}`))];
+    const paths = [
+      "/", "/en", "/uk", `/en/de/${ID}`, `/uk/de/${ID}`, "/en/de", "/uk/de?topic=economy", "/en?menu=where", "/en/ua",
+      ...SITE_LANGS.flatMap((l) => INFO_PAGES.map((p) => `/${l}/${p}`)),
+    ];
     for (const path of paths) {
       const { body } = await site(path);
       expect(body, path).not.toMatch(/<script|<img|<iframe|<object|<embed|<video|<audio|<source|rel="stylesheet"|rel="preload"|rel="prefetch"|rel="preconnect"|rel="dns-prefetch"|@import|@font-face/i);
@@ -153,7 +165,7 @@ describe("one request per page view", () => {
 
 describe("the request's host", () => {
   it("never appears in a page: every absolute URL is SITE_ORIGIN's (the cache key has no host)", async () => {
-    for (const path of ["/", "/en", `/uk/de/${ID}`, "/es/about", "/en/", `/uk/de/${NOT_IN_UK}`]) {
+    for (const path of ["/", "/en", `/uk/de/${ID}`, "/es/about", "/en/", `/uk/de/${NOT_IN_UK}`, "/en/de", "/en/de/", "/en?topic=economy&x=1", "/en/local"]) {
       const { body, headers } = await site(path, {}, "evil.test");
       expect(body).not.toContain("evil.test");
       expect(headers.get("location") ?? "").not.toContain("evil.test");

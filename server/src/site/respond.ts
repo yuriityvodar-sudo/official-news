@@ -35,6 +35,13 @@ export const CACHE = {
   icon: { browser: "public, max-age=86400", edge: "max-age=86400" },
   /** A list or landing URL with a query it does not use, sent to its clean URL with no D1 read. */
   redirect: { browser: "public, max-age=86400", edge: "max-age=86400" },
+  /**
+   * Local (`/{lang}/local`): a 302 to the reader's own country, from the
+   * request's IP country, so it differs per reader. Never stored, by the
+   * browser or the edge: the cache key has no country, so a stored copy would
+   * send every reader to the first one's country.
+   */
+  local: { browser: "private, no-store", edge: "no-store" },
   /** 405 and 500: never stored, so an outage is never cached as a page. */
   none: { browser: "no-store", edge: "no-store" },
 } as const;

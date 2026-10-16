@@ -8,7 +8,9 @@
 import { type toArticle, encodeCursor, handleApi } from "../api";
 import type { Env } from "../env";
 import type { SiteEnv } from "./env";
+import type { Topic } from "../summarizer/schema";
 import { SITE_LANGS, type SiteLang } from "./texts";
+import type { ListFilter } from "./urls";
 
 /** An article as the API returns it (docs/contract.md); `lang` in a language other than English. */
 export type ApiArticle = ReturnType<typeof toArticle> & { lang?: string };
@@ -52,14 +54,46 @@ export async function articleInLanguages(env: SiteEnv, id: string): Promise<Part
 
 /**
  * A page of the latest list in `lang`, as the app gets it: 20 articles, and top
- * stories on the first. `before` is the site's paging parameter, the feedSeq
- * after which the page continues, turned into the API's own cursor.
+ * stories on the first, with the app's filters (#67, #68: `country`, `topic`).
+ * `before` is the site's paging parameter, the feedSeq after which the page
+ * continues, turned into the API's own cursor (a place in the feed, so the
+ * next page continues within the filter).
  */
-export async function latest(env: SiteEnv, lang: SiteLang, before: number | null): Promise<ApiList> {
+export async function latest(env: SiteEnv, lang: SiteLang, filter: ListFilter, before: number | null): Promise<ApiList> {
   const params = new URLSearchParams({ limit: "20" });
   if (lang !== "en") params.set("lang", lang);
+  if (filter.country) params.set("country", filter.country);
+  if (filter.topic) params.set("topic", filter.topic);
   if (before !== null) params.set("cursor", encodeCursor(before));
   const list = await api<ApiList>(env, `/articles?${params}`);
   if (!list) throw new ApiError("API 404 for /articles");
   return list;
+}
+
+export interface ApiTopic {
+  id: Topic;
+  name: string;
+}
+
+export interface ApiCountry {
+  code: string;
+  name: string;
+}
+
+/** The Topics menu: `GET /topics`, the topics with articles in that country's (or the whole) feed in `lang`, busiest first. */
+export async function topicsMenu(env: SiteEnv, lang: SiteLang, country: string | null): Promise<ApiTopic[]> {
+  const params = new URLSearchParams();
+  if (lang !== "en") params.set("lang", lang);
+  if (country) params.set("country", country);
+  const query = params.toString();
+  const answer = await api<{ topics: ApiTopic[] }>(env, query ? `/topics?${query}` : "/topics");
+  if (!answer) throw new ApiError("API 404 for /topics");
+  return answer.topics;
+}
+
+/** The countries of the Where menu: `GET /countries`, those with active sources, named in `lang` and sorted by that name. */
+export async function countriesMenu(env: SiteEnv, lang: SiteLang): Promise<ApiCountry[]> {
+  const answer = await api<{ countries: ApiCountry[] }>(env, lang === "en" ? "/countries" : `/countries?lang=${lang}`);
+  if (!answer) throw new ApiError("API 404 for /countries");
+  return answer.countries;
 }

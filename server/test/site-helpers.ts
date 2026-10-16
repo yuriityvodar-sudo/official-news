@@ -9,7 +9,8 @@ import { rowsRead } from "./helpers";
 export const ORIGIN = "https://site.test";
 export const siteEnv = () => ({ DB: env.DB, SITE_ORIGIN: ORIGIN });
 
-export async function site(path: string, init: RequestInit = {}, host = "site.test", e = siteEnv()) {
+/** `init.cf` is the request's Cloudflare properties, as the edge sets them (`{ country: "DE" }`). */
+export async function site(path: string, init: RequestInit & { cf?: { country?: string } } = {}, host = "site.test", e = siteEnv()) {
   const response = await handleSite(new Request(`https://${host}${path}`, init), e);
   return { status: response.status, headers: response.headers, body: await response.text() };
 }
@@ -30,6 +31,8 @@ export interface Fixture {
   originalLanguage?: string;
   originalUrl?: string;
   importance?: number | null;
+  /** The AI's topics; `["economy"]` by default. */
+  topics?: string[];
 }
 
 /** 26-character ids for tests: "01JTEST" and a padded number. */
@@ -41,7 +44,7 @@ export async function insertArticle(f: Fixture) {
   await env.DB.prepare(
     `INSERT INTO articles (id, source_id, url, original_title, published_at, fetched_at, headline, short_summary, summary,
                            is_news, importance, decision_type, original_language, summarized_at, topics, tags, feed_seq, added_at)
-     VALUES (?1, ?2, ?3, ?4, ?5, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, '["economy"]', '[]',
+     VALUES (?1, ?2, ?3, ?4, ?5, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?15, '[]',
              CASE WHEN ?14 THEN (SELECT COALESCE(MAX(feed_seq), 0) + 1 FROM articles WHERE feed_seq IS NOT NULL) END,
              CASE WHEN ?14 THEN strftime('%Y-%m-%dT%H:%M:%SZ', 'now') END)`,
   )
@@ -60,6 +63,7 @@ export async function insertArticle(f: Fixture) {
       f.originalLanguage ?? "de",
       hoursAgo(1),
       f.released === false ? 0 : 1,
+      JSON.stringify(f.topics ?? ["economy"]),
     )
     .run();
 }
