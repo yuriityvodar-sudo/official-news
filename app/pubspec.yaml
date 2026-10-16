@@ -7,9 +7,11 @@ environment:
   sdk: ^3.12.2
 
 dependencies:
+  cached_network_image: ^4.0.3
   cupertino_icons: ^2.0.0
   flutter:
     sdk: flutter
+  flutter_cache_manager: ^3.4.5
   http: ^1.6.0
   share_plus: ^13.3.1
   shared_preferences: ^2.5.6

@@ -7,6 +7,7 @@ import '../../core/article.dart';
 import '../../core/countries.dart';
 import '../../core/languages.dart';
 import '../../core/news_widgets.dart';
+import '../../core/pictures.dart';
 import '../../core/theme.dart';
 
 /// Opens the official page; tests pass their own.
@@ -227,20 +228,20 @@ class _Picture extends StatelessWidget {
             borderRadius: BorderRadius.circular(12),
             child: AspectRatio(
               aspectRatio: 16 / 9,
-              child: Image.network(
-                url,
+              child: Image(
+                // The picture the feed card saved, decoded at screen size:
+                // official preview images can be several MB.
+                image: picture(
+                  url,
+                  width: (media.size.width * media.devicePixelRatio).round(),
+                ),
                 fit: BoxFit.cover,
-                // Decoded at screen size: official preview images can be several MB.
-                cacheWidth: (media.size.width * media.devicePixelRatio).round(),
                 errorBuilder: (_, _, _) => const SizedBox.shrink(),
               ),
             ),
           ),
           const SizedBox(height: 6),
-          Text(
-            'Image: ${_site(url)}',
-            style: text.meta.copyWith(fontSize: 12),
-          ),
+          Text('Image: ${_site(url)}', style: text.meta.copyWith(fontSize: 12)),
         ],
       ),
     );
