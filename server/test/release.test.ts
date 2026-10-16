@@ -5,7 +5,18 @@
 // hours is paused automatically and catches up later at the English places.
 import { env, exports } from "cloudflare:workers";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { AUTO_PAUSE_HOURS, LANGS, RELEASE, TRANSLATIONS_PER_RUN, TRANSLATORS, releaseReady, runTranslator } from "../src/translator";
+import { createScheduledController } from "cloudflare:test";
+import worker, { CRONS } from "../src/index";
+import {
+  AUTO_PAUSE_HOURS,
+  LANGS,
+  RELEASE,
+  TRANSLATIONS_PER_RUN,
+  TRANSLATOR_ALIVE_MINUTES,
+  TRANSLATORS,
+  releaseReady,
+  runTranslator,
+} from "../src/translator";
 import {
   type ArticlesPage,
   type Reply,
@@ -33,6 +44,12 @@ const run = (fetch: typeof globalThis.fetch, now = new Date(), e = testEnv()) =>
 const at = (start: Date, minutes: number) => new Date(start.getTime() + minutes * 60_000);
 const langRow = (lang: string) =>
   env.DB.prepare("SELECT enabled, paused, paused_reason, down_since FROM translation_langs WHERE lang = ?").bind(lang).first();
+/** The translator's last run, as it records it at the start of each run (step_runs). */
+const translatorRan = (at: Date) =>
+  env.DB.prepare("INSERT INTO step_runs (step, at) VALUES ('translator', ?1) ON CONFLICT (step) DO UPDATE SET at = excluded.at")
+    .bind(stored(at))
+    .run();
+const feedSeq = (id: string) => env.DB.prepare("SELECT feed_seq FROM articles WHERE id = ?").bind(id).first("feed_seq");
 const delayed = async (lang: string) => ((await get(`/articles?lang=${lang}`)).body as ArticlesPage).translationsDelayed;
 const queue = async () => (await (await exports.default.fetch("https://api.test/queue")).json()) as {
   languages: Record<string, Record<string, unknown>>;
@@ -174,6 +191,7 @@ describe("release together", () => {
   it("does not release an article on translations of an older English", async () => {
     await insertNews("a1", hoursAgo(1));
     await only("uk");
+    await translatorRan(new Date());
     // Published for the English summarized an hour ago; then the English is summarized again, before any run queues it.
     await env.DB.prepare(
       `INSERT INTO article_translations (article_id, lang, headline, short_summary, summary, model, source_summarized_at,
@@ -183,12 +201,12 @@ describe("release together", () => {
       .bind(stored(new Date()))
       .run();
     await env.DB.prepare("UPDATE articles SET summarized_at = ? WHERE id = 'a1'").bind(stored(new Date())).run();
-    expect(await releaseReady(env, stored(new Date()), hoursAgo(7 * 24))).toEqual([]);
+    expect(await releaseReady(env, new Date())).toEqual([]);
     // Once the new English is translated, it is.
     await env.DB.prepare("UPDATE article_translations SET source_summarized_at = ?1, attempts_source = ?1 WHERE article_id = 'a1'")
       .bind(await env.DB.prepare("SELECT summarized_at FROM articles WHERE id = 'a1'").first("summarized_at"))
       .run();
-    expect(await releaseReady(env, stored(new Date()), hoursAgo(7 * 24))).toEqual(["a1"]);
+    expect(await releaseReady(env, new Date())).toEqual(["a1"]);
   });
 
   it(`counts a language without its provider key as down, and releases without it after ${AUTO_PAUSE_HOURS} hours`, async () => {
@@ -230,12 +248,73 @@ describe("release together", () => {
 
   it("finds the waiting articles through their partial index", async () => {
     const { results } = await env.DB.prepare(`EXPLAIN QUERY PLAN ${RELEASE}`)
-      .bind(stored(new Date()), hoursAgo(7 * 24), JSON.stringify(LANGS))
+      .bind(stored(new Date()), hoursAgo(7 * 24), JSON.stringify(LANGS), hoursAgo(1))
       .all<{ detail: string }>();
     const plan = results.map((r) => r.detail).join("; ");
     expect(plan).toMatch(/SCAN u USING (COVERING )?INDEX articles_unreleased/);
+    expect(plan).toContain("SEARCH r USING INDEX sqlite_autoindex_step_runs_1 (step=?)");
     expect(plan).toContain("SEARCH t USING INDEX sqlite_autoindex_article_translations_1 (article_id=? AND lang=?)");
     expect(plan).toContain("articles_feed_seq");
     expect(plan).not.toContain("TEMP B-TREE");
+  });
+
+  describe("while the translator is not running", () => {
+    // Its new cron trigger can take about an hour to start firing after a deploy (#50): the
+    // English feed goes on, and the languages fill in later at the English places (Roman, #49).
+    it(`releases at once when the translator has not run for ${TRANSLATOR_ALIVE_MINUTES} minutes, or never`, async () => {
+      await insertNews("a1", hoursAgo(1));
+      await only("uk", "ru", "es");
+      expect(await releaseReady(env, new Date())).toEqual(["a1"]);
+
+      await insertNews("a2", hoursAgo(1));
+      await translatorRan(new Date(Date.now() - (TRANSLATOR_ALIVE_MINUTES - 1) * 60_000));
+      expect(await releaseReady(env, new Date())).toEqual([]);
+      await translatorRan(new Date(Date.now() - (TRANSLATOR_ALIVE_MINUTES + 1) * 60_000));
+      expect(await releaseReady(env, new Date())).toEqual(["a2"]);
+    });
+
+    it("releases from the summarizer's scheduled run, also one with nothing to summarize", async () => {
+      await insertNews("a1", hoursAgo(1));
+      await only("uk", "ru", "es");
+      const log = vi.spyOn(console, "log").mockImplementation(() => {});
+      await worker.scheduled(createScheduledController({ cron: CRONS.summarizer }), env);
+      expect(await feedSeq("a1")).toEqual(expect.any(Number));
+      expect(log.mock.calls.map((c) => JSON.parse(String(c[0])))).toContainEqual({ message: "summarizer release", released: ["a1"] });
+
+      // Once the translator runs, the summarizer's release waits for the translations too.
+      await insertNews("a2", hoursAgo(1));
+      await translatorRan(new Date());
+      await worker.scheduled(createScheduledController({ cron: CRONS.summarizer }), env);
+      expect(await feedSeq("a2")).toBeNull();
+    });
+
+    it("records each translator run, so the release waits for it from its first run", async () => {
+      await insertNews("a1", hoursAgo(1));
+      await only("uk");
+      const start = new Date();
+      await run(fakeApis({ "groq:qwen/qwen3.8-27b": [{ status: 503 }], "groq:openai/gpt-oss-120b": [{ status: 503 }] }).fetch, start);
+      expect(await env.DB.prepare("SELECT at FROM step_runs WHERE step = 'translator'").first("at")).toBe(stored(start));
+      expect(await feedSeq("a1")).toBeNull();
+    });
+  });
+
+  it("goes on after an unexpected error in one translation: the other languages are stored and the run releases", async () => {
+    await insertNews("a2", hoursAgo(1));
+    await only("uk", "ru", "es");
+    // The first translation's store fails in D1, as an outage of the database would.
+    const prepare = env.DB.prepare.bind(env.DB);
+    let failed = false;
+    vi.spyOn(env.DB, "prepare").mockImplementation((sql: string) => {
+      if (!failed && sql.includes("SET headline = ?1")) {
+        failed = true;
+        throw new Error("D1_ERROR: storage operation exceeded timeout");
+      }
+      return prepare(sql);
+    });
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    const results = await run(fakeApis().fetch);
+    expect(results.filter((r) => r.ok)).toHaveLength(2);
+    expect(results.filter((r) => r.error?.startsWith("unexpected: D1_ERROR"))).toHaveLength(1);
+    expect(log.mock.calls.map((c) => JSON.parse(String(c[0])).message)).toContain("translator run");
   });
 });

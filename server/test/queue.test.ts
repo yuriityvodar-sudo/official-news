@@ -427,7 +427,7 @@ describe("the translation queue in four languages", () => {
 
 interface QueueBody {
   languages: Record<string, Record<string, number | boolean | string | null>>;
-  release: { waiting: number; oldestWaitingAgeMinutes: number | null };
+  release: { waiting: number; oldestWaitingAgeMinutes: number | null; translatorRanAt: string | null };
 }
 
 describe("GET /queue", () => {
@@ -456,7 +456,7 @@ describe("GET /queue", () => {
     expect(languages.de).toMatchObject({ ...zero, enabled: false, paused: false });
     expect(languages.uk.lastPublishedAt).toMatch(/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/);
     // a2 waits for its Russian; summarized two hours ago (insertNews stamps the publication time).
-    expect(release).toEqual({ waiting: 1, oldestWaitingAgeMinutes: 120 });
+    expect(release).toEqual({ waiting: 1, oldestWaitingAgeMinutes: 120, translatorRanAt: stored(now) });
     // Nothing secret: only counts, times and the switches.
     expect(JSON.stringify(languages)).not.toMatch(/key|groq|zai|Bearer/i);
   });

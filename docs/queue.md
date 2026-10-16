@@ -14,7 +14,7 @@ Every news article of the 7-day feed waits in the queue once per enabled languag
 curl -s https://api.officialnews.workers.dev/queue
 ```
 
-A growing `oldestWaitingAgeMinutes` with nothing `translating` means the language is paused, has no provider key (the `translator skipped` or `waiting` lines in `wrangler tail` say so), or its provider is down (`retrying`, with `last_error`, and `downSince`). A growing `release.oldestWaitingAgeMinutes` means some language is holding the feed back: look for the one with `downSince` set or a backlog. After 2 hours down it is paused by itself and the feed goes on without it.
+A growing `oldestWaitingAgeMinutes` with nothing `translating` means the language is paused, has no provider key (the `translator skipped` or `waiting` lines in `wrangler tail` say so), or its provider is down (`retrying`, with `last_error`, and `downSince`). A growing `release.oldestWaitingAgeMinutes` means some language is holding the feed back: look for the one with `downSince` set or a backlog. After 2 hours down it is paused by itself and the feed goes on without it. `release.translatorRanAt` is the translator's last run: while it is null or more than 10 minutes old (for about an hour after its cron trigger is added), the summarizer releases every decision at once and the languages fill in later.
 
 ## Automatic pause
 

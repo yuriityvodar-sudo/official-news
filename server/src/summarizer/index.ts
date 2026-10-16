@@ -59,8 +59,8 @@ function workersAi(env: Env): Summarize {
 }
 
 function store(env: Env, id: string, s: Summary, now: string): D1PreparedStatement {
-  // No feed_seq here: an article enters the feed when the translator releases it, in
-  // English and every language at once (release together, #46: translator/release.ts).
+  // No feed_seq here: an article enters the feed when it is released, in English
+  // and every language at once (release together, #46: translator/release.ts).
   return env.DB.prepare(
     `UPDATE articles SET headline = ?, short_summary = ?, summary = ?, decision_type = ?, topics = ?, tags = ?,
             importance = ?, is_news = ?, summarized_at = ?, model = ?
@@ -85,8 +85,10 @@ function store(env: Env, id: string, s: Summary, now: string): D1PreparedStateme
  * newest first: one AI call each, writing the fields in docs/style-guide.md
  * and `is_news`, which decides whether the article goes to the feed.
  *
- * An official decision is not shown yet: the translator releases it into the
- * feed (feed_seq) once it is translated into every enabled language (#46).
+ * An official decision is not shown yet: the release gives it its place in
+ * the feed (feed_seq) once it is translated into every enabled language, or at
+ * once while the translator is not running (#46, translator/release.ts). The
+ * scheduled run (../index.ts) releases after each summarizer run.
  *
  * An unusable answer counts as an attempt; after MAX_ATTEMPTS the article
  * stays hidden. An error from Workers AI itself (an outage, or the daily free

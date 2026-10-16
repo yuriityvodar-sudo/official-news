@@ -25,10 +25,10 @@ import {
   CLAIM,
   nextAttemptAt,
 } from "./queue";
-import { releaseReady } from "./release";
+import { DAY_MS, FEED_DAYS, TRANSLATOR_RAN, releaseReady } from "./release";
 
 export { LANGS, LANGUAGES, type Lang, isLang } from "./languages";
-export { RELEASE, RELEASES_PER_BATCH, releaseReady, releaseStatus } from "./release";
+export { FEED_DAYS, RELEASE, RELEASES_PER_BATCH, TRANSLATOR_ALIVE_MINUTES, releaseReady, releaseStatus } from "./release";
 export {
   AUTO_PAUSE,
   AUTO_PAUSE_HOURS,
@@ -78,10 +78,6 @@ export const TRANSLATORS: Record<Lang, readonly string[]> = {
  * one per language.
  */
 export const TRANSLATIONS_PER_RUN = LANGS.length;
-
-/** Only articles the feed can show get translated: the last 7 days (docs/contract.md). */
-const FEED_DAYS = 7;
-const DAY_MS = 24 * 3_600_000;
 
 /**
  * The order in which a language's first translations were stored: its last
@@ -206,6 +202,8 @@ export async function runTranslator(env: Env, options: TranslatorOptions): Promi
     // A language without a provider key is down too (always the 3rd statement; it changes nothing when none is missing).
     env.DB.prepare(MARK_DOWN).bind(claimedAt, JSON.stringify(waiting)),
     ...LANGS.map((lang) => env.DB.prepare(ENQUEUE).bind(lang, claimedAt, writtenFrom, feedStart)),
+    // The translator runs: from now on the release waits for the translations (release.ts).
+    env.DB.prepare(TRANSLATOR_RAN).bind(claimedAt),
     ...(ready.length
       ? [env.DB.prepare(CLAIM).bind(claimedAt, feedStart, options.maxTranslations, JSON.stringify(ready), CLAIM_WINDOW, CLAIMS_PER_LANGUAGE)]
       : []),
@@ -253,7 +251,7 @@ export async function runTranslator(env: Env, options: TranslatorOptions): Promi
   ]);
   const resumed = answered.length ? switches[0].results.filter((r) => r.paused === 0).map((r) => r.lang) : [];
   const autoPaused = (switches.at(-1)?.results ?? []).map((r) => r.lang);
-  const released = await releaseReady(env, claimedAt, feedStart);
+  const released = await releaseReady(env, now);
 
   const after = {
     ...(released.length ? { released } : {}),
@@ -306,43 +304,15 @@ async function translate(
 
   const results: TranslationResult[] = [];
   for (const job of jobs) {
-    const language = LANGUAGES[job.lang];
-    const messages = [
-      { role: "system" as const, content: systemPrompt(language) },
-      { role: "user" as const, content: userMessage(job.english) },
-    ];
-    let result: TranslationResult | null = null;
-    for (const provider of providersOf(job.lang)) {
-      if (provider.name in down) continue;
-      try {
-        const checked = toTranslation(await provider.translate(messages), job.english, language);
-        if ("problems" in checked) throw new UnusableAnswer(checked.problems.join("; "));
-        result = { ...(await store(env, job, checked.translation, provider.name, claimedAt)), provider: provider.name };
-      } catch (error) {
-        if (error instanceof ProviderDown) {
-          down[provider.name] = error.message;
-          continue;
-        }
-        if (!(error instanceof UnusableAnswer)) throw error;
-        const why = `${provider.name}: ${error.message}`;
-        await env.DB.prepare(COUNT_ATTEMPT)
-          .bind(job.articleId, job.lang, job.source, MAX_ATTEMPTS, claimedAt, nextAttemptAt(now, RETRY_UNUSABLE_MINUTES, job.attempts), why, claimedAt)
-          .run();
-        result = { articleId: job.articleId, lang: job.lang, ok: false, provider: provider.name, error: error.message };
-      }
-      break;
+    try {
+      results.push(await translateOne(env, job, providersOf, down, now, claimedAt));
+    } catch (error) {
+      // Anything unexpected (a D1 error while storing, an answer the checks did not
+      // expect) stops only this translation: its claim runs out in CLAIM_MINUTES and it
+      // is queued again; the other languages and the release go on (Roman, #49 review).
+      const message = error instanceof Error ? error.message : String(error);
+      results.push({ articleId: job.articleId, lang: job.lang, ok: false, error: `unexpected: ${message}` });
     }
-    if (!result) {
-      // Every provider for this language is down or out of quota: it waits, without an attempt.
-      const why = providersOf(job.lang)
-        .map((p) => `${p.name}: ${down[p.name]}`)
-        .join("; ");
-      await env.DB.prepare(OUTAGE)
-        .bind(job.articleId, job.lang, claimedAt, nextAttemptAt(now, RETRY_OUTAGE_MINUTES, job.outageRetries), why, claimedAt)
-        .run();
-      result = { articleId: job.articleId, lang: job.lang, ok: false, error: NO_ANSWER };
-    }
-    results.push(result);
   }
 
   if (free.length) {
@@ -350,6 +320,49 @@ async function translate(
     await env.DB.batch(free.map((c) => env.DB.prepare(FREE_CLAIM).bind(c.articleId, c.lang, claimedAt, claimedAt)));
   }
   return results;
+}
+
+/** One claimed translation: its providers in order, then its outcome stored while the claim holds. */
+async function translateOne(
+  env: Env,
+  job: Job,
+  providersOf: (lang: Lang) => Provider[],
+  down: Record<string, string>,
+  now: Date,
+  claimedAt: string,
+): Promise<TranslationResult> {
+  const language = LANGUAGES[job.lang];
+  const messages = [
+    { role: "system" as const, content: systemPrompt(language) },
+    { role: "user" as const, content: userMessage(job.english) },
+  ];
+  for (const provider of providersOf(job.lang)) {
+    if (provider.name in down) continue;
+    try {
+      const checked = toTranslation(await provider.translate(messages), job.english, language);
+      if ("problems" in checked) throw new UnusableAnswer(checked.problems.join("; "));
+      return { ...(await store(env, job, checked.translation, provider.name, claimedAt)), provider: provider.name };
+    } catch (error) {
+      if (error instanceof ProviderDown) {
+        down[provider.name] = error.message;
+        continue;
+      }
+      if (!(error instanceof UnusableAnswer)) throw error;
+      const why = `${provider.name}: ${error.message}`;
+      await env.DB.prepare(COUNT_ATTEMPT)
+        .bind(job.articleId, job.lang, job.source, MAX_ATTEMPTS, claimedAt, nextAttemptAt(now, RETRY_UNUSABLE_MINUTES, job.attempts), why, claimedAt)
+        .run();
+      return { articleId: job.articleId, lang: job.lang, ok: false, provider: provider.name, error: error.message };
+    }
+  }
+  // Every provider for this language is down or out of quota: it waits, without an attempt.
+  const why = providersOf(job.lang)
+    .map((p) => `${p.name}: ${down[p.name]}`)
+    .join("; ");
+  await env.DB.prepare(OUTAGE)
+    .bind(job.articleId, job.lang, claimedAt, nextAttemptAt(now, RETRY_OUTAGE_MINUTES, job.outageRetries), why, claimedAt)
+    .run();
+  return { articleId: job.articleId, lang: job.lang, ok: false, error: NO_ANSWER };
 }
 
 /** Why a checked translation was not stored: the queue no longer holds this run's claim for that English. */
