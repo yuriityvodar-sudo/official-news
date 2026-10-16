@@ -360,9 +360,11 @@ class _CarouselState extends State<_Carousel> {
         6 +
         lines(k.summary, 1.33, k.summaryLines) +
         12 +
-        kindTag +
-        6 +
-        lines(13, 1.3, BCardKind.footerLines(large));
+        // Beside each other up to XXXL; at the Accessibility sizes the topic
+        // and time may go under the tag.
+        (large
+            ? kindTag + 6 + lines(13, 1.3, BCardKind.footerLines(large))
+            : math.max(kindTag, lines(13, 1.3, 1)));
     return SizedBox(
       // Room to spare (a line): the sum above comes out a little short at the
       // largest text sizes.
