@@ -9,6 +9,8 @@ environment:
 dependencies:
   cached_network_image: ^4.0.3
   cupertino_icons: ^2.0.0
+  firebase_analytics: ^13.0.0
+  firebase_core: ^5.0.0
   flutter:
     sdk: flutter
   flutter_cache_manager: ^3.4.5

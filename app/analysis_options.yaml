@@ -1,1 +1,7 @@
 include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  exclude:
+    # Flutter's Swift Package Manager copies plugin sources (with their example
+    # apps) into build/ios/SourcePackages; they are not our code (#60).
+    - build/**
