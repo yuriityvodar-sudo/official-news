@@ -131,5 +131,11 @@
   "supportMessages": "Sie haben einen Fehler in einer Zusammenfassung oder eine Quelle gefunden, die nicht funktioniert, oder Sie haben eine Idee? Wir lesen jede Nachricht.",
   "supportMistakes": "Wenn Sie einen Fehler melden, helfen uns der Titel des Artikels und die Sprache, in der Sie ihn gelesen haben, bei der Suche.",
   "supportAppStore": "Sie erreichen uns über die Seite der App im App Store.",
-  "supportWrite": "E-Mail schreiben"
+  "supportWrite": "E-Mail schreiben",
+
+  "countryCZ": "Tschechien",
+  "countryES": "Spanien",
+  "countryPL": "Polen",
+  "countryUA": "Ukraine",
+  "languageCs": "Tschechischen"
 }
