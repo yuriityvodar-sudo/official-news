@@ -278,12 +278,12 @@ abstract final class _Size {
 /// Lines for the country and ministry: two, four at the Accessibility sizes.
 int _placeLines(bool large) => large ? 4 : 2;
 
-/// Lines for the time after the topic tags.
+/// Lines for the time before the topic tags.
 int _footerLines(bool large) => large ? 3 : 1;
 
 /// One decision in its own card: picture (when the page has one), country and
-/// ministry, the serif headline, what it means, then its topics and when it
-/// arrived. The topic tags stand where the decision type's grey tag stood
+/// ministry, the serif headline, what it means, then when it arrived and its
+/// topics. The topic tags stand where the decision type's grey tag stood
 /// until Yurii's review (16 Oct); the type is on the article screen.
 class BCard extends StatefulWidget {
   const BCard({
@@ -407,9 +407,11 @@ class _BCardState extends State<BCard> {
       ),
     );
 
-    // The topic tags lead the footer, the time after them; it moves under
-    // them when it does not fit beside the last one. Grey, faded a little
-    // once read, as the card's other grey text.
+    // The time leads the footer, the topic tags after it: so the time is at
+    // the start of the footer on every card, and three long names take two
+    // lines at most (after the last tag, the time moved from card to card
+    // and could take a third line). Grey, faded a little once read, as the
+    // card's other grey text.
     final footerText = Text(
       time,
       maxLines: _footerLines(large),
@@ -424,7 +426,7 @@ class _BCardState extends State<BCard> {
             topics,
             color: _fadeGrey(s.footer, read).color!,
             fill: read ? quiet.withValues(alpha: quiet.a * _readGrey) : quiet,
-            trailing: footerText,
+            leading: footerText,
           );
 
     final text = Padding(
@@ -456,15 +458,15 @@ class _BCardState extends State<BCard> {
     );
 
     // One VoiceOver stop per card. The headline first, as it is the news,
-    // then the card's own order: who, what it means, the topics ("Topics:
-    // Economy, Trade"), when; "Read" after a card already opened (in the dot
-    // styles, "Unread" after one not opened yet).
+    // then the card's own order: who, what it means, when, the topics
+    // ("Topics: Economy, Trade"); "Read" after a card already opened (in the
+    // dot styles, "Unread" after one not opened yet).
     final spoken = _sentences([
       a.headline,
       '$country, ${a.source.name}',
       if (hasSummary) summary,
-      ?spokenTopics(topics, l10n),
       time,
+      ?spokenTopics(topics, l10n),
     ]);
 
     return Semantics(

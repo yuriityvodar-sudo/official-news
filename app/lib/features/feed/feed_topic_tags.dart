@@ -44,19 +44,20 @@ String? spokenTopics(List<String> ids, AppLocalizations l10n) => ids.isEmpty
 /// even on a line of its own, the tags' text is made a little smaller.
 ///
 /// Nothing at all for no topics (no empty row): a look leaves out the gap
-/// above it too. [trailing] (the time, in looks that have it after the
-/// decision type) follows the last tag on the same line, or starts the next.
+/// above it too. [leading] (the time, in B) comes before the first tag, so
+/// it starts the first line on every card, however the tags wrap.
 ///
 /// VoiceOver hears the tags once, as "Topics: Economy, Trade"
-/// ([spokenTopics]); looks whose card has one label of its own put that in
-/// it.
+/// ([spokenTopics]), unless [speak] is false: looks whose card has one label
+/// of its own put that in it, and Now puts it after the row's time.
 class TopicTags extends StatelessWidget {
   const TopicTags(
     this.ids, {
     super.key,
     required this.color,
     this.fill,
-    this.trailing,
+    this.leading,
+    this.speak = true,
     this.maxScale = 2,
   });
 
@@ -72,8 +73,15 @@ class TopicTags extends StatelessWidget {
   /// and 4.7:1 on a dark grey card).
   final Color? fill;
 
-  /// What follows the tags on their line: in A and B the time.
-  final Widget? trailing;
+  /// What comes before the first tag, on the first line: in B the time
+  /// (Yurii's brief: the time stays where it is). After the last tag it
+  /// would move from card to card with the tags' lengths.
+  final Widget? leading;
+
+  /// Whether the tags say "Topics: Economy, Trade" to VoiceOver here. False
+  /// when the look says it elsewhere in the card, so that the topics,
+  /// secondary, are heard after the headline.
+  final bool speak;
 
   /// How far the tags grow with the reader's text size: they are labels, so
   /// at most twice their size (24 pt).
@@ -85,7 +93,7 @@ class TopicTags extends StatelessWidget {
   static const _padV = 2.0;
   static const _gap = 3.0;
 
-  /// Between two tags, and between the last one and [trailing].
+  /// Between two tags, and between [leading] and the first one.
   static const spacing = 5.0;
 
   /// Between two lines of tags.
@@ -93,12 +101,16 @@ class TopicTags extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (ids.isEmpty) return trailing ?? const SizedBox.shrink();
+    if (ids.isEmpty) return leading ?? const SizedBox.shrink();
     final l10n = AppLocalizations.of(context);
     final names = [for (final id in ids) topicName(id, l10n)];
     final style = TextStyle(
       fontSize: fontSize,
       fontWeight: FontWeight.w500,
+      // iOS's own tracking for 12-pt text, not the theme's 0.25 pt a letter:
+      // up to 7 pt narrower a tag, so two long names ("Asuntos exteriores",
+      // "Derechos humanos") share a line in C's column with room to spare.
+      letterSpacing: 0,
       height: _lineHeight,
       color: color,
     );
@@ -131,13 +143,16 @@ class TopicTags extends StatelessWidget {
           runSpacing: runSpacing,
           crossAxisAlignment: WrapCrossAlignment.center,
           children: [
+            ?leading,
             // One VoiceOver phrase for all the tags, on the first.
-            Semantics(
-              label: spokenTopics(ids, l10n),
-              child: ExcludeSemantics(child: tags.first),
-            ),
+            if (speak)
+              Semantics(
+                label: spokenTopics(ids, l10n),
+                child: ExcludeSemantics(child: tags.first),
+              )
+            else
+              ExcludeSemantics(child: tags.first),
             for (final tag in tags.skip(1)) ExcludeSemantics(child: tag),
-            ?trailing,
           ],
         );
       },

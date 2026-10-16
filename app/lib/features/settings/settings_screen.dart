@@ -270,13 +270,13 @@ class _DesignSection extends StatelessWidget {
         ),
       ),
       // How many topic tags a card shows at most (Yurii, 16 Oct: "we can try
-      // one, two, three"), in every design.
+      // one, two, three"), in every design. Short segments and no subtitle,
+      // as the Splash row, so the row fits at 375 pt.
       ValueListenableBuilder(
         valueListenable: topicTagCount,
         builder: (context, count, _) => CupertinoListTile(
           leading: const _Icon(CupertinoIcons.tag),
           title: const Text('Topics'),
-          subtitle: const Text('tags on a card'),
           trailing: CupertinoSlidingSegmentedControl<int>(
             groupValue: count,
             onValueChanged: (n) {
@@ -289,7 +289,7 @@ class _DesignSection extends StatelessWidget {
                 }
               });
             },
-            children: const {1: Text('One'), 2: Text('Two'), 3: Text('Three')},
+            children: const {1: Text('1'), 2: Text('2'), 3: Text('3')},
           ),
         ),
       ),

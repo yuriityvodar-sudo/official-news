@@ -164,6 +164,9 @@ class NowArticleRow extends StatelessWidget {
                   padding: const EdgeInsets.only(bottom: 8),
                   child: TopicTags(
                     topics,
+                    // VoiceOver hears them after the time (_body): first
+                    // in the row, they would be heard before the headline.
+                    speak: false,
                     color: dim(text.meta, read).color!,
                     fill: dim(
                       TextStyle(
@@ -183,7 +186,8 @@ class NowArticleRow extends StatelessWidget {
     );
   }
 
-  /// The publisher, headline and time, the picture on their right.
+  /// The publisher, headline and time, the picture on their right; for
+  /// VoiceOver, the topics after them ("Topics: Economy, Trade").
   Widget _body(BuildContext context, NewsText text, bool read) => Row(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
@@ -206,6 +210,11 @@ class NowArticleRow extends StatelessWidget {
                 style: dim(text.meta, read),
               ),
             ],
+            if (topics.isNotEmpty)
+              Semantics(
+                label: spokenTopics(topics, AppLocalizations.of(context)),
+                child: const SizedBox.shrink(),
+              ),
           ],
         ),
       ),

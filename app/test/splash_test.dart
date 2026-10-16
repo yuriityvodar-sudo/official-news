@@ -457,6 +457,12 @@ void main() {
   });
 
   group('Settings → Prototype → Splash', () {
+    // A segment of the Splash row: the Topics row has "1", "2" and "3" too.
+    Finder splashSegment(String text) => find.descendant(
+      of: find.byType(CupertinoSlidingSegmentedControl<SplashStyle>),
+      matching: find.text(text),
+    );
+
     Future<void> openSettings(WidgetTester tester) async {
       tester.view.physicalSize = const Size(390, 844) * 3;
       tester.view.devicePixelRatio = 3;
@@ -479,7 +485,7 @@ void main() {
       expect(find.text('Splash'), findsOneWidget);
       expect(find.text('rise'), findsOneWidget);
       for (final segment in ['1', '1b', '2', '3']) {
-        expect(find.text(segment), findsOneWidget, reason: segment);
+        expect(splashSegment(segment), findsOneWidget, reason: segment);
       }
       final control = tester
           .widget<CupertinoSlidingSegmentedControl<SplashStyle>>(
@@ -524,7 +530,7 @@ void main() {
         );
         await tester.tap(find.text('the feed'));
         await tester.pumpAndSettle();
-        await tester.tap(find.text(segment));
+        await tester.tap(splashSegment(segment));
         await tester.pumpAndSettle();
         expect(splashStyle.value, style);
         expect(find.text(name), findsOneWidget);

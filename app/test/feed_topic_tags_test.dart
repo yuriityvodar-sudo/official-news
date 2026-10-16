@@ -1,9 +1,11 @@
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -11,6 +13,7 @@ import 'package:official_news/core/api_client.dart';
 import 'package:official_news/core/article.dart';
 import 'package:official_news/core/decision_types.dart';
 import 'package:official_news/core/feed_language.dart';
+import 'package:official_news/core/news_widgets.dart';
 import 'package:official_news/core/router.dart';
 import 'package:official_news/core/theme.dart';
 import 'package:official_news/features/feed/feed_controller.dart';
@@ -33,7 +36,9 @@ import 'test_app.dart';
 ///
 /// Tests draw text in the FlutterTest font, every letter a square as wide as
 /// the font size, so names here are much wider than in SF: tags that fit
-/// here fit on the phone.
+/// here fit on the phone. How many lines they take is measured at the end of
+/// this file in a real font (Roboto, from the Flutter SDK), on a screen a
+/// little narrower than 375 pt for the difference from SF.
 
 Map<String, dynamic> _article(
   String id, {
@@ -103,6 +108,8 @@ Future<void> _pump(
   tester.platformDispatcher.textScaleFactorTestValue = textScale;
   addTearDown(tester.view.reset);
   addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+  // A new feed, also when a test pumps a second one (in another language).
+  await tester.pumpWidget(const SizedBox());
   await tester.pumpWidget(
     MaterialApp(
       theme: buildTheme(brightness),
@@ -364,6 +371,42 @@ void main() {
         expect(grey, const Color(0xFF6C6C70));
       });
 
+      testWidgets('no decision type on a card in any language, on screen or '
+          'for VoiceOver', (tester) async {
+        final handle = tester.ensureSemantics();
+        for (final lang in FeedLanguage.values) {
+          await _pump(tester, [
+            for (final (i, type) in decisionTypes.indexed)
+              _article(
+                'a$i',
+                topics: ['economy', 'trade'],
+                type: type,
+                lang: lang.code,
+                seq: decisionTypes.length - i,
+              ),
+          ], language: lang);
+          expect(tester.takeException(), isNull);
+          final types = _decisionTypes(lang);
+          expect(
+            find.textContaining(types, findRichText: true),
+            findsNothing,
+            reason: lang.code,
+          );
+          for (var i = 0; i < decisionTypes.length; i++) {
+            final card = tester.getSemantics(
+              find.bySemanticsLabel(RegExp('Headline a$i\\b')),
+            );
+            expect(
+              card.label,
+              isNot(matches(types)),
+              reason: '${lang.code}: ${decisionTypes[i]}',
+            );
+            expect(card.label, contains(topicName('economy', l10nFor(lang))));
+          }
+        }
+        handle.dispose();
+      });
+
       testWidgets('the filtered topic comes first', (tester) async {
         // Wide enough for C's chips, which slide sideways in the test font.
         await _pump(tester, [
@@ -412,6 +455,21 @@ void main() {
           find.bySemanticsLabel(RegExp('Headline a1')),
         );
         expect(card.label, contains('Topics: Economy, Trade'));
+        // Secondary: heard after the headline, in every look. In Now and B,
+        // after the time too, last (the time leads B's footer; Now's tags
+        // stand above the row).
+        expect(
+          card.label.indexOf('Topics'),
+          greaterThan(card.label.indexOf('Headline a1')),
+          reason: card.label,
+        );
+        if (design == FeedDesign.now || design == FeedDesign.b) {
+          expect(
+            card.label,
+            matches(RegExp(r'Topics: Economy, Trade\.?$')),
+            reason: card.label,
+          );
+        }
         // Said once, not also tag by tag.
         expect(
           RegExp('Economy').allMatches(card.label).length,
@@ -543,7 +601,7 @@ void main() {
 
   // Narrower than any tag row gets on a 375-pt phone (C's text column, the
   // narrowest, is 287 pt; Now and A give the tags the whole row, beside no
-  // picture): the tags alone, with a time after them, still wrap whole.
+  // picture): the tags alone, with a time before them, still wrap whole.
   for (final language in [FeedLanguage.uk, FeedLanguage.de]) {
     for (final scale in [1.0, 23 / 17, 53 / 17]) {
       testWidgets('the longest names wrap whole in 237 pt in ${language.code} '
@@ -561,7 +619,7 @@ void main() {
                 child: TopicTags(
                   ids,
                   color: const Color(0xFF6C6C70),
-                  trailing: const Text('5 хв тому'),
+                  leading: const Text('5 хв тому'),
                 ),
               ),
             ),
@@ -590,7 +648,15 @@ void main() {
     await tester.tap(find.byIcon(CupertinoIcons.gear_alt).hitTestable());
     await tester.pumpAndSettle();
     expect(find.text('Topics'), findsOneWidget);
-    await tester.tap(find.text('One'));
+    await tester.tap(
+      find.descendant(
+        of: find.ancestor(
+          of: find.text('Topics'),
+          matching: find.byType(CupertinoListTile),
+        ),
+        matching: find.text('1'),
+      ),
+    );
     await tester.pumpAndSettle();
     // Settings closes once the segment has slid over.
     await tester.pump(const Duration(milliseconds: 300));
@@ -598,5 +664,103 @@ void main() {
     expect(topicTagCount.value, 1);
     expect(find.byType(SettingsScreen), findsNothing);
     expect([for (final t in _tags(tester, 'a1')) t.name], ['Economy']);
+  });
+
+  // How many lines the tags take, in a real font: Yurii's brief is one line,
+  // or neatly two. Roboto Medium (in the Flutter SDK, also on CI) draws the
+  // app's text here; SF is a little wider, so the screen is 356 pt, 5% under
+  // 375 pt. At the normal text size, in every look and language, the three
+  // longest names and two common sets take two lines at most; in B the time
+  // starts the footer's first line on every card. This group comes last: the
+  // font stays loaded for the rest of the file.
+  group('in a real font at 375 pt', () {
+    setUpAll(() async {
+      final root = Platform.environment['FLUTTER_ROOT'];
+      final file = File(
+        '$root/bin/cache/artifacts/material_fonts/Roboto-Medium.ttf',
+      );
+      expect(file.existsSync(), isTrue, reason: '${file.path} is missing');
+      final bytes = file.readAsBytesSync();
+      // The family the app's iOS theme draws text in.
+      await (FontLoader(
+        'CupertinoSystemText',
+      )..addFont(Future.value(ByteData.sublistView(bytes)))).load();
+    });
+
+    /// The [count] longest topic names in [language].
+    List<String> longest(FeedLanguage language, int count) {
+      final l10n = l10nFor(language);
+      return (topicIcons.keys.toList()..sort(
+            (a, b) =>
+                topicName(b, l10n).length.compareTo(topicName(a, l10n).length),
+          ))
+          .take(count)
+          .toList();
+    }
+
+    for (final design in FeedDesign.values) {
+      for (final language in FeedLanguage.values) {
+        testWidgets('${design.name} in ${language.code}: tags take two lines '
+            'at most', (tester) async {
+          feedDesign.value = design;
+          final sets = {
+            'a1': longest(language, 3),
+            'a2': ['security-defence', 'foreign-affairs', 'human-rights'],
+            'a3': ['economy', 'energy', 'trade'],
+          };
+          final items = [
+            for (final (i, MapEntry(key: id, value: topics))
+                in sets.entries.indexed)
+              _article(id, topics: topics, lang: language.code, seq: 9 - i),
+          ];
+          await _pump(tester, items, language: language, width: 356);
+          expect(tester.takeException(), isNull);
+          final l10n = l10nFor(language);
+          for (final (i, id) in sets.keys.indexed) {
+            final tags = _tags(tester, id);
+            expect(tags, hasLength(3));
+            // Drawn in Roboto, not in the test font's squares.
+            final name = _name(tester, tags.first);
+            expect(
+              name.size.width,
+              lessThan(0.8 * TopicTags.fontSize * tags.first.name.length),
+              reason: 'not in the real font: ${tags.first.name}',
+            );
+            final heights = [
+              for (final tag in tags) tester.getSize(find.byWidget(tag)).height,
+            ];
+            final line = heights.reduce(math.min);
+            // Each name on one line in its tag.
+            for (final (j, h) in heights.indexed) {
+              expect(h, closeTo(line, 0.5), reason: tags[j].name);
+            }
+            final row = find.descendant(
+              of: _card(id),
+              matching: find.byType(TopicTags),
+            );
+            final box = tester.getRect(row);
+            final names = [for (final t in tags) t.name].join(', ');
+            expect(
+              box.height,
+              lessThanOrEqualTo(2 * line + TopicTags.runSpacing + 0.5),
+              reason: '$names: ${box.height} pt',
+            );
+            if (design == FeedDesign.b) {
+              // The time starts the footer, on its first line.
+              final time = tester.getRect(
+                find.descendant(
+                  of: row,
+                  matching: find.text(
+                    feedTime(Article.fromJson(items[i]), l10n),
+                  ),
+                ),
+              );
+              expect(time.left, closeTo(box.left, 0.5), reason: names);
+              expect(time.bottom, lessThanOrEqualTo(box.top + line + 0.5));
+            }
+          }
+        });
+      }
+    }
   });
 }
