@@ -44,7 +44,7 @@ class ALook extends NowLook {
   Widget topStories(BuildContext context, FeedSection top) {
     return SliverMainAxisGroup(
       slivers: [
-        padded(_SectionHead(top.title, first: true)),
+        padded(_SectionHead(top.title)),
         padded(
           _Lead(
             article: top.articles.first,
@@ -52,9 +52,13 @@ class ALook extends NowLook {
             onTap: () => top.open(0),
           ),
         ),
-        // The other top stories keep two lines of their summary, which sets
-        // them apart from the Latest list below.
+        // The other top stories keep the first sentence of their summary,
+        // which sets them apart from the Latest list below.
         if (top.length > 1) _rows(top, from: 1, ruleFirst: true, deck: true),
+        // The space between the sections belongs to the end of Top stories,
+        // so Latest sits as close under the filters as Top stories does when
+        // a filter leaves no top stories.
+        const SliverToBoxAdapter(child: SizedBox(height: _sectionGap)),
       ],
     );
   }
@@ -135,6 +139,9 @@ class ALook extends NowLook {
 /// The feed's side margins.
 const _margin = 20.0;
 
+/// Above a section title, and after the last top story.
+const _sectionGap = 18.0;
+
 /// How far the masthead's text grows with Dynamic Type.
 const _mastheadMaxScale = 1.3;
 
@@ -151,6 +158,7 @@ const _serifFallback = ['Georgia', 'serif'];
 class _AType {
   _AType._(ColorScheme scheme)
     : ink = scheme.onSurface,
+      muted = scheme.onSurfaceVariant,
       nameplate = TextStyle(
         fontFamily: _serif,
         fontFamilyFallback: _serifFallback,
@@ -186,7 +194,7 @@ class _AType {
         height: 1.3,
         fontWeight: FontWeight.w700,
         letterSpacing: 0.7,
-        color: scheme.onSurface,
+        color: scheme.onSurfaceVariant,
       ),
       kicker = TextStyle(
         fontSize: 13,
@@ -229,19 +237,31 @@ class _AType {
         fontSize: 13,
         height: 1.3,
         color: scheme.onSurfaceVariant,
+      ),
+      kind = TextStyle(
+        fontSize: 13,
+        height: 1.3,
+        fontWeight: FontWeight.w600,
+        color: scheme.onSurface,
       );
 
   factory _AType.of(BuildContext context) =>
       _AType._(Theme.of(context).colorScheme);
 
   final Color ink;
+
+  /// The grey of everything but the headline and the decision type, 5.2:1
+  /// on white and 7.3:1 on black.
+  final Color muted;
   final TextStyle nameplate;
   final TextStyle compactTitle;
   final TextStyle dateline;
   final TextStyle section;
 
-  /// "BRAZIL  Chamber of Deputies": the country in ink capitals, like a
-  /// wire dateline, the institution in grey.
+  /// "BRAZIL  Chamber of Deputies": the country in grey capitals, like a
+  /// wire dateline, the institution in grey. The country is the field that
+  /// repeats (one source gives several decisions in a row), so it is not in
+  /// ink: the headline and the decision type are.
   final TextStyle country;
   final TextStyle kicker;
   final TextStyle headline;
@@ -253,22 +273,36 @@ class _AType {
   /// A top story's short summary in a row.
   final TextStyle rowDeck;
 
-  /// "Bill · 8m ago".
+  /// "Bill · 8m ago": the time.
   final TextStyle footer;
+
+  /// "Bill · 8m ago": what the decision is, in ink, because "Proposal" and
+  /// "Law" are what tells a reader whether the headline is already in force.
+  final TextStyle kind;
+
+  /// A read article's ink text turns grey; text that is grey already stays
+  /// as it is, so a read card stays readable (5.2:1 on white).
+  TextStyle read(TextStyle style, bool read) =>
+      read ? style.copyWith(color: muted) : style;
 }
 
 /// PROTOTYPE: a site's default sharing picture (the GOV.UK crown tile,
 /// Kantei's logo) says nothing about the decision and reads like an ad, so
 /// the feed leaves it out. The real fix belongs in the fetcher: not saving
 /// such a picture as the article's.
+///
+/// "logo" counts only as a name of its own in the path ("/logo.png",
+/// "site-logo.svg", "/logos/"), not inside a word ("/catalogo/").
 bool _sitePicture(String url) {
-  final u = url.toLowerCase();
-  return u.contains('opengraph') ||
-      u.contains('/ogp.') ||
-      u.contains('og-image') ||
-      u.contains('og_image') ||
-      u.contains('logo');
+  final path = (Uri.tryParse(url)?.path ?? url).toLowerCase();
+  return path.contains('opengraph') ||
+      path.contains('/ogp.') ||
+      path.contains('og-image') ||
+      path.contains('og_image') ||
+      _logo.hasMatch(path);
 }
+
+final _logo = RegExp(r'(^|[/_.-])logos?([/_.-]|$)');
 
 /// The article's own picture, or null.
 String? _pictureOf(Article a) {
@@ -279,16 +313,15 @@ String? _pictureOf(Article a) {
 
 /// Above a section: a short red mark, then the title in the serif.
 class _SectionHead extends StatelessWidget {
-  const _SectionHead(this.title, {this.first = false});
+  const _SectionHead(this.title);
 
   final String title;
-  final bool first;
 
   @override
   Widget build(BuildContext context) {
     final type = _AType.of(context);
     return Padding(
-      padding: EdgeInsets.only(top: first ? 18 : 36, bottom: 4),
+      padding: const EdgeInsets.only(top: _sectionGap, bottom: 4),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -311,11 +344,11 @@ class _SectionHead extends StatelessWidget {
 
 /// Where a decision comes from: "BRAZIL  Chamber of Deputies". The
 /// country comes first so it is never cut; a long institution name is.
+/// It is grey already, so it looks the same once the article is read.
 class _Kicker extends StatelessWidget {
-  const _Kicker(this.article, {required this.read, required this.maxLines});
+  const _Kicker(this.article, {required this.maxLines});
 
   final Article article;
-  final bool read;
   final int maxLines;
 
   @override
@@ -324,11 +357,11 @@ class _Kicker extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     return Text.rich(
       TextSpan(
-        style: dim(type.kicker, read),
+        style: type.kicker,
         children: [
           TextSpan(
             text: countryName(article.country, l10n).toUpperCase(),
-            style: dim(type.country, read),
+            style: type.country,
           ),
           TextSpan(text: '  ${article.source.name}'),
         ],
@@ -354,16 +387,10 @@ class _Footer extends StatelessWidget {
     final time = feedTime(article, l10n);
     return Text.rich(
       TextSpan(
-        style: dim(type.footer, read),
+        style: type.footer,
         children: [
           if (kind != null) ...[
-            TextSpan(
-              text: kind,
-              style: dim(
-                type.footer.copyWith(fontWeight: FontWeight.w600),
-                read,
-              ),
-            ),
+            TextSpan(text: kind, style: type.read(type.kind, read)),
             const TextSpan(text: ' · '),
           ],
           TextSpan(text: time),
@@ -373,8 +400,8 @@ class _Footer extends StatelessWidget {
   }
 }
 
-/// What VoiceOver reads for a card, once: the headline first, then where it
-/// comes from, what it is and when.
+/// What VoiceOver reads for a card, once: the headline first, the summary as
+/// shown, then where it comes from, what it is and when.
 String _spoken(BuildContext context, Article a, {String? deck}) {
   final l10n = AppLocalizations.of(context);
   final kind = decisionTypeLabel(a.decisionType, l10n);
@@ -388,27 +415,83 @@ String _spoken(BuildContext context, Article a, {String? deck}) {
   ].map(sentence).join(' ');
 }
 
-/// A card that is one button for VoiceOver, with one label.
-class _Card extends StatelessWidget {
-  const _Card({required this.label, required this.onTap, required this.child});
+/// PROTOTYPE: "Read", for VoiceOver on an opened article. It belongs in the
+/// app's translations (`feedRead` in the .arb files) once a design is chosen;
+/// a design option may change only its own file.
+String _readWord(BuildContext context) =>
+    switch (Localizations.localeOf(context).languageCode) {
+      'uk' || 'ru' => 'Прочитано',
+      'es' => 'Leído',
+      'de' => 'Gelesen',
+      _ => 'Read',
+    };
+
+/// A card that is one button for VoiceOver, with one label, and says "Read"
+/// once it was opened. It tints under the finger, across the whole width,
+/// as iOS lists do.
+class _Card extends StatefulWidget {
+  const _Card({
+    required this.label,
+    required this.read,
+    required this.onTap,
+    required this.child,
+  });
 
   final String label;
+  final bool read;
   final VoidCallback onTap;
   final Widget child;
 
   @override
-  Widget build(BuildContext context) => Semantics(
-    container: true,
-    button: true,
-    label: label,
-    onTap: onTap,
-    excludeSemantics: true,
-    child: GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: child,
-    ),
-  );
+  State<_Card> createState() => _CardState();
+}
+
+class _CardState extends State<_Card> {
+  bool _pressed = false;
+
+  void _press(bool pressed) {
+    if (pressed != _pressed) setState(() => _pressed = pressed);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Semantics(
+      container: true,
+      button: true,
+      label: widget.label,
+      value: widget.read ? _readWord(context) : null,
+      onTap: widget.onTap,
+      excludeSemantics: true,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        // Flutter reports the touch after 100 ms, or at once on a quick tap,
+        // and cancels it when the finger starts a scroll: no flicker.
+        onTapDown: (_) => _press(true),
+        onTapUp: (_) => _press(false),
+        onTapCancel: () => _press(false),
+        onTap: widget.onTap,
+        child: Stack(
+          // The card keeps the full width it is given, also for a short lead.
+          fit: StackFit.passthrough,
+          clipBehavior: Clip.none,
+          children: [
+            if (_pressed)
+              Positioned(
+                top: 0,
+                bottom: 0,
+                left: -_margin,
+                right: -_margin,
+                child: ColoredBox(
+                  color: scheme.onSurface.withValues(alpha: 0.06),
+                ),
+              ),
+            widget.child,
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 /// Dynamic Type for text of [size] points: small text grows as the reader
@@ -426,6 +509,21 @@ TextScaler _damped(BuildContext context, double? size) {
 bool _hugeText(BuildContext context) =>
     MediaQuery.textScalerOf(context).scale(10) > 15;
 
+/// The first sentence of [summary], or null when there is none. A sentence
+/// ends at ".", "!" or "?" after a word of three or more characters and before
+/// a capital: "z. B.", "Dr. Silva", "U.S." and "Art. 5" do not end one.
+String? _firstSentence(String? summary) {
+  final s = summary?.trim() ?? '';
+  if (s.isEmpty) return null;
+  final end = _sentenceEnd.firstMatch(s);
+  return end == null ? s : s.substring(0, end.start);
+}
+
+final _sentenceEnd = RegExp(
+  r'(?<=[\p{L}\d)»"”’]{3}[.!?])\s+(?=[\p{Lu}«"“„])',
+  unicode: true,
+);
+
 /// One decision: where from, the headline with a small picture on its right,
 /// and what it is and when.
 class _Row extends StatelessWidget {
@@ -440,7 +538,8 @@ class _Row extends StatelessWidget {
   final bool read;
   final VoidCallback onTap;
 
-  /// Shows the short summary under the headline (top stories).
+  /// Shows the first sentence of the short summary under the headline (top
+  /// stories).
   final bool deck;
 
   @override
@@ -449,15 +548,17 @@ class _Row extends StatelessWidget {
     final huge = _hugeText(context);
     // At the accessibility sizes the headline needs the whole width.
     final url = huge ? null : _pictureOf(article);
+    final summary = deck ? _firstSentence(article.shortSummary) : null;
     return _Card(
-      label: _spoken(context, article),
+      label: _spoken(context, article, deck: summary),
+      read: read,
       onTap: onTap,
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _Kicker(article, read: read, maxLines: huge ? 3 : 1),
+            _Kicker(article, maxLines: huge ? 3 : 1),
             const SizedBox(height: 6),
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -468,15 +569,18 @@ class _Row extends StatelessWidget {
                     children: [
                       _WholeWords(
                         article.headline,
-                        style: dim(type.headline, read),
+                        style: type.read(type.headline, read),
                         maxLines: huge ? 9 : 6,
                       ),
-                      if (deck && (article.shortSummary ?? '').isNotEmpty) ...[
+                      if (summary != null) ...[
                         const SizedBox(height: 4),
+                        // One whole sentence, so the row ends on a full
+                        // stop; the limit is only for a sentence that runs
+                        // on for most of the summary.
                         _WholeWords(
-                          article.shortSummary!.trim(),
-                          style: dim(type.rowDeck, read),
-                          maxLines: 2,
+                          summary,
+                          style: type.rowDeck,
+                          maxLines: huge ? 8 : 4,
                         ),
                       ],
                       const SizedBox(height: 6),
@@ -510,25 +614,31 @@ class _Lead extends StatelessWidget {
     final url = _pictureOf(article);
     final deck = article.shortSummary?.trim();
     final hasDeck = deck != null && deck.isNotEmpty;
+    final huge = _hugeText(context);
     return _Card(
       label: _spoken(context, article, deck: hasDeck ? deck : null),
+      read: read,
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.only(top: 12, bottom: 20),
+        // As far under "Top stories" as a Latest row is under "Latest".
+        padding: const EdgeInsets.only(top: 16, bottom: 20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (url != null) _LeadPicture(url: url, dimmed: read),
-            _Kicker(article, read: read, maxLines: 3),
+            _Kicker(article, maxLines: 3),
             const SizedBox(height: 8),
             _WholeWords(
               article.headline,
-              style: dim(type.leadHeadline, read),
-              maxLines: _hugeText(context) ? 9 : 6,
+              style: type.read(type.leadHeadline, read),
+              maxLines: huge ? 9 : 6,
             ),
             if (hasDeck) ...[
               const SizedBox(height: 10),
-              _WholeWords(deck, style: dim(type.deck, read), maxLines: 4),
+              // The whole summary: up to 200 characters in English and about
+              // twice that in a translation, so the limit only stops a
+              // runaway one.
+              _WholeWords(deck, style: type.deck, maxLines: huge ? 20 : 10),
             ],
             const SizedBox(height: 10),
             _Footer(article, read: read),
@@ -551,12 +661,13 @@ class _WholeWords extends StatelessWidget {
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
+      final drawn = _drawnStyle(context);
       final shown = constraints.maxWidth.isFinite
-          ? _fit(context, constraints.maxWidth)
+          ? _fit(context, drawn, constraints.maxWidth)
           : text;
       return Text(
         shown,
-        style: style,
+        style: drawn,
         textScaler: _damped(context, style.fontSize),
         maxLines: maxLines,
         overflow: TextOverflow.ellipsis,
@@ -564,22 +675,25 @@ class _WholeWords extends StatelessWidget {
     },
   );
 
-  String _fit(BuildContext context, double width) {
+  /// The style the text is drawn in, as Text builds it: with iOS Bold Text
+  /// on, everything is bold, so it is measured bold too.
+  TextStyle _drawnStyle(BuildContext context) {
+    final s = DefaultTextStyle.of(context).style.merge(style);
+    return MediaQuery.boldTextOf(context)
+        ? s.merge(const TextStyle(fontWeight: FontWeight.bold))
+        : s;
+  }
+
+  String _fit(BuildContext context, TextStyle drawn, double width) {
     final painter = TextPainter(
-      text: TextSpan(
-        text: text,
-        style: DefaultTextStyle.of(context).style.merge(style),
-      ),
       maxLines: maxLines,
       textDirection: Directionality.of(context),
       textScaler: _damped(context, style.fontSize),
+      textHeightBehavior: DefaultTextStyle.of(context).textHeightBehavior,
       locale: Localizations.maybeLocaleOf(context),
     );
     bool fits(String s) {
-      painter.text = TextSpan(
-        text: s,
-        style: DefaultTextStyle.of(context).style.merge(style),
-      );
+      painter.text = TextSpan(text: s, style: drawn);
       painter.layout(maxWidth: width);
       return !painter.didExceedMaxLines;
     }
@@ -754,125 +868,136 @@ class _MastheadDelegate extends SliverPersistentHeaderDelegate {
       0.0,
       1.0,
     );
-    return MediaQuery(
-      data: mq.copyWith(textScaler: scaler),
-      child: ColoredBox(
-        color: background,
-        child: ClipRect(
-          child: Stack(
-            children: [
-              // The nameplate and the filters, sliding up under the bar.
-              Positioned(
-                top: _bar - shrink,
-                left: 0,
-                right: 0,
-                height: titleHeight + _chips,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: _margin),
-                      child: SizedBox(
-                        height: titleHeight,
-                        width: double.infinity,
-                        child: FittedBox(
-                          fit: BoxFit.scaleDown,
-                          alignment: Alignment.bottomLeft,
-                          child: Semantics(
-                            header: true,
-                            child: Text(
-                              masthead.title,
-                              maxLines: 1,
-                              style: type.nameplate,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    // One line of pull-downs that scrolls sideways if a long
-                    // country or topic name does not fit, so the masthead
-                    // keeps its height.
-                    SizedBox(
-                      height: _chips,
-                      child: SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
+    _tellHeaderBottom(maxExtent - shrink);
+    return _Snap(
+      shrinkOffset: shrinkOffset,
+      range: maxExtent - minExtent,
+      child: MediaQuery(
+        data: mq.copyWith(textScaler: scaler),
+        child: ColoredBox(
+          color: background,
+          child: ClipRect(
+            child: Stack(
+              children: [
+                // The nameplate and the filters, sliding up under the bar.
+                Positioned(
+                  top: _bar - shrink,
+                  left: 0,
+                  right: 0,
+                  height: titleHeight + _chips,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
                         padding: const EdgeInsets.symmetric(
                           horizontal: _margin,
                         ),
-                        child: Align(
-                          alignment: Alignment.topLeft,
-                          child: ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: 1000),
-                            child: masthead.filterBar,
+                        child: SizedBox(
+                          height: titleHeight,
+                          width: double.infinity,
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.bottomLeft,
+                            child: Semantics(
+                              header: true,
+                              child: Text(
+                                masthead.title,
+                                maxLines: 1,
+                                style: type.nameplate,
+                              ),
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  ],
-                ),
-              ),
-              // The bar: date (or the small name) and the settings button.
-              Positioned(
-                top: 0,
-                left: 0,
-                right: 0,
-                height: _bar,
-                child: ColoredBox(
-                  color: background,
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      if (dateAlpha > 0)
-                        Positioned(
-                          left: _margin,
-                          right: 64,
-                          child: Text(
-                            masthead.date.toUpperCase(),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: type.dateline.copyWith(
-                              color: type.dateline.color!.withValues(
-                                alpha: dateAlpha,
-                              ),
+                      // One line of pull-downs that scrolls sideways if a long
+                      // country or topic name does not fit, so the masthead
+                      // keeps its height.
+                      SizedBox(
+                        height: _chips,
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: _margin,
+                          ),
+                          child: Align(
+                            alignment: Alignment.topLeft,
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 1000),
+                              child: masthead.filterBar,
                             ),
                           ),
                         ),
-                      // Built only once it shows, so the page has one title.
-                      if (nameAlpha > 0)
-                        ExcludeSemantics(
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 64),
-                            child: Text(
-                              masthead.title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: type.compactTitle.copyWith(
-                                color: type.ink.withValues(alpha: nameAlpha),
-                              ),
-                            ),
-                          ),
-                        ),
-                      Positioned(
-                        right: _margin - 4,
-                        child: masthead.settingsButton,
                       ),
                     ],
                   ),
                 ),
-              ),
-              if (ruleAlpha > 0)
+                // The bar: date (or the small name) and the settings button.
                 Positioned(
+                  top: 0,
                   left: 0,
                   right: 0,
-                  bottom: 0,
-                  height: 0.5,
+                  height: _bar,
                   child: ColoredBox(
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.outlineVariant.withValues(alpha: ruleAlpha),
+                    color: background,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        if (dateAlpha > 0)
+                          Positioned(
+                            left: _margin,
+                            right: 64,
+                            child: Text(
+                              masthead.date.toUpperCase(),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: type.dateline.copyWith(
+                                color: type.dateline.color!.withValues(
+                                  alpha: dateAlpha,
+                                ),
+                              ),
+                            ),
+                          ),
+                        // Built only once it shows, so the page has one title.
+                        if (nameAlpha > 0)
+                          ExcludeSemantics(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 64,
+                              ),
+                              child: Text(
+                                masthead.title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: type.compactTitle.copyWith(
+                                  color: type.ink.withValues(alpha: nameAlpha),
+                                ),
+                              ),
+                            ),
+                          ),
+                        Positioned(
+                          right: _margin - 4,
+                          child: _SettingsButton(
+                            onPressed: masthead.openSettings,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-            ],
+                if (ruleAlpha > 0)
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    height: 0.5,
+                    child: ColoredBox(
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.outlineVariant.withValues(alpha: ruleAlpha),
+                    ),
+                  ),
+              ],
+            ),
           ),
         ),
       ),
@@ -883,64 +1008,211 @@ class _MastheadDelegate extends SliverPersistentHeaderDelegate {
   bool shouldRebuild(_MastheadDelegate old) => true;
 }
 
-/// "3 new decisions": a calm capsule in the brand's red with an arrow, on a
-/// 44-pt target.
+/// Where the masthead ends now, in points from the top of the feed: the
+/// "N new" pill floats just under it, over the nameplate's place neither
+/// when the masthead is open nor over the bar's title when it is folded.
+/// The screen places every look's pill at one height (12 pt from the top),
+/// so A's pill finds its own from this.
+final _headerBottom = ValueNotifier<double>(_MastheadDelegate._bar);
+
+/// The masthead is built while the feed is laid out, when nothing else may
+/// change; the pill hears of it just after.
+void _tellHeaderBottom(double bottom) {
+  if ((_headerBottom.value - bottom).abs() < 0.5) return;
+  WidgetsBinding.instance.addPostFrameCallback(
+    (_) => _headerBottom.value = bottom,
+  );
+}
+
+/// Settles the masthead open or folded when a scroll stops halfway, like an
+/// iOS large title, so the nameplate is never left cut by the bar's edge.
+class _Snap extends StatefulWidget {
+  const _Snap({
+    required this.shrinkOffset,
+    required this.range,
+    required this.child,
+  });
+
+  /// How far the masthead is folded now, and how far it folds at most.
+  final double shrinkOffset;
+  final double range;
+  final Widget child;
+
+  @override
+  State<_Snap> createState() => _SnapState();
+}
+
+class _SnapState extends State<_Snap> {
+  ScrollPosition? _position;
+
+  /// Where in the feed's scroll the masthead starts folding: 0, unless the
+  /// pull-to-refresh spinner is holding space above it.
+  double _start = 0;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final position = Scrollable.maybeOf(context)?.position;
+    if (position == _position) return;
+    _position?.isScrollingNotifier.removeListener(_stopped);
+    _position = position?..isScrollingNotifier.addListener(_stopped);
+  }
+
+  @override
+  void dispose() {
+    _position?.isScrollingNotifier.removeListener(_stopped);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final position = _position;
+    // Only while partly folded does the offset say where the masthead starts.
+    if (position != null &&
+        position.hasPixels &&
+        widget.shrinkOffset > 0 &&
+        widget.shrinkOffset < widget.range) {
+      _start = position.pixels - widget.shrinkOffset;
+    }
+    return widget.child;
+  }
+
+  void _stopped() {
+    final position = _position;
+    if (position == null || position.isScrollingNotifier.value) return;
+    // Measured from the scroll itself: the last frame of a fling may not
+    // have reached this widget yet.
+    final folded = position.pixels - _start;
+    if (folded <= 0.5 || folded >= widget.range - 0.5) return;
+    final fold = _start + widget.range;
+    final target = folded < widget.range / 2 || fold > position.maxScrollExtent
+        ? _start
+        : fold;
+    // Not from inside the scroll's own change of state.
+    Future.microtask(() {
+      if (!mounted || position.isScrollingNotifier.value) return;
+      position.animateTo(
+        target,
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOut,
+      );
+    });
+  }
+}
+
+/// The settings gear in the same grey as the filter pull-downs beside it,
+/// with a 44-pt target and its VoiceOver label.
+class _SettingsButton extends StatelessWidget {
+  const _SettingsButton({required this.onPressed});
+
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) => CupertinoButton(
+    padding: EdgeInsets.zero,
+    minimumSize: const Size(44, 44),
+    onPressed: onPressed,
+    child: Container(
+      width: 36,
+      height: 36,
+      decoration: BoxDecoration(
+        color: CupertinoColors.tertiarySystemFill.resolveFrom(context),
+        shape: BoxShape.circle,
+      ),
+      child: Icon(
+        CupertinoIcons.gear_alt,
+        size: 21,
+        color: CupertinoColors.label.resolveFrom(context),
+        semanticLabel: AppLocalizations.of(context).settings,
+      ),
+    ),
+  );
+}
+
+/// "3 new decisions": a calm capsule in a deeper shade of the brand's red
+/// with an arrow, on a 44-pt target, just under the masthead. White on the
+/// brand red itself is 3.8:1, too faint for 15-pt text; this red is 5.2:1.
+const _pillRed = Color(0xFFD41A35);
+
 class _NewPill extends StatelessWidget {
   const _NewPill({required this.count, required this.onTap});
 
   final int count;
   final VoidCallback onTap;
 
+  /// The screen puts the pill 12 pt from the top; the capsule sits 5 pt
+  /// inside its 44-pt target.
+  static const _screenTop = 12.0;
+  static const _inset = 5.0;
+  static const _gap = 8.0;
+
   @override
   Widget build(BuildContext context) {
     final label = AppLocalizations.of(context).newDecisions(count);
-    return Semantics(
-      button: true,
-      label: label,
-      excludeSemantics: true,
-      onTap: onTap,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
+    return ValueListenableBuilder<double>(
+      valueListenable: _headerBottom,
+      builder: (context, bottom, pill) => Padding(
+        // The space above lets taps through to the masthead.
+        padding: EdgeInsets.only(
+          top: (bottom + _gap - _inset - _screenTop).clamp(0.0, 1000.0),
+        ),
+        child: pill,
+      ),
+      child: Semantics(
+        button: true,
+        label: label,
+        excludeSemantics: true,
         onTap: onTap,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 44),
-          child: Center(
-            widthFactor: 1,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: AppColors.accent,
-                borderRadius: BorderRadius.circular(18),
-                boxShadow: const [
-                  BoxShadow(
-                    color: Color(0x33000000),
-                    blurRadius: 10,
-                    offset: Offset(0, 3),
-                  ),
-                ],
-              ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 8,
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(
-                      CupertinoIcons.arrow_up,
-                      size: 15,
-                      color: Colors.white,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onTap,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 44),
+            child: Center(
+              widthFactor: 1,
+              // Grows with the text up to twice the size: past that, three
+              // words would cover the feed.
+              child: MediaQuery.withClampedTextScaling(
+                maxScaleFactor: 2,
+                child: Builder(
+                  builder: (context) => DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: _pillRed,
+                      borderRadius: BorderRadius.circular(18),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Color(0x33000000),
+                          blurRadius: 10,
+                          offset: Offset(0, 3),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 6),
-                    Text(
-                      label,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 15,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 8,
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            CupertinoIcons.arrow_up,
+                            size: MediaQuery.textScalerOf(context).scale(15),
+                            color: Colors.white,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            label,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 15,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                  ],
+                  ),
                 ),
               ),
             ),
