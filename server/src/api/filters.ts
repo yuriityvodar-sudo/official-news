@@ -119,32 +119,56 @@ type Names = readonly [string, string, string, string, string];
 
 /**
  * Country names for the source countries (docs/sources.csv), the same as the
- * app's (app/lib/l10n), plus the countries planned next (#72). A test checks
- * that every country of docs/sources.csv is here. Written out rather than read
+ * app's (app/lib/l10n), plus the countries planned next (#72) and every other
+ * member of a bloc in BLOCS (#88: a member's Local feed is the bloc's, so the
+ * website has a page for it, as the app's Local shows it). Tests check that
+ * every country of docs/sources.csv and every bloc member is here, and that a
+ * name the app's ARB files have is the same. Written out rather than read
  * from Intl.DisplayNames: loading ICU's names costs a fresh Worker several ms
  * of its 10 ms of CPU.
  */
 const COUNTRIES: Record<string, Names> = {
   AR: ["Argentina", "Аргентина", "Аргентина", "Argentina", "Argentinien"],
+  AT: ["Austria", "Австрія", "Австрия", "Austria", "Österreich"],
   AU: ["Australia", "Австралія", "Австралия", "Australia", "Australien"],
+  BE: ["Belgium", "Бельгія", "Бельгия", "Bélgica", "Belgien"],
+  BG: ["Bulgaria", "Болгарія", "Болгария", "Bulgaria", "Bulgarien"],
   BR: ["Brazil", "Бразилія", "Бразилия", "Brasil", "Brasilien"],
   CA: ["Canada", "Канада", "Канада", "Canadá", "Kanada"],
   CN: ["China", "Китай", "Китай", "China", "China"],
+  CY: ["Cyprus", "Кіпр", "Кипр", "Chipre", "Zypern"],
   CZ: ["Czechia", "Чехія", "Чехия", "Chequia", "Tschechien"],
   DE: ["Germany", "Німеччина", "Германия", "Alemania", "Deutschland"],
+  DK: ["Denmark", "Данія", "Дания", "Dinamarca", "Dänemark"],
+  EE: ["Estonia", "Естонія", "Эстония", "Estonia", "Estland"],
   ES: ["Spain", "Іспанія", "Испания", "España", "Spanien"],
   EU: ["European Union", "Європейський Союз", "Европейский союз", "Unión Europea", "Europäische Union"],
+  FI: ["Finland", "Фінляндія", "Финляндия", "Finlandia", "Finnland"],
   FR: ["France", "Франція", "Франция", "Francia", "Frankreich"],
   GB: ["United Kingdom", "Велика Британія", "Великобритания", "Reino Unido", "Vereinigtes Königreich"],
+  GR: ["Greece", "Греція", "Греция", "Grecia", "Griechenland"],
+  HR: ["Croatia", "Хорватія", "Хорватия", "Croacia", "Kroatien"],
+  HU: ["Hungary", "Угорщина", "Венгрия", "Hungría", "Ungarn"],
   ID: ["Indonesia", "Індонезія", "Индонезия", "Indonesia", "Indonesien"],
+  IE: ["Ireland", "Ірландія", "Ирландия", "Irlanda", "Irland"],
   IN: ["India", "Індія", "Индия", "India", "Indien"],
   IT: ["Italy", "Італія", "Италия", "Italia", "Italien"],
   JP: ["Japan", "Японія", "Япония", "Japón", "Japan"],
   KR: ["South Korea", "Південна Корея", "Южная Корея", "Corea del Sur", "Südkorea"],
+  LT: ["Lithuania", "Литва", "Литва", "Lituania", "Litauen"],
+  LU: ["Luxembourg", "Люксембург", "Люксембург", "Luxemburgo", "Luxemburg"],
+  LV: ["Latvia", "Латвія", "Латвия", "Letonia", "Lettland"],
+  MT: ["Malta", "Мальта", "Мальта", "Malta", "Malta"],
   MX: ["Mexico", "Мексика", "Мексика", "México", "Mexiko"],
+  NL: ["Netherlands", "Нідерланди", "Нидерланды", "Países Bajos", "Niederlande"],
   PL: ["Poland", "Польща", "Польша", "Polonia", "Polen"],
+  PT: ["Portugal", "Португалія", "Португалия", "Portugal", "Portugal"],
+  RO: ["Romania", "Румунія", "Румыния", "Rumania", "Rumänien"],
   RU: ["Russia", "Росія", "Россия", "Rusia", "Russland"],
   SA: ["Saudi Arabia", "Саудівська Аравія", "Саудовская Аравия", "Arabia Saudita", "Saudi-Arabien"],
+  SE: ["Sweden", "Швеція", "Швеция", "Suecia", "Schweden"],
+  SI: ["Slovenia", "Словенія", "Словения", "Eslovenia", "Slowenien"],
+  SK: ["Slovakia", "Словаччина", "Словакия", "Eslovaquia", "Slowakei"],
   TR: ["Türkiye", "Туреччина", "Турция", "Turquía", "Türkei"],
   UA: ["Ukraine", "Україна", "Украина", "Ucrania", "Ukraine"],
   US: ["United States", "США", "США", "Estados Unidos", "Vereinigte Staaten"],

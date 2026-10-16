@@ -467,6 +467,13 @@ describe("GET /countries", () => {
     for (const code of env.TEST_SOURCE_COUNTRIES) expect(hasCountryName(code), code).toBe(true);
   });
 
+  it("has a name for every member of a bloc, whose Local feed is the bloc's (the website's country page)", () => {
+    for (const [bloc, members] of Object.entries(BLOCS)) {
+      expect(hasCountryName(bloc), bloc).toBe(true);
+      for (const code of members) expect(hasCountryName(code), `${bloc} ${code}`).toBe(true);
+    }
+  });
+
   it("shows a code it has no name for as it is", async () => {
     await env.DB.prepare("INSERT INTO sources (id, country, name, kind, url, status) VALUES ('qq-1', 'QQ', 'Q', 'rss', 'https://q.example/feed', 'active')").run();
     expect((await get("/countries?lang=de")).body).toEqual({

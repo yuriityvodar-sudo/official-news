@@ -38,9 +38,11 @@ export type OpenMenu = "where";
 
 /**
  * Whether `/{lang}/{cc}` is a page: a code the API names in every language
- * (COUNTRIES in api/filters.ts: the source countries, the EU, and the countries
- * planned next), so it needs no D1 read and the set of cached URLs is bounded.
- * A named country without sources is a page with the empty state.
+ * (COUNTRIES in api/filters.ts: the source countries, the EU and its other
+ * members, and the countries planned next; 45 codes), so it needs no D1 read
+ * and the set of cached URLs is bounded. A named country without sources is a
+ * page with the empty state; an EU member without sources of its own shows
+ * the EU's decisions, as its Local feed does in the app.
  */
 export const isCountryPage = (code: string) => /^[A-Z]{2}$/.test(code) && hasCountryName(code);
 

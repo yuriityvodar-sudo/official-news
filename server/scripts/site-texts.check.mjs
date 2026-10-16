@@ -62,6 +62,20 @@ describe("the app's texts", () => {
     assert.deepEqual(missing, [], `add country names to app/lib/l10n/app_*.arb: ${missing.join(", ")}`);
   });
 
+  test("the API's country names (COUNTRIES in src/api/filters.ts) are the app's wherever the app has one, so the site's chips and the app's never differ", () => {
+    const source = read(fileURLToPath(new URL("../src/api/filters.ts", import.meta.url)));
+    const block = source.slice(source.indexOf("const COUNTRIES"), source.indexOf("\n};", source.indexOf("const COUNTRIES")));
+    const api = Object.fromEntries([...block.matchAll(/^ {2}([A-Z]{2}): (\[.+\]),$/gm)].map((m) => [m[1], JSON.parse(m[2])]));
+    assert.ok(Object.keys(api).length >= 45, "COUNTRIES not found in src/api/filters.ts");
+    const all = arbs();
+    for (const [code, names] of Object.entries(api)) {
+      SITE_LANGS.forEach((lang, i) => {
+        const key = `country${code}`;
+        if (key in all[lang]) assert.equal(names[i], all[lang][key], `COUNTRIES.${code} in ${lang} differs from app_${lang}.arb`);
+      });
+    }
+  });
+
   test("every source language in docs/sources.csv has a name (language<Xx>), or the AI label would show its code", () => {
     const en = english();
     const missing = [...new Set(sources().map((s) => s.language))].filter((code) => !(languageKey(code) in en));

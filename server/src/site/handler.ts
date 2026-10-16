@@ -83,10 +83,11 @@ function ipCountry(request: Request): string | null {
  * place. A 302 to `/{lang}/{cc}` when the site has that country's page and its
  * Local feed has sources: its own active ones (GET /countries, a few dozen
  * rows), or a bloc's it belongs to (an EU member without sources of its own,
- * such as Poland, still gets the EU's, so no D1 read). Otherwise (no IP
- * country, Tor's T1, a country without sources or without a page) to the
- * Global list with its Where menu open. The topic goes along. Never stored:
- * it differs per reader, and the cache key has no country.
+ * such as Poland or Finland, still gets the EU's, so no D1 read). Otherwise
+ * (no IP country, Tor's T1, a country without active sources or without a
+ * page, such as Norway, the EU itself) to the Global list with its Where menu
+ * open. The topic goes along. Never stored: it differs per reader, and the
+ * cache key has no country.
  */
 async function localReply(env: SiteEnv, origin: string, lang: SiteLang, topic: Topic | null, code: string | null): Promise<Reply> {
   let country: string | null = null;

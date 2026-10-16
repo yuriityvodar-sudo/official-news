@@ -131,7 +131,7 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     filterShowAllTopics: "Показати всі теми",
     filters: "Фільтри",
     localNone: "Не вдалося визначити вашу країну, або для неї ще немає джерел. Виберіть країну:",
-    siteLocal: "Якщо ви вибираєте «{local}», сайт відкриває рішення країни, яку Cloudflare визначає за вашою IP-адресою. Країна не зберігається, а сторінка, яку він відкриває, однакова для всіх.",
+    siteLocal: "Якщо ви виберете «{local}», сайт відкриє рішення країни, яку Cloudflare визначає за вашою IP-адресою. Країна не зберігається, а сторінка, яку він відкриває, однакова для всіх.",
   },
   ru: {
     aiNotice:
@@ -165,7 +165,7 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     filterShowAllTopics: "Показать все темы",
     filters: "Фильтры",
     localNone: "Не удалось определить вашу страну, или для неё ещё нет источников. Выберите страну:",
-    siteLocal: "Если вы выбираете «{local}», сайт открывает решения страны, которую Cloudflare определяет по вашему IP-адресу. Страна не сохраняется, а открываемая страница одинакова для всех.",
+    siteLocal: "Если вы выберете «{local}», сайт откроет решения страны, которую Cloudflare определяет по вашему IP-адресу. Страна не сохраняется, а открываемая страница одинакова для всех.",
   },
   es: {
     aiNotice:
@@ -198,7 +198,7 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     filterShowGlobal: "Mostrar todos los países",
     filterShowAllTopics: "Mostrar todos los temas",
     filters: "Filtros",
-    localNone: "No hemos podido saber tu país, o aún no tiene fuentes. Elige un país:",
+    localNone: "No hemos podido detectar tu país, o aún no tiene fuentes. Elige un país:",
     siteLocal: "Si eliges «{local}», el sitio web abre las decisiones del país que Cloudflare deduce de tu dirección IP. El país no se guarda, y la página que se abre es la misma para todos.",
   },
   de: {
@@ -232,7 +232,7 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     filterShowGlobal: "Alle Länder anzeigen",
     filterShowAllTopics: "Alle Themen anzeigen",
     filters: "Filter",
-    localNone: "Ihr Land ließ sich nicht erkennen, oder es hat noch keine Quellen. Wählen Sie ein Land:",
+    localNone: "Wir konnten Ihr Land nicht erkennen, oder es gibt dafür noch keine Quellen. Wählen Sie ein Land:",
     siteLocal: "Wenn Sie „{local}“ wählen, öffnet die Website die Entscheidungen des Landes, das Cloudflare aus Ihrer IP-Adresse ermittelt. Das Land wird nicht gespeichert, und die geöffnete Seite ist für alle gleich.",
   },
 };

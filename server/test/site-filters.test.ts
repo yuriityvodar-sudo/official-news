@@ -8,6 +8,7 @@ import type { ApiList } from "../src/site/data";
 import { filterBar } from "../src/site/pages/filters";
 import { CACHE } from "../src/site/respond";
 import { SITE_LANGS, type SiteLang, text } from "../src/site/texts";
+import { BLOCS } from "../src/api/filters";
 import { GLOBAL } from "../src/site/urls";
 import { get, hideSeed } from "./helpers";
 import { ORIGIN, hreflangs, insertArticle, insertTranslation, linkedIds, site, siteRowsRead as rowsRead, testId } from "./site-helpers";
@@ -54,9 +55,10 @@ describe("routing", () => {
     }
   });
 
-  it("has a page for every country the API names, the EU's too, and none for anything else (no D1 read)", async () => {
+  it("has a page for every country the API names, the EU and each of its members too, and none for anything else (no D1 read)", async () => {
     for (const path of ["/en/de", "/en/eu", "/en/ua", "/en/pl", "/uk/us"]) expect((await site(path)).status, path).toBe(200);
-    for (const path of ["/en/zz", "/en/xx", "/en/fi", "/en/DE", "/en/d1", "/en/deu"]) {
+    for (const code of BLOCS.EU) expect((await site(`/en/${code.toLowerCase()}`)).status, code).toBe(200);
+    for (const path of ["/en/zz", "/en/xx", "/en/no", "/en/el", "/en/DE", "/en/d1", "/en/deu"]) {
       let status = 0;
       expect(await rowsRead(async () => (status = (await site(path)).status)), path).toBe(0);
       expect(status, path).toBe(404);
@@ -255,6 +257,7 @@ describe("Local", () => {
       ["/es/local?topic=economy&utm=1", "US", "/es/us?topic=economy"],
       // An EU member without sources of its own still gets the EU's decisions, as in the app.
       ["/en/local", "PL", "/en/pl"],
+      ["/de/local?topic=health", "FI", "/de/fi?topic=health"],
     ] as const) {
       for (const method of ["GET", "HEAD"]) {
         const { status, headers, body } = await site(path, { method, cf: { country } }, "evil.test");
@@ -280,7 +283,7 @@ describe("Local", () => {
       ["/en/local", "UA", "/en?menu=where"],
       ["/en/local", "T1", "/en?menu=where"],
       ["/en/local", "XX", "/en?menu=where"],
-      ["/en/local", "FI", "/en?menu=where"],
+      ["/en/local", "NO", "/en?menu=where"],
       ["/en/local", "EU", "/en?menu=where"],
       ["/en/local", "de", "/en?menu=where"],
     ] as const) {
@@ -294,6 +297,7 @@ describe("Local", () => {
   it("reads D1 only to check a country outside a bloc has sources (GET /countries)", async () => {
     expect(await rowsRead(() => local("/en/local", "DE"))).toBe(0);
     expect(await rowsRead(() => local("/en/local", "PL"))).toBe(0);
+    expect(await rowsRead(() => local("/en/local", "FI"))).toBe(0);
     expect(await rowsRead(() => local("/en/local"))).toBe(0);
     const us = await rowsRead(() => local("/en/local", "US"));
     expect(us).toBeGreaterThan(0);
@@ -364,14 +368,27 @@ describe("paging and languages keep the filters", () => {
     expect((await site("/uk")).body).toContain(`<link rel="alternate" hreflang="x-default" href="${ORIGIN}/">`);
   });
 
-  it("a later page shows its filters without menus, and reads no rows for them", async () => {
-    const next = nextLink((await site("/en/de")).body)!;
-    const later = await site(next);
-    expect(later.body).not.toContain("<details");
-    expect(later.body).toMatch(/<p class="filters"><span class="chip on">[\s\S]*?Germany/);
-    const withMenus = await rowsRead(() => site("/en/de"));
-    const without = await rowsRead(() => site(next));
-    expect(without).toBeLessThan(withMenus);
+  it("a later page shows its filters without menus, each a link to the list's first page, and reads no rows for them", async () => {
+    const chips = (body: string) =>
+      [...body.matchAll(/<a class="chip-link" href="([^"]+)"><span class="(chip[^"]*)">[\s\S]*?<span class="label">([^<]+)</g)].map((m) => [
+        m[1].replaceAll("&amp;", "&"),
+        m[2],
+        m[3],
+      ]);
+    for (const [first, expected] of [
+      ["/en/de", [["/en/de", "chip on", "Germany"], ["/en/de", "chip", "All topics"]]],
+      ["/en?topic=health", [["/en?topic=health", "chip", "Global"], ["/en?topic=health", "chip on", "Health"]]],
+    ] as const) {
+      const next = nextLink((await site(first)).body);
+      expect(next, first).not.toBeNull();
+      const later = await site(next!);
+      expect(later.body).not.toContain("<details");
+      expect(chips(later.body), first).toEqual(expected);
+      expect(later.body).toContain(`<nav class="filters" aria-label="${text("en", "filters")}"><a class="chip-link"`);
+      const withMenus = await rowsRead(() => site(first));
+      const without = await rowsRead(() => site(next!));
+      expect(without, first).toBeLessThan(withMenus);
+    }
   });
 
   it("article links from a filtered list are the article's own address", async () => {

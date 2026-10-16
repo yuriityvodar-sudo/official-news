@@ -43,8 +43,9 @@ const item = (i: Item) =>
     i.detail ? html` <small>${i.detail}</small>` : ""
   }</span>${i.current ? CHECK : ""}</a></li>`;
 
-const chip = (glyph: Html, label: string, active: boolean, menu: boolean) =>
-  html`<span class="chip${active ? " on" : ""}">${glyph}<span class="label">${label}</span>${menu ? CHEVRON : ""}</span>`;
+/** A chip, as the app's: its glyph, its label, a chevron (it opens a menu, or leads to the page that has it). */
+const chip = (glyph: Html, label: string, active: boolean) =>
+  html`<span class="chip${active ? " on" : ""}">${glyph}<span class="label">${label}</span>${CHEVRON}</span>`;
 
 /** The Where chip's label: the country's name, or Global. */
 export const whereLabel = (lang: SiteLang, filter: ListFilter) => (filter.country ? countryName(lang, filter.country) : text(lang, "filterGlobal"));
@@ -65,7 +66,7 @@ function whereMenu(lang: SiteLang, filter: ListFilter, countries: ApiCountry[], 
     item({ label: text(lang, "filterLocal"), href: localPath(lang, topic), current: false }),
   ];
   return html`<details class="pick" name="filters"${open ? raw(" open") : ""}>
-<summary>${chip(filter.country ? PIN : GLOBE, whereLabel(lang, filter), !!filter.country, true)}</summary>
+<summary>${chip(filter.country ? PIN : GLOBE, whereLabel(lang, filter), !!filter.country)}</summary>
 <div class="menu">${open ? html`<p class="menu-note">${t(lang, "localNone")}</p>` : ""}<ul>${scopes}</ul>${
     listed.length
       ? html`<ul>${listed.map((c) => item({ label: c.name, href: listPath(lang, { country: c.code, topic }), current: c.code === filter.country }))}</ul>`
@@ -79,7 +80,7 @@ function topicsMenu(lang: SiteLang, filter: ListFilter, topics: ApiTopic[]): Htm
   const listed =
     filter.topic && !topics.some((x) => x.id === filter.topic) ? [{ id: filter.topic, name: topicName(lang, filter.topic) }, ...topics] : topics;
   return html`<details class="pick" name="filters">
-<summary>${chip(GRID, topicLabel(lang, filter), !!filter.topic, true)}</summary>
+<summary>${chip(GRID, topicLabel(lang, filter), !!filter.topic)}</summary>
 <div class="menu"><ul>${item({ label: text(lang, "filterAllTopics"), href: listPath(lang, { country, topic: null }), current: !filter.topic })}${listed.map((x) =>
     item({ label: x.name, href: listPath(lang, { country, topic: x.id }), current: x.id === filter.topic }),
   )}</ul></div>
@@ -89,17 +90,18 @@ function topicsMenu(lang: SiteLang, filter: ListFilter, topics: ApiTopic[]): Htm
 /**
  * The two chips under the list's title. With `menus` (a first page), each
  * opens its menu; without (a later page, which reads no D1 rows for menus),
- * they only say which list is being paged through. `open` opens Where: Local
- * with no country to go to.
+ * each is a link to the first page of the same list, where the menus are (a
+ * URL that is cached on its own, so this page still reads nothing for them).
+ * `open` opens Where: Local with no country to go to.
  */
 export function filterBar(lang: SiteLang, filter: ListFilter, menus: Menus | null, open: OpenMenu | null): Html {
   if (!menus) {
-    return html`<p class="filters">${chip(filter.country ? PIN : GLOBE, whereLabel(lang, filter), !!filter.country, false)}${chip(
-      GRID,
-      topicLabel(lang, filter),
-      !!filter.topic,
-      false,
-    )}</p>`;
+    const first = listPath(lang, filter);
+    return html`<nav class="filters" aria-label="${text(lang, "filters")}"><a class="chip-link" href="${first}">${chip(
+      filter.country ? PIN : GLOBE,
+      whereLabel(lang, filter),
+      !!filter.country,
+    )}</a><a class="chip-link" href="${first}">${chip(GRID, topicLabel(lang, filter), !!filter.topic)}</a></nav>`;
   }
   return html`<nav class="filters" aria-label="${text(lang, "filters")}">
 ${whereMenu(lang, filter, menus.countries, open === "where")}
