@@ -86,28 +86,47 @@
     }
   },
 
-  "filterGlobal": "Global",
-  "@filterGlobal": {
-    "description": "The Where chip under the date while the feed shows every country, and the first item of its pull-down menu."
-  },
-  "filterGlobalDetail": "All countries",
-  "@filterGlobalDetail": {
-    "description": "Under filterGlobal in the Where menu."
-  },
-  "filterLocal": "Local",
-  "@filterLocal": {
-    "description": "The second item of the Where menu: the reader's country (its name shows under the item and on the chip), plus the EU's decisions for EU members."
+  "filterAllCountries": "All countries",
+  "@filterAllCountries": {
+    "description": "The Where chip under the date while the feed shows every country, and the first item of its menu (#68)."
   },
   "filterAllTopics": "All topics",
   "@filterAllTopics": {
     "description": "The Topics chip under the date while no topic is chosen, and the first item of its menu."
   },
+  "filterCountryChip": "Country: {name}",
+  "@filterCountryChip": {
+    "description": "What VoiceOver says for the Where chip while one country is chosen: the chip itself shows only the country's code (GB). {name} is the country's name.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "filterGroupChip": "Countries: {name}",
+  "@filterGroupChip": {
+    "description": "What VoiceOver says for the Where chip while a group of countries is chosen: the chip shows its short name (EU, G7, G20, NATO). {name} is the group's name (European Union, G7, G20, NATO).",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "filterTopicChip": "Topic: {name}",
+  "@filterTopicChip": {
+    "description": "What VoiceOver says for the Topics chip while a topic is chosen: the chip itself shows only the topic's icon. {name} is the topic's name.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "filterEmpty": "No decisions here in the last 7 days.",
   "@filterEmpty": {
     "description": "The feed is empty under the chosen Where or topic (the feed shows the last 7 days)."
   },
-  "filterShowGlobal": "Show all countries",
-  "@filterShowGlobal": {
+  "filterShowAllCountries": "Show all countries",
+  "@filterShowAllCountries": {
     "description": "A button under filterEmpty: shows the feed for every country again."
   },
   "filterShowAllTopics": "Show all topics",
@@ -201,21 +220,9 @@
   "@countryAR": {
     "description": "Country name after the publisher: \"Federal Government · Germany\"."
   },
-  "countryAT": "Austria",
-  "@countryAT": {
-    "description": "Country name: an EU member state, so its Local feed has the EU's decisions (#68)."
-  },
   "countryAU": "Australia",
   "@countryAU": {
     "description": "Country name."
-  },
-  "countryBE": "Belgium",
-  "@countryBE": {
-    "description": "Country name: an EU member state, so its Local feed has the EU's decisions (#68)."
-  },
-  "countryBG": "Bulgaria",
-  "@countryBG": {
-    "description": "Country name: an EU member state, so its Local feed has the EU's decisions (#68)."
   },
   "countryBR": "Brazil",
   "@countryBR": {
@@ -229,37 +236,25 @@
   "@countryCN": {
     "description": "Country name."
   },
-  "countryCY": "Cyprus",
-  "@countryCY": {
-    "description": "Country name: an EU member state, so its Local feed has the EU's decisions (#68)."
-  },
   "countryCZ": "Czechia",
   "@countryCZ": {
-    "description": "Country name: an EU member state, so its Local feed has the EU's decisions (#68)."
+    "description": "Country name."
   },
   "countryDE": "Germany",
   "@countryDE": {
     "description": "Country name."
   },
-  "countryDK": "Denmark",
-  "@countryDK": {
-    "description": "Country name: an EU member state, so its Local feed has the EU's decisions (#68)."
-  },
-  "countryEE": "Estonia",
-  "@countryEE": {
-    "description": "Country name: an EU member state, so its Local feed has the EU's decisions (#68)."
-  },
   "countryES": "Spain",
   "@countryES": {
-    "description": "Country name: an EU member state, so its Local feed has the EU's decisions (#68)."
+    "description": "Country name."
   },
   "countryEU": "European Union",
   "@countryEU": {
-    "description": "Shown like a country name, for the EU's institutions."
+    "description": "Shown like a country name, for the EU's institutions; also the European Union in the Where menu (#68), its institutions and member states together."
   },
-  "countryFI": "Finland",
-  "@countryFI": {
-    "description": "Country name: an EU member state, so its Local feed has the EU's decisions (#68)."
+  "groupNato": "NATO",
+  "@groupNato": {
+    "description": "A group of countries in the Where menu (#68): the North Atlantic Treaty Organization, as the language writes its short name. The European Union is countryEU; G7 and G20 are written so in every language."
   },
   "countryFR": "France",
   "@countryFR": {
@@ -269,25 +264,9 @@
   "@countryGB": {
     "description": "Country name."
   },
-  "countryGR": "Greece",
-  "@countryGR": {
-    "description": "Country name: an EU member state, so its Local feed has the EU's decisions (#68)."
-  },
-  "countryHR": "Croatia",
-  "@countryHR": {
-    "description": "Country name: an EU member state, so its Local feed has the EU's decisions (#68)."
-  },
-  "countryHU": "Hungary",
-  "@countryHU": {
-    "description": "Country name: an EU member state, so its Local feed has the EU's decisions (#68)."
-  },
   "countryID": "Indonesia",
   "@countryID": {
     "description": "Country name."
-  },
-  "countryIE": "Ireland",
-  "@countryIE": {
-    "description": "Country name: an EU member state, so its Local feed has the EU's decisions (#68)."
   },
   "countryIN": "India",
   "@countryIN": {
@@ -305,41 +284,13 @@
   "@countryKR": {
     "description": "Country name."
   },
-  "countryLT": "Lithuania",
-  "@countryLT": {
-    "description": "Country name: an EU member state, so its Local feed has the EU's decisions (#68)."
-  },
-  "countryLU": "Luxembourg",
-  "@countryLU": {
-    "description": "Country name: an EU member state, so its Local feed has the EU's decisions (#68)."
-  },
-  "countryLV": "Latvia",
-  "@countryLV": {
-    "description": "Country name: an EU member state, so its Local feed has the EU's decisions (#68)."
-  },
-  "countryMT": "Malta",
-  "@countryMT": {
-    "description": "Country name: an EU member state, so its Local feed has the EU's decisions (#68)."
-  },
   "countryMX": "Mexico",
   "@countryMX": {
     "description": "Country name."
   },
-  "countryNL": "Netherlands",
-  "@countryNL": {
-    "description": "Country name: an EU member state, so its Local feed has the EU's decisions (#68)."
-  },
   "countryPL": "Poland",
   "@countryPL": {
-    "description": "Country name: an EU member state, so its Local feed has the EU's decisions (#68)."
-  },
-  "countryPT": "Portugal",
-  "@countryPT": {
-    "description": "Country name: an EU member state, so its Local feed has the EU's decisions (#68)."
-  },
-  "countryRO": "Romania",
-  "@countryRO": {
-    "description": "Country name: an EU member state, so its Local feed has the EU's decisions (#68)."
+    "description": "Country name."
   },
   "countryRU": "Russia",
   "@countryRU": {
@@ -349,25 +300,13 @@
   "@countrySA": {
     "description": "Country name."
   },
-  "countrySE": "Sweden",
-  "@countrySE": {
-    "description": "Country name: an EU member state, so its Local feed has the EU's decisions (#68)."
-  },
-  "countrySI": "Slovenia",
-  "@countrySI": {
-    "description": "Country name: an EU member state, so its Local feed has the EU's decisions (#68)."
-  },
-  "countrySK": "Slovakia",
-  "@countrySK": {
-    "description": "Country name: an EU member state, so its Local feed has the EU's decisions (#68)."
-  },
   "countryTR": "Türkiye",
   "@countryTR": {
     "description": "Country name."
   },
   "countryUA": "Ukraine",
   "@countryUA": {
-    "description": "Country name, for Local (#68)."
+    "description": "Country name."
   },
   "countryUS": "United States",
   "@countryUS": {
@@ -607,24 +546,6 @@
   "languageFooter": "News and the app are shown in this language.",
   "@languageFooter": {
     "description": "Under the list of languages."
-  },
-
-  "country": "Country",
-  "@country": {
-    "description": "A Settings row (Reading section) and the title of its page: the country the Local feed shows."
-  },
-  "countryFooter": "“{local}” in the feed shows the chosen country's decisions, and for an EU member state the EU's as well.",
-  "@countryFooter": {
-    "description": "Under the list of countries in Settings. {local} is filterLocal, in quotation marks of the language.",
-    "placeholders": {
-      "local": {
-        "type": "String"
-      }
-    }
-  },
-  "countriesLoadFailed": "Couldn't load the list of countries. Tap to try again.",
-  "@countriesLoadFailed": {
-    "description": "On the Country page in Settings when the list of countries could not be loaded (offline). Tapping it asks again."
   },
 
   "publisher": "{name}, Slovakia",

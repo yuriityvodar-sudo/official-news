@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart' show listEquals;
+import 'package:flutter/foundation.dart' show immutable, listEquals;
 
 import '../l10n/app_localizations.dart';
 import 'countries.dart';
@@ -6,18 +6,170 @@ import 'topics.dart';
 
 /// The feed's two filters (#67, #68): where the news come from, and one topic.
 ///
-/// Where: [FeedScope.global] (every country, the default) or [FeedScope.local],
-/// the reader's country and the blocs it belongs to (the server adds the EU's
-/// decisions for EU members). Topic: all, or one of the fixed list. Both are
-/// asked of the server (`GET /articles?country=&topic=`), so the pages, the
-/// top stories and the "N new" check all follow them.
-enum FeedScope {
-  global,
-  local;
+/// Where (Yurii, 16 Oct): all countries (the default), a group of countries
+/// (an official organization: the European Union, G7, G20, NATO), or one
+/// country alone. Which countries a group has is the server's rule (`GROUPS`
+/// in server/src/api/filters.ts): the app sends `group=<id>` or `country=XX`
+/// and never filters on the phone. Both filters are asked of the server
+/// (`GET /articles?group=|country=&topic=`), so the pages, the top stories
+/// and the "N new" check all follow them.
+enum WhereKind { all, group, country }
 
-  /// A saved name; anything unknown is [global].
-  static FeedScope fromName(String? name) =>
-      name == local.name ? local : global;
+@immutable
+class FeedWhere {
+  const FeedWhere._(this.kind, this.id);
+
+  /// One group, by the server's id (`g7`).
+  const FeedWhere.group(String id) : this._(WhereKind.group, id);
+
+  /// One country alone, by its two-letter code (`GB`).
+  const FeedWhere.country(String code) : this._(WhereKind.country, code);
+
+  /// Every country.
+  static const all = FeedWhere._(WhereKind.all, null);
+
+  final WhereKind kind;
+
+  /// The group's id or the country's code; null for every country.
+  final String? id;
+
+  bool get isAll => kind == WhereKind.all;
+
+  /// What `GET /articles` and `GET /topics` send.
+  String? get group => kind == WhereKind.group ? id : null;
+  String? get country => kind == WhereKind.country ? id : null;
+
+  /// As saved on the phone: `all`, `group:g7`, `country:GB`.
+  String get saved => isAll ? 'all' : '${kind.name}:$id';
+
+  /// A saved value; anything else (nothing saved, the old Global or Local of
+  /// the first filters build) is every country.
+  static FeedWhere fromSaved(String? saved) {
+    final match = _saved.firstMatch(saved ?? '');
+    if (match == null) return all;
+    return match[1] == 'group'
+        ? FeedWhere.group(match[2]!)
+        : FeedWhere.country(match[2]!);
+  }
+
+  static final _saved = RegExp(r'^(group|country):(.+)$');
+
+  @override
+  bool operator ==(Object other) =>
+      other is FeedWhere && other.kind == kind && other.id == id;
+
+  @override
+  int get hashCode => Object.hash(kind, id);
+
+  @override
+  String toString() => saved;
+}
+
+/// A group of countries for the Where menu, as `GET /countries` lists it:
+/// the id to send back as `group=`, and its name in the language asked for.
+/// The members are the server's to know; the app never filters on them.
+class FeedGroup {
+  const FeedGroup(this.id, this.name);
+
+  final String id;
+  final String name;
+
+  Map<String, String> toJson() => {'id': id, 'name': name};
+
+  @override
+  bool operator ==(Object other) =>
+      other is FeedGroup && other.id == id && other.name == name;
+
+  @override
+  int get hashCode => Object.hash(id, name);
+}
+
+/// A country for the Where menu, as `GET /countries` lists it: a two-letter
+/// code with sources, and its name in the language asked for.
+class FeedCountry {
+  const FeedCountry(this.code, this.name);
+
+  final String code;
+  final String name;
+
+  Map<String, String> toJson() => {'code': code, 'name': name};
+
+  @override
+  bool operator ==(Object other) =>
+      other is FeedCountry && other.code == code && other.name == name;
+
+  @override
+  int get hashCode => Object.hash(code, name);
+}
+
+/// The Where menu, as `GET /countries` answers: the groups (in the server's
+/// fixed order, each listed even when its feed is empty) and the countries
+/// with sources (by name in the language). [groups] is null for a server
+/// from before the groups: the menu then has every country and the countries.
+class WhereMenu {
+  const WhereMenu({this.groups, this.countries = const []});
+
+  final List<FeedGroup>? groups;
+  final List<FeedCountry> countries;
+
+  /// Whether [where] can be asked of this server: a group it does not list
+  /// would be refused (400), or ignored by a server without groups.
+  bool offers(FeedWhere where) =>
+      where.kind != WhereKind.group ||
+      (groups ?? const []).any((g) => g.id == where.id);
+
+  Map<String, Object?> toJson() => {
+    'groups': groups == null ? null : [for (final g in groups!) g.toJson()],
+    'countries': [for (final c in countries) c.toJson()],
+  };
+
+  @override
+  bool operator ==(Object other) =>
+      other is WhereMenu &&
+      listEquals(other.groups, groups) &&
+      listEquals(other.countries, countries);
+
+  @override
+  int get hashCode => Object.hash(
+    groups == null ? null : Object.hashAll(groups!),
+    Object.hashAll(countries),
+  );
+}
+
+/// What a chosen group's chip shows: its short name, in Latin letters in
+/// every language, as the chip of one country shows its ISO code. One map.
+const groupShortNames = {'eu': 'EU', 'g7': 'G7', 'g20': 'G20', 'nato': 'NATO'};
+
+String groupShortName(String id) => groupShortNames[id] ?? id.toUpperCase();
+
+/// Group [id]'s full name in the app's language, for the menu and VoiceOver:
+/// the app's own for the groups it knows, so a menu saved in another language
+/// is never shown in it; else the server's, from [menu]; else its short name.
+String groupName(String id, WhereMenu? menu, AppLocalizations l10n) {
+  switch (id) {
+    case 'eu':
+      return l10n.countryEU;
+    case 'g7':
+    case 'g20':
+      return groupShortName(id);
+    case 'nato':
+      return l10n.groupNato;
+  }
+  for (final g in menu?.groups ?? const <FeedGroup>[]) {
+    if (g.id == id) return g.name;
+  }
+  return groupShortName(id);
+}
+
+/// Country [code]'s name in the app's language ([countryName]); for a code
+/// the app does not know yet, the server's, from [menu]; else the code.
+String whereCountryName(String code, WhereMenu? menu, AppLocalizations l10n) {
+  final own = countryName(code, l10n);
+  if (own != code) return own;
+  for (final c in menu?.countries ?? const <FeedCountry>[]) {
+    if (c.code == code) return c.name;
+  }
+  return code;
 }
 
 /// A topic for the Topics menu, as `GET /topics` lists it: an id from the fixed
@@ -49,92 +201,4 @@ String topicName(String id, List<FeedTopic>? menu, AppLocalizations l10n) {
     if (t.id == id) return t.name;
   }
   return id;
-}
-
-/// A country for Local, as `GET /countries` lists it: a two-letter code with
-/// sources, and its name in the language asked for.
-class FeedCountry {
-  const FeedCountry(this.code, this.name);
-
-  final String code;
-  final String name;
-
-  Map<String, String> toJson() => {'code': code, 'name': name};
-
-  @override
-  bool operator ==(Object other) =>
-      other is FeedCountry && other.code == code && other.name == name;
-
-  @override
-  int get hashCode => Object.hash(code, name);
-}
-
-/// What Settings shows in its Country row and page: the Local country now,
-/// the countries that have sources, and whether they are being loaded.
-class CountryMenu {
-  const CountryMenu({
-    this.current,
-    this.countries,
-    this.region,
-    this.loading = false,
-    this.available = true,
-  });
-
-  /// The country Local shows; null when there is none to offer.
-  final String? current;
-
-  /// Null when the list could not be loaded (offline).
-  final List<FeedCountry>? countries;
-
-  /// The phone's region when it can be Local's country, so it stays offered
-  /// after another country is chosen, though it has no sources of its own.
-  final String? region;
-
-  final bool loading;
-
-  /// False for a server without `GET /countries`, which would ignore
-  /// `country=`: the Country row hides, as the Where chip does.
-  final bool available;
-
-  /// The countries to choose from: the phone's region and the current one
-  /// first when the list does not have them (no sources of their own, or no
-  /// list yet), then the list in the server's order.
-  List<String> get choices {
-    final listed = [for (final c in countries ?? const <FeedCountry>[]) c.code];
-    return [
-      for (final code in {?region, ?current})
-        if (!listed.contains(code)) code,
-      ...listed,
-    ];
-  }
-
-  /// [code]'s name in the app's language: the app's own ([countryName]), so a
-  /// list saved in another language is never shown in it; else the server's,
-  /// from the list, so a country the app does not know yet is named once the
-  /// server lists it; else the code.
-  String nameOf(String code, AppLocalizations l10n) {
-    if (hasCountryName(code)) return countryName(code, l10n);
-    for (final c in countries ?? const <FeedCountry>[]) {
-      if (c.code == code) return c.name;
-    }
-    return code;
-  }
-
-  @override
-  bool operator ==(Object other) =>
-      other is CountryMenu &&
-      other.current == current &&
-      other.region == region &&
-      other.loading == loading &&
-      other.available == available &&
-      listEquals(other.countries, countries);
-
-  @override
-  int get hashCode => Object.hash(
-    current,
-    region,
-    loading,
-    available,
-    Object.hashAll(countries ?? const []),
-  );
 }

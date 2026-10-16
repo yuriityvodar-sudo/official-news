@@ -79,19 +79,16 @@ class Analytics {
     await feedLanguage(chosen);
   }
 
-  /// The reader changed a filter (#67, #68), from the chips or the Country in
-  /// Settings: the filters as they are now. `scope` is `global` or `local`;
-  /// `country` is Local's country (also while Global is shown), `none` when
-  /// there is none; `topic` is the topic's id or `all`.
-  Future<void> filterChanged({
-    required FeedScope scope,
-    String? country,
-    String? topic,
-  }) => _event('filter_changed', {
-    'scope': scope.name,
-    'country': country ?? 'none',
-    'topic': topic ?? 'all',
-  });
+  /// The reader changed a filter (#67, #68) on a chip: the filters as they
+  /// are now. `where` is `all`, `group` or `country`; `value` the group's id
+  /// (`g7`), the country's code (`GB`), or `all`; `topic` the topic's id, or
+  /// `all`.
+  Future<void> filterChanged({required FeedWhere where, String? topic}) =>
+      _event('filter_changed', {
+        'where': where.kind.name,
+        'value': where.id ?? 'all',
+        'topic': topic ?? 'all',
+      });
 
   /// An article opened from the feed: from `top` (Top stories) or `latest`.
   Future<void> articleOpened(

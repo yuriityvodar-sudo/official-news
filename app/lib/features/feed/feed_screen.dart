@@ -108,17 +108,12 @@ class _FeedScreenState extends State<FeedScreen> {
   }
 
   void _openSettings() {
-    // The countries for the Country row, if the feed has none yet (offline).
-    unawaited(_feed.loadCountries());
     Navigator.of(context).push(
       CupertinoPageRoute(
         settings: const RouteSettings(name: '/settings'),
         builder: (_) => SettingsScreen(
           language: _feed.languageChanges,
           onLanguage: _chooseLanguage,
-          country: _feed.countryChanges,
-          onCountry: _chooseCountry,
-          loadCountries: () => unawaited(_feed.loadCountries()),
         ),
       ),
     );
@@ -147,22 +142,17 @@ class _FeedScreenState extends State<FeedScreen> {
     await _feed.setLanguage(chosen);
   }
 
-  /// Global or Local from the chip (#68): another feed, from the top.
-  Future<void> _chooseScope(FeedScope scope) async {
-    if (scope != _feed.scope) _toTop();
-    await _feed.setScope(scope);
+  /// Every country, a group or one country from the chip (#68): another
+  /// feed, from the top.
+  Future<void> _chooseWhere(FeedWhere where) async {
+    if (where != _feed.where) _toTop();
+    await _feed.setWhere(where);
   }
 
   /// One topic, or all, from the chip (#67): another feed, from the top.
   Future<void> _chooseTopic(String? topic) async {
     if (topic != _feed.topic) _toTop();
     await _feed.setTopic(topic);
-  }
-
-  /// Local's country from Settings: the feed changes only while it is Local.
-  Future<void> _chooseCountry(String code) async {
-    if (_feed.scope == FeedScope.local && code != _feed.localCountry) _toTop();
-    await _feed.setCountry(code);
   }
 
   void _toTop() {
@@ -173,8 +163,6 @@ class _FeedScreenState extends State<FeedScreen> {
   Widget build(BuildContext context) {
     final text = NewsText.from(context);
     final l10n = AppLocalizations.of(context);
-    final local = _feed.localCountry;
-    final topic = _feed.topic;
     return Scaffold(
       body: SafeArea(
         bottom: false,
@@ -213,13 +201,11 @@ class _FeedScreenState extends State<FeedScreen> {
                           style: text.dateLine,
                         ),
                         FeedFilterBar(
-                          scope: _feed.scope,
-                          localName: local == null
-                              ? null
-                              : _feed.countryChanges.value.nameOf(local, l10n),
-                          topic: topic,
+                          where: _feed.where,
+                          whereMenu: _feed.whereMenu,
+                          topic: _feed.topic,
                           topics: _feed.topics,
-                          onScope: _chooseScope,
+                          onWhere: _chooseWhere,
                           onTopic: _chooseTopic,
                         ),
                       ],
@@ -264,9 +250,9 @@ class _FeedScreenState extends State<FeedScreen> {
                 ? Text(l10n.feedLoadFailed, style: text.meta)
                 : _feed.filtered
                 ? _FilteredEmpty(
-                    local: _feed.feedCountry != null,
+                    where: !_feed.where.isAll,
                     topic: _feed.topic != null,
-                    onGlobal: () => _chooseScope(FeedScope.global),
+                    onAllCountries: () => _chooseWhere(FeedWhere.all),
                     onAllTopics: () => _chooseTopic(null),
                   )
                 : _feed.language == FeedLanguage.en
@@ -398,18 +384,19 @@ class _FeedScreenState extends State<FeedScreen> {
 }
 
 /// A filtered feed with nothing in it (#67, #68): says so, with a way back to
-/// all countries and to all topics, whichever narrows it.
+/// all countries and to all topics, whichever narrows it. A group is a fixed
+/// choice, so it can be empty too.
 class _FilteredEmpty extends StatelessWidget {
   const _FilteredEmpty({
-    required this.local,
+    required this.where,
     required this.topic,
-    required this.onGlobal,
+    required this.onAllCountries,
     required this.onAllTopics,
   });
 
-  final bool local;
+  final bool where;
   final bool topic;
-  final VoidCallback onGlobal;
+  final VoidCallback onAllCountries;
   final VoidCallback onAllTopics;
 
   @override
@@ -433,7 +420,7 @@ class _FilteredEmpty extends StatelessWidget {
       children: [
         Text(l10n.filterEmpty, style: text.meta),
         const SizedBox(height: 4),
-        if (local) button(l10n.filterShowGlobal, onGlobal),
+        if (where) button(l10n.filterShowAllCountries, onAllCountries),
         if (topic) button(l10n.filterShowAllTopics, onAllTopics),
       ],
     );

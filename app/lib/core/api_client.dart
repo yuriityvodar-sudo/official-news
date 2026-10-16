@@ -36,10 +36,11 @@ class ApiClient {
   /// without the parameter.
   /// An article that is not in `lang` is dropped here, whatever the server sends
   /// ([ArticlesPage.inLanguage]).
-  /// With `country` (two letters, #68) only that country's articles, and the
-  /// EU's for an EU member; with `topic` (#67) only that topic's. Pages,
-  /// cursors, `after` and `top` all follow them, so every request for one feed
-  /// sends the same ones.
+  /// With `country` (two letters, #68) only that country's articles; with
+  /// `group` (a group's id from [fetchCountries]) its countries' articles
+  /// together, at most one of the two; with `topic` (#67) only that topic's.
+  /// Pages, cursors, `after` and `top` all follow them, so every request for
+  /// one feed sends the same ones.
   Future<ArticlesPage> fetchArticles({
     String? cursor,
     DateTime? since,
@@ -47,6 +48,7 @@ class ApiClient {
     int limit = 20,
     String? lang,
     String? country,
+    String? group,
     String? topic,
   }) async {
     final param = _langParam(lang);
@@ -58,6 +60,7 @@ class ApiClient {
         if (after != null) 'after': '$after',
         'lang': ?param,
         'country': ?country,
+        'group': ?group,
         'topic': ?topic,
       },
     );
@@ -82,14 +85,19 @@ class ApiClient {
   }
 
   /// `GET /topics` (#67): the topics with at least one article in the feed's
-  /// 7 days, under `country` when given, busiest first, named in `lang`.
-  /// A server without it answers 404 ([ApiException]); an answer of another
-  /// shape is a [FormatException].
-  Future<List<FeedTopic>> fetchTopics({String? lang, String? country}) async {
+  /// 7 days, under `country` or `group` when given, busiest first, named in
+  /// `lang`. A server without it answers 404 ([ApiException]); an answer of
+  /// another shape is a [FormatException].
+  Future<List<FeedTopic>> fetchTopics({
+    String? lang,
+    String? country,
+    String? group,
+  }) async {
     final json = await _getJson(
       _withQuery('$_baseUrl/topics', {
         'lang': ?_langParam(lang),
         'country': ?country,
+        'group': ?group,
       }),
     );
     return [
@@ -98,16 +106,26 @@ class ApiClient {
     ];
   }
 
-  /// `GET /countries` (#68): the countries that have sources, named in `lang`,
-  /// in the server's order. Blocs such as the EU are not in it.
-  Future<List<FeedCountry>> fetchCountries({String? lang}) async {
+  /// `GET /countries` (#68): the Where menu, named in `lang`, in the server's
+  /// order: the groups of countries, then the countries that have sources.
+  /// A server from before the groups has no `groups`: [WhereMenu.groups] is
+  /// null, and the menu has the countries only.
+  Future<WhereMenu> fetchCountries({String? lang}) async {
     final json = await _getJson(
       _withQuery('$_baseUrl/countries', {'lang': ?_langParam(lang)}),
     );
-    return [
-      for (final c in _list(json, 'countries'))
-        FeedCountry(_string(c, 'code'), _string(c, 'name')),
-    ];
+    return WhereMenu(
+      groups: json['groups'] == null
+          ? null
+          : [
+              for (final g in _list(json, 'groups'))
+                FeedGroup(_string(g, 'id'), _string(g, 'name')),
+            ],
+      countries: [
+        for (final c in _list(json, 'countries'))
+          FeedCountry(_string(c, 'code'), _string(c, 'name')),
+      ],
+    );
   }
 
   static Uri _withQuery(String url, Map<String, String> query) {

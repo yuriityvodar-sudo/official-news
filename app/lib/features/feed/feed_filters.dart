@@ -2,29 +2,35 @@ import 'package:flutter/cupertino.dart';
 
 import '../../core/filters.dart';
 import '../../core/theme.dart';
+import '../../core/topics.dart';
 import '../../l10n/app_localizations.dart';
 
-/// The two pull-downs under the date (#67, #68), as in the prototype Yurii saw
-/// on the simulator: Where (Global, or Local with the reader's country) and
-/// Topics (all, or one). Rounded chips, red while they narrow the feed, each
-/// opening an iOS pull-down menu with a checkmark on the current choice. No
-/// counts in the menus; the topics come busiest first from the server.
+/// The two pull-downs under the date (#67, #68), as in the chips prototype
+/// Yurii saw on the simulator (16 Oct): Where (all countries, a group, or one
+/// country) and Topics (all, or one). Grey chips that open an iOS pull-down
+/// menu with a checkmark on the current choice; no counts in the menus.
+/// While nothing is chosen they read "All countries" / "All topics"; a choice
+/// keeps the grey chip and shows short, in red: a country's code (GB), a
+/// group's short name (G7), a topic's icon. The menus, and VoiceOver, keep
+/// the full names.
 class FeedFilterBar extends StatelessWidget {
   const FeedFilterBar({
     super.key,
-    required this.scope,
-    required this.localName,
+    required this.where,
+    required this.whereMenu,
     required this.topic,
     required this.topics,
-    required this.onScope,
+    required this.onWhere,
     required this.onTopic,
   });
 
-  final FeedScope scope;
+  /// What the feed shows now.
+  final FeedWhere where;
 
-  /// Local's country in the app's language; null hides the Where chip (no
-  /// country to offer, so Global is all there is).
-  final String? localName;
+  /// The groups and countries to offer; null hides the Where chip (a server
+  /// without them, or none known yet) unless something is chosen, so it can
+  /// always be cleared.
+  final WhereMenu? whereMenu;
 
   /// The chosen topic's id, or null for all topics.
   final String? topic;
@@ -33,98 +39,142 @@ class FeedFilterBar extends StatelessWidget {
   /// without topics) unless a topic is chosen, so it can always be cleared.
   final List<FeedTopic>? topics;
 
-  final ValueChanged<FeedScope> onScope;
+  final ValueChanged<FeedWhere> onWhere;
   final ValueChanged<String?> onTopic;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final local = localName;
-    final menu = topics;
+    final menu = whereMenu;
+    final showWhere = menu != null || !where.isAll;
     final chosen = topic;
-    final showTopics = menu != null || chosen != null;
-    String name(String id) => topicName(id, menu, l10n);
-    if (local == null && !showTopics) return const SizedBox.shrink();
+    final showTopics = topics != null || chosen != null;
+    if (!showWhere && !showTopics) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.only(top: 10),
       child: Wrap(
         spacing: 8,
         runSpacing: 8,
         children: [
-          if (local != null)
-            _Pulldown(
-              key: const ValueKey('filter-where'),
-              icon: scope == FeedScope.local
-                  ? CupertinoIcons.location_solid
-                  : CupertinoIcons.globe,
-              label: scope == FeedScope.local ? local : l10n.filterGlobal,
-              active: scope == FeedScope.local,
-              items: [
-                _Item(
-                  l10n.filterGlobal,
-                  l10n.filterGlobalDetail,
-                  scope == FeedScope.global,
-                  () => onScope(FeedScope.global),
-                ),
-                _Item(
-                  l10n.filterLocal,
-                  local,
-                  scope == FeedScope.local,
-                  () => onScope(FeedScope.local),
-                ),
-              ],
-            ),
-          if (showTopics)
-            _Pulldown(
-              key: const ValueKey('filter-topic'),
-              icon: CupertinoIcons.square_grid_2x2,
-              label: chosen == null ? l10n.filterAllTopics : name(chosen),
-              active: chosen != null,
-              items: [
-                _Item(
-                  l10n.filterAllTopics,
-                  null,
-                  chosen == null,
-                  () => onTopic(null),
-                ),
-                // The chosen topic stays in the menu, checked, when it has no
-                // articles under the other filter now.
-                if (chosen != null && !(menu ?? []).any((t) => t.id == chosen))
-                  _Item(name(chosen), null, true, () => onTopic(chosen)),
-                for (final t in menu ?? const <FeedTopic>[])
-                  _Item(name(t.id), null, t.id == chosen, () => onTopic(t.id)),
-              ],
-            ),
+          if (showWhere) _whereChip(l10n, menu),
+          if (showTopics) _topicsChip(l10n, chosen),
         ],
       ),
     );
   }
+
+  Widget _whereChip(AppLocalizations l10n, WhereMenu? menu) {
+    final groups = menu?.groups ?? const <FeedGroup>[];
+    final countries = menu?.countries ?? const <FeedCountry>[];
+    final id = where.id;
+    _Item item(FeedWhere choice, String title) =>
+        _Item(title, choice == where, () => onWhere(choice));
+    return _Pulldown(
+      key: const ValueKey('filter-where'),
+      label: switch (where.kind) {
+        WhereKind.all => l10n.filterAllCountries,
+        WhereKind.group => groupShortName(id!),
+        WhereKind.country => id!,
+      },
+      active: !where.isAll,
+      semanticLabel: switch (where.kind) {
+        WhereKind.all => l10n.filterAllCountries,
+        WhereKind.group => l10n.filterGroupChip(groupName(id!, menu, l10n)),
+        WhereKind.country => l10n.filterCountryChip(
+          whereCountryName(id!, menu, l10n),
+        ),
+      },
+      sections: [
+        [item(FeedWhere.all, l10n.filterAllCountries)],
+        [
+          // A choice the menu does not list stays in it, checked, so the
+          // menu always shows what the feed shows.
+          if (where.kind == WhereKind.group && !groups.any((g) => g.id == id))
+            item(where, groupName(id!, menu, l10n)),
+          for (final g in groups)
+            item(FeedWhere.group(g.id), groupName(g.id, menu, l10n)),
+        ],
+        [
+          if (where.kind == WhereKind.country &&
+              !countries.any((c) => c.code == id))
+            item(where, whereCountryName(id!, menu, l10n)),
+          for (final c in countries)
+            item(
+              FeedWhere.country(c.code),
+              whereCountryName(c.code, menu, l10n),
+            ),
+        ],
+      ],
+    );
+  }
+
+  Widget _topicsChip(AppLocalizations l10n, String? chosen) {
+    final menu = topics ?? const <FeedTopic>[];
+    String name(String id) => topicName(id, topics, l10n);
+    return _Pulldown(
+      key: const ValueKey('filter-topic'),
+      label: l10n.filterAllTopics,
+      icon: chosen == null ? null : topicIcon(chosen),
+      active: chosen != null,
+      semanticLabel: chosen == null
+          ? l10n.filterAllTopics
+          : l10n.filterTopicChip(name(chosen)),
+      sections: [
+        [_Item(l10n.filterAllTopics, chosen == null, () => onTopic(null))],
+        [
+          // The chosen topic stays in the menu, checked, when it has no
+          // articles under the Where choice now.
+          if (chosen != null && !menu.any((t) => t.id == chosen))
+            _Item(name(chosen), true, () => onTopic(chosen)),
+          for (final t in menu)
+            _Item(name(t.id), t.id == chosen, () => onTopic(t.id)),
+        ],
+      ],
+    );
+  }
 }
 
+/// One item of a chip's menu.
 class _Item {
-  const _Item(this.title, this.detail, this.selected, this.onTap);
+  const _Item(this.title, this.selected, this.onTap);
 
   final String title;
-  final String? detail;
   final bool selected;
   final VoidCallback onTap;
 }
 
-/// A rounded chip that opens an iOS pull-down menu, like the language menu
-/// had before Settings (#46).
+/// The red of a chip's label while it narrows the feed: the brand red, made
+/// deeper on light grounds, where the brand red on the grey chip is under 3:1
+/// (from the chips prototype).
+const filterActiveRed = CupertinoDynamicColor.withBrightness(
+  color: Color(0xFFD1203A),
+  darkColor: AppColors.accent,
+);
+
+/// A rounded grey chip that opens an iOS pull-down menu, like the language
+/// menu had before Settings (#46): [label] (or [icon]) and a chevron, both
+/// red while [active].
 class _Pulldown extends StatefulWidget {
   const _Pulldown({
     super.key,
-    required this.icon,
     required this.label,
+    this.icon,
     required this.active,
-    required this.items,
+    required this.semanticLabel,
+    required this.sections,
   });
 
-  final IconData icon;
+  /// What the chip shows; [icon] instead when there is one.
   final String label;
+  final IconData? icon;
   final bool active;
-  final List<_Item> items;
+
+  /// What VoiceOver says for the chip: the full name of the choice.
+  final String semanticLabel;
+
+  /// The menu's items in groups, a wide divider between groups; empty groups
+  /// are left out.
+  final List<List<_Item>> sections;
 
   @override
   State<_Pulldown> createState() => _PulldownState();
@@ -135,27 +185,42 @@ class _PulldownState extends State<_Pulldown> {
 
   @override
   Widget build(BuildContext context) {
-    final label = CupertinoColors.label.resolveFrom(context);
-    final fill = widget.active
-        ? AppColors.accent
-        : CupertinoColors.tertiarySystemFill.resolveFrom(context);
-    final fg = widget.active ? CupertinoColors.white : label;
+    final fg = widget.active
+        ? filterActiveRed.resolveFrom(context)
+        : CupertinoColors.label.resolveFrom(context);
+    final sections = widget.sections.where((s) => s.isNotEmpty).toList();
+    // The menu stays clear of the status bar and the home indicator, as iOS's
+    // own do: a long one (every group and country) scrolls between them. The
+    // feed's SafeArea hides those insets from the chip, so they are read from
+    // the screen itself.
+    final insets = MediaQueryData.fromView(View.of(context)).padding;
     return CupertinoMenuAnchor(
+      overlayPadding: EdgeInsets.fromLTRB(
+        8,
+        insets.top + 8,
+        8,
+        insets.bottom + 8,
+      ),
       onAnimationStatusChanged: (status) => _status = status,
       menuChildren: [
-        for (final item in widget.items)
-          CupertinoMenuItem(
-            onPressed: item.onTap,
-            subtitle: item.detail == null ? null : Text(item.detail!),
-            trailing: item.selected
-                ? const Icon(
-                    CupertinoIcons.checkmark_alt,
-                    color: AppColors.accent,
-                  )
-                : null,
-            // VoiceOver says which one is current.
-            child: Semantics(selected: item.selected, child: Text(item.title)),
-          ),
+        for (final (i, section) in sections.indexed) ...[
+          if (i > 0) const CupertinoMenuDivider(),
+          for (final item in section)
+            CupertinoMenuItem(
+              onPressed: item.onTap,
+              trailing: item.selected
+                  ? const Icon(
+                      CupertinoIcons.checkmark_alt,
+                      color: AppColors.accent,
+                    )
+                  : null,
+              // VoiceOver says which one is current.
+              child: Semantics(
+                selected: item.selected,
+                child: Text(item.title),
+              ),
+            ),
+        ],
       ],
       builder: (context, controller, _) => CupertinoButton(
         padding: EdgeInsets.zero,
@@ -164,32 +229,42 @@ class _PulldownState extends State<_Pulldown> {
         onPressed: () => _status.isForwardOrCompleted
             ? controller.close()
             : controller.open(),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-          decoration: BoxDecoration(
-            color: fill,
-            borderRadius: BorderRadius.circular(18),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(widget.icon, size: 16, color: fg),
-              const SizedBox(width: 6),
-              Flexible(
-                child: Text(
-                  widget.label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    color: fg,
+        child: Semantics(
+          label: widget.semanticLabel,
+          excludeSemantics: true,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+            decoration: BoxDecoration(
+              color: CupertinoColors.tertiarySystemFill.resolveFrom(context),
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // At the largest text sizes a long label ends in "…" instead
+                // of overflowing the chip. An icon sits in a line of text, so
+                // the chip is as high as one with a label, and grows with it.
+                Flexible(
+                  child: Text.rich(
+                    widget.icon == null
+                        ? TextSpan(text: widget.label)
+                        : WidgetSpan(
+                            alignment: PlaceholderAlignment.middle,
+                            child: Icon(widget.icon, size: 17, color: fg),
+                          ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: fg,
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 4),
-              Icon(CupertinoIcons.chevron_down, size: 12, color: fg),
-            ],
+                const SizedBox(width: 4),
+                Icon(CupertinoIcons.chevron_down, size: 12, color: fg),
+              ],
+            ),
           ),
         ),
       ),

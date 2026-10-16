@@ -10,16 +10,18 @@ import 'package:official_news/core/feed_language.dart';
 import 'package:official_news/core/filters.dart';
 import 'package:official_news/core/news_widgets.dart';
 import 'package:official_news/core/router.dart';
-import 'package:official_news/core/theme.dart';
+import 'package:official_news/core/topics.dart';
 import 'package:official_news/features/feed/feed_controller.dart';
+import 'package:official_news/features/feed/feed_filters.dart';
 import 'package:official_news/features/feed/feed_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'test_app.dart';
 
-/// The feed's filters (#67, #68): the Where and Topics chips under the date,
-/// the requests they make, the Country in Settings, the choices saved on the
-/// phone, the empty filtered feed, and a server without the new endpoints.
+/// The feed's filters (#67, #68): the Where chip (all countries, a group of
+/// countries, or one country alone) and the Topics chip under the date, the
+/// requests they make, the compact chips, the choices saved on the phone, the
+/// empty filtered feed, and servers without the groups or the new endpoints.
 
 Map<String, dynamic> _article(
   String id, {
@@ -56,35 +58,65 @@ Map<String, dynamic> _article(
   'lang': ?lang,
 };
 
-/// The week's feed, newest first: two from Germany, one from the EU, two from
-/// the US. Economy is the busiest topic, then health, then trade.
+/// The week's feed, newest first: Germany, the US, the EU institutions, the
+/// UK, Japan and Türkiye. Economy is the busiest topic, then health.
 final _week = [
-  _article('de1', country: 'DE', topics: ['economy'], feedSeq: 9),
-  _article('us1', country: 'US', topics: ['economy', 'health'], feedSeq: 8),
-  _article('eu1', country: 'EU', topics: ['trade'], feedSeq: 7),
+  _article('de1', country: 'DE', topics: ['economy'], feedSeq: 10),
+  _article('us1', country: 'US', topics: ['economy', 'health'], feedSeq: 9),
+  _article('eu1', country: 'EU', topics: ['trade'], feedSeq: 8),
+  _article('gb1', country: 'GB', topics: ['economy'], feedSeq: 7),
   _article('de2', country: 'DE', topics: ['health'], feedSeq: 6),
-  _article('us2', country: 'US', topics: ['economy'], feedSeq: 5),
+  _article('jp1', country: 'JP', topics: ['security-defence'], feedSeq: 5),
+  _article('us2', country: 'US', topics: ['economy'], feedSeq: 4),
+  _article('tr1', country: 'TR', topics: ['health'], feedSeq: 3),
 ];
 
-/// EU members, whose Local feed has the EU's articles too; Poland has no
-/// sources of its own.
-const _eu = {'DE', 'FR', 'PL'};
+/// The groups as the server defines them (`GROUPS`), with the members these
+/// tests have articles for; `EU` is the EU institutions.
+const _groups = {
+  'eu': {'DE', 'FR', 'EU'},
+  'g7': {'DE', 'FR', 'GB', 'JP', 'US', 'EU'},
+  'g20': {'DE', 'FR', 'GB', 'JP', 'TR', 'US', 'EU'},
+  'nato': {'DE', 'FR', 'GB', 'TR', 'US'},
+};
+
+const _groupNames = {
+  'en': {'eu': 'European Union', 'g7': 'G7', 'g20': 'G20', 'nato': 'NATO'},
+  'uk': {'eu': 'Європейський Союз', 'g7': 'G7', 'g20': 'G20', 'nato': 'НАТО'},
+  'de': {'eu': 'Europäische Union', 'g7': 'G7', 'g20': 'G20', 'nato': 'NATO'},
+};
 
 const _topicNames = {
-  'en': {'economy': 'Economy', 'health': 'Health', 'trade': 'Trade'},
-  'uk': {'economy': 'Економіка', 'health': 'Здоров’я', 'trade': 'Торгівля'},
+  'en': {
+    'economy': 'Economy',
+    'health': 'Health',
+    'trade': 'Trade',
+    'security-defence': 'Security and defence',
+    'education': 'Education',
+  },
+  'uk': {
+    'economy': 'Економіка',
+    'health': 'Здоров’я',
+    'trade': 'Торгівля',
+    'security-defence': 'Безпека та оборона',
+    'education': 'Освіта',
+  },
 };
 
 const _countryNames = {
   'en': {
     'DE': 'Germany',
-    'FR': 'France',
+    'GB': 'United Kingdom',
+    'JP': 'Japan',
+    'TR': 'Türkiye',
     'US': 'United States',
     'NZ': 'New Zealand',
   },
   'uk': {
     'DE': 'Німеччина',
-    'FR': 'Франція',
+    'GB': 'Велика Британія',
+    'JP': 'Японія',
+    'TR': 'Туреччина',
     'US': 'США',
     'NZ': 'Нова Зеландія',
   },
@@ -96,23 +128,37 @@ http.Response _ok(Object body) => http.Response.bytes(
   headers: {'content-type': 'application/json; charset=utf-8'},
 );
 
-/// A server that follows the contract for the filters: `?country=` (with the
-/// EU's articles for EU members) and `?topic=` on every article request,
-/// `GET /topics` busiest first under the country, `GET /countries` (the
-/// countries with sources, no bloc, by name in the language asked). Without
-/// [menus], a server from before them: both answer 404 and the filters are
-/// ignored. Pages of [pageSize]; the cursor is the next offset.
+http.Response _bad(String message) => http.Response.bytes(
+  utf8.encode(jsonEncode({'error': message})),
+  400,
+  headers: {'content-type': 'application/json; charset=utf-8'},
+);
+
+/// A server that follows the contract for the filters: `country=` (only that
+/// country), `group=` (its members, refused when unknown, never with
+/// `country=`) and `topic=` on every article request, `GET /topics` busiest
+/// first under them, `GET /countries` with its groups (fixed order) and the
+/// countries with sources (by name). With [groups] false, the server of the
+/// first filters build: `/countries` without `groups`, and `group=` ignored.
+/// Without [menus], a server from before them: both menus answer 404 and every
+/// filter is ignored. Pages of [pageSize]; the cursor is the next offset.
 class _Server {
   _Server({
     List<Map<String, dynamic>>? articles,
-    this.countries = const ['DE', 'FR', 'US'],
+    this.countries = const ['DE', 'GB', 'JP', 'TR', 'US'],
+    this.groupIds = const ['eu', 'g7', 'g20', 'nato'],
     this.menus = true,
+    this.groups = true,
+    this.extraTopics = const [],
     this.pageSize = 20,
   }) : articles = articles ?? _week;
 
   List<Map<String, dynamic>> articles;
   final List<String> countries;
+  final List<String> groupIds;
   final bool menus;
+  final bool groups;
+  final List<String> extraTopics;
   final int pageSize;
   final log = <Uri>[];
   bool offline = false;
@@ -121,6 +167,8 @@ class _Server {
   List<Uri> get feedRequests =>
       log.where((u) => u.path == '/articles').toList();
 
+  List<Uri> get topicRequests => log.where((u) => u.path == '/topics').toList();
+
   ApiClient get api => ApiClient(
     baseUrl: 'https://api.test',
     client: MockClient((request) async {
@@ -128,17 +176,29 @@ class _Server {
       if (offline) return http.Response('offline', 503);
       final q = request.url.queryParameters;
       final lang = q['lang'] ?? 'en';
+      if (!menus && request.url.path != '/articles') {
+        return http.Response('{"error":"Not found"}', 404);
+      }
+      final error = _check(q);
+      if (error != null) return _bad(error);
       switch (request.url.path) {
         case '/countries':
-          if (!menus) return http.Response('{"error":"Not found"}', 404);
           final names = _countryNames[lang]!;
           return _ok({
+            if (groups)
+              'groups': [
+                for (final id in groupIds)
+                  {
+                    'id': id,
+                    'name': _groupNames[lang]?[id] ?? id.toUpperCase(),
+                    'members': [...?_groups[id]],
+                  },
+              ],
             'countries': [
               for (final c in countries) {'code': c, 'name': names[c]!},
             ]..sort((a, b) => a['name']!.compareTo(b['name']!)),
           });
         case '/topics':
-          if (!menus) return http.Response('{"error":"Not found"}', 404);
           final counts = <String, int>{};
           for (final a in _matching(q, topic: false)) {
             for (final t in a['topics'] as List) {
@@ -149,7 +209,8 @@ class _Server {
             ..sort((x, y) => counts[y]!.compareTo(counts[x]!));
           return _ok({
             'topics': [
-              for (final id in ids) {'id': id, 'name': _topicNames[lang]![id]},
+              for (final id in [...ids, ...extraTopics])
+                {'id': id, 'name': _topicNames[lang]![id]},
             ],
           });
         case '/articles':
@@ -180,18 +241,31 @@ class _Server {
     }),
   );
 
+  /// The server's 400s for the Where filter.
+  String? _check(Map<String, String> q) {
+    if (!menus || !groups) return null;
+    if (q.containsKey('country') && q.containsKey('group')) {
+      return 'country and group cannot be used together: send one of them';
+    }
+    final group = q['group'];
+    if (group != null && !groupIds.contains(group)) {
+      return 'group must be one of: ${groupIds.join(', ')}';
+    }
+    return null;
+  }
+
   List<Map<String, dynamic>> _matching(
     Map<String, String> q, {
     bool topic = true,
   }) {
     if (!menus) return articles;
     final country = q['country'];
+    final group = groups ? _groups[q['group']] : null;
     final id = topic ? q['topic'] : null;
     return [
       for (final a in articles)
-        if ((country == null ||
-                a['country'] == country ||
-                (a['country'] == 'EU' && _eu.contains(country))) &&
+        if ((country == null || a['country'] == country) &&
+            (group == null || group.contains(a['country'])) &&
             (id == null || (a['topics'] as List).contains(id)))
           a,
     ];
@@ -210,9 +284,9 @@ Future<void> _settle() async {
   }
 }
 
-/// A phone-sized screen (iPhone 15, 393 x 852 pt).
+/// A phone-wide screen (iPhone 15, 393 pt), tall enough for the whole week.
 void _phone(WidgetTester tester) {
-  tester.view.physicalSize = const Size(393, 852) * 3;
+  tester.view.physicalSize = const Size(393, 1600) * 3;
   tester.view.devicePixelRatio = 3;
   addTearDown(tester.view.reset);
 }
@@ -220,11 +294,10 @@ void _phone(WidgetTester tester) {
 Future<FeedController> _pump(
   WidgetTester tester,
   _Server server, {
-  String? region = 'DE',
   FeedLanguage words = FeedLanguage.en,
 }) async {
   _phone(tester);
-  final feed = FeedController(api: server.api, phoneRegion: () => region);
+  final feed = FeedController(api: server.api);
   await tester.pumpWidget(
     testApp(
       language: words,
@@ -255,34 +328,79 @@ Future<void> _pick(WidgetTester tester, Key chip, String item) async {
   await tester.pumpAndSettle();
 }
 
-/// The chip's colour: red while it narrows the feed.
-Color? _fill(WidgetTester tester, Key chip) {
-  final box = tester.widget<Container>(
-    find
-        .descendant(of: find.byKey(chip), matching: find.byType(Container))
-        .first,
-  );
-  return (box.decoration! as BoxDecoration).color;
+/// Closes an open menu without picking.
+Future<void> _close(WidgetTester tester) async {
+  await tester.tapAt(const Offset(20, 20));
+  await tester.pumpAndSettle();
 }
 
-String _label(WidgetTester tester, Key chip) => tester
-    .widgetList<Text>(
-      find.descendant(of: find.byKey(chip), matching: find.byType(Text)),
+/// The chip's line: its label and icon, the chevron after them.
+Text _line(WidgetTester tester, Key chip) => tester.widget<Text>(
+  find.descendant(of: find.byKey(chip), matching: find.byType(Text)).first,
+);
+
+/// What the chip shows as text; empty when it shows an icon.
+String _label(WidgetTester tester, Key chip) {
+  final span = _line(tester, chip).textSpan!;
+  return span is TextSpan ? span.toPlainText() : '';
+}
+
+/// The chip's icon in place of a label, or null.
+IconData? _icon(WidgetTester tester, Key chip) {
+  final span = _line(tester, chip).textSpan;
+  return span is WidgetSpan ? (span.child as Icon).icon : null;
+}
+
+/// The colour of the chip's label (or icon), and of its chevron, as ARGB.
+int _ink(WidgetTester tester, Key chip) =>
+    _line(tester, chip).style!.color!.toARGB32();
+
+int _chevron(WidgetTester tester, Key chip) => tester
+    .widget<Icon>(
+      find.descendant(
+        of: find.byKey(chip),
+        matching: find.byIcon(CupertinoIcons.chevron_down),
+      ),
     )
-    .single
-    .data!;
+    .color!
+    .toARGB32();
 
-Iterable<String> _shown(WidgetTester tester) => tester
-    .widgetList<Text>(find.textContaining('Decision '))
-    .map((t) => t.data!.replaceFirst('Decision ', ''));
+Finder _box(Key chip) => find
+    .descendant(of: find.byKey(chip), matching: find.byType(Container))
+    .first;
 
-/// The menu's items, top to bottom.
+/// The chip's grey, as ARGB.
+int _fill(WidgetTester tester, Key chip) =>
+    (tester.widget<Container>(_box(chip)).decoration! as BoxDecoration).color!
+        .toARGB32();
+
+/// What VoiceOver says for the chip.
+String _spoken(WidgetTester tester, Key chip) =>
+    tester.getSemantics(_box(chip)).label;
+
+Iterable<String> _shown(WidgetTester tester) => {
+  for (final t in tester.widgetList<Text>(find.textContaining('Decision ')))
+    t.data!.replaceFirst('Decision ', ''),
+};
+
+/// The open menu's items, top to bottom.
 List<String> _menu(WidgetTester tester) => [
   for (final item in tester.widgetList<CupertinoMenuItem>(
     find.byType(CupertinoMenuItem),
   ))
     ((item.child as Semantics).child! as Text).data!,
 ];
+
+/// The checked item of the open menu.
+String _checked(WidgetTester tester) => [
+  for (final item in tester.widgetList<CupertinoMenuItem>(
+    find.byType(CupertinoMenuItem),
+  ))
+    if (item.trailing != null) ((item.child as Semantics).child! as Text).data!,
+].single;
+
+const _black = 0xFF000000;
+const _lightRed = 0xFFD1203A;
 
 void main() {
   late List<(String, Map<String, Object>)> events;
@@ -296,19 +414,39 @@ void main() {
   });
   tearDown(() => analytics = Analytics());
 
-  testWidgets('a new reader sees Global and All topics, nothing narrowed', (
+  List<Map<String, Object>> filterEvents() => [
+    for (final e in events)
+      if (e.$1 == 'filter_changed') e.$2,
+  ];
+
+  testWidgets('a new reader sees All countries and All topics, in grey', (
     tester,
   ) async {
     final server = _Server();
     await _pump(tester, server);
-    expect(_label(tester, _where), 'Global');
+    expect(_label(tester, _where), 'All countries');
     expect(_label(tester, _topics), 'All topics');
-    expect(_fill(tester, _where), isNot(AppColors.accent));
-    expect(_fill(tester, _topics), isNot(AppColors.accent));
-    expect(_shown(tester), ['de1', 'us1', 'eu1', 'de2', 'us2']);
+    for (final chip in [_where, _topics]) {
+      expect(_ink(tester, chip), _black, reason: '$chip');
+      expect(_chevron(tester, chip), _black, reason: '$chip');
+      expect(_icon(tester, chip), isNull, reason: '$chip');
+    }
+    expect(_spoken(tester, _where), 'All countries');
+    expect(_spoken(tester, _topics), 'All topics');
+    expect(_shown(tester), [
+      'de1',
+      'us1',
+      'eu1',
+      'gb1',
+      'de2',
+      'jp1',
+      'us2',
+      'tr1',
+    ]);
     final first = server.feedRequests.single.queryParameters;
-    expect(first.containsKey('country'), isFalse);
-    expect(first.containsKey('topic'), isFalse);
+    for (final param in ['country', 'group', 'topic']) {
+      expect(first.containsKey(param), isFalse, reason: param);
+    }
     // Under the date.
     expect(
       tester.getRect(find.byKey(_where)).top,
@@ -320,28 +458,173 @@ void main() {
   });
 
   testWidgets(
-    'the Where menu: Global for all countries, Local for the phone region',
+    'the Where menu: All countries, then the groups, then each country',
     (tester) async {
       await _pump(tester, _Server());
       await tester.tap(find.byKey(_where));
       await tester.pumpAndSettle();
-      expect(_menu(tester), ['Global', 'Local']);
-      expect(find.text('All countries'), findsOneWidget);
-      expect(find.text('Germany'), findsOneWidget);
+      expect(_menu(tester), [
+        'All countries',
+        'European Union',
+        'G7',
+        'G20',
+        'NATO',
+        'Germany',
+        'Japan',
+        'Türkiye',
+        'United Kingdom',
+        'United States',
+      ]);
+      // A divider between the three parts.
+      expect(find.byType(CupertinoMenuDivider), findsNWidgets(2));
       // The checkmark is on the current choice, and VoiceOver says so.
+      expect(_checked(tester), 'All countries');
       expect(find.byIcon(CupertinoIcons.checkmark_alt), findsOneWidget);
       expect(
-        find.descendant(
-          of: find.ancestor(
-            of: find.text('Global').last,
-            matching: find.byType(CupertinoMenuItem),
-          ),
-          matching: find.byIcon(CupertinoIcons.checkmark_alt),
-        ),
-        findsOneWidget,
+        tester.getSemantics(find.text('All countries').last),
+        isSemantics(label: 'All countries', isSelected: true),
       );
     },
   );
+
+  testWidgets('the long Where menu stays below the status bar', (tester) async {
+    _phone(tester);
+    // An iPhone's status bar and home indicator, on a screen shorter than
+    // the menu.
+    tester.view.physicalSize = const Size(393, 420) * 3;
+    tester.view.padding = const FakeViewPadding(top: 62 * 3, bottom: 34 * 3);
+    final feed = FeedController(api: _Server().api);
+    await tester.pumpWidget(
+      testApp(
+        home: FeedScreen(
+          controller: feed,
+          newCheckEvery: const Duration(hours: 1),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(_where));
+    await tester.pumpAndSettle();
+    // Taller than the screen: it starts just under the status bar (it
+    // started at 8 pt, over the clock, before), and scrolls.
+    final first = tester.getRect(find.byType(CupertinoMenuItem).first);
+    expect(first.top, greaterThanOrEqualTo(62 + 8));
+  });
+
+  testWidgets('one country: only its own, the chip its code in red', (
+    tester,
+  ) async {
+    final server = _Server();
+    final feed = await _pump(tester, server);
+    final grey = _fill(tester, _where);
+    await _pick(tester, _where, 'United Kingdom');
+    expect(feed.where, const FeedWhere.country('GB'));
+    final asked = server.feedRequests.last.queryParameters;
+    expect(asked['country'], 'GB');
+    expect(asked.containsKey('group'), isFalse);
+    expect(_shown(tester), ['gb1']);
+    // Short and red on the same grey chip; VoiceOver hears the full name.
+    expect(_label(tester, _where), 'GB');
+    expect(_ink(tester, _where), _lightRed);
+    expect(_chevron(tester, _where), _lightRed);
+    expect(_fill(tester, _where), grey);
+    expect(_spoken(tester, _where), 'Country: United Kingdom');
+    // The menu keeps the full names, the checkmark on the country.
+    await tester.tap(find.byKey(_where));
+    await tester.pumpAndSettle();
+    expect(_checked(tester), 'United Kingdom');
+  });
+
+  testWidgets("a country alone never has the EU institutions' decisions", (
+    tester,
+  ) async {
+    final server = _Server();
+    await _pump(tester, server);
+    await _pick(tester, _where, 'Germany');
+    expect(server.feedRequests.last.queryParameters['country'], 'DE');
+    expect(_shown(tester), ['de1', 'de2']);
+  });
+
+  testWidgets('a group: its countries together, the chip its short name', (
+    tester,
+  ) async {
+    final server = _Server();
+    final feed = await _pump(tester, server);
+    await _pick(tester, _where, 'G7');
+    expect(feed.where, const FeedWhere.group('g7'));
+    final asked = server.feedRequests.last.queryParameters;
+    expect(asked['group'], 'g7');
+    expect(asked.containsKey('country'), isFalse);
+    expect(_shown(tester), ['de1', 'us1', 'eu1', 'gb1', 'de2', 'jp1', 'us2']);
+    expect(_label(tester, _where), 'G7');
+    expect(_ink(tester, _where), _lightRed);
+    expect(_spoken(tester, _where), 'Countries: G7');
+
+    await _pick(tester, _where, 'European Union');
+    expect(server.feedRequests.last.queryParameters['group'], 'eu');
+    expect(_label(tester, _where), 'EU');
+    expect(_spoken(tester, _where), 'Countries: European Union');
+    expect(_shown(tester), ['de1', 'eu1', 'de2']);
+
+    await _pick(tester, _where, 'NATO');
+    expect(server.feedRequests.last.queryParameters['group'], 'nato');
+    expect(_label(tester, _where), 'NATO');
+    expect(_spoken(tester, _where), 'Countries: NATO');
+    expect(_shown(tester), ['de1', 'us1', 'gb1', 'de2', 'us2', 'tr1']);
+
+    await _pick(tester, _where, 'All countries');
+    expect(feed.where, FeedWhere.all);
+    expect(_label(tester, _where), 'All countries');
+    expect(_ink(tester, _where), _black);
+    final last = server.feedRequests.last.queryParameters;
+    expect(last.containsKey('group'), isFalse);
+    expect(last.containsKey('country'), isFalse);
+  });
+
+  testWidgets('in dark mode a chosen chip is the brand red, the rest white', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      testApp(
+        home: CupertinoTheme(
+          data: const CupertinoThemeData(brightness: Brightness.dark),
+          child: Center(
+            child: FeedFilterBar(
+              where: const FeedWhere.group('g20'),
+              whereMenu: const WhereMenu(groups: [FeedGroup('g20', 'G20')]),
+              topic: 'health',
+              topics: const [FeedTopic('health', 'Health')],
+              onWhere: (_) {},
+              onTopic: (_) {},
+            ),
+          ),
+        ),
+      ),
+    );
+    expect(_label(tester, _where), 'G20');
+    expect(_ink(tester, _where), 0xFFFA2D48);
+    expect(_chevron(tester, _topics), 0xFFFA2D48);
+    expect(filterActiveRed.darkColor.toARGB32(), 0xFFFA2D48);
+    await tester.pumpWidget(
+      testApp(
+        home: CupertinoTheme(
+          data: const CupertinoThemeData(brightness: Brightness.dark),
+          child: Center(
+            child: FeedFilterBar(
+              where: FeedWhere.all,
+              whereMenu: const WhereMenu(),
+              topic: null,
+              topics: const [],
+              onWhere: (_) {},
+              onTopic: (_) {},
+            ),
+          ),
+        ),
+      ),
+    );
+    expect(_ink(tester, _where), 0xFFFFFFFF);
+    expect(_ink(tester, _topics), 0xFFFFFFFF);
+  });
 
   testWidgets(
     'the Topics menu: All topics, then the busiest first, no counts',
@@ -349,7 +632,14 @@ void main() {
       await _pump(tester, _Server());
       await tester.tap(find.byKey(_topics));
       await tester.pumpAndSettle();
-      expect(_menu(tester), ['All topics', 'Economy', 'Health', 'Trade']);
+      expect(_menu(tester), [
+        'All topics',
+        'Economy',
+        'Health',
+        'Trade',
+        'Security and defence',
+      ]);
+      expect(find.byType(CupertinoMenuDivider), findsOneWidget);
       // Names only: no counts, no second line.
       expect(
         tester
@@ -360,121 +650,141 @@ void main() {
     },
   );
 
-  testWidgets('Local asks for the country and the chip turns red', (
+  testWidgets('one topic at a time: the chip shows its icon in red', (
     tester,
   ) async {
     final server = _Server();
-    final feed = await _pump(tester, server);
-    await _pick(tester, _where, 'Local');
-    expect(_label(tester, _where), 'Germany');
-    expect(_fill(tester, _where), AppColors.accent);
-    expect(server.feedRequests.last.queryParameters['country'], 'DE');
-    expect(feed.scope, FeedScope.local);
-    // Germany's, and the EU's: Germany is a member.
-    expect(_shown(tester), ['de1', 'eu1', 'de2']);
-  });
-
-  test('every request of a filtered feed carries its filters', () async {
-    final server = _Server(pageSize: 1);
-    final feed = FeedController(api: server.api, phoneRegion: () => 'DE');
-    await feed.start();
-    await feed.setScope(FeedScope.local);
-    await feed.setTopic('health');
-    await _settle();
-    server.log.clear();
-    // The next page (de2 is the only one, so none), then Global's.
-    await feed.setScope(FeedScope.global);
-    await _settle();
-    await feed.loadMore();
-    await feed.checkForNew();
-    await _settle();
-    expect(server.feedRequests, hasLength(3));
-    for (final request in server.feedRequests) {
-      expect(request.queryParameters['topic'], 'health', reason: '$request');
-      expect(request.queryParameters.containsKey('country'), isFalse);
-    }
-    expect(server.feedRequests[1].queryParameters['cursor'], '1');
-    expect(server.feedRequests[2].queryParameters['after'], isNotNull);
-    expect(feed.items.map((a) => a.id), ['us1', 'de2']);
-
-    server.log.clear();
-    await feed.setScope(FeedScope.local);
-    await _settle();
-    await feed.checkForNew();
-    expect(server.feedRequests.map((u) => u.queryParameters['country']), [
-      'DE',
-      'DE',
-    ]);
-    // The new check and more pages ask for no menu.
-    expect(server.log.where((u) => u.path == '/topics'), hasLength(1));
-  });
-
-  testWidgets('Local shows the topics of that country only', (tester) async {
-    final server = _Server();
-    await _pump(tester, server);
-    await _pick(tester, _where, 'Local');
-    final asked = server.log.where((u) => u.path == '/topics').last;
-    expect(asked.queryParameters['country'], 'DE');
-    await tester.tap(find.byKey(_topics));
-    await tester.pumpAndSettle();
-    // de1 economy, eu1 trade, de2 health: one each.
-    expect(_menu(tester).first, 'All topics');
-    expect(_menu(tester).skip(1).toSet(), {'Economy', 'Trade', 'Health'});
-  });
-
-  testWidgets('one topic at a time; All topics clears it', (tester) async {
-    final server = _Server();
     await _pump(tester, server);
     await _pick(tester, _topics, 'Health');
-    expect(_label(tester, _topics), 'Health');
-    expect(_fill(tester, _topics), AppColors.accent);
     expect(server.feedRequests.last.queryParameters['topic'], 'health');
-    expect(_shown(tester), ['us1', 'de2']);
+    expect(_shown(tester), ['us1', 'de2', 'tr1']);
+    expect(_icon(tester, _topics), CupertinoIcons.heart_fill);
+    expect(_label(tester, _topics), '');
+    expect(
+      find.descendant(of: find.byKey(_topics), matching: find.text('Health')),
+      findsNothing,
+    );
+    final icon = tester.widget<Icon>(
+      find.descendant(
+        of: find.byKey(_topics),
+        matching: find.byIcon(CupertinoIcons.heart_fill),
+      ),
+    );
+    expect(icon.color!.toARGB32(), _lightRed);
+    expect(_chevron(tester, _topics), _lightRed);
+    expect(_spoken(tester, _topics), 'Topic: Health');
 
     await _pick(tester, _topics, 'Trade');
     expect(server.feedRequests.last.queryParameters['topic'], 'trade');
+    expect(_icon(tester, _topics), CupertinoIcons.arrow_right_arrow_left);
     expect(_shown(tester), ['eu1']);
 
     await _pick(tester, _topics, 'All topics');
     expect(_label(tester, _topics), 'All topics');
+    expect(_icon(tester, _topics), isNull);
     expect(
       server.feedRequests.last.queryParameters.containsKey('topic'),
       isFalse,
     );
-    expect(_shown(tester), hasLength(5));
+    expect(_shown(tester), hasLength(8));
   });
 
-  testWidgets('Local and a topic together', (tester) async {
+  test('every topic of the fixed list has its own icon', () {
+    expect(topicIcons.keys.toSet(), topicIds.toSet());
+    expect(topicIcons.values.toSet(), hasLength(topicIds.length));
+    expect(topicIcons.values, isNot(contains(otherTopicIcon)));
+  });
+
+  testWidgets('the topics follow the Where choice', (tester) async {
     final server = _Server();
     await _pump(tester, server);
-    await _pick(tester, _where, 'Local');
-    await _pick(tester, _topics, 'Economy');
-    final last = server.feedRequests.last.queryParameters;
-    expect(last['country'], 'DE');
-    expect(last['topic'], 'economy');
-    expect(_shown(tester), ['de1']);
+    await _pick(tester, _where, 'G7');
+    expect(server.topicRequests.last.queryParameters['group'], 'g7');
+    await tester.tap(find.byKey(_topics));
+    await tester.pumpAndSettle();
+    // No Türkiye: health is under economy now.
+    expect(_menu(tester), [
+      'All topics',
+      'Economy',
+      'Health',
+      'Trade',
+      'Security and defence',
+    ]);
+    await _close(tester);
+    await _pick(tester, _where, 'Japan');
+    final asked = server.topicRequests.last.queryParameters;
+    expect(asked['country'], 'JP');
+    expect(asked.containsKey('group'), isFalse);
+    await tester.tap(find.byKey(_topics));
+    await tester.pumpAndSettle();
+    expect(_menu(tester), ['All topics', 'Security and defence']);
   });
 
-  testWidgets('an empty filtered feed says so, with the ways back', (
-    tester,
-  ) async {
-    // Nothing from France or the EU this week.
+  test('every request of a filtered feed carries its filters', () async {
+    final server = _Server(pageSize: 1);
+    final feed = FeedController(api: server.api);
+    await feed.start();
+    await feed.setWhere(const FeedWhere.group('nato'));
+    await feed.setTopic('health');
+    await _settle();
+    // us1, de2, tr1: a page each.
+    expect(feed.items.map((a) => a.id), ['us1']);
+    await feed.loadMore();
+    await feed.loadMore();
+    await feed.checkForNew();
+    await _settle();
+    final asked = server.feedRequests.skip(2).toList();
+    expect(asked, hasLength(4));
+    for (final request in asked) {
+      final q = request.queryParameters;
+      expect(q['group'], 'nato', reason: '$request');
+      expect(q['topic'], 'health', reason: '$request');
+      expect(q.containsKey('country'), isFalse, reason: '$request');
+    }
+    expect(asked[1].queryParameters['cursor'], '1');
+    expect(asked[2].queryParameters['cursor'], '2');
+    expect(asked[3].queryParameters['after'], isNotNull);
+    expect(feed.items.map((a) => a.id), ['us1', 'de2', 'tr1']);
+
+    server.log.clear();
+    await feed.setWhere(const FeedWhere.country('US'));
+    await _settle();
+    await feed.checkForNew();
+    expect(
+      server.feedRequests.map(
+        (u) => (u.queryParameters['country'], u.queryParameters['group']),
+      ),
+      [('US', null), ('US', null)],
+    );
+    // A new Where asks for its topics once; the new check asks for no menu.
+    expect(server.topicRequests, hasLength(1));
+    expect(server.log.where((u) => u.path == '/countries'), isEmpty);
+  });
+
+  testWidgets('an empty group says so, and is still offered', (tester) async {
+    // Nothing from the EU or its members this week.
     final server = _Server(
       articles: [
         for (final a in _week)
-          if (a['country'] != 'EU') a,
+          if (!{'DE', 'EU'}.contains(a['country'])) a,
       ],
     );
-    await _pump(tester, server, region: 'FR');
+    await _pump(tester, server);
     await _pick(tester, _topics, 'Health');
-    expect(_shown(tester), ['us1', 'de2']);
-    await _pick(tester, _where, 'Local');
-    expect(_label(tester, _where), 'France');
+    expect(_shown(tester), ['us1', 'tr1']);
+    await _pick(tester, _where, 'European Union');
+    expect(_label(tester, _where), 'EU');
     expect(_shown(tester), isEmpty);
     expect(find.text('No decisions here in the last 7 days.'), findsOneWidget);
     expect(find.text('Show all countries'), findsOneWidget);
     expect(find.text('Show all topics'), findsOneWidget);
     expect(find.text('No decisions yet today.'), findsNothing);
+    // Its topics are none, and the chosen one stays, checked.
+    await tester.tap(find.byKey(_topics));
+    await tester.pumpAndSettle();
+    expect(_menu(tester), ['All topics', 'Health']);
+    expect(_checked(tester), 'Health');
+    await _close(tester);
 
     await tester.tap(find.text('Show all topics'));
     await tester.pumpAndSettle();
@@ -484,8 +794,8 @@ void main() {
 
     await tester.tap(find.text('Show all countries'));
     await tester.pumpAndSettle();
-    expect(_label(tester, _where), 'Global');
-    expect(_shown(tester), ['de1', 'us1', 'de2', 'us2']);
+    expect(_label(tester, _where), 'All countries');
+    expect(_shown(tester), ['us1', 'gb1', 'jp1', 'us2', 'tr1']);
     expect(find.text('No decisions here in the last 7 days.'), findsNothing);
   });
 
@@ -494,221 +804,324 @@ void main() {
     (tester) async {
       final server = _Server();
       await _pump(tester, server);
-      await _pick(tester, _where, 'Local');
+      await _pick(tester, _where, 'G7');
       await _pick(tester, _topics, 'Economy');
       final prefs = await SharedPreferences.getInstance();
-      expect(prefs.getString('feed.scope'), 'local');
+      expect(prefs.getString('feed.where'), 'group:g7');
       expect(prefs.getString('feed.topic'), 'economy');
       // The first page kept on the phone is still the unfiltered one.
-      expect(prefs.getString('feed.lastPage'), contains('"us2"'));
+      expect(prefs.getString('feed.lastPage'), contains('"tr1"'));
 
       // The next launch, offline: the filtered feed is not saved, so it says
       // it could not load, rather than showing other countries' news.
       final next = _Server()..offline = true;
       await tester.pumpWidget(const SizedBox());
       final feed = await _pump(tester, next);
-      expect(feed.scope, FeedScope.local);
+      expect(feed.where, const FeedWhere.group('g7'));
       expect(feed.topic, 'economy');
-      expect(_label(tester, _where), 'Germany');
-      expect(_label(tester, _topics), 'Economy'); // the saved menu's name
+      expect(_label(tester, _where), 'G7');
+      expect(_icon(tester, _topics), CupertinoIcons.chart_bar_alt_fill);
+      expect(_spoken(tester, _topics), 'Topic: Economy');
       expect(_shown(tester), isEmpty);
       expect(
         find.text("Couldn't load the news. Pull down to retry."),
         findsOneWidget,
       );
-      expect(next.feedRequests.first.queryParameters['country'], 'DE');
+      expect(next.feedRequests.first.queryParameters['group'], 'g7');
       expect(next.feedRequests.first.queryParameters['topic'], 'economy');
+      // The saved menu, offline.
+      await tester.tap(find.byKey(_where));
+      await tester.pumpAndSettle();
+      expect(_menu(tester), hasLength(10));
+      expect(_checked(tester), 'G7');
+      await _close(tester);
 
-      // Global and all topics open from the saved page at once, still offline.
-      await _pick(tester, _where, 'Global');
+      // All countries and all topics open from the saved page at once.
+      await _pick(tester, _where, 'All countries');
       await _pick(tester, _topics, 'All topics');
-      expect(_shown(tester), ['de1', 'us1', 'eu1', 'de2', 'us2']);
+      expect(_shown(tester), hasLength(8));
+      expect(prefs.getString('feed.where'), isNull);
+      expect(prefs.getString('feed.topic'), isNull);
     },
   );
+
+  test('one country is saved and asked again after a restart', () async {
+    final server = _Server();
+    final feed = FeedController(api: server.api);
+    await feed.start();
+    await feed.setWhere(const FeedWhere.country('JP'));
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getString('feed.where'), 'country:JP');
+    server.log.clear();
+    final next = FeedController(api: server.api);
+    await next.start();
+    await _settle();
+    expect(next.where, const FeedWhere.country('JP'));
+    expect(server.feedRequests.map((u) => u.queryParameters['country']), [
+      'JP',
+    ]);
+  });
+
+  test(
+    'a Local saved by the first filters build opens on every country',
+    () async {
+      SharedPreferences.setMockInitialValues({
+        'feed.scope': 'local',
+        'feed.country': 'DE',
+        'feed.countries.en': '[{"code":"DE","name":"Germany"}]',
+        'feed.topic': 'health',
+      });
+      final server = _Server();
+      final feed = FeedController(api: server.api);
+      await feed.start();
+      await _settle();
+      expect(feed.where, FeedWhere.all);
+      final asked = server.feedRequests.single.queryParameters;
+      expect(asked.containsKey('country'), isFalse);
+      expect(asked.containsKey('group'), isFalse);
+      // The topic was its own choice and stays.
+      expect(asked['topic'], 'health');
+      final prefs = await SharedPreferences.getInstance();
+      for (final key in ['feed.scope', 'feed.country', 'feed.countries.en']) {
+        expect(prefs.containsKey(key), isFalse, reason: key);
+      }
+      expect(prefs.getString('feed.topic'), 'health');
+    },
+  );
+
+  test('a saved value it cannot read is every country', () {
+    for (final saved in [null, '', 'local', 'global', 'country:', 'x:y']) {
+      expect(FeedWhere.fromSaved(saved), FeedWhere.all, reason: saved);
+    }
+    for (final where in const [
+      FeedWhere.all,
+      FeedWhere.group('g20'),
+      FeedWhere.country('GB'),
+    ]) {
+      expect(FeedWhere.fromSaved(where.saved), where);
+    }
+  });
 
   testWidgets('the analytics event says what the filters are now', (
     tester,
   ) async {
     await _pump(tester, _Server());
-    await _pick(tester, _where, 'Local');
+    await _pick(tester, _where, 'G7');
     await _pick(tester, _topics, 'Health');
     await _pick(tester, _topics, 'Health'); // no change: no event
-    await _pick(tester, _where, 'Global');
-    final changes = [
-      for (final e in events)
-        if (e.$1 == 'filter_changed') e.$2,
-    ];
-    expect(changes, [
-      {'scope': 'local', 'country': 'DE', 'topic': 'all'},
-      {'scope': 'local', 'country': 'DE', 'topic': 'health'},
-      {'scope': 'global', 'country': 'DE', 'topic': 'health'},
+    await _pick(tester, _where, 'United Kingdom');
+    await _pick(tester, _where, 'All countries');
+    expect(filterEvents(), [
+      {'where': 'group', 'value': 'g7', 'topic': 'all'},
+      {'where': 'group', 'value': 'g7', 'topic': 'health'},
+      {'where': 'country', 'value': 'GB', 'topic': 'health'},
+      {'where': 'all', 'value': 'all', 'topic': 'health'},
     ]);
   });
 
-  group('the Local country', () {
-    test('the phone region when it has sources', () async {
-      final feed = FeedController(api: _Server().api, phoneRegion: () => 'us');
-      await feed.start();
-      await _settle();
-      expect(feed.localCountry, 'US');
+  testWidgets('a chosen country the menu does not list stays in it, checked', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({'feed.where': 'country:CA'});
+    final server = _Server();
+    await _pump(tester, server);
+    expect(server.feedRequests.single.queryParameters['country'], 'CA');
+    expect(_label(tester, _where), 'CA');
+    expect(_spoken(tester, _where), 'Country: Canada');
+    expect(_shown(tester), isEmpty);
+    expect(find.text('Show all countries'), findsOneWidget);
+    await tester.tap(find.byKey(_where));
+    await tester.pumpAndSettle();
+    expect(_menu(tester).sublist(5, 7), ['Canada', 'Germany']);
+    expect(_checked(tester), 'Canada');
+  });
+
+  testWidgets("a group or country the app does not know: the server's name", (
+    tester,
+  ) async {
+    final server = _Server(
+      groupIds: const ['eu', 'g7', 'g20', 'nato', 'brics'],
+      countries: const ['DE', 'NZ'],
+    );
+    await _pump(tester, server);
+    await tester.tap(find.byKey(_where));
+    await tester.pumpAndSettle();
+    expect(_menu(tester).sublist(4), [
+      'NATO',
+      'BRICS',
+      'Germany',
+      'New Zealand',
+    ]);
+    await tester.tap(find.text('BRICS'));
+    await tester.pumpAndSettle();
+    expect(server.feedRequests.last.queryParameters['group'], 'brics');
+    expect(_label(tester, _where), 'BRICS');
+    expect(_spoken(tester, _where), 'Countries: BRICS');
+    await _pick(tester, _where, 'New Zealand');
+    expect(_label(tester, _where), 'NZ');
+    expect(_spoken(tester, _where), 'Country: New Zealand');
+  });
+
+  testWidgets("a topic the app does not know yet: the server's name", (
+    tester,
+  ) async {
+    final server = _Server(extraTopics: const ['education']);
+    await _pump(tester, server);
+    await _pick(tester, _topics, 'Education');
+    expect(server.feedRequests.last.queryParameters['topic'], 'education');
+    expect(_icon(tester, _topics), otherTopicIcon);
+    expect(_spoken(tester, _topics), 'Topic: Education');
+  });
+
+  group('a server from before the groups', () {
+    testWidgets('the menu has every country and the countries, no crash', (
+      tester,
+    ) async {
+      final server = _Server(groups: false);
+      final feed = await _pump(tester, server);
+      expect(feed.whereMenu!.groups, isNull);
+      await tester.tap(find.byKey(_where));
+      await tester.pumpAndSettle();
+      expect(_menu(tester), [
+        'All countries',
+        'Germany',
+        'Japan',
+        'Türkiye',
+        'United Kingdom',
+        'United States',
+      ]);
+      expect(find.byType(CupertinoMenuDivider), findsOneWidget);
+      await tester.tap(find.text('Japan'));
+      await tester.pumpAndSettle();
+      expect(server.feedRequests.last.queryParameters['country'], 'JP');
+      expect(_label(tester, _where), 'JP');
     });
 
-    testWidgets(
-      "an EU member without sources: its own country, with the EU's decisions",
-      (tester) async {
-        final server = _Server();
-        await _pump(tester, server, region: 'PL');
-        await _pick(tester, _where, 'Local');
-        expect(_label(tester, _where), 'Poland');
-        expect(server.feedRequests.last.queryParameters['country'], 'PL');
-        expect(_shown(tester), ['eu1']);
-      },
-    );
-
-    testWidgets(
-      'a country with no sources: its own, empty, with the way back',
-      (tester) async {
-        final server = _Server();
-        await _pump(tester, server, region: 'UA');
-        await tester.tap(find.byKey(_where));
-        await tester.pumpAndSettle();
-        expect(find.text('Ukraine'), findsOneWidget); // under Local
-        await tester.tapAt(const Offset(20, 20));
-        await tester.pumpAndSettle();
-        await _pick(tester, _where, 'Local');
-        expect(_label(tester, _where), 'Ukraine');
-        expect(server.feedRequests.last.queryParameters['country'], 'UA');
-        expect(_shown(tester), isEmpty);
-        expect(
-          find.text('No decisions here in the last 7 days.'),
-          findsOneWidget,
-        );
-        expect(find.text('Show all countries'), findsOneWidget);
-      },
-    );
-
     test(
-      'a Local feed asks once, before and after the countries arrive',
+      'a saved group shows every country, and comes back with them',
       () async {
-        SharedPreferences.setMockInitialValues({'feed.scope': 'local'});
-        final server = _Server();
-        final feed = FeedController(api: server.api, phoneRegion: () => 'UA');
+        SharedPreferences.setMockInitialValues({'feed.where': 'group:g7'});
+        final old = _Server(groups: false);
+        final feed = FeedController(api: old.api);
         await feed.start();
         await _settle();
-        expect(server.feedRequests.map((u) => u.queryParameters['country']), [
-          'UA',
+        // G7 before the menu, every country once it says there are no groups.
+        expect(old.feedRequests.map((u) => u.queryParameters['group']), [
+          'g7',
+          null,
         ]);
-        expect(feed.localCountry, 'UA');
+        expect(feed.where, FeedWhere.all);
+        expect(feed.filtered, isFalse);
+        final prefs = await SharedPreferences.getInstance();
+        expect(prefs.getString('feed.where'), 'group:g7'); // kept
+
+        // The next launch knows the menu at once: no G7 request at all.
+        old.log.clear();
+        final next = FeedController(api: old.api);
+        await next.start();
+        await _settle();
+        expect(old.feedRequests.map((u) => u.queryParameters['group']), [null]);
+
+        // A server with the groups: G7 again, as it was chosen.
+        final updated = _Server();
+        final later = FeedController(api: updated.api);
+        await later.start();
+        await _settle();
+        expect(updated.feedRequests.map((u) => u.queryParameters['group']), [
+          null,
+          'g7',
+        ]);
+        expect(later.where, const FeedWhere.group('g7'));
       },
     );
 
-    test('a language change keeps the country and asks once', () async {
-      SharedPreferences.setMockInitialValues({'feed.scope': 'local'});
-      final server = _Server();
-      final feed = FeedController(api: server.api, phoneRegion: () => 'UA');
+    test('All countries chosen then is saved, and nothing reloads', () async {
+      SharedPreferences.setMockInitialValues({'feed.where': 'group:g7'});
+      final old = _Server(groups: false);
+      final feed = FeedController(api: old.api);
       await feed.start();
       await _settle();
-      server.log.clear();
-      await feed.setLanguage(FeedLanguage.uk);
-      await _settle();
-      expect(feed.localCountry, 'UA');
-      expect(
-        server.feedRequests.map(
-          (u) => (u.queryParameters['lang'], u.queryParameters['country']),
-        ),
-        [('uk', 'UA')],
-      );
-    });
-
-    testWidgets('a region the app cannot name: Global only, never a code', (
-      tester,
-    ) async {
-      final feed = await _pump(tester, _Server(), region: 'CH');
-      expect(feed.localCountry, isNull);
-      expect(find.byKey(_where), findsNothing);
-      expect(find.text('CH'), findsNothing);
-    });
-
-    test(
-      "a region only the server names: Local, with the server's name",
-      () async {
-        final server = _Server(countries: const ['DE', 'FR', 'US', 'NZ']);
-        final feed = FeedController(api: server.api, phoneRegion: () => 'NZ');
-        await feed.start();
-        expect(feed.localCountry, isNull); // no list yet
-        await _settle();
-        expect(feed.localCountry, 'NZ');
-        expect(
-          feed.countryChanges.value.nameOf('NZ', l10nFor()),
-          'New Zealand',
-        );
-      },
-    );
-
-    testWidgets('no country at all: no Where chip, Global only', (
-      tester,
-    ) async {
-      await _pump(tester, _Server(countries: const []), region: null);
-      expect(find.byKey(_where), findsNothing);
-      expect(find.byKey(_topics), findsOneWidget);
+      old.log.clear();
+      await feed.setWhere(FeedWhere.all);
+      expect(old.feedRequests, isEmpty);
+      expect(filterEvents(), isEmpty);
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getString('feed.where'), isNull);
     });
   });
 
+  test('a group the server no longer lists is never asked for', () async {
+    SharedPreferences.setMockInitialValues({'feed.where': 'group:brics'});
+    final server = _Server();
+    final feed = FeedController(api: server.api);
+    await feed.start();
+    await _settle();
+    // Asked before the menu said (a 400), then every country.
+    expect(server.feedRequests.map((u) => u.queryParameters['group']), [
+      'brics',
+      null,
+    ]);
+    expect(feed.where, FeedWhere.all);
+    expect(feed.error, isNull);
+    expect(feed.items, hasLength(8));
+  });
+
   group('a server without /topics and /countries', () {
-    testWidgets('no Where or Topics chip, and no Country in Settings', (
-      tester,
-    ) async {
+    testWidgets('no Where or Topics chip', (tester) async {
       final server = _Server(menus: false);
       final feed = await _pump(tester, server);
       expect(find.byKey(_topics), findsNothing);
       expect(feed.topics, isNull);
-      // Such a server ignores country=: Local would show every country.
+      // Such a server ignores country= and group=.
       expect(find.byKey(_where), findsNothing);
-      expect(feed.localCountry, isNull);
+      expect(feed.whereMenu, isNull);
       expect(
-        server.feedRequests.where((u) => u.queryParameters['country'] != null),
+        server.feedRequests.where(
+          (u) =>
+              u.queryParameters.containsKey('country') ||
+              u.queryParameters.containsKey('group'),
+        ),
         isEmpty,
       );
-      await tester.tap(find.byIcon(CupertinoIcons.gear_alt));
-      await tester.pumpAndSettle();
-      expect(find.text('Language'), findsOneWidget);
-      expect(find.text('Country'), findsNothing);
     });
 
-    test('a Local feed turns Global, and the next launch starts so', () async {
-      SharedPreferences.setMockInitialValues({'feed.scope': 'local'});
-      final server = _Server(menus: false);
-      final feed = FeedController(api: server.api, phoneRegion: () => 'DE');
-      await feed.start();
-      await _settle();
-      // DE before the answer, every country after it.
-      expect(server.feedRequests.map((u) => u.queryParameters['country']), [
-        'DE',
-        null,
-      ]);
-      expect(feed.scope, FeedScope.global);
+    test(
+      'a chosen country shows every country, and the next launch starts so',
+      () async {
+        SharedPreferences.setMockInitialValues({'feed.where': 'country:DE'});
+        final server = _Server(menus: false);
+        final feed = FeedController(api: server.api);
+        await feed.start();
+        await _settle();
+        // DE before the answer, every country after it.
+        expect(server.feedRequests.map((u) => u.queryParameters['country']), [
+          'DE',
+          null,
+        ]);
+        expect(feed.where, FeedWhere.all);
 
-      server.log.clear();
-      final next = FeedController(api: server.api, phoneRegion: () => 'DE');
-      await next.start();
-      await _settle();
-      expect(server.feedRequests.map((u) => u.queryParameters['country']), [
-        null,
-      ]);
+        server.log.clear();
+        final next = FeedController(api: server.api);
+        await next.start();
+        await _settle();
+        expect(server.feedRequests.map((u) => u.queryParameters['country']), [
+          null,
+        ]);
 
-      // A server with the filters again: Local is back, as it was chosen.
-      final updated = _Server();
-      final later = FeedController(api: updated.api, phoneRegion: () => 'DE');
-      await later.start();
-      await _settle();
-      expect(updated.feedRequests.map((u) => u.queryParameters['country']), [
-        null,
-        'DE',
-      ]);
-      expect(later.scope, FeedScope.local);
-      final prefs = await SharedPreferences.getInstance();
-      expect(prefs.getBool('feed.noCountries'), isNull);
-    });
+        // A server with the filters again: the country is back, as chosen.
+        final updated = _Server();
+        final later = FeedController(api: updated.api);
+        await later.start();
+        await _settle();
+        expect(updated.feedRequests.map((u) => u.queryParameters['country']), [
+          null,
+          'DE',
+        ]);
+        expect(later.where, const FeedWhere.country('DE'));
+        final prefs = await SharedPreferences.getInstance();
+        expect(prefs.getBool('feed.noCountries'), isNull);
+      },
+    );
 
     testWidgets('a topic chosen before stays, so it can be cleared', (
       tester,
@@ -716,230 +1129,105 @@ void main() {
       SharedPreferences.setMockInitialValues({'feed.topic': 'health'});
       final server = _Server(menus: false);
       await _pump(tester, server);
-      expect(_label(tester, _topics), 'Health'); // the app's own name
+      expect(_spoken(tester, _topics), 'Topic: Health'); // the app's own name
       await _pick(tester, _topics, 'All topics');
       expect(find.byKey(_topics), findsNothing);
     });
   });
 
-  group("topic names in the app's language", () {
-    testWidgets('a topic not in the menu, also after a restart', (
-      tester,
-    ) async {
+  testWidgets('Settings has no Country any more', (tester) async {
+    await _pump(tester, _Server());
+    await tester.tap(find.byIcon(CupertinoIcons.gear_alt));
+    await tester.pumpAndSettle();
+    expect(find.text('Language'), findsOneWidget);
+    expect(find.text('Country'), findsNothing);
+  });
+
+  group("names in the app's language", () {
+    testWidgets('the menus and chips, in Ukrainian', (tester) async {
       SharedPreferences.setMockInitialValues({'feed.lang': 'uk'});
       final server = _Server();
-      await _pump(tester, server, region: 'US', words: FeedLanguage.uk);
-      await _pick(tester, _topics, 'Торгівля');
-      // The US has no trade decisions: the menu under Local has none.
-      await _pick(tester, _where, 'Моя країна');
-      expect(_label(tester, _topics), 'Торгівля');
-
-      await tester.pumpWidget(const SizedBox());
-      await _pump(
-        tester,
-        _Server()..offline = true,
-        region: 'US',
-        words: FeedLanguage.uk,
+      await _pump(tester, server, words: FeedLanguage.uk);
+      expect(server.topicRequests.single.queryParameters['lang'], 'uk');
+      expect(
+        server.log
+            .where((u) => u.path == '/countries')
+            .single
+            .queryParameters['lang'],
+        'uk',
       );
-      expect(_label(tester, _topics), 'Торгівля');
+      expect(_label(tester, _where), 'Усі країни');
+      expect(_label(tester, _topics), 'Усі теми');
+      await tester.tap(find.byKey(_where));
+      await tester.pumpAndSettle();
+      expect(_menu(tester), [
+        'Усі країни',
+        'Європейський Союз',
+        'G7',
+        'G20',
+        'НАТО',
+        'Велика Британія',
+        'Німеччина',
+        'США',
+        'Туреччина',
+        'Японія',
+      ]);
+      await tester.tap(find.text('Велика Британія'));
+      await tester.pumpAndSettle();
+      // The code stays the ISO code, in Latin letters.
+      expect(_label(tester, _where), 'GB');
+      expect(_spoken(tester, _where), 'Країна: Велика Британія');
+      await _pick(tester, _where, 'НАТО');
+      expect(_label(tester, _where), 'NATO');
+      expect(_spoken(tester, _where), 'Країни: НАТО');
+      await _pick(tester, _topics, 'Економіка');
+      expect(_spoken(tester, _topics), 'Тема: Економіка');
     });
 
     test('another language, offline: names in it, not the old one', () async {
       SharedPreferences.setMockInitialValues({'feed.lang': 'uk'});
       final server = _Server();
-      final feed = FeedController(api: server.api, phoneRegion: () => 'DE');
+      final feed = FeedController(api: server.api);
       await feed.start();
       await _settle();
       await feed.setTopic('economy');
-      await feed.setScope(FeedScope.local);
+      await feed.setWhere(const FeedWhere.group('nato'));
       await _settle();
       server.offline = true;
       await feed.setLanguage(FeedLanguage.de);
       await _settle();
       final de = l10nFor(FeedLanguage.de);
+      final menu = feed.whereMenu;
       expect(topicName('economy', feed.topics, de), 'Wirtschaft');
       expect(
-        [for (final t in feed.topics!) topicName(t.id, feed.topics, de)],
-        ['Wirtschaft', 'Handel', 'Gesundheit'],
-      );
-      expect(feed.countryChanges.value.nameOf('DE', de), 'Deutschland');
-    });
-  });
-
-  testWidgets('the menus and chips are in the feed language', (tester) async {
-    SharedPreferences.setMockInitialValues({'feed.lang': 'uk'});
-    final server = _Server();
-    await _pump(tester, server, words: FeedLanguage.uk);
-    final topics = server.log.where((u) => u.path == '/topics').single;
-    final countries = server.log.where((u) => u.path == '/countries').single;
-    expect(topics.queryParameters['lang'], 'uk');
-    expect(countries.queryParameters['lang'], 'uk');
-    expect(_label(tester, _where), 'Увесь світ');
-    expect(_label(tester, _topics), 'Усі теми');
-    await tester.tap(find.byKey(_topics));
-    await tester.pumpAndSettle();
-    expect(_menu(tester), ['Усі теми', 'Економіка', 'Здоров’я', 'Торгівля']);
-    await tester.tapAt(const Offset(20, 20));
-    await tester.pumpAndSettle();
-    await _pick(tester, _where, 'Моя країна');
-    expect(_label(tester, _where), 'Німеччина');
-  });
-
-  group('Settings: Country', () {
-    Future<void> openCountry(WidgetTester tester) async {
-      await tester.tap(find.byIcon(CupertinoIcons.gear_alt));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Country'));
-      await tester.pumpAndSettle();
-    }
-
-    Future<void> backToFeed(WidgetTester tester) async {
-      await tester.pageBack();
-      await tester.pumpAndSettle();
-      await tester.pageBack();
-      await tester.pumpAndSettle();
-    }
-
-    testWidgets('lists the countries with sources, the phone region checked', (
-      tester,
-    ) async {
-      await _pump(tester, _Server());
-      await tester.tap(find.byIcon(CupertinoIcons.gear_alt));
-      await tester.pumpAndSettle();
-      expect(find.text('Country'), findsOneWidget);
-      expect(find.text('Germany'), findsOneWidget); // the row's value
-      await tester.tap(find.text('Country'));
-      await tester.pumpAndSettle();
-      for (final name in ['Germany', 'France', 'United States']) {
-        expect(find.text(name), findsOneWidget, reason: name);
-      }
-      expect(find.byIcon(CupertinoIcons.checkmark_alt), findsOneWidget);
-      expect(
-        tester.getSemantics(find.text('Germany')),
-        isSemantics(label: 'Germany', isSelected: true),
+        [for (final g in menu!.groups!) groupName(g.id, menu, de)],
+        ['Europäische Union', 'G7', 'G20', 'NATO'],
       );
       expect(
-        find.text(
-          '“Local” in the feed shows the chosen country\'s decisions, and for '
-          'an EU member state the EU\'s as well.',
-        ),
-        findsOneWidget,
+        [for (final c in menu.countries) whereCountryName(c.code, menu, de)],
+        [
+          'Vereinigtes Königreich',
+          'Deutschland',
+          'Vereinigte Staaten',
+          'Türkei',
+          'Japan',
+        ],
       );
     });
 
-    testWidgets(
-      'a country chosen while Local is shown reloads the feed in it',
-      (tester) async {
-        final server = _Server();
-        await _pump(tester, server);
-        await _pick(tester, _where, 'Local');
-        await openCountry(tester);
-        await tester.tap(find.text('United States'));
-        await tester.pumpAndSettle();
-        expect(
-          tester.getSemantics(find.text('United States')),
-          isSemantics(label: 'United States', isSelected: true),
-        );
-        await backToFeed(tester);
-        expect(_label(tester, _where), 'United States');
-        expect(server.feedRequests.last.queryParameters['country'], 'US');
-        expect(_shown(tester), ['us1', 'us2']);
-        final prefs = await SharedPreferences.getInstance();
-        expect(prefs.getString('feed.country'), 'US');
-        expect(events.where((e) => e.$1 == 'filter_changed').last.$2, {
-          'scope': 'local',
-          'country': 'US',
-          'topic': 'all',
-        });
-      },
-    );
-
-    testWidgets('a country chosen while Global is shown only changes Local', (
+    testWidgets('a topic not in the menu, also after a restart', (
       tester,
     ) async {
-      final server = _Server();
-      await _pump(tester, server);
-      final asked = server.feedRequests.length;
-      await openCountry(tester);
-      await tester.tap(find.text('France'));
-      await tester.pumpAndSettle();
-      await backToFeed(tester);
-      expect(_label(tester, _where), 'Global');
-      expect(server.feedRequests, hasLength(asked)); // the same feed
-      await tester.tap(find.byKey(_where));
-      await tester.pumpAndSettle();
-      expect(find.text('France'), findsOneWidget); // under Local
-    });
-
-    testWidgets('the phone region chosen in Settings is saved too', (
-      tester,
-    ) async {
-      final server = _Server();
-      await _pump(tester, server);
-      await openCountry(tester);
-      await tester.tap(find.text('Germany'));
-      await tester.pumpAndSettle();
-      final prefs = await SharedPreferences.getInstance();
-      expect(prefs.getString('feed.country'), 'DE');
-      expect(events.where((e) => e.$1 == 'filter_changed'), isEmpty);
-    });
-
-    testWidgets('offline with no list: says so, keeps the country, retries', (
-      tester,
-    ) async {
-      final server = _Server()..offline = true;
-      await _pump(tester, server);
-      await openCountry(tester);
-      const failed = "Couldn't load the list of countries. Tap to try again.";
-      expect(find.text(failed), findsOneWidget);
-      expect(find.text('Germany'), findsOneWidget);
-      expect(find.byIcon(CupertinoIcons.checkmark_alt), findsOneWidget);
-      // Back online: a tap on the message loads the list.
-      server.offline = false;
-      await tester.tap(find.text(failed));
-      await tester.pumpAndSettle();
-      expect(find.text(failed), findsNothing);
-      for (final name in ['Germany', 'France', 'United States']) {
-        expect(find.text(name), findsOneWidget, reason: name);
-      }
-    });
-
-    testWidgets('the page asks again when it opens, after a failure', (
-      tester,
-    ) async {
-      final server = _Server()..offline = true;
-      await _pump(tester, server);
-      await openCountry(tester);
-      await tester.pageBack();
-      await tester.pumpAndSettle();
-      server.offline = false;
-      await tester.tap(find.text('Country'));
-      await tester.pumpAndSettle();
-      expect(find.textContaining("Couldn't load"), findsNothing);
-      expect(find.text('United States'), findsOneWidget);
-    });
-
-    testWidgets('the phone region without sources is first, and stays', (
-      tester,
-    ) async {
-      final server = _Server();
-      await _pump(tester, server, region: 'UA');
-      await openCountry(tester);
-      expect(
-        tester.getSemantics(find.text('Ukraine')),
-        isSemantics(label: 'Ukraine', isSelected: true),
-      );
-      expect(
-        tester.getTopLeft(find.text('Ukraine')).dy,
-        lessThan(tester.getTopLeft(find.text('France')).dy),
-      );
-      await tester.tap(find.text('Germany'));
-      await tester.pumpAndSettle();
-      expect(find.text('Ukraine'), findsOneWidget);
-      await tester.tap(find.text('Ukraine'));
-      await tester.pumpAndSettle();
-      final prefs = await SharedPreferences.getInstance();
-      expect(prefs.getString('feed.country'), 'UA');
+      SharedPreferences.setMockInitialValues({'feed.lang': 'uk'});
+      await _pump(tester, _Server(), words: FeedLanguage.uk);
+      await _pick(tester, _topics, 'Торгівля');
+      // Japan has no trade decisions: its menu has none.
+      await _pick(tester, _where, 'Японія');
+      expect(_spoken(tester, _topics), 'Тема: Торгівля');
+      await tester.pumpWidget(const SizedBox());
+      await _pump(tester, _Server()..offline = true, words: FeedLanguage.uk);
+      expect(_spoken(tester, _topics), 'Тема: Торгівля');
+      expect(_spoken(tester, _where), 'Країна: Японія');
     });
   });
 }

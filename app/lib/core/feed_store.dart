@@ -9,7 +9,7 @@ import 'filters.dart';
 /// What the phone keeps between launches: the feed's language and filters, the
 /// last first page of the unfiltered feed in each language, so the app opens
 /// instantly (offline too), the articles already opened, shown dimmed (by id,
-/// so in every language), and the last menus of topics and countries in each
+/// so in every language), and the last Where and Topics menus in each
 /// language, so the filters show their names at once.
 class FeedStore {
   FeedStore(this._prefs);
@@ -22,12 +22,17 @@ class FeedStore {
   static const _pageKey = 'feed.lastPage';
   static const _readKey = 'feed.readIds';
   static const _langKey = 'feed.lang';
-  static const _scopeKey = 'feed.scope';
-  static const _countryKey = 'feed.country';
+  static const _whereKey = 'feed.where';
   static const _topicKey = 'feed.topic';
   static const _topicsKey = 'feed.topics';
-  static const _countriesKey = 'feed.countries';
+  static const _whereMenuKey = 'feed.whereMenu';
   static const _noCountriesKey = 'feed.noCountries';
+
+  /// What the first filters build (Global / Local, 16 Oct) kept: its Local
+  /// country and its list of countries per language. Local is gone, so the
+  /// feed opens on every country; [dropOldFilters] removes them.
+  static const _oldKeys = ['feed.scope', 'feed.country'];
+  static const _oldPrefix = 'feed.countries.';
   static const _maxRead = 500;
 
   /// English keeps the key it had before there were languages: 'feed.lastPage'.
@@ -68,17 +73,22 @@ class FeedStore {
     FeedLanguage lang = FeedLanguage.en,
   ]) => _prefs.setString(_pageKeyFor(lang), jsonEncode(page.toJson()));
 
-  /// Global or Local, Global until one is chosen (#68).
-  FeedScope scope() => FeedScope.fromName(_prefs.getString(_scopeKey));
+  /// The Where choice (#68): every country until another is chosen.
+  FeedWhere where() => FeedWhere.fromSaved(_prefs.getString(_whereKey));
 
-  Future<void> saveScope(FeedScope scope) =>
-      _prefs.setString(_scopeKey, scope.name);
+  Future<void> saveWhere(FeedWhere where) => where.isAll
+      ? _prefs.remove(_whereKey)
+      : _prefs.setString(_whereKey, where.saved);
 
-  /// The country chosen in Settings for Local; null until one is chosen, and
-  /// Local follows the phone's region meanwhile.
-  String? country() => _prefs.getString(_countryKey);
-
-  Future<void> saveCountry(String code) => _prefs.setString(_countryKey, code);
+  /// Forgets the Global / Local choice of the first filters build: a saved
+  /// Local reads as every country ([where] never reads it).
+  Future<void> dropOldFilters() async {
+    for (final key in _prefs.getKeys().toList()) {
+      if (_oldKeys.contains(key) || key.startsWith(_oldPrefix)) {
+        await _prefs.remove(key);
+      }
+    }
+  }
 
   /// The one topic the feed shows, or null for all topics (#67).
   String? topic() => _prefs.getString(_topicKey);
@@ -110,28 +120,36 @@ class FeedStore {
           jsonEncode([for (final t in list) t.toJson()]),
         );
 
-  /// The last list of countries in [lang], or null if none was saved.
-  List<FeedCountry>? countries(FeedLanguage lang) {
-    final raw = _prefs.getString('$_countriesKey.${lang.code}');
+  /// The last Where menu in [lang], or null if none was saved.
+  WhereMenu? whereMenu(FeedLanguage lang) {
+    final raw = _prefs.getString('$_whereMenuKey.${lang.code}');
     if (raw == null) return null;
     try {
-      return [
-        for (final c in jsonDecode(raw) as List)
-          FeedCountry(c['code'] as String, c['name'] as String),
-      ];
+      final json = jsonDecode(raw) as Map<String, dynamic>;
+      final groups = json['groups'] as List?;
+      return WhereMenu(
+        groups: groups == null
+            ? null
+            : [
+                for (final g in groups)
+                  FeedGroup(g['id'] as String, g['name'] as String),
+              ],
+        countries: [
+          for (final c in json['countries'] as List)
+            FeedCountry(c['code'] as String, c['name'] as String),
+        ],
+      );
     } catch (_) {
       return null;
     }
   }
 
-  Future<void> saveCountries(FeedLanguage lang, List<FeedCountry> list) =>
-      _prefs.setString(
-        '$_countriesKey.${lang.code}',
-        jsonEncode([for (final c in list) c.toJson()]),
-      );
+  Future<void> saveWhereMenu(FeedLanguage lang, WhereMenu menu) => _prefs
+      .setString('$_whereMenuKey.${lang.code}', jsonEncode(menu.toJson()));
 
   /// True once a server without `GET /countries` answered (404), so the next
-  /// launch offers no Local from the start; false again once it lists them.
+  /// launch hides the Where chip from the start (such a server ignores
+  /// `country=` and `group=`); false again once it lists them.
   bool noCountries() => _prefs.getBool(_noCountriesKey) ?? false;
 
   Future<void> saveNoCountries(bool none) => none

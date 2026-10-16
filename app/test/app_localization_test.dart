@@ -10,6 +10,7 @@ import 'package:official_news/core/api_client.dart';
 import 'package:official_news/core/countries.dart';
 import 'package:official_news/core/decision_types.dart';
 import 'package:official_news/core/feed_language.dart';
+import 'package:official_news/core/filters.dart';
 import 'package:official_news/core/languages.dart';
 import 'package:official_news/core/news_widgets.dart';
 import 'package:official_news/core/topics.dart';
@@ -77,8 +78,12 @@ ApiClient _api({List<Uri>? log}) => ApiClient(
     final l10n = l10nFor(FeedLanguage.fromCode(query['lang']));
     if (request.url.path == '/countries') {
       return _ok({
+        'groups': [
+          for (final id in groupShortNames.keys)
+            {'id': id, 'name': groupName(id, null, l10n), 'members': []},
+        ],
         'countries': [
-          for (final code in ['DE', 'US', 'ZA'])
+          for (final code in ['DE', 'GB', 'US', 'ZA'])
             {'code': code, 'name': countryName(code, l10n)},
         ],
       });
@@ -230,11 +235,11 @@ void main() {
         for (final id in topicIds) {
           expect(topicLabel(id, l10n), isNotNull, reason: id);
         }
-        // Ukraine and every EU member can be Local's country (#68).
-        for (final code in ['UA', 'PL', 'ES', 'NL', 'CZ', 'GR', 'SK']) {
-          expect(hasCountryName(code), isTrue, reason: code);
-          expect(countryName(code, l10n), isNot(code), reason: code);
-        }
+        // The groups of the Where menu (#68), named by the app.
+        expect(groupName('eu', null, l10n), l10n.countryEU);
+        expect(groupName('g7', null, l10n), 'G7');
+        expect(groupName('g20', null, l10n), 'G20');
+        expect(groupName('nato', null, l10n), isNotEmpty);
         expect(countryName('DE', l10n), isNot('DE'));
         expect(languageName('de', l10n), isNot('DE'));
         // Unknown codes are shown as they are.
@@ -510,24 +515,31 @@ void main() {
       await tester.pageBack();
       await tester.pumpAndSettle();
 
-      // The filters (#67, #68): both menus, then the longest names on the chips.
-      await tester.tap(find.text(l10n.filterGlobal));
+      // The filters (#67, #68): both menus with their longest names, then
+      // the short chips.
+      await tester.tap(find.text(l10n.filterAllCountries));
       await tester.pumpAndSettle();
-      expect(find.text(l10n.filterGlobalDetail), findsOneWidget);
-      await tester.tap(find.text(l10n.filterLocal));
+      expect(find.text(l10n.countryEU), findsOneWidget);
+      expect(find.text(countryName('GB', l10n)), findsOneWidget);
+      await tester.tap(find.text(countryName('US', l10n)));
       await tester.pumpAndSettle();
+      expect(find.text('US'), findsOneWidget);
+      await tester.tap(find.text('US'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(l10n.countryEU));
+      await tester.pumpAndSettle();
+      expect(find.text('EU'), findsOneWidget);
       await tester.tap(find.text(l10n.filterAllTopics));
       await tester.pumpAndSettle();
       await tester.tap(find.text(_longTopic[lang.code]!));
       await tester.pumpAndSettle();
-      expect(find.text(countryName('US', l10n)), findsWidgets);
-      expect(find.text(_longTopic[lang.code]!), findsOneWidget);
+      expect(find.text(_longTopic[lang.code]!), findsNothing);
+      expect(find.byIcon(topicIcon('security-defence')), findsOneWidget);
 
       await tester.tap(find.byIcon(CupertinoIcons.gear_alt));
       await tester.pumpAndSettle();
       for (final row in [
         l10n.language,
-        l10n.country,
         l10n.aboutApp,
         l10n.privacyPolicy,
         l10n.termsOfUse,

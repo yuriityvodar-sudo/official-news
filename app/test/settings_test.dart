@@ -4,7 +4,6 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:official_news/core/analytics.dart';
 import 'package:official_news/core/feed_language.dart';
-import 'package:official_news/core/filters.dart';
 import 'package:official_news/core/push.dart';
 import 'package:official_news/features/settings/info_pages.dart';
 import 'package:official_news/features/settings/settings_screen.dart';
@@ -13,25 +12,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'fake_messaging.dart';
 import 'test_app.dart';
 
-/// The countries a server with `GET /countries` lists, in English.
-const _countries = [
-  FeedCountry('DE', 'Germany'),
-  FeedCountry('FR', 'France'),
-  FeedCountry('US', 'United States'),
-];
-
 Future<ValueNotifier<FeedLanguage>> _pump(
   WidgetTester tester, {
   List<FeedLanguage>? chosen,
   FeedLanguage words = FeedLanguage.en,
-  ValueNotifier<CountryMenu>? country,
-  List<String>? countriesChosen,
-  VoidCallback? loadCountries,
 }) async {
   final language = ValueNotifier(FeedLanguage.en);
-  final menu =
-      country ??
-      ValueNotifier(const CountryMenu(current: 'DE', countries: _countries));
   await tester.pumpWidget(
     testApp(
       language: words,
@@ -41,16 +27,6 @@ Future<ValueNotifier<FeedLanguage>> _pump(
           chosen?.add(lang);
           language.value = lang;
         },
-        country: menu,
-        onCountry: (code) {
-          countriesChosen?.add(code);
-          menu.value = CountryMenu(
-            current: code,
-            countries: menu.value.countries,
-            region: menu.value.region,
-          );
-        },
-        loadCountries: loadCountries ?? () {},
         openLink: (_) async {},
       ),
     ),
@@ -120,10 +96,6 @@ void main() {
           home: SettingsScreen(
             language: ValueNotifier(FeedLanguage.en),
             onLanguage: (_) {},
-            // No Country row: the chevrons counted are push's and the pages'.
-            country: ValueNotifier(const CountryMenu(available: false)),
-            onCountry: (_) {},
-            loadCountries: () {},
             openLink: (_) async {},
             notifications: push,
             openSettingsApp: () async => settingsAppOpened++,
@@ -343,99 +315,6 @@ void main() {
     await tester.pageBack();
     await tester.pumpAndSettle();
     expect(find.text('Español'), findsOneWidget);
-  });
-
-  testWidgets('Country (#68): the Local country, chosen from the list', (
-    tester,
-  ) async {
-    final chosen = <String>[];
-    await _pump(tester, countriesChosen: chosen);
-    expect(find.text('Country'), findsOneWidget);
-    expect(find.text('Germany'), findsOneWidget);
-    await tester.tap(find.text('Country'));
-    await tester.pumpAndSettle();
-    expect(find.text('France'), findsOneWidget);
-    expect(find.text('United States'), findsOneWidget);
-    expect(find.byIcon(CupertinoIcons.checkmark_alt), findsOneWidget);
-    await tester.tap(find.text('France'));
-    await tester.pumpAndSettle();
-    expect(chosen, ['FR']);
-    expect(
-      tester.getSemantics(find.text('France')),
-      isSemantics(label: 'France', isSelected: true),
-    );
-    await tester.pageBack();
-    await tester.pumpAndSettle();
-    expect(find.text('France'), findsOneWidget);
-  });
-
-  testWidgets('Country while the list loads, and when it could not', (
-    tester,
-  ) async {
-    final menu = ValueNotifier(const CountryMenu(current: 'DE', loading: true));
-    var asked = 0;
-    await _pump(tester, country: menu, loadCountries: () => asked++);
-    await tester.tap(find.text('Country'));
-    // Not pumpAndSettle: the spinner turns for as long as it is shown.
-    await tester.pump();
-    await tester.pump(const Duration(seconds: 1));
-    expect(find.byType(CupertinoActivityIndicator), findsOneWidget);
-    expect(asked, 1); // the page asks when it opens
-    menu.value = const CountryMenu(current: 'DE');
-    await tester.pumpAndSettle();
-    expect(find.byType(CupertinoActivityIndicator), findsNothing);
-    // The country shown now stays listed, checked.
-    expect(find.text('Germany'), findsOneWidget);
-    expect(find.byIcon(CupertinoIcons.checkmark_alt), findsOneWidget);
-    // The failure text asks again.
-    await tester.tap(
-      find.text("Couldn't load the list of countries. Tap to try again."),
-    );
-    expect(asked, 2);
-    menu.value = const CountryMenu(current: 'DE', countries: _countries);
-    await tester.pumpAndSettle();
-    expect(find.textContaining("Couldn't load"), findsNothing);
-    expect(find.text('United States'), findsOneWidget);
-  });
-
-  testWidgets('Country: the phone region without sources is listed first', (
-    tester,
-  ) async {
-    final chosen = <String>[];
-    final menu = ValueNotifier(
-      const CountryMenu(current: 'UA', region: 'UA', countries: _countries),
-    );
-    await _pump(tester, country: menu, countriesChosen: chosen);
-    expect(find.text('Ukraine'), findsOneWidget); // the row's value
-    await tester.tap(find.text('Country'));
-    await tester.pumpAndSettle();
-    List<String> names() => [
-      for (final tile in tester.widgetList<CupertinoListTile>(
-        find.byType(CupertinoListTile),
-      ))
-        ((tile.title as Semantics).child! as Text).data!,
-    ];
-    expect(names(), ['Ukraine', 'Germany', 'France', 'United States']);
-    expect(
-      tester.getSemantics(find.text('Ukraine')),
-      isSemantics(label: 'Ukraine', isSelected: true),
-    );
-    // Another country: the phone's stays offered, to go back to.
-    await tester.tap(find.text('Germany'));
-    await tester.pumpAndSettle();
-    expect(names(), ['Ukraine', 'Germany', 'France', 'United States']);
-    await tester.tap(find.text('Ukraine'));
-    await tester.pumpAndSettle();
-    expect(chosen, ['DE', 'UA']);
-  });
-
-  testWidgets('no Country row for a server without countries', (tester) async {
-    await _pump(
-      tester,
-      country: ValueNotifier(const CountryMenu(available: false)),
-    );
-    expect(find.text('Language'), findsOneWidget);
-    expect(find.text('Country'), findsNothing);
   });
 
   for (final (row, title, line) in [

@@ -657,9 +657,7 @@ void main() {
             }),
           ),
         );
-        // No language button by the date any more: a globe there now is the
-        // Where chip (#68).
-        expect(find.text('EN'), findsNothing);
+        expect(find.byIcon(CupertinoIcons.globe), findsNothing);
         final button = find.ancestor(
           of: find.byIcon(CupertinoIcons.gear_alt),
           matching: find.byType(CupertinoButton),
