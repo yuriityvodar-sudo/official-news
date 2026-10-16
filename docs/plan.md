@@ -232,6 +232,7 @@ Each item becomes one GitHub issue owned by one person. **Must** is what the ite
 
 - **Must:** `fetcher.run()`, called by the scheduled handler every minute, takes the source with the oldest `last_checked_at`; reads RSS/Atom feeds and news pages (selectors in `config`); skips URLs already stored; saves new articles with their extracted text and `text_expires_at`; clear User-Agent; respects `robots.txt`; logs requests and CPU time per run from the first version.
 - **Suggested:** retries for failed sources; reading the site's own data endpoints.
+- **Changed 16 Oct (#71):** the whole text, not the teaser. List text under 1,000 characters is completed from the item page or from the source's own data endpoint (`fullText` in `docs/sources.md`), within the same 2 page reads a run, reading at most 20,000 characters of a page; an item whose page fails or whose site is busy is asked again on later checks for up to 24 hours. PDF-only texts (South Africa, Brazil's bill text) are a later step.
 - **Done when:** the deployed fetcher checks all 20 sources at least once an hour, new articles appear in D1 with no duplicates, and the logs show how close each run is to the free limits.
 
 ### 7. AI summaries (Roman)

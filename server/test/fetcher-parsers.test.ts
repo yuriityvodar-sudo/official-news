@@ -3,9 +3,9 @@ import { describe, expect, it } from "vitest";
 import { parseApi } from "../src/fetcher/api";
 import { parseDate } from "../src/fetcher/dates";
 import { parseFeed } from "../src/fetcher/feed";
-import { extractContent, parsePage } from "../src/fetcher/page";
+import { extractContent, findLink, parsePage } from "../src/fetcher/page";
 import { isAllowed, parseRobots, robotsFromResponse } from "../src/fetcher/robots";
-import { decodeEntities, fillTemplate, getPath, htmlToText } from "../src/fetcher/text";
+import { decodeBody, decodeEntities, fillTemplate, getPath, getStrings, htmlToText } from "../src/fetcher/text";
 
 const NOW = new Date("2026-10-14T15:00:00Z");
 
@@ -110,11 +110,41 @@ describe("text helpers", () => {
     expect(htmlToText("&lt;p&gt;Tomorrow I will join&lt;/p&gt;&lt;p&gt;counterparts&lt;/p&gt;")).toBe("Tomorrow I will join\ncounterparts");
   });
 
+  it("decodes ISO-8859-1 byte for byte, also 0x80 to 0x9F", () => {
+    const bytes = Uint8Array.from({ length: 256 }, (_, i) => i);
+    expect(decodeBody(bytes.buffer, "ISO-8859-1")).toBe(String.fromCharCode(...bytes));
+    expect(decodeBody(Uint8Array.from([0x52, 0x65, 0x73, 0x6f, 0x6c, 0x75, 0x63, 0x69, 0xf3, 0x6e]).buffer, "latin1")).toBe("Resolución");
+  });
+
+  it("collapses Windows and old Mac line ends like any other", () => {
+    expect(htmlToText("Ementa\r\n\r\n\t Institui mecanismos\r\rpara a saúde ")).toBe("Ementa\nInstitui mecanismos\npara a saúde");
+  });
+
   it("follows JSON stored as a string and fills templates", () => {
     const item = { abs: '{"document":{"content":{"title":"Decreto 1177"}}}', n: 5 };
     expect(getPath(item, "abs.document.content.title")).toBe("Decreto 1177");
     expect(fillTemplate("PL {n}: {abs.document.content.title}", item)).toBe("PL 5: Decreto 1177");
     expect(fillTemplate("missing.path", item)).toBe("");
+  });
+
+  it("collects strings through lists (*), with a template per entry", () => {
+    // Trimmed from the Commission's Press Corner API answer for IP/26/2175.
+    const answer = {
+      docuLanguageResource: {
+        htmlContent: "<p>Today, the Commission launched RAISE.</p>",
+        dolaQuoteResources: [
+          { author: { authorName: "Ekaterina Zaharieva, Commissioner for Startups, Research and Innovation" }, extract: "Our ambition for AI in science can only become reality together." },
+          { author: {}, extract: "" },
+        ],
+      },
+    };
+    expect(getStrings(answer, "docuLanguageResource.htmlContent")).toEqual(["<p>Today, the Commission launched RAISE.</p>"]);
+    expect(getStrings(answer, "docuLanguageResource.dolaQuoteResources.*.extract")).toEqual(["Our ambition for AI in science can only become reality together."]);
+    expect(getStrings(answer, "docuLanguageResource.dolaQuoteResources.*.{author.authorName}: {extract}")).toEqual([
+      "Ekaterina Zaharieva, Commissioner for Startups, Research and Innovation: Our ambition for AI in science can only become reality together.",
+    ]);
+    expect(getStrings(answer, "docuLanguageResource.missing.*.extract")).toEqual([]);
+    expect(getStrings({ a: '{"b":"from a JSON string"}' }, "a.b")).toEqual(["from a JSON string"]);
   });
 });
 
@@ -237,6 +267,131 @@ describe("extractContent", () => {
   it("uses the source's text selector", async () => {
     const html = `<body><div class="top">首页 | 简 | 繁</div><div id="UCAP-CONTENT"><p>国务院关于发展新质生产力的意见</p></div></body>`;
     expect((await extractContent(html, "https://www.gov.cn/x", "#UCAP-CONTENT")).text).toBe("国务院关于发展新质生产力的意见");
+  });
+
+  it("with a text selector, still skips scripts and menus inside it and breaks between its blocks; a selector list works too", async () => {
+    const html = `<body><div><p>Outside</p></div><div id="c"><nav>Menu</nav><script>track()</script><h2>Title</h2><div>First</div><p>Second<br>Third</p></div>
+      <aside id="d"><p>Sidebar</p></aside></body>`;
+    expect((await extractContent(html, "https://x.gov/", "#c")).text).toBe("Title\nFirst\nSecond\nThird");
+    expect((await extractContent(html, "https://x.gov/", "#c, #d")).text).toBe("Title\nFirst\nSecond\nThird");
+  });
+
+  // #71: trimmed from the real item pages of each source the selector was set for.
+  it("takes the Bundesregierung article body without the share links (textSelector)", async () => {
+    const html = `<html><head><meta property="og:image" content="/resource/image/2427030/og.jpg"></head><body>
+      <nav>Startseite Aktuelles</nav>
+      <main id="main"><div class="bpa-container"><header class="bpa-article-header"><h2><span class="bpa-topline-title">Im Bundestag beschlossen</span>
+        <span class="bpa-teaser-title-text-inner">Mehr Resilienz für Smart-Geräte</span></h2>
+        <div class="bpa-short-text"><p>Mit der Cyberresilienz-Verordnung werden erstmalig Mindeststandards festgelegt.</p></div></header>
+        <div class="bpa-share rs_skip"><ul class="bpa-share-list"><li><a href="mailto:?">E-Mail<br>per E-Mail teilen, Mehr Resilienz für Smart-Geräte</a></li>
+        <li><a href="https://www.facebook.com/sharer">Facebook<br>per Facebook teilen, Mehr Resilienz für Smart-Geräte</a></li></ul></div></div>
+      <div class="bpa-container" id="rs_reading_area_content"><div class="bpa-module-full bpa-article bpa-padded"><div class="bpa-richtext">
+        <figure class="bpa-figure"><img src="/resource/image/2427030/w.webp" alt="Waschmaschine"><figcaption>Foto: picture alliance / Westend61</figcaption></figure>
+        <div class="bpa-richtext"><p><span>Der sogenannte </span><span lang="en-GB">Cyber Resilience Act</span><span> (CRA) legt erstmalig ein Mindestmaß an Cybersicherheit für alle vernetzten Produkte fest.</span></p>
+        <h3>Wann tritt der CRA in Kraft?</h3><p>Die Umsetzung erfolgt in verschiedenen Etappen, bis Ende 2027.</p></div></div></div></div></main>
+      <footer>Impressum</footer></body></html>`;
+    const base = "https://www.bundesregierung.de/breg-de/aktuelles/cyberresilienz-2426502";
+    expect((await extractContent(html, base)).text).toContain("per Facebook teilen");
+    const content = await extractContent(html, base, "div.bpa-article .bpa-richtext");
+    // The picture's caption and credit are not the article's text.
+    expect(content.text).toBe(
+      "Der sogenannte Cyber Resilience Act (CRA) legt erstmalig ein Mindestmaß an Cybersicherheit für alle vernetzten Produkte fest.\nWann tritt der CRA in Kraft?\nDie Umsetzung erfolgt in verschiedenen Etappen, bis Ende 2027.",
+    );
+    expect(content.imageUrl).toBe("https://www.bundesregierung.de/resource/image/2427030/og.jpg");
+  });
+
+  it("keeps a gov.za notice's fields, with the public-comment deadline, and leaves the menus out", async () => {
+    // Trimmed from /documents/notices/standards-act-standards-matters-comments-invited-09-oct-2026 (16 Oct).
+    const html = `<html><body><a href="#main-content">Skip to main content</a><form><label>Search gov.za</label><button>Search</button></form>
+      <aside><div class="field--name-body"><p>The Government Gazette is published on the Government Printing Works' website</p></div></aside>
+      <main role="main"><h1 class="page-title"><span>Standards Act: Standards Matters: Comments invited</span></h1>
+      <article data-history-node-id="846491" class="node"><div class="node-content"><div class="field field--name-field-gcisdoc-files"><div class="field__label">Files</div>
+      <table><thead><tr>
+        <th>Attachment</th>
+        <th>Size</th>
+      </tr></thead><tbody><tr>
+        <td><a href="/sites/default/files/gcis_document/202610/55525gen4190.pdf" type="application/pdf">55525gen4190.pdf</a></td>
+        <td>389.25 KB</td>
+      </tr></tbody></table></div>
+      <div class="field field--name-field-comment-by"><div class="field__label">Comment by</div><div class="field__item"><time datetime="2026-12-08T12:00:00Z">Tuesday, December 8, 2026 - 12:00</time></div></div>
+      <div class="grid"><h3>Share this page</h3><a class="social-link facebook"><div class="inline">Facebook</div></a></div>
+      </div></article></main></body></html>`;
+    const base = "https://www.gov.za/documents/notices/standards-act-standards-matters-comments-invited-09-oct-2026";
+    expect((await extractContent(html, base)).text).toContain("Skip to main content");
+    expect(await extractContent(html, base, "article.node .field")).toEqual({
+      text: "Files\nAttachment\nSize\n55525gen4190.pdf\n389.25 KB\nComment by\nTuesday, December 8, 2026 - 12:00",
+      imageUrl: null,
+    });
+  });
+
+  it("keeps the Grand National Assembly's news text without the site footer", async () => {
+    // Trimmed from /Haber/Detay?Id=377f1763-9427-47f8-b58e-01a13a00ae7c (16 Oct).
+    const html = `<html><body><div class="page-content"><div id="content-title-type"><a href="/meclis-haber/meclis-baskani">MECLİS HABERLERİ</a></div>
+      <div id="detay-content"><div class="blog-content"><div id="haber-detay-baslik"><div id="haber-detay-saat-dakika"> 2026-10-14 - 13:41</div>
+      <div class="mobile-social-media"><a class="a-whatsapp" href="whatsapp://send"><img src="/images/yeni_tasarim/whatsapp.png"></a></div>
+      &#x130;Y&#x130; PART&#x130; TBMM GRUP TOPLANTISI</div>
+      <div id="haber-detay-ozet">İYİ Parti Genel Başkanı Müsavat Dervişoğlu, fon soruşturmalarına ilişkin açıklama yaptı.</div>
+      <div id="haber-detay-aciklama"><p>Dervişoğlu, partisinin TBMM Grup Toplantısı'nda konuştu.</p></div></div></div></div>
+      <div class="footer-area"><a href="/cerez-politikasi">Çerez Politikası</a><h4>BİZE ULAŞIN</h4><p>Atatürk Bulvarı TBMM 06543</p><p>0 (312) 420 50 00</p></div></body></html>`;
+    const base = "https://www.tbmm.gov.tr/Haber/Detay?Id=377f1763-9427-47f8-b58e-01a13a00ae7c";
+    expect((await extractContent(html, base)).text).toContain("BİZE ULAŞIN");
+    expect((await extractContent(html, base, "#detay-content")).text).toBe(
+      "2026-10-14 - 13:41\nİYİ PARTİ TBMM GRUP TOPLANTISI\nİYİ Parti Genel Başkanı Müsavat Dervişoğlu, fon soruşturmalarına ilişkin açıklama yaptı.\nDervişoğlu, partisinin TBMM Grup Toplantısı'nda konuştu.",
+    );
+  });
+
+  it("stops reading a page once its text is long enough, whatever the page's size", async () => {
+    // An Argentine norm is mostly <br> and text: 198 KB took about 25 ms locally to read whole (#71 review).
+    const line = "ARTÍCULO 1°.- Apruébase el Plan Nacional de Abordaje Integral de Salud Vascular 2026-2030.<br>";
+    const html = `<html><head><meta property="og:image" content="/og.jpg"></head><body><p>${line.repeat(3000)}</p><p>LAST LINE</p></body></html>`;
+    const whole = await extractContent(html, "https://servicios.infoleg.gob.ar/x");
+    expect(whole.text).toContain("LAST LINE");
+    const cut = await extractContent(html, "https://servicios.infoleg.gob.ar/x", undefined, 20_000);
+    expect(cut.text.length).toBeGreaterThanOrEqual(20_000);
+    expect(cut.text.length).toBeLessThan(30_000);
+    expect(cut.text).not.toContain("LAST LINE");
+    expect(whole.text.startsWith(cut.text)).toBe(true);
+    expect(cut.imageUrl).toBe("https://servicios.infoleg.gob.ar/og.jpg");
+    // A short page is read whole.
+    expect((await extractContent(`<body><main>${"<p>Short decree text.</p>".repeat(20)}</main></body>`, "https://x.gov/", undefined, 20_000)).text).toHaveLength(
+      20 * "Short decree text.".length + 19,
+    );
+  });
+
+  it("with a cap, still prefers main over body while main is being read", async () => {
+    const html = `<body><div>${"Menu entry that is not a nav element. ".repeat(10)}</div><main><p>${"Decision of the cabinet. ".repeat(100)}</p></main><div>${"Footer text. ".repeat(500)}</div></body>`;
+    const content = await extractContent(html, "https://x.gov/", undefined, 1000);
+    expect(content.text.startsWith("Decision of the cabinet.")).toBe(true);
+    expect(content.text).not.toContain("Menu entry");
+  });
+
+  it("reads a Chamber of Deputies bill record without menus, also with CRLF line ends", async () => {
+    const html = [
+      `<html><body><div id="portal-breadcrumbs">Página Inicial / Atividade Legislativa / PL 5576/2026</div>`,
+      `<div id="content"><span id="barraFuncoesTopo">Versões\r\npara impressão</span>`,
+      `<div id="identificacaoProposicao"><p id="colunaPrimeiroAutor"><strong>Autor</strong><br />\r\n\t\t\tJosé Medeiros - PL/MT\r\n</p>`,
+      `<p><strong>Apresentação</strong><br />15/10/2026</p>`,
+      `<p><strong>Ementa</strong><br /> <span class="textoJustificado">Institui mecanismos para o aproveitamento da capacidade assistencial ociosa dos prestadores privados de serviços de saúde.\r\n\r\n</span></p></div>`,
+      `<div id="informacoesDeTramitacao">Regime de Tramitação\r\n.\r\n</div></div></body></html>`,
+    ].join("\r\n");
+    const content = await extractContent(html, "https://www.camara.leg.br/propostas-legislativas/2647775", "#identificacaoProposicao");
+    expect(content.text).toBe(
+      "Autor\nJosé Medeiros - PL/MT\nApresentação\n15/10/2026\nEmenta\nInstitui mecanismos para o aproveitamento da capacidade assistencial ociosa dos prestadores privados de serviços de saúde.",
+    );
+    expect((await extractContent(html, "https://www.camara.leg.br/x")).text).not.toContain("\r");
+  });
+});
+
+describe("findLink", () => {
+  it("finds the InfoLEG link to a norm's full text, as an absolute URL", async () => {
+    const html = `<div id="Textos_Completos"><p><strong>Resolución&nbsp;1445/2026 MINISTERIO DE SALUD</strong></p>
+      <p><strong> Resumen:</strong><br/>APRUEBASE EL PLAN NACIONAL DE ABORDAJE INTEGRAL DE SALUD VASCULAR 2026-2030.</p>
+      <p><a href='anexos/430000-434999/431253/norma.htm'><b>Texto completo de la norma</b></a></p>
+      <p><a href="/infolegInternet/verVinculos.do?modo=1&amp;id=431253">Esta norma modifica o complementa a 3 norma(s).</a></p></div>`;
+    const base = "https://servicios.infoleg.gob.ar/infolegInternet/verNorma.do?id=431253";
+    expect(await findLink(html, base, "a[href$='norma.htm']")).toBe("https://servicios.infoleg.gob.ar/infolegInternet/anexos/430000-434999/431253/norma.htm");
+    expect(await findLink(html, base, "a[href*='verVinculos']@href")).toBe("https://servicios.infoleg.gob.ar/infolegInternet/verVinculos.do?modo=1&id=431253");
+    expect(await findLink(html, base, "a.missing")).toBeNull();
   });
 });
 
