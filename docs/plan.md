@@ -238,7 +238,7 @@ Each item becomes one GitHub issue owned by one person. **Must** is what the ite
 
 ### 5. Source list (Yurii)
 
-- **Must:** `docs/sources.csv` with one source per G20 member (19 since 14 Oct: Saudi Arabia waits for consent), plus Poland, Czechia, Spain and Ukraine (5 sources since 16 Oct, #72), each with kind, URL, language, `verified_by` and licence, preferring pages that publish official decisions (laws, proposals, meeting agendas, minutes and outcomes), and each source's name in Ukrainian, Russian, Spanish and German in `docs/source-names.csv` (#76); loaded into `sources`.
+- **Must:** `docs/sources.csv` with one source per G20 member (19 since 14 Oct: Saudi Arabia waits for consent), plus Poland, Czechia, Spain and Ukraine (5 sources since 16 Oct, #72) and international organizations as sources of their own decisions (16 Oct: the European Central Bank, code `EU`; more international bodies follow: the ILO Governing Body once the app and website show a source's required notice on its articles, UN press and the African Union after the decision on #107), each with kind, URL, language, `verified_by` and licence, preferring pages that publish official decisions (laws, proposals, meeting agendas, minutes and outcomes), and each source's name in Ukrainian, Russian, Spanish and German in `docs/source-names.csv` (#76); loaded into `sources`.
 - **Suggested:** grow to about 85 Phase 1 sources once the fetcher is stable.
 - **Done when:** the verified sources are in D1 (19 since 14 Oct: Saudi Arabia waits for the gazette's written consent, see `docs/sources.md`).
 

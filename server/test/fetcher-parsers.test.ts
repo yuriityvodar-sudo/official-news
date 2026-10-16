@@ -77,6 +77,14 @@ describe("parseDate", () => {
     expect(parseDate("2026. 10. 14. ~ 2026. 11. 24.", { format: "yyyy. mm. dd." }, NOW)?.publishedAt).toBe("2026-10-14T12:00:00Z");
   });
 
+  it("reads English month names, also after other words (ilo.org)", () => {
+    const dateOnly = { publishedAt: "2026-09-07T12:00:00Z", dateOnly: true };
+    expect(parseDate("Record of decisions | 7 September 2026", { format: "en" }, NOW)).toEqual(dateOnly);
+    expect(parseDate("07 Sep. 2026", { format: "en" }, NOW)).toEqual(dateOnly);
+    expect(parseDate("Record of decisions | 7 Septembre 2026", { format: "en" }, NOW)).toBeNull();
+    expect(parseDate("Record of decisions", { format: "en" }, NOW)).toBeNull();
+  });
+
   it("reads Ukrainian dates, with the time before or after and the year left out (kmu.gov.ua)", () => {
     const now = new Date("2026-10-16T10:00:00Z");
     const kyiv = { format: "uk", utcOffset: "+03:00" };
@@ -217,6 +225,31 @@ describe("parsePage", () => {
 
     const [meeting] = await parsePage(`<ul><li class="m"><a href="/jp/kakugi/2026/kakugi-2026101301.html">定例閣議案件</a></li></ul>`, "https://www.kantei.go.jp/jp/kakugi/index.html", { item: "li.m", date: { fromLink: "kakugi-(\\d{8})" } }, NOW);
     expect(meeting).toMatchObject({ title: "定例閣議案件", publishedAt: "2026-10-13T12:00:00Z" });
+  });
+
+  it("reads the ILO's decisions list: the date after its label, as a date without time", async () => {
+    // A row of https://www.ilo.org/governing-body/all-gb-documents?field_document_type_target_id=5966 (16 Oct), trimmed.
+    // `datetime` is a Unix timestamp, which parseDate does not read, so the text is read with format "en".
+    const html = `<div class="views-row"><div class="ilo--card"><a class="ilo--card--link" href="/resource/record-decisions/gb/gb357bis/x" title="Decision concerning X">
+      <span class="ilo--card--link--text">Decision concerning X</span></a><div class="ilo--card--wrap"><div class="ilo--card--content">
+      <p class="ilo--card--eyebrow">GB.357bis/PFA/1/Decision</p><p class="ilo--card--title">Decision concerning X</p>
+      <p class="ilo--card--intro">Adopted at the 357th bis (Special) session</p>
+      <time class="ilo--card--date" datetime="1788782400">Record of decisions | 7 September 2026</time></div></div></div></div>`;
+    const [item] = await parsePage(html, "https://www.ilo.org/governing-body/all-gb-documents?field_document_type_target_id=5966", {
+      item: "div.views-row",
+      link: "a.ilo--card--link",
+      title: ".ilo--card--title",
+      summary: ".ilo--card--intro",
+      date: { selector: "time.ilo--card--date", format: "en" },
+    }, NOW);
+    expect(item).toMatchObject({
+      url: "https://www.ilo.org/resource/record-decisions/gb/gb357bis/x",
+      title: "Decision concerning X",
+      text: "Adopted at the 357th bis (Special) session",
+      publishedAt: "2026-09-07T12:00:00Z",
+      dateOnly: true,
+      imageUrl: null,
+    });
   });
 
   it("keeps every part of a selector list inside the item", async () => {
