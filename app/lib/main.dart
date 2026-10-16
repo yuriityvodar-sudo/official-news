@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
+import 'core/analytics.dart';
 import 'core/router.dart';
 import 'core/theme.dart';
 import 'features/feed/feed_controller.dart';
@@ -7,6 +10,8 @@ import 'l10n/app_localizations.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Not awaited: the feed shows at once; events before Firebase is up are not sent.
+  unawaited(startAnalytics());
   // The language is read before the first frame (#52), so no word shows in
   // another language first; the launch screen stays up meanwhile.
   final feed = FeedController();
@@ -38,6 +43,7 @@ class OfficialNewsApp extends StatelessWidget {
         darkTheme: buildTheme(Brightness.dark),
         themeMode: ThemeMode.system,
         onGenerateRoute: (settings) => onGenerateRoute(settings, feed: feed),
+        navigatorObservers: [ScreenViews()],
         initialRoute: Routes.feed,
       ),
     );

@@ -10,12 +10,14 @@ Widget testApp({
   Widget? home,
   RouteFactory? onGenerateRoute,
   FeedLanguage language = FeedLanguage.en,
+  List<NavigatorObserver> navigatorObservers = const [],
 }) => MaterialApp(
   theme: buildTheme(Brightness.light),
   locale: language.locale,
   localizationsDelegates: AppLocalizations.localizationsDelegates,
   supportedLocales: AppLocalizations.supportedLocales,
   onGenerateRoute: onGenerateRoute,
+  navigatorObservers: navigatorObservers,
   home: home,
 );
 
