@@ -17,30 +17,29 @@ import 'test_app.dart';
 /// floats, the masthead settling open or folded, a top story's one-sentence
 /// summary and the "Read" VoiceOver users hear.
 
-Map<String, dynamic> _article(String id, {int seq = 0, String? shortSummary}) =>
-    {
-      'id': id,
-      'country': 'DE',
-      'source': {
-        'id': 'de-gov',
-        'name': 'Federal Government',
-        'url': 'https://www.bundesregierung.de',
-      },
-      'publishedAt': DateTime.now().toUtc().toIso8601String(),
-      'dateOnly': false,
-      'headline': 'Decision $id',
-      'shortSummary': shortSummary ?? 'Short summary $id.',
-      'summary': 'Summary $id',
-      'decisionType': 'cabinet-decision',
-      'originalTitle': 'Original $id',
-      'originalLanguage': 'de',
-      'topics': ['economy'],
-      'tags': <String>[],
-      'importance': 3,
-      'imageUrl': null,
-      'originalUrl': 'https://www.bundesregierung.de/$id',
-      'feedSeq': seq,
-    };
+Map<String, dynamic> _article(String id, {int seq = 0}) => {
+  'id': id,
+  'country': 'DE',
+  'source': {
+    'id': 'de-gov',
+    'name': 'Federal Government',
+    'url': 'https://www.bundesregierung.de',
+  },
+  'publishedAt': DateTime.now().toUtc().toIso8601String(),
+  'dateOnly': false,
+  'headline': 'Decision $id',
+  'shortSummary': 'Short summary $id.',
+  'summary': 'Summary $id',
+  'decisionType': 'cabinet-decision',
+  'originalTitle': 'Original $id',
+  'originalLanguage': 'de',
+  'topics': ['economy'],
+  'tags': <String>[],
+  'importance': 3,
+  'imageUrl': null,
+  'originalUrl': 'https://www.bundesregierung.de/$id',
+  'feedSeq': seq,
+};
 
 void main() {
   setUp(() {
@@ -50,12 +49,9 @@ void main() {
   tearDown(() => feedDesign.value = FeedDesign.now);
 
   /// A feed of 30 articles and 3 top stories; asking for newer ones finds 3.
-  Future<FeedController> pumpFeed(
-    WidgetTester tester, {
-    List<Map<String, dynamic>>? top,
-  }) async {
+  Future<FeedController> pumpFeed(WidgetTester tester) async {
     final items = [for (var i = 30; i >= 1; i--) _article('n$i', seq: i)];
-    final tops = top ?? [_article('t1'), _article('t2'), _article('t3')];
+    final tops = [_article('t1'), _article('t2'), _article('t3')];
     final controller = FeedController(
       api: ApiClient(
         baseUrl: 'https://api.test',
@@ -148,49 +144,24 @@ void main() {
     expect(scrolled(tester), closeTo(folded + 300, 1));
   });
 
-  testWidgets('a top story shows the first whole sentence of its summary', (
-    tester,
-  ) async {
-    await pumpFeed(
-      tester,
-      top: [
-        _article('t1'),
-        _article(
-          't2',
-          shortSummary:
-              'The cabinet approved the plan. It takes effect in January.',
-        ),
-        _article(
-          't3',
-          shortSummary:
-              'Die Regierung plant z. B. neue Regeln für Dr. Schmidt. '
-              'Sie gelten ab Januar.',
-        ),
-      ],
-    );
-    expect(find.text('The cabinet approved the plan.'), findsOneWidget);
-    expect(
-      find.text('Die Regierung plant z. B. neue Regeln für Dr. Schmidt.'),
-      findsOneWidget,
-    );
-  });
-
-  testWidgets('VoiceOver hears the summary shown and "Read" once opened', (
+  testWidgets('VoiceOver hears a row once and "Read" once opened', (
     tester,
   ) async {
     SharedPreferences.setMockInitialValues({
-      'feed.readIds': ['t2'],
+      'feed.readIds': ['n29'],
     });
     final semantics = tester.ensureSemantics();
     await pumpFeed(tester);
+    // Every row as the Latest rows were: no summary under the headline.
     final read = tester.getSemantics(
-      find.bySemanticsLabel(RegExp(r'^Decision t2\. Short summary t2\.')),
+      find.bySemanticsLabel(RegExp(r'^Decision n29\. Germany, Federal')),
     );
     expect(read.value, 'Read');
     final unread = tester.getSemantics(
-      find.bySemanticsLabel(RegExp(r'^Decision t3\. Short summary t3\.')),
+      find.bySemanticsLabel(RegExp(r'^Decision n28\. Germany, Federal')),
     );
     expect(unread.value, isEmpty);
+    expect(find.textContaining('Short summary'), findsNothing);
     semantics.dispose();
   });
 }

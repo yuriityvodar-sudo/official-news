@@ -166,9 +166,8 @@ Future<void> _chooseLanguage(WidgetTester tester, String name) async {
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
-  testWidgets('shows top stories, then one Latest list without day headings', (
-    tester,
-  ) async {
+  testWidgets('shows one list with the top story in it once, and no section '
+      'titles or day headings', (tester) async {
     final top = _article(
       't1',
       _today.add(const Duration(minutes: 1)),
@@ -199,12 +198,11 @@ void main() {
       ),
     );
 
-    expect(find.text('Top stories'), findsOneWidget);
-    expect(
-      find.text('Cabinet approves budget'),
-      findsOneWidget,
-    ); // only once: top articles are not repeated below
-    expect(find.text('Latest'), findsOneWidget);
+    // One list (Yurii, 16 Oct): no "Top stories" or "Latest" titles.
+    expect(find.text('Top stories'), findsNothing);
+    expect(find.text('Latest'), findsNothing);
+    // Only once: a top story is in the items too.
+    expect(find.text('Cabinet approves budget'), findsOneWidget);
     expect(find.text('Law on water signed'), findsOneWidget);
     // No day heading: the older article shows its own time on the card.
     expect(find.text('Yesterday'), findsNothing);
@@ -573,7 +571,7 @@ void main() {
           }),
         ),
       );
-      expect(find.text('Latest'), findsOneWidget);
+      expect(find.text('Latest'), findsNothing);
       expect(find.text('Yesterday'), findsNothing);
       final late = tester.getTopLeft(find.text('Late but new')).dy;
       final older = tester.getTopLeft(find.text('Appeared yesterday')).dy;
@@ -592,7 +590,7 @@ void main() {
         api: _api({
           '': {
             'items': [
-              // Dated three days ago (no time), appeared just now: under "Latest".
+              // Dated three days ago (no time), appeared just now: at the top.
               _article(
                 'dated',
                 dated,
@@ -616,7 +614,6 @@ void main() {
         }),
       ),
     );
-    expect(find.text('Latest'), findsOneWidget);
     // Both appeared just now: the cards say so, not the older publication day.
     expect(find.text(dayLabel(dated, l10nFor())), findsNothing);
     expect(find.text('Today'), findsNothing);

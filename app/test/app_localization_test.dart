@@ -341,13 +341,15 @@ void main() {
       tester,
     ) async {
       await _launch(tester, phone: const [Locale('uk', 'UA')]);
-      expect(find.text('Головне'), findsOneWidget);
-      expect(find.text('Останнє'), findsOneWidget);
+      expect(find.text('Усі теми'), findsOneWidget);
       expect(
         find.text(longDay(DateTime.now(), l10nFor(FeedLanguage.uk))),
         findsOneWidget,
       );
-      expect(find.text('Top stories'), findsNothing);
+      expect(find.text('All topics'), findsNothing);
+      // One list, no section titles (Yurii, 16 Oct), in Ukrainian too.
+      expect(find.text('Головне'), findsNothing);
+      expect(find.text('Останнє'), findsNothing);
     });
 
     testWidgets('choosing the language it already shows saves it', (
@@ -373,8 +375,8 @@ void main() {
       tester,
     ) async {
       await _launch(tester, phone: const [Locale('fr', 'FR')]);
-      expect(find.text('Top stories'), findsOneWidget);
-      expect(find.text('Latest'), findsOneWidget);
+      expect(find.text('All topics'), findsOneWidget);
+      expect(find.text(longDay(DateTime.now(), l10nFor())), findsOneWidget);
     });
   });
 
@@ -384,7 +386,7 @@ void main() {
       final semantics = tester.ensureSemantics();
       final log = <Uri>[];
       await _launch(tester, log: log);
-      expect(find.text('Top stories'), findsOneWidget);
+      expect(find.text('All topics'), findsOneWidget);
       expect(find.text('CABINET DECISION'), findsNWidgets(2));
       expect(find.text(longDay(DateTime.now(), l10nFor())), findsOneWidget);
 
@@ -422,9 +424,10 @@ void main() {
       await tester.pageBack();
       await tester.pumpAndSettle();
       expect(log.last.queryParameters['lang'], 'uk');
-      expect(find.text('Головне'), findsOneWidget);
-      expect(find.text('Останнє'), findsOneWidget);
-      expect(find.text('Top stories'), findsNothing);
+      expect(find.text('Усі теми'), findsOneWidget);
+      expect(find.text('All topics'), findsNothing);
+      expect(find.text('Головне'), findsNothing);
+      expect(find.text('Останнє'), findsNothing);
       expect(
         find.text(longDay(DateTime.now(), l10nFor(FeedLanguage.uk))),
         findsOneWidget,
@@ -452,8 +455,8 @@ void main() {
       await tester.pumpAndSettle();
       await tester.pageBack();
       await tester.pumpAndSettle();
-      expect(find.text('Top stories'), findsOneWidget);
-      expect(find.text('Головне'), findsNothing);
+      expect(find.text('All topics'), findsOneWidget);
+      expect(find.text('Усі теми'), findsNothing);
       semantics.dispose();
     },
   );
@@ -467,7 +470,10 @@ void main() {
       SharedPreferences.setMockInitialValues({'feed.lang': lang.code});
       final l10n = l10nFor(lang);
       await _launch(tester);
-      expect(find.text(l10n.topStories), findsOneWidget);
+      expect(find.text(l10n.filterAllTopics), findsOneWidget);
+      // One list in every language: no section titles.
+      expect(find.text(l10n.topStories), findsNothing);
+      expect(find.text(l10n.latest), findsNothing);
       await tester.tap(
         find.textContaining(lang == FeedLanguage.en ? 'Law' : 'Закон'),
       );

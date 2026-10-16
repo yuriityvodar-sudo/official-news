@@ -31,8 +31,8 @@ const _deepRed = AppColors.deepRed;
 /// Card corners: iOS's continuous corners (a superellipse, as on app icons).
 const bRadius = 18.0;
 
-/// Official pages' share pictures are mostly 1200 x 630 (1.91:1): the first
-/// top story shows its picture whole.
+/// Official pages' share pictures are mostly 1200 x 630 (1.91:1): a
+/// [BCardPicture] shows the whole picture unless told otherwise.
 const _pictureRatio = 1.91;
 
 /// The iOS Accessibility text sizes, from AX1 (1.65x, body 28 pt). Up to the
@@ -207,14 +207,6 @@ class BStyle {
     color: label,
   );
 
-  TextStyle get section => TextStyle(
-    fontSize: 22,
-    fontWeight: FontWeight.w700,
-    letterSpacing: -0.2,
-    height: 1.2,
-    color: label,
-  );
-
   TextStyle get country => TextStyle(
     fontSize: 13,
     fontWeight: FontWeight.w700,
@@ -276,62 +268,25 @@ String _sentences(List<String> parts) => [
     RegExp(r'[.!?…]$').hasMatch(part) ? part : '$part.',
 ].join(' ');
 
-/// The sizes of a card.
-enum BCardKind {
-  /// A top story: more room, a bigger headline, four lines of summary.
-  top(
-    padding: 20,
-    headline: 24,
-    headlineHeight: 1.18,
-    summary: 16,
-    summaryLines: 4,
-    // The band of Latest; only the first top story shows its picture whole.
-    pictureRatio: 2.4,
-  ),
+/// The sizes of a card: one size for every card, as the feed is one list
+/// (Yurii, 16 Oct; Top stories had bigger cards, and a carousel was tried).
+abstract final class _Size {
+  static const padding = 16.0;
+  static const headline = 20.0;
+  static const headlineHeight = 1.22;
+  static const summary = 15.0;
+  static const summaryLines = 3;
 
-  /// A card in Latest.
-  latest(
-    padding: 16,
-    headline: 20,
-    headlineHeight: 1.22,
-    summary: 15,
-    summaryLines: 3,
-    // A band rather than the whole picture, so the list keeps moving.
-    pictureRatio: 2.4,
-  ),
-
-  /// A top story in the carousel (the alternative tried, FEED_B_TOP=carousel):
-  /// every card as tall as the carousel, so it has no picture and its text a
-  /// fixed number of lines.
-  carousel(
-    padding: 16,
-    headline: 22,
-    headlineHeight: 1.2,
-    summary: 15,
-    summaryLines: 3,
-    pictureRatio: _pictureRatio,
-  );
-
-  const BCardKind({
-    required this.padding,
-    required this.headline,
-    required this.headlineHeight,
-    required this.summary,
-    required this.summaryLines,
-    required this.pictureRatio,
-  });
-
-  final double padding, headline, headlineHeight, summary, pictureRatio;
-  final int summaryLines;
-
-  static const carouselHeadlineLines = 4;
-
-  /// Lines for the country and ministry: two, four at the Accessibility sizes.
-  static int placeLines(bool large) => large ? 4 : 2;
-
-  /// Lines for the topic and time beside the type tag.
-  static int footerLines(bool large) => large ? 3 : 1;
+  /// A band of the picture rather than the whole of it, so the list keeps
+  /// moving.
+  static const pictureRatio = 2.4;
 }
+
+/// Lines for the country and ministry: two, four at the Accessibility sizes.
+int _placeLines(bool large) => large ? 4 : 2;
+
+/// Lines for the topic and time beside the type tag.
+int _footerLines(bool large) => large ? 3 : 1;
 
 /// One decision in its own card: picture (when the page has one), country and
 /// ministry, the serif headline, what it means, then the decision type, the
@@ -342,8 +297,6 @@ class BCard extends StatefulWidget {
     required this.article,
     required this.mark,
     required this.onTap,
-    this.kind = BCardKind.latest,
-    this.lead = false,
     this.topic,
   });
 
@@ -358,10 +311,6 @@ class BCard extends StatefulWidget {
   /// article's main topic ([FeedSection.topic]).
   final String? topic;
   final VoidCallback onTap;
-  final BCardKind kind;
-
-  /// The first top story: its picture is shown whole.
-  final bool lead;
 
   @override
   State<BCard> createState() => _BCardState();
@@ -380,12 +329,10 @@ class _BCardState extends State<BCard> {
     final l10n = AppLocalizations.of(context);
     final scaler = MediaQuery.textScalerOf(context);
     final a = widget.article;
-    final k = widget.kind;
     final mark = widget.mark;
     final read = mark.dimmed;
-    final fill = k == BCardKind.carousel;
     final large = bLargeText(context);
-    final padding = large ? 16.0 : k.padding;
+    final padding = large ? 16.0 : _Size.padding;
     final country = countryName(a.country, l10n);
     final kind = decisionTypeLabel(a.decisionType, l10n);
     final topic = bTopicName(a, l10n, prefer: widget.topic);
@@ -442,27 +389,29 @@ class _BCardState extends State<BCard> {
             ],
           ),
           textScaler: fitted,
-          maxLines: BCardKind.placeLines(large),
+          maxLines: _placeLines(large),
           overflow: TextOverflow.ellipsis,
         );
       },
     );
 
-    final headlineStyle = dim(s.headline(k.headline, k.headlineHeight), read);
+    final headlineStyle = dim(
+      s.headline(_Size.headline, _Size.headlineHeight),
+      read,
+    );
     final headline = LayoutBuilder(
       builder: (context, constraints) => Text(
         a.headline,
         style: headlineStyle,
         textScaler: bFitWords(
           context,
-          _capped(scaler, k.headline, _Largest.headline),
+          _capped(scaler, _Size.headline, _Largest.headline),
           constraints.maxWidth,
           [(a.headline, headlineStyle)],
         ),
         // The headline is the news: never cut in the list, at any size.
         // (An ellipsis without a line limit would cut it after one line.)
-        maxLines: fill ? BCardKind.carouselHeadlineLines : null,
-        overflow: fill ? TextOverflow.ellipsis : TextOverflow.clip,
+        overflow: TextOverflow.clip,
       ),
     );
 
@@ -470,7 +419,7 @@ class _BCardState extends State<BCard> {
     // move under it when a long type and topic do not fit on one line.
     final footerText = Text(
       [?topic, time].join('  ·  '),
-      maxLines: BCardKind.footerLines(large),
+      maxLines: _footerLines(large),
       overflow: TextOverflow.ellipsis,
       style: _fadeGrey(s.footer, read),
       textScaler: _capped(scaler, 13, _Largest.label),
@@ -490,7 +439,7 @@ class _BCardState extends State<BCard> {
     final text = Padding(
       padding: EdgeInsets.fromLTRB(
         padding,
-        a.imageUrl == null || fill ? padding : padding - 2,
+        a.imageUrl == null ? padding : padding - 2,
         padding,
         padding,
       ),
@@ -498,19 +447,18 @@ class _BCardState extends State<BCard> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           place,
-          SizedBox(height: k == BCardKind.top ? 10 : 8),
+          const SizedBox(height: 8),
           headline,
           if (hasSummary) ...[
-            SizedBox(height: k == BCardKind.top ? 8 : 6),
+            const SizedBox(height: 6),
             _Teaser(
               summary,
-              style: _fadeGrey(s.summary(k.summary), read),
-              maxLines: k.summaryLines,
-              scaler: _capped(scaler, k.summary, _Largest.summary),
+              style: _fadeGrey(s.summary(_Size.summary), read),
+              maxLines: _Size.summaryLines,
+              scaler: _capped(scaler, _Size.summary, _Largest.summary),
             ),
           ],
-          if (fill) const Spacer(),
-          SizedBox(height: k == BCardKind.top ? 14 : 12),
+          const SizedBox(height: 12),
           footer,
         ],
       ),
@@ -556,13 +504,13 @@ class _BCardState extends State<BCard> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              if (a.imageUrl != null && !fill)
+              if (a.imageUrl != null)
                 BCardPicture(
                   url: a.imageUrl!,
                   dimmed: read,
-                  ratio: widget.lead ? _pictureRatio : k.pictureRatio,
+                  ratio: _Size.pictureRatio,
                 ),
-              if (fill) Expanded(child: text) else text,
+              text,
             ],
           ),
         ),

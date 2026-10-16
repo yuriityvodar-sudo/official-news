@@ -18,10 +18,11 @@ import 'feed_controller.dart';
 import 'feed_filters.dart';
 import 'feed_look.dart';
 
-/// Item 3: the feed (docs/design/mvp.png). Top stories, then the latest
-/// decisions in the order they arrived; opens instantly from the feed saved on
-/// the phone. What it does lives here; how it looks is a [FeedLook] (#66,
-/// prototype): `feed_look_now.dart` is today's.
+/// Item 3: the feed (docs/design/mvp.png). One list of decisions in the order
+/// they arrived, with no sections (Yurii, 16 Oct: the server's top stories are
+/// in it with the rest); opens instantly from the feed saved on the phone.
+/// What it does lives here; how it looks is a [FeedLook] (#66, prototype):
+/// `feed_look_now.dart` is today's.
 class FeedScreen extends StatefulWidget {
   const FeedScreen({
     super.key,
@@ -58,7 +59,7 @@ class _FeedScreenState extends State<FeedScreen> {
   final _scroll = ScrollController();
   Timer? _newCheck;
 
-  /// Analytics (#60): the deepest Latest row shown this visit, and whether the
+  /// Analytics (#60): the deepest row shown this visit, and whether the
   /// feed's first page failed last time it changed.
   int _deepest = 0;
   bool _failed = false;
@@ -112,11 +113,12 @@ class _FeedScreenState extends State<FeedScreen> {
 
   /// PROTOTYPE (#66): a script cannot scroll the simulator, so a build with
   /// `--dart-define=FEED_SCROLL=1400` opens the feed that many points down once
-  /// it has articles, for screenshots of the Latest list. 0 (the default) does nothing.
+  /// it has articles, for screenshots further down the list. 0 (the default)
+  /// does nothing.
   static const _startScroll = int.fromEnvironment('FEED_SCROLL');
   bool _scrolledAtStart = false;
   void _scrollAtStart() {
-    if (_startScroll <= 0 || _scrolledAtStart || _feed.items.isEmpty) return;
+    if (_startScroll <= 0 || _scrolledAtStart || _feed.feed.isEmpty) return;
     _scrolledAtStart = true;
     _scroll.jumpTo(
       min(_startScroll.toDouble(), _scroll.position.maxScrollExtent),
@@ -125,20 +127,15 @@ class _FeedScreenState extends State<FeedScreen> {
 
   /// PROTOTYPE, for screenshots only: a script cannot tap the simulator, so a
   /// debug build with `--dart-define=READ_DEMO=2` shows the first 2 articles
-  /// of the feed (top stories first) as read, once the feed has articles.
+  /// of the feed as read, once the feed has articles.
   /// Kept in memory only, never saved; ignored by release builds.
   static const _readDemo = int.fromEnvironment('READ_DEMO');
   bool _readDemoDone = false;
   void _readAtStart() {
     if (!kDebugMode || _readDemo <= 0 || _readDemoDone) return;
-    if (_feed.items.isEmpty && _feed.top.isEmpty) return;
+    if (_feed.feed.isEmpty) return;
     _readDemoDone = true;
-    final topIds = _feed.top.map((a) => a.id).toSet();
-    final shown = [
-      ..._feed.top,
-      ..._feed.items.where((a) => !topIds.contains(a.id)),
-    ];
-    _feed.readIds.addAll(shown.take(_readDemo).map((a) => a.id));
+    _feed.readIds.addAll(_feed.feed.take(_readDemo).map((a) => a.id));
   }
 
   void _nearEnd() {
@@ -183,7 +180,7 @@ class _FeedScreenState extends State<FeedScreen> {
     );
   }
 
-  /// The first time this visit a Latest row at a depth of [feedDepths] is drawn.
+  /// The first time this visit a row at a depth of [feedDepths] is drawn.
   void _shownRow(int row) {
     if (row <= _deepest) return;
     for (final depth in feedDepths) {
@@ -284,16 +281,12 @@ class _FeedScreenState extends State<FeedScreen> {
   static const _pillGap = 8.0;
 
   /// The countries with articles in the loaded feed.
-  Set<String> _countries() => {
-    for (final a in [..._feed.top, ..._feed.items]) a.country,
-  };
+  Set<String> _countries() => {for (final a in _feed.feed) a.country};
 
   /// Topics in the feed under the current Where choice, busiest first.
   List<MapEntry<String, int>> _topicCounts() {
     final counts = <String, int>{};
-    final seen = <String>{};
-    for (final a in [..._feed.top, ..._feed.items]) {
-      if (!seen.add(a.id)) continue;
+    for (final a in _feed.feed) {
       if (!_place.includes(a)) continue;
       for (final t in a.topics) {
         counts[t] = (counts[t] ?? 0) + 1;
@@ -305,7 +298,7 @@ class _FeedScreenState extends State<FeedScreen> {
   List<Widget> _content(BuildContext context, FeedLook look) {
     final text = NewsText.from(context);
     final l10n = AppLocalizations.of(context);
-    if (_feed.items.isEmpty && _feed.top.isEmpty) {
+    if (_feed.feed.isEmpty) {
       if (_feed.loading) {
         return const [
           SliverFillRemaining(
@@ -339,18 +332,16 @@ class _FeedScreenState extends State<FeedScreen> {
       ];
     }
 
-    final topIds = _feed.top.map((a) => a.id).toSet();
-    final latest = _feed.items
-        .where((a) => !topIds.contains(a.id) && _shown(a))
-        .toList();
-    final top = _feed.top.where(_shown).toList();
+    // One list, no sections (Yurii, 16 Oct): the controller has merged the
+    // top stories into it, in the order the articles arrived.
+    final shown = _feed.feed.where(_shown).toList();
     final slivers = <Widget>[];
 
     if (_feed.error != null) {
       slivers.add(_padded(Text(l10n.feedRefreshFailed, style: text.meta)));
     }
 
-    if (top.isEmpty && latest.isEmpty) {
+    if (shown.isEmpty) {
       Widget undo(String label, VoidCallback onPressed) => CupertinoButton(
         padding: EdgeInsets.zero,
         onPressed: onPressed,
@@ -386,33 +377,17 @@ class _FeedScreenState extends State<FeedScreen> {
         ),
       );
     }
-    // Analytics (#60) record each opened article's section and its index in
-    // that section, and how deep the Latest list was drawn.
-    if (top.isNotEmpty) {
+    // Analytics (#60) record each opened article's place in the list (the
+    // section is always "feed" now), and how deep the list was drawn.
+    if (shown.isNotEmpty) {
       slivers.add(
-        look.topStories(
+        look.articles(
           context,
-          FeedSection(
-            title: l10n.topStories,
-            articles: top,
+          FeedList(
+            articles: shown,
             readIds: _feed.readIds,
             readStyle: readStyle.value,
-            open: (i) => _open(top[i], section: 'top', position: i),
-            topic: _topic,
-          ),
-        ),
-      );
-    }
-    if (latest.isNotEmpty) {
-      slivers.add(
-        look.latest(
-          context,
-          FeedSection(
-            title: l10n.latest,
-            articles: latest,
-            readIds: _feed.readIds,
-            readStyle: readStyle.value,
-            open: (i) => _open(latest[i], section: 'latest', position: i),
+            open: (i) => _open(shown[i], section: 'feed', position: i),
             shown: (i) => _shownRow(i + 1),
             topic: _topic,
           ),

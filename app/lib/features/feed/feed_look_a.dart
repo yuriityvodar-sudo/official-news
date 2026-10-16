@@ -7,15 +7,15 @@ import '../../core/decision_types.dart';
 import '../../core/news_widgets.dart';
 import '../../core/pictures.dart';
 import '../../core/read_mark.dart';
-import '../../core/theme.dart';
 import '../../l10n/app_localizations.dart';
 import 'feed_look.dart';
 import 'feed_look_now.dart';
 
 /// Design option A (#66), prototype: "Refined editorial".
 ///
-/// Today's Apple News structure, done carefully: a lead story (with or without
-/// a picture), then rows with a small picture on the right. Every card reads
+/// Today's Apple News structure, done carefully: one list of rows with a small
+/// picture on the right (no section titles and no lead story since Yurii's
+/// review, 16 Oct). Every row reads
 /// in the same order, top to bottom: where it comes from (country,
 /// institution), the headline in a reading serif, then what it is and when
 /// ("Bill · 8m ago"). Red is kept for the brand's few accents only.
@@ -41,36 +41,15 @@ class ALook extends NowLook {
     );
   }
 
+  // One list in the order articles appeared, with no titles and no day
+  // headings: an article dated yesterday can appear today. Each row shows
+  // its time.
   @override
-  Widget topStories(BuildContext context, FeedSection top) {
-    return SliverMainAxisGroup(
-      slivers: [
-        padded(_SectionHead(top.title)),
-        padded(
-          _Lead(
-            article: top.articles.first,
-            mark: top.markOf(top.articles.first),
-            onTap: () => top.open(0),
-          ),
-        ),
-        // The other top stories keep the first sentence of their summary,
-        // which sets them apart from the Latest list below.
-        if (top.length > 1) _rows(top, from: 1, ruleFirst: true, deck: true),
-        // The space between the sections belongs to the end of Top stories,
-        // so Latest sits as close under the filters as Top stories does when
-        // a filter leaves no top stories.
-        const SliverToBoxAdapter(child: SizedBox(height: _sectionGap)),
-      ],
-    );
-  }
-
-  // One "Latest" list in the order articles appeared, with no day headings:
-  // an article dated yesterday can appear today. Each card shows its time.
-  @override
-  Widget latest(BuildContext context, FeedSection latest) =>
-      SliverMainAxisGroup(
-        slivers: [padded(_SectionHead(latest.title)), _rows(latest)],
-      );
+  Widget articles(BuildContext context, FeedList list) => SliverPadding(
+    // As far under the filters as the first row was under a section title.
+    padding: const EdgeInsets.only(top: 6),
+    sliver: _rows(list),
+  );
 
   // As today's, but a failed page offers its retry in the text colour: the
   // brand red on white is too faint for small text (about 3.8:1).
@@ -106,28 +85,20 @@ class ALook extends NowLook {
     required VoidCallback onTap,
   }) => _NewPill(count: count, onTap: onTap);
 
-  /// The articles of [section] from [from] on, a hairline between them (and
-  /// above the first when [ruleFirst], under a lead story).
-  Widget _rows(
-    FeedSection section, {
-    int from = 0,
-    bool ruleFirst = false,
-    bool deck = false,
-  }) => SliverPadding(
+  /// The articles of [list], a hairline between them.
+  Widget _rows(FeedList list) => SliverPadding(
     padding: const EdgeInsets.symmetric(horizontal: _margin),
     sliver: SliverList.builder(
-      itemCount: section.length - from,
-      itemBuilder: (context, index) {
-        final i = from + index;
-        final a = section.articles[i];
-        section.shown(i);
+      itemCount: list.length,
+      itemBuilder: (context, i) {
+        final a = list.articles[i];
+        list.shown(i);
         final row = _Row(
           article: a,
-          deck: deck,
-          mark: section.markOf(a),
-          onTap: () => section.open(i),
+          mark: list.markOf(a),
+          onTap: () => list.open(i),
         );
-        if (index == 0 && !ruleFirst) return row;
+        if (i == 0) return row;
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [const Divider(height: 1), row],
@@ -139,9 +110,6 @@ class ALook extends NowLook {
 
 /// The feed's side margins.
 const _margin = 20.0;
-
-/// Above a section title, and after the last top story.
-const _sectionGap = 18.0;
 
 /// How far the masthead's text grows with Dynamic Type.
 const _mastheadMaxScale = 1.3;
@@ -182,14 +150,6 @@ class _AType {
         letterSpacing: 0.6,
         color: scheme.onSurfaceVariant,
       ),
-      section = TextStyle(
-        fontFamily: _serif,
-        fontFamilyFallback: _serifFallback,
-        fontSize: 22,
-        fontWeight: FontWeight.w700,
-        height: 1.2,
-        color: scheme.onSurface,
-      ),
       country = TextStyle(
         fontSize: 12,
         height: 1.3,
@@ -210,29 +170,6 @@ class _AType {
         fontWeight: FontWeight.w700,
         height: 1.24,
         color: scheme.onSurface,
-      ),
-      leadHeadline = TextStyle(
-        fontFamily: _serif,
-        fontFamilyFallback: _serifFallback,
-        fontSize: 28,
-        fontWeight: FontWeight.w700,
-        height: 1.16,
-        letterSpacing: -0.2,
-        color: scheme.onSurface,
-      ),
-      deck = TextStyle(
-        fontFamily: _serif,
-        fontFamilyFallback: _serifFallback,
-        fontSize: 17,
-        height: 1.4,
-        color: scheme.onSurfaceVariant,
-      ),
-      rowDeck = TextStyle(
-        fontFamily: _serif,
-        fontFamilyFallback: _serifFallback,
-        fontSize: 15.5,
-        height: 1.35,
-        color: scheme.onSurfaceVariant,
       ),
       footer = TextStyle(
         fontSize: 13,
@@ -257,7 +194,6 @@ class _AType {
   final TextStyle nameplate;
   final TextStyle compactTitle;
   final TextStyle dateline;
-  final TextStyle section;
 
   /// "BRAZIL  Chamber of Deputies": the country in grey capitals, like a
   /// wire dateline, the institution in grey. The country is the field that
@@ -266,13 +202,6 @@ class _AType {
   final TextStyle country;
   final TextStyle kicker;
   final TextStyle headline;
-  final TextStyle leadHeadline;
-
-  /// The lead story's short summary.
-  final TextStyle deck;
-
-  /// A top story's short summary in a row.
-  final TextStyle rowDeck;
 
   /// "Bill · 8m ago": the time.
   final TextStyle footer;
@@ -310,37 +239,6 @@ String? _pictureOf(Article a) {
   final url = a.imageUrl;
   if (url == null || url.isEmpty || _sitePicture(url)) return null;
   return url;
-}
-
-/// Above a section: a short red mark, then the title in the serif.
-class _SectionHead extends StatelessWidget {
-  const _SectionHead(this.title);
-
-  final String title;
-
-  @override
-  Widget build(BuildContext context) {
-    final type = _AType.of(context);
-    return Padding(
-      padding: const EdgeInsets.only(top: _sectionGap, bottom: 4),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // The brand's red, as a short mark rather than a red title.
-          Container(height: 3, width: 28, color: AppColors.accent),
-          const SizedBox(height: 10),
-          Semantics(
-            header: true,
-            child: Text(
-              title,
-              textScaler: _damped(context, type.section.fontSize),
-              style: type.section,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 /// Where a decision comes from: "BRAZIL  Chamber of Deputies". The
@@ -415,16 +313,15 @@ class _Footer extends StatelessWidget {
   }
 }
 
-/// What VoiceOver reads for a card, once: the headline first, the summary as
-/// shown, then where it comes from, what it is and when.
-String _spoken(BuildContext context, Article a, {String? deck}) {
+/// What VoiceOver reads for a card, once: the headline first, then where it
+/// comes from, what it is and when.
+String _spoken(BuildContext context, Article a) {
   final l10n = AppLocalizations.of(context);
   final kind = decisionTypeLabel(a.decisionType, l10n);
-  // One sentence each; a summary that already ends in a full stop keeps one.
+  // One sentence each; a text that already ends in a full stop keeps one.
   String sentence(String s) => RegExp(r'[.!?…]$').hasMatch(s) ? s : '$s.';
   return [
     a.headline,
-    ?deck,
     '${countryName(a.country, l10n)}, ${a.source.name}',
     [?kind, feedTime(a, l10n)].join(', '),
   ].map(sentence).join(' ');
@@ -528,38 +425,14 @@ TextScaler _damped(BuildContext context, double? size) {
 bool _hugeText(BuildContext context) =>
     MediaQuery.textScalerOf(context).scale(10) > 15;
 
-/// The first sentence of [summary], or null when there is none. A sentence
-/// ends at ".", "!" or "?" after a word of three or more characters and before
-/// a capital: "z. B.", "Dr. Silva", "U.S." and "Art. 5" do not end one.
-String? _firstSentence(String? summary) {
-  final s = summary?.trim() ?? '';
-  if (s.isEmpty) return null;
-  final end = _sentenceEnd.firstMatch(s);
-  return end == null ? s : s.substring(0, end.start);
-}
-
-final _sentenceEnd = RegExp(
-  r'(?<=[\p{L}\d)»"”’]{3}[.!?])\s+(?=[\p{Lu}«"“„])',
-  unicode: true,
-);
-
 /// One decision: where from, the headline with a small picture on its right,
 /// and what it is and when.
 class _Row extends StatelessWidget {
-  const _Row({
-    required this.article,
-    required this.mark,
-    required this.onTap,
-    this.deck = false,
-  });
+  const _Row({required this.article, required this.mark, required this.onTap});
 
   final Article article;
   final ReadMark mark;
   final VoidCallback onTap;
-
-  /// Shows the first sentence of the short summary under the headline (top
-  /// stories).
-  final bool deck;
 
   @override
   Widget build(BuildContext context) {
@@ -568,9 +441,8 @@ class _Row extends StatelessWidget {
     final huge = _hugeText(context);
     // At the accessibility sizes the headline needs the whole width.
     final url = huge ? null : _pictureOf(article);
-    final summary = deck ? _firstSentence(article.shortSummary) : null;
     return _Card(
-      label: _spoken(context, article, deck: summary),
+      label: _spoken(context, article),
       mark: mark,
       onTap: onTap,
       child: Padding(
@@ -592,17 +464,6 @@ class _Row extends StatelessWidget {
                         style: type.read(type.headline, read),
                         maxLines: huge ? 9 : 6,
                       ),
-                      if (summary != null) ...[
-                        const SizedBox(height: 4),
-                        // One whole sentence, so the row ends on a full
-                        // stop; the limit is only for a sentence that runs
-                        // on for most of the summary.
-                        _WholeWords(
-                          summary,
-                          style: type.rowDeck,
-                          maxLines: huge ? 8 : 4,
-                        ),
-                      ],
                       const SizedBox(height: 6),
                       _Footer(article, read: read),
                     ],
@@ -612,57 +473,6 @@ class _Row extends StatelessWidget {
                   _Thumb(url: url, size: 76, gap: 16, dimmed: read),
               ],
             ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// The first top story: its picture when it has one, a large headline and its
-/// short summary. Without a picture it stands on its type alone.
-class _Lead extends StatelessWidget {
-  const _Lead({required this.article, required this.mark, required this.onTap});
-
-  final Article article;
-  final ReadMark mark;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final type = _AType.of(context);
-    final read = mark.dimmed;
-    final url = _pictureOf(article);
-    final deck = article.shortSummary?.trim();
-    final hasDeck = deck != null && deck.isNotEmpty;
-    final huge = _hugeText(context);
-    return _Card(
-      label: _spoken(context, article, deck: hasDeck ? deck : null),
-      mark: mark,
-      onTap: onTap,
-      child: Padding(
-        // As far under "Top stories" as a Latest row is under "Latest".
-        padding: const EdgeInsets.only(top: 16, bottom: 20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (url != null) _LeadPicture(url: url, dimmed: read),
-            _Kicker(article, mark: mark, maxLines: 3),
-            const SizedBox(height: 8),
-            _WholeWords(
-              article.headline,
-              style: type.read(type.leadHeadline, read),
-              maxLines: huge ? 9 : 6,
-            ),
-            if (hasDeck) ...[
-              const SizedBox(height: 10),
-              // The whole summary: up to 200 characters in English and about
-              // twice that in a translation, so the limit only stops a
-              // runaway one.
-              _WholeWords(deck, style: type.deck, maxLines: huge ? 20 : 10),
-            ],
-            const SizedBox(height: 10),
-            _Footer(article, read: read),
           ],
         ),
       ),
@@ -800,45 +610,6 @@ class _Thumb extends StatelessWidget {
       errorBuilder: (_, _, _) => const SizedBox.shrink(),
     );
   }
-}
-
-/// The lead story's picture, 16:9 across the column; nothing if it fails.
-class _LeadPicture extends StatelessWidget {
-  const _LeadPicture({required this.url, required this.dimmed});
-
-  final String url;
-  final bool dimmed;
-
-  @override
-  Widget build(BuildContext context) => LayoutBuilder(
-    builder: (context, constraints) {
-      final width = constraints.maxWidth;
-      final height = width * 9 / 16;
-      final ratio = MediaQuery.devicePixelRatioOf(context);
-      final opacity = _pictureOpacity(context, dimmed);
-      return Image(
-        image: picture(url, width: (width * ratio).round()),
-        width: width,
-        height: height,
-        fit: BoxFit.cover,
-        opacity: opacity == null ? null : AlwaysStoppedAnimation(opacity),
-        excludeFromSemantics: true,
-        frameBuilder: (context, child, frame, _) => Padding(
-          padding: const EdgeInsets.only(bottom: 14),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: ColoredBox(
-              color: frame == null
-                  ? _pictureFill(context, dimmed)
-                  : Colors.transparent,
-              child: child,
-            ),
-          ),
-        ),
-        errorBuilder: (_, _, _) => const SizedBox.shrink(),
-      );
-    },
-  );
 }
 
 /// The top of the feed, pinned: a slim bar with the date and the settings

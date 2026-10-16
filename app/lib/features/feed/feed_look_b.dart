@@ -10,12 +10,13 @@ import 'feed_look_b_cards.dart';
 /// Design option B (#66), prototype: cards.
 ///
 /// iOS's grouped grey page with each decision in its own white card (dark
-/// grey in dark mode). A card reads top to bottom: who decided (the country
-/// and ministry), the serif headline, what it means in three lines (four in
-/// Top stories), then the decision type, the topic and when it arrived.
-/// Pictures run across the top of their card; a card without one is complete
-/// as it is. Top stories are bigger cards. The filters and the settings button
-/// stay at the top while reading; the "N new" pill floats just under them.
+/// grey in dark mode), one list of cards of one size (no section titles and
+/// no bigger top-story cards since Yurii's review, 16 Oct). A card reads top
+/// to bottom: who decided (the country and ministry), the serif headline,
+/// what it means in three lines, then the decision type, the topic and when
+/// it arrived. Pictures run across the top of their card; a card without one
+/// is complete as it is. The filters and the settings button stay at the top
+/// while reading; the "N new" pill floats just under them.
 class BLook extends FeedLook {
   @override
   Color background(BuildContext context) => BStyle.of(context).page;
@@ -37,32 +38,30 @@ class BLook extends FeedLook {
         child: _PinnedMasthead(masthead),
       );
 
-  /// The alternative tried for Top stories: a carousel of cards
-  /// (`--dart-define=FEED_B_TOP=carousel`).
-  static const _carousel = String.fromEnvironment('FEED_B_TOP') == 'carousel';
-
+  // One list in the order articles arrived, with no titles and no day
+  // headings: an article dated yesterday can arrive today. Each card shows
+  // its own time.
   @override
-  Widget topStories(BuildContext context, FeedSection top) =>
-      SliverMainAxisGroup(
-        slivers: [
-          _title(context, top.title, first: true),
-          if (_carousel)
-            SliverToBoxAdapter(child: _Carousel(top))
-          else
-            _cards(top, kind: BCardKind.top),
-        ],
-      );
-
-  // One "Latest" list in the order articles arrived, with no day headings: an
-  // article dated yesterday can arrive today. Each card shows its own time.
-  @override
-  Widget latest(BuildContext context, FeedSection latest) =>
-      SliverMainAxisGroup(
-        slivers: [
-          _title(context, latest.title, first: false),
-          _cards(latest, kind: BCardKind.latest),
-        ],
-      );
+  Widget articles(BuildContext context, FeedList list) => SliverPadding(
+    // As far under the filters as the first card was under a section title.
+    padding: const EdgeInsets.fromLTRB(bMargin, 10, bMargin, 0),
+    sliver: SliverList.builder(
+      itemCount: list.length,
+      itemBuilder: (context, i) {
+        final a = list.articles[i];
+        list.shown(i);
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: BCard(
+            article: a,
+            mark: list.markOf(a),
+            topic: list.topic,
+            onTap: () => list.open(i),
+          ),
+        );
+      },
+    ),
+  );
 
   @override
   Widget feedEnd(BuildContext context, FeedEnd end) {
@@ -102,49 +101,6 @@ class BLook extends FeedLook {
     required int count,
     required VoidCallback onTap,
   }) => BNewPill(count: count, onTap: onTap);
-
-  /// "Top stories", "Latest": black, not red, with room above so the
-  /// sections read as separate.
-  Widget _title(BuildContext context, String title, {required bool first}) =>
-      SliverPadding(
-        padding: EdgeInsets.fromLTRB(bMargin + 4, first ? 14 : 30, bMargin, 10),
-        sliver: SliverToBoxAdapter(
-          child: Semantics(
-            header: true,
-            child: Text(
-              title,
-              style: BStyle.of(context).section,
-              textScaler: MediaQuery.textScalerOf(
-                context,
-              ).clamp(maxScaleFactor: 1.6),
-            ),
-          ),
-        ),
-      );
-
-  /// The cards of [section], built as they scroll into view.
-  Widget _cards(FeedSection section, {required BCardKind kind}) =>
-      SliverPadding(
-        padding: const EdgeInsets.symmetric(horizontal: bMargin),
-        sliver: SliverList.builder(
-          itemCount: section.length,
-          itemBuilder: (context, i) {
-            final a = section.articles[i];
-            section.shown(i);
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: BCard(
-                article: a,
-                mark: section.markOf(a),
-                kind: kind,
-                lead: kind == BCardKind.top && i == 0,
-                topic: section.topic,
-                onTap: () => section.open(i),
-              ),
-            );
-          },
-        ),
-      );
 }
 
 /// The top of the feed as drawn: the full masthead, of which only the bottom
@@ -273,84 +229,6 @@ class _Toolbar extends StatelessWidget {
             child: masthead.settingsButton,
           ),
         ],
-      ),
-    );
-  }
-}
-
-/// Top stories side by side, swiped one at a time, the next card peeking in.
-/// Every card has the carousel's height, worked out from the text size, so the
-/// cards are text only: with pictures, a card without one was half empty.
-class _Carousel extends StatefulWidget {
-  const _Carousel(this.top);
-
-  final FeedSection top;
-
-  @override
-  State<_Carousel> createState() => _CarouselState();
-}
-
-class _CarouselState extends State<_Carousel> {
-  PageController? _pages;
-
-  @override
-  void dispose() {
-    _pages?.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final width = MediaQuery.sizeOf(context).width;
-    final scaler = MediaQuery.textScalerOf(context);
-    const k = BCardKind.carousel;
-    final cardWidth = width - 2 * bMargin - 28;
-    // Each page is a card and the gap before it, so a swipe lands on a card's edge.
-    final fraction = (cardWidth + bMargin) / width;
-    // Made once: the prototype does not follow a change of screen width.
-    _pages ??= PageController(viewportFraction: fraction);
-    final top = widget.top;
-    double lines(double size, double height, int n) =>
-        scaler.scale(size) * height * n;
-    // The card's own layout, line by line, at its most: who decided, the
-    // headline, the summary and the footer (the type tag, and the topic and
-    // time under it when they do not fit beside it).
-    final large = bLargeText(context);
-    final kindTag = scaler.clamp(maxScaleFactor: 2.0).scale(11) * 1.25 + 6;
-    final text =
-        2 * (large ? 16 : k.padding) +
-        lines(13, 1.3, BCardKind.placeLines(large)) +
-        8 +
-        lines(k.headline, k.headlineHeight, BCardKind.carouselHeadlineLines) +
-        6 +
-        lines(k.summary, 1.33, k.summaryLines) +
-        12 +
-        // Beside each other up to XXXL; at the Accessibility sizes the topic
-        // and time may go under the tag.
-        (large
-            ? kindTag + 6 + lines(13, 1.3, BCardKind.footerLines(large))
-            : math.max(kindTag, lines(13, 1.3, 1)));
-    return SizedBox(
-      // Room to spare (a line): the sum above comes out a little short at the
-      // largest text sizes.
-      height: text + 8 + lines(13, 1.3, 1),
-      child: PageView.builder(
-        controller: _pages,
-        padEnds: false,
-        itemCount: top.length,
-        itemBuilder: (context, i) {
-          final a = top.articles[i];
-          return Padding(
-            padding: const EdgeInsets.only(left: bMargin),
-            child: BCard(
-              article: a,
-              mark: top.markOf(a),
-              kind: k,
-              topic: top.topic,
-              onTap: () => top.open(i),
-            ),
-          );
-        },
       ),
     );
   }

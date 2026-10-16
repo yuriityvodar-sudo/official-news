@@ -10,8 +10,8 @@ import '../../l10n/app_localizations.dart';
 import 'feed_look.dart';
 
 /// The feed as it looks today (docs/design/mvp.png): the Apple News look, a
-/// big serif masthead, red section titles, a lead card when the first top
-/// story has a picture, then rows with a thumbnail on the right.
+/// big serif masthead, then one list of rows with a thumbnail on the right
+/// (no section titles and no lead card since Yurii's review, 16 Oct).
 ///
 /// The other looks start as copies of this one ([FeedLook] explains the
 /// slots); its widgets below are public so a look can reuse any of them.
@@ -45,48 +45,15 @@ class NowLook extends FeedLook {
     );
   }
 
+  // One list in the order articles appeared, with no titles and no day
+  // headings: an article dated yesterday can appear today, so headings by day
+  // would contradict the cards' own dates. Each card shows its date instead.
   @override
-  Widget topStories(BuildContext context, FeedSection top) {
-    final first = top.articles.first;
-    // A lead card only when the first top story has a picture.
-    final lead = first.imageUrl != null;
-    return SliverMainAxisGroup(
-      slivers: [
-        padded(
-          NowSectionTitle(
-            top.title,
-            padding: const EdgeInsets.only(top: 16, bottom: 4),
-          ),
-        ),
-        if (lead)
-          padded(
-            NowTopCard(
-              article: first,
-              mark: top.markOf(first),
-              onTap: () => top.open(0),
-            ),
-          ),
-        rows(top, from: lead ? 1 : 0),
-      ],
-    );
-  }
-
-  // One "Latest" list in the order articles appeared, with no day headings: an
-  // article dated yesterday can appear today, so headings by day would contradict
-  // the cards' own dates. Each card shows its date instead.
-  @override
-  Widget latest(BuildContext context, FeedSection latest) =>
-      SliverMainAxisGroup(
-        slivers: [
-          padded(
-            NowSectionTitle(
-              latest.title,
-              padding: const EdgeInsets.only(top: 20, bottom: 4),
-            ),
-          ),
-          rows(latest),
-        ],
-      );
+  Widget articles(BuildContext context, FeedList list) => SliverPadding(
+    // As far under the filters as the first row was under "Top stories".
+    padding: const EdgeInsets.only(top: 8),
+    sliver: rows(list),
+  );
 
   @override
   Widget feedEnd(BuildContext context, FeedEnd end) {
@@ -127,40 +94,24 @@ class NowLook extends FeedLook {
     sliver: SliverToBoxAdapter(child: child),
   );
 
-  /// The articles of [section] from index [from] on, as rows with a hairline
-  /// between them. Every card shows its own date ("2h ago", or the day for
-  /// date-only articles).
-  Widget rows(FeedSection section, {int from = 0}) => SliverPadding(
+  /// The articles of [list] as rows with a hairline between them. Every card
+  /// shows its own date ("2h ago", or the day for date-only articles).
+  Widget rows(FeedList list) => SliverPadding(
     padding: const EdgeInsets.symmetric(horizontal: 20),
     sliver: SliverList.separated(
-      itemCount: section.length - from,
+      itemCount: list.length,
       separatorBuilder: (_, _) => const Divider(),
-      itemBuilder: (context, index) {
-        final i = from + index;
-        final a = section.articles[i];
-        section.shown(i);
+      itemBuilder: (context, i) {
+        final a = list.articles[i];
+        list.shown(i);
         return NowArticleRow(
           article: a,
-          mark: section.markOf(a),
+          mark: list.markOf(a),
           showDay: true,
-          onTap: () => section.open(i),
+          onTap: () => list.open(i),
         );
       },
     ),
-  );
-}
-
-/// A red section title: "Top stories", "Latest".
-class NowSectionTitle extends StatelessWidget {
-  const NowSectionTitle(this.title, {super.key, required this.padding});
-
-  final String title;
-  final EdgeInsets padding;
-
-  @override
-  Widget build(BuildContext context) => Padding(
-    padding: padding,
-    child: Text(title, style: NewsText.from(context).section),
   );
 }
 
@@ -232,62 +183,6 @@ class NowArticleRow extends StatelessWidget {
                   dimmed: read,
                 ),
               ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// The first top story: a big picture with the text below.
-class NowTopCard extends StatelessWidget {
-  const NowTopCard({
-    super.key,
-    required this.article,
-    required this.mark,
-    required this.onTap,
-  });
-
-  final Article article;
-
-  /// Read or not, and how that shows (prototype): dimmed, or the unread dot.
-  final ReadMark mark;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final text = NewsText.from(context);
-    final read = mark.dimmed;
-    return Semantics(
-      value: mark.unread ? AppLocalizations.of(context).feedUnread : null,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.only(top: 8, bottom: 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              AspectRatio(
-                aspectRatio: 16 / 9,
-                child: FeedPicture(url: article.imageUrl!, dimmed: read),
-              ),
-              const SizedBox(height: 12),
-              KindLabel(article, dimmed: read),
-              PublisherLine(article, dimmed: read, mark: mark),
-              const SizedBox(height: 4),
-              Text(
-                article.headline,
-                style: dim(text.headline.copyWith(fontSize: 25), read),
-                maxLines: 4,
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 6),
-              Text(
-                feedTime(article, AppLocalizations.of(context)),
-                style: dim(text.meta, read),
-              ),
             ],
           ),
         ),

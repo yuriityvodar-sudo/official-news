@@ -39,8 +39,8 @@ ReadStyle readStyleNamed(String name) =>
     ReadStyle.values.asNameMap()[name.trim().toLowerCase()] ?? ReadStyle.blue;
 
 /// The look for [design]. Looks are created for each build of the feed, so
-/// they keep no state: a look that needs some (a carousel's page) keeps it
-/// in a StatefulWidget of its own.
+/// they keep no state: a look that needs some keeps it in a StatefulWidget
+/// of its own.
 FeedLook lookFor(FeedDesign design) => switch (design) {
   FeedDesign.now => NowLook(),
   FeedDesign.a => ALook(),
@@ -48,16 +48,17 @@ FeedLook lookFor(FeedDesign design) => switch (design) {
   FeedDesign.c => CLook(),
 };
 
-/// How the feed looks. The slots that hold lists return SLIVERS, so a long
-/// feed builds only the rows on screen: use SliverList (or SliverMainAxisGroup
-/// to put a title and a list together), never a Column of every article.
+/// How the feed looks. The slot that holds the list returns a SLIVER, so a
+/// long feed builds only the rows on screen: use SliverList (or
+/// SliverMainAxisGroup to put something before it), never a Column of every
+/// article.
 ///
 /// The screen lays the page out as, top to bottom: the pull-to-refresh
-/// control, [masthead], a notice when the refresh failed, [topStories] (when
-/// there are top stories), [latest] (when there are later articles) and
-/// [feedEnd]. While new articles wait, the screen floats [newPill] just under
-/// the masthead as it is on screen: under the filters at the top of the feed,
-/// under a pinned bar once folded, near the top once the masthead has gone.
+/// control, [masthead], a notice when the refresh failed, [articles] (when
+/// there are any) and [feedEnd]. While new articles wait, the screen floats
+/// [newPill] just under the masthead as it is on screen: under the filters
+/// at the top of the feed, under a pinned bar once folded, near the top once
+/// the masthead has gone.
 abstract class FeedLook {
   /// The colour behind the whole feed.
   Color background(BuildContext context);
@@ -73,15 +74,14 @@ abstract class FeedLook {
   /// SliverPersistentHeader is fine).
   Widget masthead(BuildContext context, FeedMasthead masthead);
 
-  /// "Top stories" as a whole, title included: up to 5 articles, most
-  /// important first. A lead card, a list, a carousel or a numbered list.
-  /// One sliver; only called when there is at least one article.
-  Widget topStories(BuildContext context, FeedSection top);
-
-  /// "Latest" as a whole, title included: one list in the order articles
-  /// arrived (no day headings: an article dated yesterday can arrive today).
-  /// One sliver, built lazily; only called when there is at least one article.
-  Widget latest(BuildContext context, FeedSection latest);
+  /// The feed's one list (Yurii, 16 Oct): every article, each once, in the
+  /// order it arrived in the feed, newest first. No section titles ("Top
+  /// stories", "Latest") and no block of its own for the first articles (a
+  /// lead card, a carousel, numbers): every row in the same style. No day
+  /// headings either: an article dated yesterday can arrive today, and each
+  /// row shows its own time. One sliver, built lazily; only called when
+  /// there is at least one article.
+  Widget articles(BuildContext context, FeedList list);
 
   /// The bottom of the feed: a spinner while more is loading, a retry when
   /// that failed, or the end of the feed. One sliver.
@@ -161,11 +161,10 @@ class FeedFilters {
   final ValueChanged<String?> onTopic;
 }
 
-/// One section of the feed for a look to draw: its title, its articles and
-/// what a row does. The screen does the rest.
-class FeedSection {
-  const FeedSection({
-    required this.title,
+/// The feed's list for a look to draw: its articles and what a row does.
+/// The screen does the rest.
+class FeedList {
+  const FeedList({
     required this.articles,
     required this.readIds,
     required this.open,
@@ -174,8 +173,6 @@ class FeedSection {
     this.topic,
   });
 
-  /// "Top stories", "Latest", in the reader's language.
-  final String title;
   final List<Article> articles;
 
   /// The topic the feed is filtered by (an id, as [Article.topics] has it),
@@ -190,14 +187,13 @@ class FeedSection {
   /// How read articles look (prototype): give each row [markOf] its article.
   final ReadStyle readStyle;
 
-  /// Opens `articles[index]`: `onTap: () => section.open(i)`. Analytics
-  /// records the section and the index as the article's position, so pass
-  /// the index in [articles], whatever the layout (a lead card is index 0).
+  /// Opens `articles[index]`: `onTap: () => list.open(i)`. Analytics
+  /// records the index as the article's position in the feed.
   final ValueChanged<int> open;
 
   /// Call when the row for `articles[index]` is built, in the item builder:
   /// how deep the reader scrolled, for analytics. Cheap, and safe to call
-  /// again; does nothing for Top stories.
+  /// again.
   final ValueChanged<int> shown;
 
   static void _nothing(int _) {}
