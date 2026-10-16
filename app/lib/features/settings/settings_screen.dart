@@ -36,7 +36,7 @@ class SettingsScreen extends StatelessWidget {
   /// own [push] unless a test passes its own.
   final Push? notifications;
 
-  /// Opens this app's page in the iOS Settings app; tests pass their own.
+  /// Opens the iOS Settings app ([appSettingsPage]); tests pass their own.
   final OpenAppSettings openSettingsApp;
 
   @override
@@ -200,9 +200,10 @@ class _Icon extends StatelessWidget {
 /// Notifications (#62), following the phone's answer live:
 /// - iOS has not asked: "Turn On" in the accent colour; a tap shows iOS's
 ///   question (no explanation first: the reader asked for it here).
-/// - On or Off: a tap opens this app's page in the iOS Settings app, the only
-///   place iOS lets an app's notifications be turned on again or off. Back in
-///   the app, [Push] reads the permission again and the row follows.
+/// - On or Off: a tap opens the iOS Settings app ([appSettingsPage], meant to
+///   land on this app's page), the only place iOS lets an app's notifications
+///   be turned on again or off. Back in the app, [Push] reads the permission
+///   again and the row follows.
 /// - No push in this build (tests, local runs): "Unavailable", no tap.
 class _NotificationsTile extends StatelessWidget {
   const _NotificationsTile({required this.push, required this.openSettingsApp});

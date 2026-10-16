@@ -152,17 +152,19 @@ class FirebaseMessagingLayer implements Messaging {
   Stream<void> get tokenChanges => _fcm.onTokenRefresh;
 }
 
-/// This app's page in the iOS Settings app (the value of
+/// The iOS Settings app, meant to open on this app's page (the value of
 /// `UIApplication.openSettingsURLString`). Once iOS has asked, Notifications
-/// is on it: the only place a "Don't Allow" is undone or notifications are
-/// turned off.
+/// is on that page: the only place a "Don't Allow" is undone or notifications
+/// are turned off. On the iOS 26.3 Simulator it opened Settings at its root
+/// page instead (16 Oct); a real iPhone is still to be checked.
 final appSettingsPage = Uri.parse('app-settings:');
 
 /// Opens [appSettingsPage]; the Settings row's opener, tests pass their own.
 typedef OpenAppSettings = Future<void> Function();
 
-/// Opens this app's page in the iOS Settings app. Back in the app, [Push]
-/// reads the permission again, so the Settings row shows what was chosen.
+/// Opens the iOS Settings app ([appSettingsPage]), never throwing. Back in the
+/// app, [Push] reads the permission again, so the Settings row shows what was
+/// chosen.
 Future<void> openAppSettings() async {
   try {
     final opened = await launchUrl(
@@ -241,7 +243,25 @@ class Push with WidgetsBindingObserver {
   /// [PushPermission.denied] at once, so the Settings row opens the iOS
   /// Settings app instead. [trigger] is for analytics: `reads` (the offer
   /// after three reads) or `settings` (the Settings row).
-  Future<PushPermission> enable({String trigger = 'settings'}) async {
+  ///
+  /// A call while iOS's question is still open (a second tap on Turn On
+  /// before the alert shows) waits for the same answer: iOS is asked once and
+  /// `push_permission` is sent once, with the first call's [trigger].
+  Future<PushPermission> enable({String trigger = 'settings'}) {
+    final waiting = _enabling;
+    if (waiting != null) return waiting;
+    late final Future<PushPermission> request;
+    request = _enable(trigger).whenComplete(() {
+      // Not one from before a [stop].
+      if (identical(_enabling, request)) _enabling = null;
+    });
+    return _enabling = request;
+  }
+
+  /// The request waiting for iOS's answer, if one is.
+  Future<PushPermission>? _enabling;
+
+  Future<PushPermission> _enable(String trigger) async {
     final messaging = _messaging;
     if (messaging == null) return PushPermission.unavailable;
     final before = _permission.value;
@@ -300,6 +320,7 @@ class Push with WidgetsBindingObserver {
     _messaging = null;
     _prefs = null;
     _confirmed = null;
+    _enabling = null;
     // A new chain: the old one may belong to an earlier test's fake clock.
     _syncing = Future.value();
     _permission.value = PushPermission.unavailable;

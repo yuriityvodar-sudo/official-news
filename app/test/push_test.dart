@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -17,9 +18,31 @@ import 'package:official_news/features/feed/feed_controller.dart';
 import 'package:official_news/l10n/app_localizations.dart';
 import 'package:official_news/main.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher_platform_interface/link.dart';
+import 'package:url_launcher_platform_interface/url_launcher_platform_interface.dart';
 
 import 'fake_messaging.dart';
 import 'test_app.dart';
+
+/// The platform side of `url_launcher`: records what the app asks to open and
+/// answers [result], a bool, or throws it.
+class FakeLauncher extends UrlLauncherPlatform {
+  FakeLauncher(this.result);
+
+  final Object result;
+  final launched = <(String, PreferredLaunchMode)>[];
+
+  @override
+  LinkDelegate? get linkDelegate => null;
+
+  @override
+  Future<bool> launchUrl(String url, LaunchOptions options) async {
+    launched.add((url, options.mode));
+    final answer = result;
+    if (answer is bool) return answer;
+    throw answer;
+  }
+}
 
 /// Topic changes as the Firebase iOS SDK (13) makes them: one that meets no
 /// network gets no answer, waits in Firebase's own queue (kept across
@@ -240,7 +263,7 @@ void main() {
       (
         FeedLanguage.uk,
         'Важливі рішення',
-        'Отримуйте найважливіші офіційні рішення у сповіщеннях: '
+        'Отримуйте найважливіші офіційні рішення в сповіщеннях: '
             'не більше 2 на день, уночі — жодних.',
         'Не зараз',
         'Увімкнути',
@@ -719,11 +742,49 @@ void main() {
       expect(app().locale, const Locale('uk'));
       expect(app().navigatorObservers, same(observers));
     });
+  });
 
-    test('the Settings row opens this app\'s page in the iOS Settings app', () {
-      // The value of UIApplication.openSettingsURLString; launchUrl opens it
-      // with UIApplication.open, which needs no LSApplicationQueriesSchemes.
-      expect(appSettingsPage.toString(), 'app-settings:');
+  // The Settings row's real opener, through url_launcher's platform side.
+  // Which page of the Settings app it lands on only a phone shows.
+  group('openAppSettings', () {
+    late UrlLauncherPlatform platform;
+    late List<String?> printed;
+    late DebugPrintCallback print;
+
+    setUp(() {
+      platform = UrlLauncherPlatform.instance;
+      printed = [];
+      print = debugPrint;
+      debugPrint = (message, {wrapWidth}) => printed.add(message);
+    });
+    tearDown(() {
+      UrlLauncherPlatform.instance = platform;
+      debugPrint = print;
+    });
+
+    test('asks iOS to open app-settings: in the Settings app itself', () async {
+      final launcher = FakeLauncher(true);
+      UrlLauncherPlatform.instance = launcher;
+      await openAppSettings();
+      // The value of UIApplication.openSettingsURLString; outside the app
+      // (UIApplication.open), which needs no LSApplicationQueriesSchemes.
+      expect(launcher.launched, [
+        ('app-settings:', PreferredLaunchMode.externalApplication),
+      ]);
+      expect(printed, isEmpty);
+    });
+
+    test('a Settings app that does not open never breaks the row', () async {
+      for (final result in [false, StateError('no handler')]) {
+        final launcher = FakeLauncher(result);
+        UrlLauncherPlatform.instance = launcher;
+        await expectLater(openAppSettings(), completes, reason: '$result');
+        expect(launcher.launched, hasLength(1));
+      }
+      expect(printed, [
+        'push: the Settings app did not open',
+        'push: the Settings app did not open: Bad state: no handler',
+      ]);
     });
   });
 }

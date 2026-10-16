@@ -3,7 +3,8 @@ import 'dart:async';
 import 'package:official_news/core/push.dart';
 
 /// Firebase Cloud Messaging as the tests want it: iOS answers [answer] when it
-/// asks; topic changes fail while [failTopics] is set.
+/// asks (only once [question] completes, while one is set); topic changes fail
+/// while [failTopics] is set.
 class FakeMessaging implements Messaging {
   FakeMessaging({
     this.status = PushPermission.notAsked,
@@ -17,6 +18,10 @@ class FakeMessaging implements Messaging {
   bool apnsToken = true;
   Object? failTopics;
   int asked = 0;
+
+  /// iOS's question still on screen: [requestPermission] answers once this
+  /// completes.
+  Completer<void>? question;
   bool tokenAllowed = false;
   bool banners = false;
   final calls = <String>[];
@@ -29,6 +34,7 @@ class FakeMessaging implements Messaging {
   @override
   Future<PushPermission> requestPermission() async {
     asked++;
+    await question?.future;
     if (status == PushPermission.notAsked) status = answer;
     return status;
   }

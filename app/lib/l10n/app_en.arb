@@ -354,11 +354,11 @@
   },
   "notificationsOn": "On",
   "@notificationsOn": {
-    "description": "Grey text on the Notifications row: notifications are allowed. Short, as the iOS Settings app writes it in its own lists; a tap opens the iOS Settings app."
+    "description": "Grey text on the Notifications row: notifications are allowed. The word the iOS Settings app uses in its own lists (its Notifications screen); a tap opens the iOS Settings app."
   },
   "notificationsOff": "Off",
   "@notificationsOff": {
-    "description": "Grey text on the Notifications row: notifications are not allowed (turned off in the iOS Settings app, or \"Don't Allow\"). Short, as the iOS Settings app writes it; a tap opens the iOS Settings app."
+    "description": "Grey text on the Notifications row: notifications are not allowed (turned off in the iOS Settings app, or \"Don't Allow\"). The word the iOS Settings app uses in its own lists; a tap opens the iOS Settings app."
   },
   "notificationsTurnOn": "Turn On",
   "@notificationsTurnOn": {
@@ -370,7 +370,7 @@
   },
   "notificationsOpensSettings": "Opens the Settings app",
   "@notificationsOpensSettings": {
-    "description": "What VoiceOver adds for the Notifications row when it says On or Off: a tap opens the iOS Settings app, where notifications are turned on or off. \"Settings\" is the name of Apple's Settings app in this language."
+    "description": "What VoiceOver adds for the Notifications row when it says On or Off: a tap opens the iOS Settings app, where notifications are turned on or off. Say it is an app, so it is not taken for the app's own Settings screen the row is on, and use a name that reads right in every region of the language."
   },
   "pushOfferTitle": "Breaking decisions",
   "@pushOfferTitle": {

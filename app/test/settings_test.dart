@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:official_news/core/analytics.dart';
@@ -152,6 +154,30 @@ void main() {
       expect(settingsAppOpened, 0);
     });
 
+    testWidgets('a second tap before iOS answers asks nothing more', (
+      tester,
+    ) async {
+      final messaging = FakeMessaging()..question = Completer<void>();
+      await pumpWithPush(tester, messaging);
+      await tester.tap(find.text(en.notifications));
+      await tester.pump(const Duration(milliseconds: 300));
+      // iOS's alert not up yet: the row still says Turn On.
+      expect(row(en.notificationsTurnOn), findsOneWidget);
+      await tester.tap(find.text(en.notifications));
+      await tester.pump();
+
+      messaging.question!.complete();
+      await tester.pumpAndSettle();
+      expect(messaging.asked, 1);
+      expect(row(en.notificationsOn), findsOneWidget);
+      expect(sent('push_permission').single, {
+        'result': 'granted',
+        'trigger': 'settings',
+      });
+      expect(messaging.calls, ['subscribe breaking_en']);
+      expect(settingsAppOpened, 0);
+    });
+
     testWidgets('"Don\'t Allow" to iOS: Off, and the next tap opens Settings', (
       tester,
     ) async {
@@ -222,8 +248,11 @@ void main() {
       ]);
     });
 
-    // Every language, on the narrowest iPhone (SE, 375 pt): a row that does
-    // not fit fails the test with an overflow.
+    // Every language, on the narrowest iPhone (SE, 375 pt): a grey value too
+    // long for the row fails the test with an overflow. The title is not
+    // checked: CupertinoListTile cuts it to one line with an ellipsis, and
+    // with the test font (every letter a square, far wider than iOS's) it is
+    // cut in every language, so only a phone shows whether it fits.
     for (final lang in FeedLanguage.values) {
       testWidgets('each state in ${lang.nativeName}, on a small phone', (
         tester,
@@ -247,9 +276,12 @@ void main() {
       });
     }
 
-    test('the row\'s words in Ukrainian and Russian, as iOS writes them', () {
+    // As the iOS Settings app writes them on its Notifications screen
+    // (NotificationsSettings.bundle, iOS 26.3): full words in Ukrainian,
+    // short ones in Russian.
+    test('the row\'s words, and a hint that names the app', () {
       for (final (lang, words) in [
-        (FeedLanguage.uk, ['Увімкнути', 'Увімк.', 'Вимк.', 'Недоступно']),
+        (FeedLanguage.uk, ['Увімкнути', 'Увімкнено', 'Вимкнено', 'Недоступно']),
         (FeedLanguage.ru, ['Включить', 'Вкл.', 'Выкл.', 'Недоступно']),
       ]) {
         final l10n = l10nFor(lang);
@@ -260,14 +292,15 @@ void main() {
           l10n.notificationsUnavailable,
         ], words);
       }
-      expect(
-        l10nFor(FeedLanguage.uk).notificationsOpensSettings,
-        'Відкриває Параметри',
-      );
-      expect(
-        l10nFor(FeedLanguage.ru).notificationsOpensSettings,
-        'Открывает Настройки',
-      );
+      // The app, not the Settings screen the row is on (same word).
+      for (final (lang, hint) in [
+        (FeedLanguage.uk, 'Відкриває застосунок «Параметри»'),
+        (FeedLanguage.ru, 'Открывает приложение «Настройки»'),
+        (FeedLanguage.de, 'Öffnet die App „Einstellungen“'),
+        (FeedLanguage.es, 'Abre los ajustes de tu teléfono'),
+      ]) {
+        expect(l10nFor(lang).notificationsOpensSettings, hint);
+      }
     });
   });
 
