@@ -14,16 +14,21 @@ import '../../core/theme.dart';
 /// dark mode) and the motion is this Flutter overlay. Its first frame is the
 /// same plain background, so nothing jumps or flashes. The feed is built and
 /// starts loading under it from the first frame, so the splash never adds
-/// waiting; a tap skips it. With Reduce Motion the words stand still for a
-/// moment and fade.
+/// waiting; any touch skips it, and it ends at once when the app is left
+/// while it plays. With Reduce Motion the words fade in, stand still for a
+/// moment and fade out.
 
 /// The splash's words, one per line, as Yurii wrote them (English for now).
 /// They live only here, to move into the ARB files when they are translated.
 const splashLines = ['only', 'official', 'news'];
 
 enum SplashStyle {
-  /// The lines rise into place from below, one after another.
+  /// The lines rise into place from below, one after another: "only" first.
   rise,
+
+  /// The same, the other way round: "news" first, so the wave runs up, as
+  /// the other two do (1b, to compare).
+  riseUp,
 
   /// Black words; a band of the red accent passes up through them.
   sweep,
@@ -33,35 +38,43 @@ enum SplashStyle {
 }
 
 /// The style shown at start and by Settings → Play. A build can start with
-/// another one: `--dart-define=SPLASH=sweep` (or `1`, `2`, `3`).
+/// another one: `--dart-define=SPLASH=sweep` (or `riseup`, `fill`, or `1`,
+/// `1b`, `2`, `3`).
 final splashStyle = ValueNotifier<SplashStyle>(
   splashNamed(const String.fromEnvironment('SPLASH')),
 );
 
-/// `rise`, `sweep` or `fill` (or `1`, `2`, `3`), in any case; anything else is
-/// [SplashStyle.rise].
+/// `rise`, `riseup`, `sweep` or `fill` (or `1`, `1b`, `2`, `3`), in any case;
+/// anything else is [SplashStyle.rise].
 SplashStyle splashNamed(String name) {
   final key = name.trim().toLowerCase();
   return switch (key) {
     '1' => SplashStyle.rise,
+    '1b' => SplashStyle.riseUp,
     '2' => SplashStyle.sweep,
     '3' => SplashStyle.fill,
-    _ => SplashStyle.values.asNameMap()[key] ?? SplashStyle.rise,
+    _ => SplashStyle.values.firstWhere(
+      (style) => style.name.toLowerCase() == key,
+      orElse: () => SplashStyle.rise,
+    ),
   };
 }
 
-/// How long [style] plays before it fades: its motion, then a short hold.
+/// How long [style] plays before it fades: its motion, then a short hold
+/// (about a third of a second).
 Duration splashLength(SplashStyle style) => switch (style) {
-  SplashStyle.rise => const Duration(milliseconds: 1850),
+  SplashStyle.rise || SplashStyle.riseUp => const Duration(milliseconds: 1850),
   SplashStyle.sweep => const Duration(milliseconds: 1950),
-  SplashStyle.fill => const Duration(milliseconds: 2000),
+  SplashStyle.fill => const Duration(milliseconds: 1850),
 };
 
-/// The fade into the app at the end, or after a tap.
+/// The fade into the app at the end, or after a touch.
 const splashFade = Duration(milliseconds: 250);
 
-/// With Reduce Motion: the words stand still this long, then fade.
-const splashStill = Duration(milliseconds: 600);
+/// With Reduce Motion: the words fade in (in [_stillIn]), stand still, and
+/// fade out after this long.
+const splashStill = Duration(milliseconds: 800);
+const _stillIn = 200.0;
 
 /// Puts the splash over the app: once when the app starts (a cold start; the
 /// app coming back from the background keeps its state, so it does not show
@@ -113,7 +126,8 @@ class _SplashHostState extends State<SplashHost> {
 }
 
 /// One splash: the page, the words and their motion, then a fade. Calls
-/// [onDone] once it has faded out.
+/// [onDone] once it has faded out, or at once when the app is left while it
+/// shows (coming back, the app is as it was, without the rest of it).
 class Splash extends StatefulWidget {
   const Splash({super.key, required this.style, required this.onDone});
 
@@ -150,9 +164,14 @@ class _SplashState extends State<Splash> with TickerProviderStateMixin {
     ),
   );
 
+  /// Ends it when the app goes to the background: the rest of it is not
+  /// played on the way back (its clock would only have paused).
+  AppLifecycleListener? _life;
+
   bool _started = false;
   bool _still = false;
   bool _fading = false;
+  bool _gone = false;
 
   /// How long it plays before it fades.
   int get _length => _still
@@ -169,6 +188,7 @@ class _SplashState extends State<Splash> with TickerProviderStateMixin {
         MediaQuery.disableAnimationsOf(context) ||
         View.of(context).platformDispatcher.accessibilityFeatures.reduceMotion;
     _clock.start();
+    _life = AppLifecycleListener(onHide: _leave);
   }
 
   void _tick(Duration elapsed) {
@@ -178,16 +198,30 @@ class _SplashState extends State<Splash> with TickerProviderStateMixin {
     if (_ms.value >= _length) _end();
   }
 
-  /// Fades out: at the end, or at once after a tap.
+  /// Fades out: at the end, or at once after a touch.
   void _end() {
     if (_fading || !mounted) return;
     setState(() => _fading = true);
     _clock.stop();
-    _fade.forward().then((_) => widget.onDone());
+    _fade.forward().then((_) => _finish());
+  }
+
+  /// The app was left: gone at once, unseen.
+  void _leave() {
+    _clock.stop();
+    _fade.stop();
+    _finish();
+  }
+
+  void _finish() {
+    if (_gone) return;
+    _gone = true;
+    widget.onDone();
   }
 
   @override
   void dispose() {
+    _life?.dispose();
     _clock.dispose();
     _fade.dispose();
     _ms.dispose();
@@ -212,20 +246,31 @@ class _SplashState extends State<Splash> with TickerProviderStateMixin {
       color: ink,
       decoration: TextDecoration.none,
     );
+    // Where the baseline sits in each line, for the fill's water.
+    final baseline = widget.style == SplashStyle.fill ? _baseline(type) : 0.0;
     final words = ValueListenableBuilder(
       valueListenable: _ms,
       builder: (context, now, _) {
         // At rest, standing still, with Reduce Motion.
         final ms = _still ? double.infinity : now;
-        return switch (widget.style) {
+        final words = switch (widget.style) {
           SplashStyle.rise => _Rise(ms: ms, style: type),
+          SplashStyle.riseUp => _Rise(ms: ms, style: type, fromBottom: true),
           SplashStyle.sweep => _Sweep(ms: ms, style: type),
           SplashStyle.fill => _Fill(
             ms: ms,
             style: type,
+            baseline: baseline,
             empty: dark ? const Color(0xFF2C2C2E) : const Color(0xFFE5E5EA),
           ),
         };
+        // Reduce Motion takes the movement away, not the gentle fade in.
+        return _still
+            ? Opacity(
+                opacity: _phase(now, 0, _stillIn, Curves.easeOut),
+                child: words,
+              )
+            : words;
       },
     );
     return AnnotatedRegion<SystemUiOverlayStyle>(
@@ -233,9 +278,11 @@ class _SplashState extends State<Splash> with TickerProviderStateMixin {
       child: IgnorePointer(
         // While it fades, the app under it already takes taps.
         ignoring: _fading,
-        child: GestureDetector(
+        // Any touch skips it, a scroll as well as a tap, so the feed under it
+        // never seems stuck.
+        child: Listener(
           behavior: HitTestBehavior.opaque,
-          onTap: _end,
+          onPointerDown: (_) => _end(),
           child: Semantics(
             label: splashLines.join(' '),
             container: true,
@@ -311,14 +358,16 @@ const _lead = 100.0;
 
 /// 1 · rise: each line comes up from below into its place, as if from under
 /// a fold, "only" first, then "official", then "news", overlapping like a wave.
+/// 1b ([fromBottom]): "news" first, then "official", then "only".
 class _Rise extends StatelessWidget {
-  const _Rise({required this.ms, required this.style});
+  const _Rise({required this.ms, required this.style, this.fromBottom = false});
 
   final double ms;
   final TextStyle style;
+  final bool fromBottom;
 
-  static const _stagger = 180.0;
-  static const _length = 1000.0;
+  static const _stagger = 240.0;
+  static const _length = 1100.0;
 
   @override
   Widget build(BuildContext context) {
@@ -326,11 +375,15 @@ class _Rise extends StatelessWidget {
     return _Lines(
       style: style,
       line: (i, text) {
-        final start = _lead + i * _stagger;
+        final order = fromBottom ? splashLines.length - 1 - i : i;
+        final start = _lead + order * _stagger;
         final t = _phase(ms, start, _length, Curves.easeOutCubic);
-        final shown = _phase(ms, start, _length * 0.4);
+        // The fold does the reveal; this only softens the first points.
+        final shown = _phase(ms, start, 150, Curves.easeOut);
         return ClipRect(
-          clipper: _LineWindow(over: size * 0.14, under: size * 0.26),
+          // The fold sits just under the tail of the "y", so a line is out of
+          // sight until it rises past it.
+          clipper: _LineWindow(over: size * 0.14, under: size * 0.08),
           child: Opacity(
             opacity: shown,
             child: Transform.translate(
@@ -373,11 +426,14 @@ class _Sweep extends StatelessWidget {
   Widget build(BuildContext context) {
     final ink = style.color!;
     final shown = _phase(ms, _lead, 400, Curves.easeOut);
-    // The band's middle, from just under the words (0 is their bottom) to just over them.
+    // The band's middle, 0 at the bottom of the words' box and 1 at its top.
+    // The letters fill about 0.1 to 0.9 of it, so the band starts with its
+    // edge on the bottom of the letters and leaves with its edge on their top:
+    // all its travel is seen.
     const half = 0.24;
     final at =
-        -half +
-        (1 + 2 * half) * _phase(ms, _lead + 200, 1400, Curves.easeInOutSine);
+        -0.6 * half +
+        (1 + 1.2 * half) * _phase(ms, _lead + 200, 1450, Curves.easeInOutSine);
     double stop(double v) => v.clamp(0.0, 1.0);
     return Opacity(
       opacity: shown,
@@ -404,34 +460,53 @@ class _Sweep extends StatelessWidget {
 }
 
 /// 3 · fill: the letters show empty (light grey), then fill with black from
-/// the bottom up behind a moving wave, like water rising inside them.
+/// the bottom up behind a moving wave, like water rising inside them. Each
+/// line has its own water, "news" first: the next line starts a third of the
+/// way into the one under it, so an edge is always moving through ink (one
+/// water line for all three would cross the empty room between the lines
+/// with nothing to see, and look like it stops).
 class _Fill extends StatelessWidget {
-  const _Fill({required this.ms, required this.style, required this.empty});
+  const _Fill({
+    required this.ms,
+    required this.style,
+    required this.baseline,
+    required this.empty,
+  });
 
   final double ms;
   final TextStyle style;
+
+  /// Where the baseline sits in a line's box, in points from its top.
+  final double baseline;
   final Color empty;
 
   @override
   Widget build(BuildContext context) {
     final shown = _phase(ms, _lead, 300, Curves.easeOut);
-    final level = _phase(ms, _lead + 100, 1500, Curves.easeInOutSine);
     final size = style.fontSize!;
+    final levels = splashFillLevels(ms);
     return Opacity(
       opacity: shown,
       child: Stack(
         children: [
           _Lines(style: style.copyWith(color: empty)),
-          ClipPath(
-            clipper: _Water(
-              level: level,
-              // The waves keep moving while the level rises; still at rest.
-              seconds: ms.isFinite ? ms / 1000 : 0,
-              height: size * 0.075,
-              length: size * 2.1,
-              inset: _Lines.inset(size),
-            ),
-            child: _Lines(style: style),
+          _Lines(
+            style: style,
+            line: (i, text) {
+              final ink = _ink(splashLines[i]);
+              return ClipPath(
+                clipper: _Water(
+                  level: levels[i],
+                  // The waves keep moving while the level rises; still at rest.
+                  seconds: ms.isFinite ? ms / 1000 : 0,
+                  top: baseline - ink.over * size,
+                  bottom: baseline + ink.under * size,
+                  wave: size * _fillWave,
+                  length: size * 2.1,
+                ),
+                child: text,
+              );
+            },
           ),
         ],
       ),
@@ -439,48 +514,131 @@ class _Fill extends StatelessWidget {
   }
 }
 
-/// Everything under a wavy water line: [level] 0 is just under the letters,
-/// 1 just over them.
+/// The waves' height, in ems.
+const _fillWave = 0.075;
+
+/// From the first line's water starting to the last one's being full, in ms.
+const _fillMotion = 1500.0;
+
+/// How far into a line's fill the next line starts. Early enough that the
+/// next line's letters start filling while only the tall letters of the one
+/// under it ("f", "l") are still filling, so the motion does not thin out.
+const _fillNext = 0.35;
+
+/// How far [word]'s letters reach over and under the baseline, in ems:
+/// Georgia Bold's ink, measured (the "l" 0.756 over, the "y" 0.217 under, the
+/// x-height 0.498, the round letters' overshoot 0.016 under). A letter not
+/// measured here (a capital, a digit, another alphabet) counts as the font's
+/// full height, so no letter is ever left unfilled.
+({double over, double under}) _ink(String word) {
+  var over = 0.498, under = 0.016;
+  for (final letter in word.split('')) {
+    if (!'abcdefghijklmnopqrstuvwxyz'.contains(letter)) {
+      return (over: 0.92, under: 0.23);
+    }
+    if ('bdfhijklt'.contains(letter)) over = 0.756;
+    if ('gjpqy'.contains(letter)) under = 0.217;
+  }
+  return (over: over, under: under);
+}
+
+/// When each line of the fill fills, (start, length) in ms, in the order of
+/// [splashLines]. The bottom line goes first, and each next one starts
+/// [_fillNext] of the way into the one under it; each takes as long as its
+/// ink is tall, so the water rises at the same speed in every line.
+final List<(double, double)> _fillTimes = () {
+  // The water's travel per line, bottom first: its ink, and the waves under
+  // it at the start and (calmer, see [_Water]) over it at the end.
+  final travel = [
+    for (final word in splashLines.reversed)
+      _ink(word).over + _ink(word).under + _fillWave * 1.35 * (1 + 0.6),
+  ];
+  final whole =
+      travel.take(travel.length - 1).fold(0.0, (a, b) => a + b * _fillNext) +
+      travel.last;
+  final perEm = _fillMotion / whole;
+  final times = <(double, double)>[];
+  var start = _lead;
+  for (final t in travel) {
+    times.add((start, t * perEm));
+    start += t * perEm * _fillNext;
+  }
+  return times.reversed.toList();
+}();
+
+/// The fill's water level in each line at [ms] (0 empty, 1 full), in the
+/// order of [splashLines].
+@visibleForTesting
+List<double> splashFillLevels(double ms) => [
+  for (final (start, length) in _fillTimes)
+    _phase(ms, start, length, Curves.easeInOutSine),
+];
+
+/// Where the baseline sits in a line of [style], in points from its top.
+double _baseline(TextStyle style) {
+  final painter = TextPainter(
+    text: TextSpan(text: splashLines.first, style: style),
+    textDirection: TextDirection.ltr,
+  )..layout();
+  final baseline = painter.computeDistanceToActualBaseline(
+    TextBaseline.alphabetic,
+  );
+  painter.dispose();
+  return baseline;
+}
+
+/// Everything in a line under a wavy water line: at [level] 0 the crests are
+/// just under its ink ([top] to [bottom]), at 1 the troughs just over it.
 class _Water extends CustomClipper<Path> {
   const _Water({
     required this.level,
     required this.seconds,
-    required this.height,
+    required this.top,
+    required this.bottom,
+    required this.wave,
     required this.length,
-    required this.inset,
   });
 
   final double level;
   final double seconds;
 
-  /// The waves' height and length, in points.
-  final double height;
-  final double length;
+  /// The line's ink, in points from the top of its box.
+  final double top;
+  final double bottom;
 
-  /// The empty room over and under the letters ([_Lines.inset]): the water
-  /// rises through it unseen, so it is mostly left out.
-  final double inset;
+  /// The waves' height and length, in points.
+  final double wave;
+  final double length;
 
   @override
   Path getClip(Size size) {
-    if (level >= 1) return Path()..addRect(Offset.zero & size);
-    // Crests just under the bottom line at 0, troughs over the "l" at 1.
-    final from = size.height - inset + height * 1.35;
-    final to = inset - height * 2.2;
-    final top = from + (to - from) * level;
-    // The waves calm down as the letters fill.
-    final wave = height * (1 - 0.4 * level);
-    final path = Path()..moveTo(0, size.height);
-    for (var x = 0.0; x <= size.width + 4; x += 4) {
+    // Past the line's box all round, for the letters that reach out of it
+    // (the tail of the "y").
+    final room = Rect.fromLTRB(
+      -size.height * 0.2,
+      -size.height,
+      size.width + size.height * 0.2,
+      size.height * 2,
+    );
+    if (level >= 1) return Path()..addRect(room);
+    if (level <= 0) return Path();
+    // The waves calm down as the line fills. Together the two waves reach
+    // 1.35 times their height over and under the middle.
+    final height = wave * (1 - 0.4 * level);
+    final from = bottom + wave * 1.35;
+    final to = top - wave * 0.6 * 1.35;
+    final middle = from + (to - from) * level;
+    final path = Path()..moveTo(room.left, room.bottom);
+    for (var x = room.left; x <= room.right + 4; x += 4) {
       final a = 2 * math.pi * x / length;
       final y =
-          top +
-          wave * math.sin(a - seconds * 2 * math.pi * 0.9) +
-          wave * 0.35 * math.sin(a * 2.3 + seconds * 2 * math.pi * 0.6);
+          middle +
+          height * math.sin(a - seconds * 2 * math.pi * 0.9) +
+          height * 0.35 * math.sin(a * 2.3 + seconds * 2 * math.pi * 0.6);
       path.lineTo(x, y);
     }
     return path
-      ..lineTo(size.width + 4, size.height)
+      ..lineTo(room.right + 4, room.bottom)
       ..close();
   }
 
@@ -488,7 +646,8 @@ class _Water extends CustomClipper<Path> {
   bool shouldReclip(_Water old) =>
       old.level != level ||
       old.seconds != seconds ||
-      old.height != height ||
-      old.length != length ||
-      old.inset != inset;
+      old.top != top ||
+      old.bottom != bottom ||
+      old.wave != wave ||
+      old.length != length;
 }

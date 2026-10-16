@@ -202,30 +202,36 @@ class _DesignSection extends StatelessWidget {
         builder: (context, style, _) => CupertinoListTile(
           leading: const _Icon(CupertinoIcons.sparkles),
           title: const Text('Splash'),
-          subtitle: const Text('1 rise · 2 sweep · 3 fill'),
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              CupertinoSlidingSegmentedControl<SplashStyle>(
-                groupValue: style,
-                onValueChanged: (s) {
-                  if (s != null) splashStyle.value = s;
-                },
-                children: const {
-                  SplashStyle.rise: Text('1'),
-                  SplashStyle.sweep: Text('2'),
-                  SplashStyle.fill: Text('3'),
-                },
-              ),
-              CupertinoButton(
-                padding: const EdgeInsets.only(left: 12),
-                minimumSize: const Size(44, 44),
-                onPressed: () => SplashHost.play(context),
-                child: const Text('Play'),
-              ),
-            ],
+          subtitle: Text(switch (style) {
+            SplashStyle.rise => 'rise',
+            SplashStyle.riseUp => 'rise, news first',
+            SplashStyle.sweep => 'sweep',
+            SplashStyle.fill => 'fill',
+          }),
+          trailing: CupertinoSlidingSegmentedControl<SplashStyle>(
+            groupValue: style,
+            onValueChanged: (s) {
+              if (s != null) splashStyle.value = s;
+            },
+            children: const {
+              SplashStyle.rise: Text('1'),
+              SplashStyle.riseUp: Text('1b'),
+              SplashStyle.sweep: Text('2'),
+              SplashStyle.fill: Text('3'),
+            },
           ),
         ),
+      ),
+      CupertinoListTile(
+        leading: const _Icon(CupertinoIcons.play),
+        title: const Text('Play'),
+        onTap: () {
+          SplashHost.play(context);
+          // It ends on the feed, as at a cold start: Settings closes under
+          // the splash, out of sight (its page covers all from its first
+          // frame).
+          Navigator.of(context).popUntil((route) => route.isFirst);
+        },
       ),
     ],
   );

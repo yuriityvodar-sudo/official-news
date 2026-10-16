@@ -83,6 +83,9 @@ void main() {
     expect(splashNamed('sweep'), SplashStyle.sweep);
     expect(splashNamed(' FILL '), SplashStyle.fill);
     expect(splashNamed('1'), SplashStyle.rise);
+    expect(splashNamed('1b'), SplashStyle.riseUp);
+    expect(splashNamed('riseup'), SplashStyle.riseUp);
+    expect(splashNamed('RiseUp'), SplashStyle.riseUp);
     expect(splashNamed('2'), SplashStyle.sweep);
     expect(splashNamed('3'), SplashStyle.fill);
     expect(splashNamed(''), SplashStyle.rise);
@@ -175,6 +178,52 @@ void main() {
     });
   }
 
+  /// How far [word] still is under its place (rise).
+  double drop(WidgetTester tester, String word) => tester
+      .widget<Transform>(
+        find
+            .ancestor(of: find.text(word), matching: find.byType(Transform))
+            .first,
+      )
+      .transform
+      .getTranslation()
+      .y;
+
+  testWidgets('1 rise brings "only" up first; 1b, "news" first', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_host());
+    await _play(tester, seconds(0.4));
+    expect(drop(tester, 'only'), lessThan(drop(tester, 'official')));
+    expect(drop(tester, 'official'), lessThan(drop(tester, 'news')));
+    await _play(tester, _total(SplashStyle.rise));
+
+    splashStyle.value = SplashStyle.riseUp;
+    await tester.pumpWidget(KeyedSubtree(key: UniqueKey(), child: _host()));
+    await _play(tester, seconds(0.4));
+    expect(drop(tester, 'news'), lessThan(drop(tester, 'official')));
+    expect(drop(tester, 'official'), lessThan(drop(tester, 'only')));
+    await _play(tester, _total(SplashStyle.riseUp));
+  });
+
+  test('3 fill: "news" fills first, and from the first fill to the last, '
+      'some line is always filling (no stop between the lines)', () {
+    // In the order of the words: only, official, news.
+    final early = splashFillLevels(300);
+    expect(early[2], greaterThan(early[1]));
+    expect(early[1], greaterThanOrEqualTo(early[0]));
+    for (var ms = 200.0; ms <= 1500; ms += 8) {
+      expect(
+        splashFillLevels(ms).any((level) => level > 0.02 && level < 0.98),
+        isTrue,
+        reason: 'at $ms ms',
+      );
+    }
+    // Full before the hold, so the splash ends at rest.
+    final end = splashLength(SplashStyle.fill).inMilliseconds - 200.0;
+    expect(splashFillLevels(end), everyElement(1));
+  });
+
   testWidgets('a slow frame (the app starting) slows it down, never skips it', (
     tester,
   ) async {
@@ -240,6 +289,33 @@ void main() {
     expect(find.text('the app').hitTestable(), findsOneWidget);
   });
 
+  testWidgets('a scroll skips it too, from the first touch', (tester) async {
+    await tester.pumpWidget(_host());
+    await _play(tester, seconds(0.3));
+    final gesture = await tester.startGesture(const Offset(200, 400));
+    await tester.pump(const Duration(milliseconds: 16));
+    await tester.pump(const Duration(milliseconds: 16));
+    // Fading already, with the finger still down.
+    expect(
+      tester
+          .widget<FadeTransition>(
+            find
+                .descendant(
+                  of: find.byType(Splash),
+                  matching: find.byType(FadeTransition),
+                )
+                .last,
+          )
+          .opacity
+          .value,
+      lessThan(1),
+    );
+    await gesture.moveBy(const Offset(0, -200));
+    await gesture.up();
+    await _play(tester, splashFade + seconds(0.05));
+    expect(find.byType(Splash), findsNothing);
+  });
+
   testWidgets('while it fades, the app under it already takes taps', (
     tester,
   ) async {
@@ -271,17 +347,15 @@ void main() {
     ),
   ]) {
     for (final style in SplashStyle.values) {
-      testWidgets('$name, ${style.name}: the words stand still for 0.6 s, '
-          'then fade', (tester) async {
+      testWidgets('$name, ${style.name}: the words fade in without moving, '
+          'stand still about 0.6 s, then fade', (tester) async {
         tester.platformDispatcher.accessibilityFeaturesTestValue = features;
         addTearDown(
           tester.platformDispatcher.clearAccessibilityFeaturesTestValue,
         );
         splashStyle.value = style;
         await tester.pumpWidget(_host());
-        // At rest from the first frame.
-        expect(_wordOpacities(tester), everyElement(1));
-        expect(
+        void atRest() => expect(
           tester.widgetList<Transform>(
             find.descendant(
               of: find.byType(Splash),
@@ -296,7 +370,15 @@ void main() {
             ),
           ),
         );
-        await _play(tester, splashStill - seconds(0.1));
+        // The first frame is the plain page (no hard cut to the words); the
+        // words are already in place, at rest.
+        expect(_wordOpacities(tester).first, 0);
+        expect(_wordOpacities(tester).skip(1), everyElement(1));
+        atRest();
+        await _play(tester, seconds(0.25));
+        expect(_wordOpacities(tester), everyElement(1));
+        atRest();
+        await _play(tester, splashStill - seconds(0.35));
         expect(find.byType(Splash), findsOneWidget);
         await _play(tester, seconds(0.1) + splashFade + seconds(0.05));
         expect(find.byType(Splash), findsNothing);
@@ -335,6 +417,45 @@ void main() {
     expect(find.byType(Splash), findsNothing);
   });
 
+  testWidgets('leaving the app while it plays ends it: coming back, the app '
+      'is there, not the rest of the splash', (tester) async {
+    await tester.pumpWidget(_host());
+    await _play(tester, seconds(0.5));
+    expect(find.byType(Splash), findsOneWidget);
+    for (final state in [
+      AppLifecycleState.inactive,
+      AppLifecycleState.hidden,
+      AppLifecycleState.paused,
+    ]) {
+      tester.binding.handleAppLifecycleStateChanged(state);
+    }
+    await tester.pump();
+    for (final state in [
+      AppLifecycleState.hidden,
+      AppLifecycleState.inactive,
+      AppLifecycleState.resumed,
+    ]) {
+      tester.binding.handleAppLifecycleStateChanged(state);
+    }
+    await tester.pump();
+    expect(find.byType(Splash), findsNothing);
+    expect(find.text('the app').hitTestable(), findsOneWidget);
+  });
+
+  testWidgets('a glance away (Control Centre: inactive only) lets it play on', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_host());
+    await _play(tester, seconds(0.5));
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    await tester.pump();
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pump();
+    expect(find.byType(Splash), findsOneWidget);
+    await _play(tester, _total(SplashStyle.rise));
+    expect(find.byType(Splash), findsNothing);
+  });
+
   group('Settings → Prototype → Splash', () {
     Future<void> openSettings(WidgetTester tester) async {
       tester.view.physicalSize = const Size(390, 844) * 3;
@@ -353,10 +474,13 @@ void main() {
       await tester.pump();
     }
 
-    testWidgets('lists the three styles, rise chosen', (tester) async {
+    testWidgets('lists the styles, rise chosen', (tester) async {
       await openSettings(tester);
       expect(find.text('Splash'), findsOneWidget);
-      expect(find.text('1 rise · 2 sweep · 3 fill'), findsOneWidget);
+      expect(find.text('rise'), findsOneWidget);
+      for (final segment in ['1', '1b', '2', '3']) {
+        expect(find.text(segment), findsOneWidget, reason: segment);
+      }
       final control = tester
           .widget<CupertinoSlidingSegmentedControl<SplashStyle>>(
             find.byType(CupertinoSlidingSegmentedControl<SplashStyle>),
@@ -365,18 +489,45 @@ void main() {
       expect(find.byType(Splash), findsNothing);
     });
 
-    for (final (segment, style) in [
-      ('1', SplashStyle.rise),
-      ('2', SplashStyle.sweep),
-      ('3', SplashStyle.fill),
+    for (final (segment, style, name) in [
+      ('1', SplashStyle.rise, 'rise'),
+      ('1b', SplashStyle.riseUp, 'rise, news first'),
+      ('2', SplashStyle.sweep, 'sweep'),
+      ('3', SplashStyle.fill, 'fill'),
     ]) {
-      testWidgets('$segment, then Play, shows ${style.name} over Settings', (
-        tester,
-      ) async {
-        await openSettings(tester);
+      testWidgets('$segment, then Play, shows ${style.name} and ends on the '
+          'feed, as at a cold start', (tester) async {
+        tester.view.physicalSize = const Size(390, 844) * 3;
+        tester.view.devicePixelRatio = 3;
+        addTearDown(tester.view.reset);
+        // The feed, with Settings opened over it, as in the app.
+        await tester.pumpWidget(
+          _host(
+            onStart: false,
+            app: Builder(
+              builder: (context) => Center(
+                child: TextButton(
+                  onPressed: () => Navigator.of(context).push(
+                    CupertinoPageRoute<void>(
+                      builder: (_) => SettingsScreen(
+                        language: ValueNotifier(FeedLanguage.en),
+                        onLanguage: (_) {},
+                        openLink: (_) async {},
+                      ),
+                    ),
+                  ),
+                  child: const Text('the feed'),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.tap(find.text('the feed'));
+        await tester.pumpAndSettle();
         await tester.tap(find.text(segment));
         await tester.pumpAndSettle();
         expect(splashStyle.value, style);
+        expect(find.text(name), findsOneWidget);
 
         await tester.tap(find.text('Play'));
         await tester.pump();
@@ -385,8 +536,9 @@ void main() {
 
         await _play(tester, _total(style));
         expect(find.byType(Splash), findsNothing);
-        // Back on Settings, as it was.
-        expect(find.text('Splash').hitTestable(), findsOneWidget);
+        // On the feed: Settings closed under the splash.
+        expect(find.byType(SettingsScreen), findsNothing);
+        expect(find.text('the feed').hitTestable(), findsOneWidget);
       });
     }
 
