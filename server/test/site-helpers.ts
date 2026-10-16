@@ -3,16 +3,30 @@
 import { env } from "cloudflare:workers";
 import { vi } from "vitest";
 import { handleSite } from "../src/site/handler";
+import { CACHE } from "../src/site/respond";
 import type { SiteLang } from "../src/site/texts";
 import { rowsRead } from "./helpers";
 
 export const ORIGIN = "https://site.test";
 export const siteEnv = () => ({ DB: env.DB, SITE_ORIGIN: ORIGIN });
 
-/** `init.cf` is the request's Cloudflare properties, as the edge sets them (`{ country: "DE" }`). */
-export async function site(path: string, init: RequestInit & { cf?: { country?: string } } = {}, host = "site.test", e = siteEnv()) {
+export async function site(path: string, init: RequestInit = {}, host = "site.test", e = siteEnv()) {
   const response = await handleSite(new Request(`https://${host}${path}`, init), e);
   return { status: response.status, headers: response.headers, body: await response.text() };
+}
+
+/**
+ * A page as a reader reaches it from a link: an article address without its
+ * slug, or with another country or slug, is the site's 301 to the article's
+ * own URL (cache kind `moved`), followed once; any other answer is returned
+ * as it is. `movedFrom` is set when it was followed.
+ */
+export async function reach(path: string, init: RequestInit = {}) {
+  const first = await site(path, init);
+  const location = first.headers.get("location");
+  if (first.status !== 301 || first.headers.get("cloudflare-cdn-cache-control") !== CACHE.moved.edge) return first;
+  if (!location?.startsWith(`${ORIGIN}/`)) throw new Error(`${path}: a 301 to ${location}`);
+  return { ...(await site(location.slice(ORIGIN.length), init)), movedFrom: path };
 }
 
 export const stored = (date: Date) => `${date.toISOString().slice(0, 19)}Z`;

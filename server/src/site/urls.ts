@@ -1,7 +1,7 @@
 // The site's addresses (#88). Every absolute URL starts with SITE_ORIGIN,
 // never the request's host: Workers Cache keys a page by path and query only,
 // so a page rendered for one host is served on every other.
-import { BLOCS, hasCountryName } from "../api/filters";
+import { EU, GROUPS, type GroupId, hasCountryName } from "../api/filters";
 import { TOPICS, type Topic } from "../summarizer/schema";
 import type { SiteLang } from "./texts";
 
@@ -22,50 +22,56 @@ export const originOf = (siteOrigin: string) => siteOrigin.replace(/\/+$/, "");
 export const countryPath = (country: string) => (/^[A-Z]{2}$/.test(country) ? country.toLowerCase() : "xx");
 
 /**
- * A list's filters, as the app's chips (#67, #68): `country` ("DE", as the API
- * takes it: that country's decisions, plus the EU's for an EU member) or null
- * for Global; one `topic`, or null for All topics.
+ * Where a list's articles come from, as the app's Where chip (#67, #68) and
+ * the API's `country=` / `group=` (readWhere in api/filters.ts): one country
+ * alone (`{ country: "DE" }`, that country's sources only), a group of
+ * countries (`{ group: "g7" }`, one of GROUPS), or null for all countries.
  */
+export type Place = { country: string } | { group: GroupId } | null;
+
+/** A list's filters: Where, and one `topic` or null for All topics. */
 export interface ListFilter {
-  country: string | null;
+  place: Place;
   topic: Topic | null;
 }
 
-export const GLOBAL: ListFilter = { country: null, topic: null };
-
-/** The menu a list URL can ask to be open: Where, when Local has no country to go to. */
-export type OpenMenu = "where";
+export const ALL: ListFilter = { place: null, topic: null };
 
 /**
- * Whether `/{lang}/{cc}` is a page: a code the API names in every language
- * (COUNTRIES in api/filters.ts: the source countries, the EU and its other
- * members, and the countries planned next; 45 codes), so it needs no D1 read
- * and the set of cached URLs is bounded. A named country without sources is a
- * page with the empty state; an EU member without sources of its own shows
- * the EU's decisions, as its Local feed does in the app.
+ * Whether `/{lang}/{cc}` is a country's page: a code the API names in every
+ * language (COUNTRIES in api/filters.ts: the source countries and the ones
+ * planned next), so it needs no D1 read and the set of cached URLs is
+ * bounded. A named country without sources is a page with the empty state.
+ * Not the EU institutions (`EU`): they are in the European Union group, and
+ * `/{lang}/eu` is that group's page.
  */
-export const isCountryPage = (code: string) => /^[A-Z]{2}$/.test(code) && hasCountryName(code);
+export const isCountryPage = (code: string) => /^[A-Z]{2}$/.test(code) && code !== EU && hasCountryName(code);
 
-/** Whether `code` publishes as one source country for its members (the EU). */
-export const isBloc = (code: string) => code in BLOCS;
+/** The group with this id (GROUPS: eu, g7, g20, nato), or null. */
+export const groupOf = (id: string): GroupId | null => GROUPS.find((g) => g.id === id)?.id ?? null;
 
 export const isTopic = (value: string): value is Topic => (TOPICS as readonly string[]).includes(value);
 
 /**
- * The one URL of a list: `/en`, `/en/de`, `/en/de?topic=economy&before=120`,
- * `/en?topic=economy&menu=where`. The country is the path (it reads as a
- * place, like an article's `/{lang}/{cc}/…`), the topic a parameter, always
- * in this order; handler.ts sends every other spelling here with a 301, so
- * each view has one cache entry.
+ * The path segment of a place: a country's code in lower case (`de`) or a
+ * group's id (`g7`, `eu`, `nato`). One segment after the language is a place
+ * to read the decisions of, as in an article's `/{lang}/{cc}/…`. A group's id
+ * is never a country's code (`eu` is ISO 3166's code reserved for the EU
+ * itself) nor an information page's name (site-filters.test.ts checks both).
  */
-export function listPath(lang: SiteLang, filter: ListFilter = GLOBAL, before: number | null = null, menu: OpenMenu | null = null): string {
-  const path = filter.country ? `/${lang}/${filter.country.toLowerCase()}` : `/${lang}`;
-  const query = [filter.topic && `topic=${filter.topic}`, before && `before=${before}`, menu && `menu=${menu}`].filter(Boolean).join("&");
+export const placeSegment = (place: NonNullable<Place>) => ("country" in place ? place.country.toLowerCase() : place.group);
+
+/**
+ * The one URL of a list: `/en`, `/en/de`, `/en/g7?topic=economy`,
+ * `/en/nato?topic=security-defence&before=120`. The place is the path, the
+ * topic and the page parameters, always in this order; handler.ts sends every
+ * other spelling here with a 301, so each view has one cache entry.
+ */
+export function listPath(lang: SiteLang, filter: ListFilter = ALL, before: number | null = null): string {
+  const path = filter.place ? `/${lang}/${placeSegment(filter.place)}` : `/${lang}`;
+  const query = [filter.topic && `topic=${filter.topic}`, before && `before=${before}`].filter(Boolean).join("&");
   return query ? `${path}?${query}` : path;
 }
-
-/** Local: `/en/local?topic=economy`, a 302 to the reader's country (handler.ts), never cached. */
-export const localPath = (lang: SiteLang, topic: Topic | null) => `/${lang}/local${topic ? `?topic=${topic}` : ""}`;
 
 export const infoPath = (lang: SiteLang, page: InfoPage) => `/${lang}/${page}`;
 

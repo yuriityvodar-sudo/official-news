@@ -6,7 +6,8 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { LANGUAGE_NAMES, SITE_LANGS, aiNoticeText, text } from "../src/site/texts";
 import { INFO_PAGES } from "../src/site/urls";
 import { hideSeed } from "./helpers";
-import { insertArticle, insertTranslation, site, testId } from "./site-helpers";
+// `site` follows an article's 301 to its own URL, as a reader's browser does (an article path here has no slug).
+import { insertArticle, insertTranslation, reach as site, testId } from "./site-helpers";
 
 describe("every page in every language", () => {
   beforeEach(async () => {

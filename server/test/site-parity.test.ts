@@ -8,7 +8,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import type { ApiArticle, ApiList } from "../src/site/data";
 import { SITE_LANGS, type SiteLang, decisionLabel } from "../src/site/texts";
 import { get, hideSeed } from "./helpers";
-import { escaped, hoursAgo, hreflangs, insertArticle, insertTranslation, linkedIds, site, siteRowsRead as rowsRead, testId } from "./site-helpers";
+import { ORIGIN, escaped, hoursAgo, hreflangs, insertArticle, insertTranslation, linkedIds, reach, site, siteRowsRead as rowsRead, testId } from "./site-helpers";
 
 const A = {
   englishOnly: testId(1),
@@ -56,7 +56,7 @@ describe("article pages", () => {
       const answers = await Promise.all(SITE_LANGS.map((lang) => apiArticle(id, lang)));
       const shownIn = SITE_LANGS.filter((_, i) => answers[i].status === 200);
       for (const [i, lang] of SITE_LANGS.entries()) {
-        const page = await site(`/${lang}/de/${id}`);
+        const page = await reach(`/${lang}/de/${id}`);
         const api = answers[i];
         expect(page.status === 200, `${id} ${lang}: site ${page.status}, API ${api.status}`).toBe(api.status === 200);
         if (api.status === 200) {
@@ -86,39 +86,48 @@ describe("article pages", () => {
   });
 
   it("shows the queue states as the API does: updating and failed-for-the-same-English are shown, failed-for-a-newer-English is not", async () => {
-    expect((await site(`/es/de/${A.esUpdating}`)).status).toBe(200);
-    expect((await site(`/ru/de/${A.ruFailedSame}`)).status).toBe(200);
-    expect((await site(`/ru/de/${A.ruFailedNewer}`)).status).toBe(404);
-    expect((await site(`/de/de/${A.ruFailedSame}`)).status).toBe(404);
+    expect((await reach(`/es/de/${A.esUpdating}`)).status).toBe(200);
+    expect((await reach(`/ru/de/${A.ruFailedSame}`)).status).toBe(200);
+    expect((await reach(`/ru/de/${A.ruFailedNewer}`)).status).toBe(404);
+    expect((await reach(`/de/de/${A.ruFailedSame}`)).status).toBe(404);
   });
 
   it("answers 404, not 410, for a hidden article: is_news = 0 means never shown, not removed", async () => {
     for (const lang of SITE_LANGS) {
-      const page = await site(`/${lang}/de/${A.hidden}`);
+      const page = await reach(`/${lang}/de/${A.hidden}`);
       expect(page.status).toBe(404);
       expect(page.body).not.toContain("removed");
     }
-    expect((await site(`/en/de/${A.notReleased}`)).status).toBe(404);
-    expect((await site(`/en/de/${A.unknown}`)).status).toBe(404);
+    expect((await reach(`/en/de/${A.notReleased}`)).status).toBe(404);
+    expect((await reach(`/en/de/${A.unknown}`)).status).toBe(404);
   });
 
   it("keeps an article older than the feed's 7 days, and one from a blocked source, as the API does", async () => {
-    expect((await site(`/en/de/${A.old}`)).status).toBe(200);
-    expect((await site(`/es/de/${A.old}`)).status).toBe(200);
-    expect((await site(`/en/us/${A.blockedSource}`)).status).toBe(200);
+    expect((await reach(`/en/de/${A.old}`)).status).toBe(200);
+    expect((await reach(`/es/de/${A.old}`)).status).toBe(200);
+    expect((await reach(`/en/us/${A.blockedSource}`)).status).toBe(200);
   });
 
-  it("finds the article by its id alone: a wrong country or slug still renders, with the right canonical", async () => {
-    const right = await site(`/uk/de/${A.ukrainian}`);
-    const canonical = /<link rel="canonical" href="([^"]+)">/.exec(right.body)![1];
+  it("sends an address with another country or slug, or none, to the article's own one with a 301 (#89 review)", async () => {
+    const own = await reach(`/uk/de/${A.ukrainian}`);
+    expect(own.status).toBe(200);
+    const canonical = /<link rel="canonical" href="([^"]+)">/.exec(own.body)![1];
     expect(canonical).toMatch(new RegExp(`^https://site\\.test/uk/de/${A.ukrainian}-uk-rishennia-`));
-    const wrong = await site(`/uk/fr/${A.ukrainian}-an-old-headline?utm_source=x`);
-    expect(wrong.status).toBe(200);
-    expect(wrong.body).toContain(`<link rel="canonical" href="${canonical}">`);
+    for (const path of [`/uk/de/${A.ukrainian}`, `/uk/fr/${A.ukrainian}-an-old-headline`, `/uk/zz/${A.ukrainian}-uk-rishennia`, `/uk/DE/${canonical.split("/").pop()}`]) {
+      for (const method of ["GET", "HEAD"]) {
+        const moved = await site(path, { method });
+        expect(moved.status, path).toBe(301);
+        expect(moved.headers.get("location"), path).toBe(canonical);
+        expect(moved.body).toBe("");
+      }
+    }
+    // The address itself is a page: no redirect loop.
+    expect((await site(canonical.slice(ORIGIN.length))).status).toBe(200);
   });
 
   it("reads about 13 D1 rows for an article page, and no row for a malformed id", async () => {
-    const rows = await rowsRead(() => site(`/uk/de/${A.ukrainian}`));
+    const own = (await site(`/uk/de/${A.ukrainian}`)).headers.get("location")!;
+    const rows = await rowsRead(() => site(own.slice(ORIGIN.length)));
     console.log(JSON.stringify({ rowsRead: { article: rows } }));
     expect(rows).toBeGreaterThan(0);
     expect(rows).toBeLessThanOrEqual(20);

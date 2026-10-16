@@ -33,15 +33,20 @@ export const CACHE = {
   notInLanguage: { browser: "public, max-age=300", edge: "max-age=300" },
   /** /favicon.ico and /apple-touch-icon*.png: a cheap 404 the browser keeps a day. */
   icon: { browser: "public, max-age=86400", edge: "max-age=86400" },
-  /** A list or landing URL with a query it does not use, sent to its clean URL with no D1 read. */
+  /**
+   * Another spelling of a list or the landing page (a query it does not use,
+   * a trailing slash, a place in capitals), or an article URL with a query
+   * (`fbclid`, `utm_*`), sent to its clean URL with no D1 read. The mapping
+   * never changes, so it is kept a day.
+   */
   redirect: { browser: "public, max-age=86400", edge: "max-age=86400" },
   /**
-   * Local (`/{lang}/local`): a 302 to the reader's own country, from the
-   * request's IP country, so it differs per reader. Never stored, by the
-   * browser or the edge: the cache key has no country, so a stored copy would
-   * send every reader to the first one's country.
+   * An article URL whose country or slug is not the article's (a link from
+   * before its headline was summarized again, or a mistyped one), sent to its
+   * one URL (articlePath). The slug follows the headline, which can change, so
+   * as long as an article page: a later change never meets a stale redirect.
    */
-  local: { browser: "private, no-store", edge: "no-store" },
+  moved: { browser: "public, max-age=300", edge: "max-age=600" },
   /** 405 and 500: never stored, so an outage is never cached as a page. */
   none: { browser: "no-store", edge: "no-store" },
 } as const;

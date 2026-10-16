@@ -5,13 +5,16 @@ import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import { ROBOTS_TXT } from "../src/site/handler";
 import { CACHE } from "../src/site/respond";
-import { INFO_PAGES } from "../src/site/urls";
+import { INFO_PAGES, slugify } from "../src/site/urls";
 import { SITE_LANGS } from "../src/site/texts";
 import { hideSeed } from "./helpers";
-import { ORIGIN, insertArticle, insertTranslation, site, siteEnv, siteRowsRead as rowsRead, testId } from "./site-helpers";
+import { ORIGIN, insertArticle, insertTranslation, reach, site, siteEnv, siteRowsRead as rowsRead, testId } from "./site-helpers";
 
 const ID = testId(1);
 const NOT_IN_UK = testId(2);
+/** ID's own addresses: its slug is its headline in the language (site-helpers.ts's texts). */
+const EN = `/en/de/${ID}-${slugify("Cabinet decision 0001 on the budget", "en")}`;
+const UK = `/uk/de/${ID}-${slugify("[uk] Рішення 0001 про бюджет", "uk")}`;
 
 beforeEach(async () => {
   await hideSeed();
@@ -26,8 +29,12 @@ const ROUTES: [string, number, keyof typeof CACHE, string | null][] = [
   ["/robots.txt", 200, "fixed", null],
   ["/en", 200, "list", "en"],
   ["/uk?before=5", 200, "list", "uk"],
-  [`/en/de/${ID}`, 200, "article", "en"],
-  [`/uk/de/${ID}-slug`, 200, "article", "uk"],
+  [EN, 200, "article", "en"],
+  [UK, 200, "article", "uk"],
+  [`/en/de/${ID}`, 301, "moved", null],
+  [`/uk/de/${ID}-slug`, 301, "moved", null],
+  [`/uk/fr/${ID}`, 301, "moved", null],
+  [`${EN}?fbclid=IwAR0abc`, 301, "redirect", null],
   [`/uk/de/${NOT_IN_UK}`, 404, "notInLanguage", "uk"],
   [`/en/de/${testId(99)}`, 404, "missing", "en"],
   ["/ru/about", 200, "fixed", "ru"],
@@ -38,14 +45,17 @@ const ROUTES: [string, number, keyof typeof CACHE, string | null][] = [
   ["/uk/nowhere", 404, "missing", "uk"],
   ["/en/de", 200, "list", "en"],
   ["/uk/de?topic=economy", 200, "list", "uk"],
+  ["/en/g7", 200, "list", "en"],
+  ["/uk/nato?topic=economy", 200, "list", "uk"],
   ["/en?topic=economy&before=5", 200, "list", "en"],
-  ["/en?menu=where", 200, "list", "en"],
   ["/es/ua", 200, "list", "es"],
   ["/en/zz", 404, "missing", "en"],
   ["/en?topic=nonsense", 404, "missing", "en"],
   ["/en/de/economy", 404, "missing", "en"],
-  ["/en/local", 302, "local", null],
+  ["/en/local", 404, "missing", "en"],
+  ["/en?menu=where", 301, "redirect", null],
   ["/en/de/", 301, "redirect", null],
+  ["/en/EU", 301, "redirect", null],
   ["/.well-known/apple-app-site-association", 404, "missing", "en"],
   ["/sitemap.xml", 404, "missing", "en"],
   ["/favicon.ico", 404, "icon", null],
@@ -136,11 +146,61 @@ describe("every route", () => {
   });
 });
 
+describe("one URL per article (#89 review)", () => {
+  it("sends an address with a query (fbclid, utm_*) to the same address without it, with no D1 read", async () => {
+    for (const [path, location] of [
+      [`${EN}?fbclid=IwAR0abc`, EN],
+      [`${UK}?utm_source=facebook&utm_medium=social`, UK],
+      [`/uk/de/${ID}-old-slug?utm_campaign=x`, `/uk/de/${ID}-old-slug`],
+    ] as const) {
+      for (const method of ["GET", "HEAD"]) {
+        let response: Awaited<ReturnType<typeof site>> | undefined;
+        expect(await rowsRead(async () => (response = await site(path, { method }))), path).toBe(0);
+        expect(response!.status, path).toBe(301);
+        expect(response!.headers.get("location"), path).toBe(ORIGIN + location);
+        expect(response!.headers.get("cloudflare-cdn-cache-control"), path).toBe(CACHE.redirect.edge);
+      }
+    }
+  });
+
+  it("sends another country, another slug or no slug to the article's own address, which is the page", async () => {
+    for (const path of [`/en/de/${ID}`, `/en/fr/${ID}-cabinet-decision-0001-on-the-budget`, `/en/zz/${ID}-x`, `/en/DE/${EN.split("/").pop()}`, `/en/de/${ID}-`]) {
+      const { status, headers, body } = await site(path);
+      expect(status, path).toBe(301);
+      expect(headers.get("location"), path).toBe(ORIGIN + EN);
+      expect(headers.get("cache-control"), path).toBe(CACHE.moved.browser);
+      expect(body).toBe("");
+    }
+    // In each language its own slug.
+    expect((await site(`/uk/de/${ID}-cabinet-decision-0001-on-the-budget`)).headers.get("location")).toBe(ORIGIN + UK);
+    // A link from Facebook with a stale slug: two hops at most, then the page.
+    const first = await site(`/en/fr/${ID}-old?fbclid=1`);
+    const second = await site(first.headers.get("location")!.slice(ORIGIN.length));
+    expect(second.headers.get("location")).toBe(ORIGIN + EN);
+    expect((await site(EN)).status).toBe(200);
+  });
+
+  it("follows a headline that is summarized again: the old address leads to the new one", async () => {
+    await env.DB.prepare("UPDATE articles SET headline = 'Cabinet approves the 2027 budget' WHERE id = ?").bind(ID).run();
+    const moved = await site(EN);
+    expect(moved.status).toBe(301);
+    expect(moved.headers.get("location")).toBe(`${ORIGIN}/en/de/${ID}-cabinet-approves-the-2027-budget`);
+  });
+
+  it("reads the article once to redirect, and keeps 404s as they were (no redirect for an article not in the language)", async () => {
+    const rows = await rowsRead(() => site(`/en/zz/${ID}`));
+    expect(rows).toBeGreaterThan(0);
+    expect(rows).toBeLessThanOrEqual(20);
+    expect((await site(`/uk/fr/${NOT_IN_UK}-x`)).status).toBe(404);
+    expect((await site(`/en/fr/${testId(99)}-x`)).status).toBe(404);
+  });
+});
+
 describe("one request per page view", () => {
   it("no page refers to anything it would have to load: no script, image, stylesheet, font or frame", async () => {
     await env.DB.prepare("UPDATE articles SET image_url = 'https://www.bundesregierung.de/picture.jpg' WHERE id = ?").bind(ID).run();
     const paths = [
-      "/", "/en", "/uk", `/en/de/${ID}`, `/uk/de/${ID}`, "/en/de", "/uk/de?topic=economy", "/en?menu=where", "/en/ua",
+      "/", "/en", "/uk", EN, UK, "/en/de", "/uk/de?topic=economy", "/en/g7", "/uk/nato?topic=health", "/en/ua",
       ...SITE_LANGS.flatMap((l) => INFO_PAGES.map((p) => `/${l}/${p}`)),
     ];
     for (const path of paths) {
@@ -158,19 +218,20 @@ describe("one request per page view", () => {
   });
 
   it("shows the Smart App Banner tag and no source picture", async () => {
-    const { body } = await site(`/en/de/${ID}`);
+    const { body } = await site(EN);
     expect(body).toContain('<meta name="apple-itunes-app" content="app-id=6822820350">');
   });
 });
 
 describe("the request's host", () => {
   it("never appears in a page: every absolute URL is SITE_ORIGIN's (the cache key has no host)", async () => {
-    for (const path of ["/", "/en", `/uk/de/${ID}`, "/es/about", "/en/", `/uk/de/${NOT_IN_UK}`, "/en/de", "/en/de/", "/en?topic=economy&x=1", "/en/local"]) {
+    for (const path of ["/", "/en", UK, `/uk/de/${ID}`, `${UK}?utm_source=x`, "/es/about", "/en/", `/uk/de/${NOT_IN_UK}`, "/en/de", "/en/de/", "/en/G7", "/en?topic=economy&x=1"]) {
       const { body, headers } = await site(path, {}, "evil.test");
       expect(body).not.toContain("evil.test");
       expect(headers.get("location") ?? "").not.toContain("evil.test");
     }
-    expect((await site(`/uk/de/${ID}`, {}, "evil.test")).body).toContain(`<link rel="canonical" href="${ORIGIN}/uk/de/${ID}-`);
+    expect((await site(UK, {}, "evil.test")).body).toContain(`<link rel="canonical" href="${ORIGIN}${UK}">`);
+    expect((await site(`/uk/de/${ID}`, {}, "evil.test")).headers.get("location")).toBe(ORIGIN + UK);
   });
 });
 
@@ -191,7 +252,7 @@ describe("text from the data and the address", () => {
 
   it("is always escaped: no tag, no attribute, no javascript: link", async () => {
     for (const path of [`/en/de/${XSS}`, "/en"]) {
-      const { status, body } = await site(path);
+      const { status, body } = await reach(path);
       expect(status).toBe(200);
       expect(body).not.toMatch(/<script|<img|<svg onload|<b>bold/i);
       // No tag carries an event handler: the escaped text may say "onerror=", a tag never does.
@@ -201,7 +262,7 @@ describe("text from the data and the address", () => {
       expect(body).toContain("&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;");
       expect(body).toContain("O&#39;Brien &amp; &quot;Co&quot; &lt;b&gt;");
     }
-    const { body } = await site(`/en/de/${XSS}`);
+    const { body } = await reach(`/en/de/${XSS}`);
     // In <title> and in attributes (meta, Open Graph), quotes are escaped too.
     expect(body).toContain("<title>&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt; · Official News</title>");
     expect(body).toMatch(/<meta property="og:title" content="&quot;&gt;&lt;script&gt;/);
@@ -213,7 +274,7 @@ describe("text from the data and the address", () => {
 
   it("keeps an https link that tries to break out of its attribute inside it", async () => {
     await env.DB.prepare("UPDATE articles SET url = ? WHERE id = ?").bind(`https://x.gov/"onmouseover=alert(1)`, XSS).run();
-    const { body } = await site(`/en/de/${XSS}`);
+    const { body } = await reach(`/en/de/${XSS}`);
     expect(body).toContain('class="official" href="https://x.gov/%22onmouseover=alert(1)"');
   });
 

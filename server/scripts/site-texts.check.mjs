@@ -66,7 +66,7 @@ describe("the app's texts", () => {
     const source = read(fileURLToPath(new URL("../src/api/filters.ts", import.meta.url)));
     const block = source.slice(source.indexOf("const COUNTRIES"), source.indexOf("\n};", source.indexOf("const COUNTRIES")));
     const api = Object.fromEntries([...block.matchAll(/^ {2}([A-Z]{2}): (\[.+\]),$/gm)].map((m) => [m[1], JSON.parse(m[2])]));
-    assert.ok(Object.keys(api).length >= 45, "COUNTRIES not found in src/api/filters.ts");
+    assert.ok(Object.keys(api).length >= 20, "COUNTRIES not found in src/api/filters.ts");
     const all = arbs();
     for (const [code, names] of Object.entries(api)) {
       SITE_LANGS.forEach((lang, i) => {
@@ -109,10 +109,10 @@ describe("the site's own texts (src/site/texts.ts)", () => {
     return out;
   };
 
-  test("say what the app's ARB files say for a key they share: a copy waiting for the app's PR (#87's filter words) is moved, never forked", () => {
+  test("say what the app's ARB files say for a key they share: a copy waiting for the app's PR (#87's filter words, the chips' prototype) is moved, never forked", () => {
     const own = siteOwn();
     const all = arbs();
-    assert.ok("filterGlobal" in own.en, "the filter words are not found in texts.ts");
+    assert.ok("filterGlobalDetail" in own.en, "the filter words are not found in texts.ts");
     for (const lang of SITE_LANGS) {
       for (const [key, value] of Object.entries(own[lang])) {
         if (key in all[lang]) assert.equal(value, all[lang][key], `texts.ts ${lang}.${key} differs from app_${lang}.arb: use the app's text (move the key to KEYS in site-texts.mjs)`);

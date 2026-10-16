@@ -18,14 +18,18 @@ export const SITE_NAME = "Official News";
 // of a break with no hyphen, but no hyphen in every other line of a headline.
 // Red small text on white is #D1102F (about 5.5:1), not the app's #FA2D48
 // (about 3.8:1, under WCAG AA); in dark mode the app's red on black.
+// A filter chip that is on stays the grey chip, its short label or icon and
+// chevron red (Yurii, 16 Oct, as the app): #C00E2B on the light chip (about
+// 5.1:1; the page's #D1102F is 4.46:1 there, under AA for 15px text), #FF5A6E
+// on the dark one (about 4.6:1). `.vh` keeps the full name for screen readers.
 // The filter menus (pages/filters.ts) open in the page's flow on a phone, a
 // full row under their own chip, so nothing focused is ever under one and the
 // page scrolls as usual; from 720px they open over the list, 320px wide, with
 // a transparent backdrop (the open chip's ::before) that closes them on a
 // click outside, without a script, and hidden while keyboard focus is in the
 // page outside the filter bar (Tab past the menu), so it never covers it.
-export const CSS = `:root{color-scheme:light dark;--bg:#fff;--text:#000;--secondary:#6c6c70;--separator:#e5e5ea;--accent:#d1102f;--chip:#e3e8ef;--card:#f2f2f7;--verified:#1a8cff;--on:#d1102f;--menu:#fff;--band:#f2f2f7;--shadow:rgba(0,0,0,.16)}
-@media (prefers-color-scheme:dark){:root{--bg:#000;--text:#fff;--secondary:#98989f;--separator:#38383a;--accent:#fa2d48;--chip:#2c2c2e;--card:#1c1c1e;--menu:#1c1c1e;--band:#000;--shadow:rgba(0,0,0,.6)}}
+export const CSS = `:root{color-scheme:light dark;--bg:#fff;--text:#000;--secondary:#6c6c70;--separator:#e5e5ea;--accent:#d1102f;--chip:#e3e8ef;--card:#f2f2f7;--verified:#1a8cff;--on:#c00e2b;--menu:#fff;--band:#f2f2f7;--shadow:rgba(0,0,0,.16)}
+@media (prefers-color-scheme:dark){:root{--bg:#000;--text:#fff;--secondary:#98989f;--separator:#38383a;--accent:#fa2d48;--on:#ff5a6e;--chip:#2c2c2e;--card:#1c1c1e;--menu:#1c1c1e;--band:#000;--shadow:rgba(0,0,0,.6)}}
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 body{margin:0;background:var(--bg);color:var(--text);font:16px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;overflow-wrap:break-word}
@@ -71,10 +75,12 @@ h1{margin:0 0 10px;font-size:31px;line-height:1.15;font-weight:700}
 .chip-link{display:inline-flex;align-items:center;max-width:100%;min-height:44px;text-decoration:none;border-radius:18px}
 .chip-link:focus-visible{border-radius:18px}
 .chip{display:inline-flex;align-items:center;gap:6px;max-width:100%;min-height:34px;padding:0 12px;border-radius:17px;background:var(--chip);color:var(--text);font-size:15px;font-weight:600}
-.chip.on{background:var(--on);color:#fff}
-.chip svg{width:16px;height:16px;flex:none}
+.chip.on{color:var(--on)}
+.chip svg{flex:none}
+.chip .glyph{display:block;width:18px;height:18px}
 .chip .chev{width:12px;height:12px;margin-left:-2px}
 .chip .label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.vh{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;border:0}
 .pick[open] .chev{transform:rotate(180deg)}
 .pick[open]{flex-basis:100%}
 .menu{margin:0 0 8px;padding:6px 0;background:var(--menu);border:.5px solid var(--separator);border-radius:14px}
@@ -84,9 +90,7 @@ h1{margin:0 0 10px;font-size:31px;line-height:1.15;font-weight:700}
 .menu a{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:44px;padding:8px 16px;color:var(--text);text-decoration:none;font-size:16px}
 .menu a:hover{background:var(--card)}
 .menu a:focus-visible{outline-offset:-2px}
-.menu small{display:block;font-size:13px;color:var(--secondary)}
 .menu .check{width:18px;height:18px;flex:none;color:var(--accent)}
-.menu-note{margin:6px 16px 10px;font-size:14px;color:var(--secondary)}
 .items{list-style:none;margin:0;padding:0}
 .item{padding:14px 0;border-bottom:.5px solid var(--separator)}
 .item .kind{margin-bottom:2px}

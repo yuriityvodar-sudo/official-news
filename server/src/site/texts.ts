@@ -2,7 +2,7 @@
 // app-texts.generated.ts, never copied; only what the app does not say is
 // written here, in all 5 languages (TypeScript requires each one). The uk and
 // ru texts need Yurii's review, es and de a native speaker's.
-import { TOPIC_NAMES, countryName as apiCountryName } from "../api/filters";
+import { GROUPS, type GroupId, TOPIC_NAMES, countryName as apiCountryName, groupName as apiGroupName } from "../api/filters";
 import type { Topic } from "../summarizer/schema";
 import { APP_TEXTS, type AppKey, LANGUAGE_NAMES, PUBLISHER_NAME, SITE_LANGS, type SiteLang } from "./app-texts.generated";
 import { Html, esc } from "./html";
@@ -45,23 +45,24 @@ interface SiteTexts {
   prevails: string;
   /**
    * The filters' words (#67, #68), word for word from the app's ARB keys of
-   * the same names in #87 (origin/feature/67-filters-app), which this branch
-   * does not have yet. Once #87 is on main, they move to KEYS in
-   * scripts/site-texts.mjs and leave this file.
+   * the same names (Yurii's compact chips, prototype/chips, 16 Oct, and #87,
+   * origin/feature/67-filters-app), which main does not have yet. Once #87 is
+   * on main, they move to KEYS in scripts/site-texts.mjs and leave this file.
+   * `filterGlobalDetail` is "All countries", the Where chip and its menu's first item.
    */
-  filterGlobal: string;
   filterGlobalDetail: string;
-  filterLocal: string;
   filterAllTopics: string;
+  /** What a screen reader says for the Where chip, which shows only the country's code (GB). */
+  filterCountryChip: string;
+  /** The same for a group, whose chip shows its short name (EU, G7, G20, NATO). */
+  filterGroupChip: string;
+  /** The same for the Topics chip, which shows only the topic's icon. */
+  filterTopicChip: string;
   filterEmpty: string;
   filterShowGlobal: string;
   filterShowAllTopics: string;
   /** The filter bar's name for screen readers (the site's own). */
   filters: string;
-  /** At the top of the Where menu that Local opens when it has no country to go to. */
-  localNone: string;
-  /** Privacy policy, "On this website": what Local reads; `{local}` is filterLocal. */
-  siteLocal: string;
 }
 
 const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
@@ -88,16 +89,15 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     siteBanner: "On iPhone and iPad, Safari may show a banner for our app, using information it loads from Apple's App Store.",
     siteCovers: "The privacy policy and the terms of use cover both the Official News app and this website.",
     prevails: "The English version prevails ({link}).",
-    filterGlobal: "Global",
     filterGlobalDetail: "All countries",
-    filterLocal: "Local",
     filterAllTopics: "All topics",
+    filterCountryChip: "Country: {name}",
+    filterGroupChip: "Countries: {name}",
+    filterTopicChip: "Topic: {name}",
     filterEmpty: "No decisions here in the last 7 days.",
     filterShowGlobal: "Show all countries",
     filterShowAllTopics: "Show all topics",
     filters: "Filters",
-    localNone: "We could not tell your country, or it has no sources yet. Choose a country:",
-    siteLocal: "If you choose “{local}”, the website opens the decisions of the country that Cloudflare reads from your IP address. The country is not stored, and the page it opens is the same for everyone.",
   },
   uk: {
     aiNotice:
@@ -122,16 +122,15 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     siteBanner: "На iPhone та iPad Safari може показати банер нашого застосунку з даними, які він завантажує з App Store від Apple.",
     siteCovers: "Політика конфіденційності й умови використання стосуються і застосунку Official News, і цього сайту.",
     prevails: "Це переклад; у разі розбіжностей переважну силу має англійська версія ({link}).",
-    filterGlobal: "Увесь світ",
     filterGlobalDetail: "Усі країни",
-    filterLocal: "Моя країна",
     filterAllTopics: "Усі теми",
+    filterCountryChip: "Країна: {name}",
+    filterGroupChip: "Країни: {name}",
+    filterTopicChip: "Тема: {name}",
     filterEmpty: "За останні 7 днів тут немає рішень.",
     filterShowGlobal: "Показати всі країни",
     filterShowAllTopics: "Показати всі теми",
     filters: "Фільтри",
-    localNone: "Не вдалося визначити вашу країну, або для неї ще немає джерел. Виберіть країну:",
-    siteLocal: "Якщо ви виберете «{local}», сайт відкриє рішення країни, яку Cloudflare визначає за вашою IP-адресою. Країна не зберігається, а сторінка, яку він відкриває, однакова для всіх.",
   },
   ru: {
     aiNotice:
@@ -156,16 +155,15 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     siteBanner: "На iPhone и iPad Safari может показать баннер нашего приложения с данными, которые он загружает из App Store от Apple.",
     siteCovers: "Политика конфиденциальности и условия использования относятся и к приложению Official News, и к этому сайту.",
     prevails: "Это перевод; в случае расхождений преимущественную силу имеет английская версия ({link}).",
-    filterGlobal: "Весь мир",
     filterGlobalDetail: "Все страны",
-    filterLocal: "Моя страна",
     filterAllTopics: "Все темы",
+    filterCountryChip: "Страна: {name}",
+    filterGroupChip: "Страны: {name}",
+    filterTopicChip: "Тема: {name}",
     filterEmpty: "За последние 7 дней здесь нет решений.",
     filterShowGlobal: "Показать все страны",
     filterShowAllTopics: "Показать все темы",
     filters: "Фильтры",
-    localNone: "Не удалось определить вашу страну, или для неё ещё нет источников. Выберите страну:",
-    siteLocal: "Если вы выберете «{local}», сайт откроет решения страны, которую Cloudflare определяет по вашему IP-адресу. Страна не сохраняется, а открываемая страница одинакова для всех.",
   },
   es: {
     aiNotice:
@@ -190,16 +188,15 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     siteBanner: "En iPhone y iPad, Safari puede mostrar un banner de nuestra app con información que obtiene del App Store de Apple.",
     siteCovers: "La política de privacidad y los términos de uso se aplican tanto a la app Official News como a este sitio web.",
     prevails: "Esto es una traducción; en caso de discrepancia, prevalece la versión en inglés ({link}).",
-    filterGlobal: "Global",
     filterGlobalDetail: "Todos los países",
-    filterLocal: "Mi país",
     filterAllTopics: "Todos los temas",
+    filterCountryChip: "País: {name}",
+    filterGroupChip: "Países: {name}",
+    filterTopicChip: "Tema: {name}",
     filterEmpty: "No hay decisiones aquí en los últimos 7 días.",
     filterShowGlobal: "Mostrar todos los países",
     filterShowAllTopics: "Mostrar todos los temas",
     filters: "Filtros",
-    localNone: "No hemos podido detectar tu país, o aún no tiene fuentes. Elige un país:",
-    siteLocal: "Si eliges «{local}», el sitio web abre las decisiones del país que Cloudflare deduce de tu dirección IP. El país no se guarda, y la página que se abre es la misma para todos.",
   },
   de: {
     aiNotice:
@@ -224,16 +221,15 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     siteBanner: "Auf iPhone und iPad kann Safari ein Banner für unsere App zeigen, mit Angaben, die es aus Apples App Store lädt.",
     siteCovers: "Die Datenschutzerklärung und die Nutzungsbedingungen gelten für die App Official News und für diese Website.",
     prevails: "Dies ist eine Übersetzung; bei Abweichungen ist die englische Fassung maßgeblich ({link}).",
-    filterGlobal: "Weltweit",
     filterGlobalDetail: "Alle Länder",
-    filterLocal: "Mein Land",
     filterAllTopics: "Alle Themen",
+    filterCountryChip: "Land: {name}",
+    filterGroupChip: "Länder: {name}",
+    filterTopicChip: "Thema: {name}",
     filterEmpty: "In den letzten 7 Tagen gab es hier keine Entscheidungen.",
     filterShowGlobal: "Alle Länder anzeigen",
     filterShowAllTopics: "Alle Themen anzeigen",
     filters: "Filter",
-    localNone: "Wir konnten Ihr Land nicht erkennen, oder es gibt dafür noch keine Quellen. Wählen Sie ein Land:",
-    siteLocal: "Wenn Sie „{local}“ wählen, öffnet die Website die Entscheidungen des Landes, das Cloudflare aus Ihrer IP-Adresse ermittelt. Das Land wird nicht gespeichert, und die geöffnete Seite ist für alle gleich.",
   },
 };
 
@@ -277,14 +273,17 @@ const hasAppKey = (key: string): key is AppKey => key in APP_TEXTS.en;
 
 /**
  * A country code's name, as the app shows it (countries.dart), else as the API
- * names it in GET /countries (COUNTRIES in api/filters.ts: the same names, plus
- * the countries the app's ARB files on this branch do not have yet, such as
- * Ukraine); an unknown code as it is.
+ * names it in GET /countries (COUNTRIES in api/filters.ts: the same names,
+ * which a check keeps so, for a country the app's ARB files do not have yet);
+ * an unknown code as it is.
  */
 export function countryName(lang: SiteLang, code: string): string {
   const key = `country${code}`;
   return hasAppKey(key) ? APP_TEXTS[lang][key] : apiCountryName(code, lang);
 }
+
+/** A group's name, as GET /countries names it (GROUPS in api/filters.ts): "European Union", "G7", "НАТО". */
+export const groupName = (lang: SiteLang, id: GroupId) => apiGroupName(GROUPS.find((g) => g.id === id)!, lang);
 
 /** A topic's name, as GET /topics names it (TOPIC_NAMES in api/filters.ts). */
 export const topicName = (lang: SiteLang, topic: Topic) => TOPIC_NAMES[lang][topic];
