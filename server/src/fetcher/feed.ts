@@ -1,7 +1,7 @@
 // RSS 2.0, RSS 1.0 (RDF) and Atom feeds. Read with regular expressions, which
 // costs far less CPU than a full XML parser and is enough for flat feed items.
 import { parseDate } from "./dates";
-import { decodeEntities, htmlToText } from "./text";
+import { decodeEntities, htmlToText, pictureUrl } from "./text";
 import { type FoundItem, type SourceConfig, dateSpec } from "./types";
 
 function unwrap(raw: string): string {
@@ -38,11 +38,11 @@ function atomLink(entry: string): string | null {
   return null;
 }
 
-function image(entry: string): string | null {
+function image(entry: string, baseUrl: string): string | null {
   for (const tag of entry.match(/<(?:media:content|media:thumbnail|enclosure)\b[^>]*>/gi) ?? []) {
     const type = attribute(tag, "type");
     const medium = attribute(tag, "medium");
-    const url = attribute(tag, "url");
+    const url = pictureUrl(attribute(tag, "url"), baseUrl);
     if (url && (!type || type.startsWith("image/")) && (!medium || medium === "image")) return url;
   }
   return null;
@@ -82,7 +82,7 @@ export function parseFeed(xml: string, baseUrl: string, config: SourceConfig, no
         publishedAt: date?.publishedAt ?? null,
         dateOnly: date?.dateOnly ?? false,
         text: content ? htmlToText(content) || null : null,
-        imageUrl: image(block),
+        imageUrl: image(block, baseUrl),
         category,
       },
     ];

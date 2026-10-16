@@ -79,7 +79,15 @@
   "settingsReading": "Читання",
   "language": "Мова",
   "notifications": "Сповіщення",
-  "soon": "Незабаром",
+  "notificationsOn": "Увімкнено",
+  "notificationsOff": "Вимкнено",
+  "notificationsTurnOn": "Увімкнути",
+  "notificationsUnavailable": "Недоступно",
+  "notificationsOpensSettings": "Відкриває застосунок «Параметри»",
+  "pushOfferTitle": "Важливі рішення",
+  "pushOfferBody": "Отримуйте найважливіші офіційні рішення в сповіщеннях: не більше 2 на день, уночі — жодних.",
+  "pushOfferNotNow": "Не зараз",
+  "pushOfferTurnOn": "Увімкнути",
   "settingsAboutHeader": "Інформація",
   "aboutApp": "Про Official News",
   "aboutTitle": "Про застосунок",
@@ -131,5 +139,11 @@
   "supportMessages": "Помітили помилку у викладі, джерело, що не працює, або маєте ідею? Ми читаємо кожне повідомлення.",
   "supportMistakes": "Коли повідомляєте про помилку, назва статті й мова, якою ви її читали, допоможуть нам її знайти.",
   "supportAppStore": "Зв’язатися з нами можна через сторінку застосунку в App Store.",
-  "supportWrite": "Написати нам"
+  "supportWrite": "Написати нам",
+
+  "countryCZ": "Чехія",
+  "countryES": "Іспанія",
+  "countryPL": "Польща",
+  "countryUA": "Україна",
+  "languageCs": "чеської"
 }

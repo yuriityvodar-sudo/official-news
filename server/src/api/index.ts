@@ -3,15 +3,18 @@ import { REAL_SOURCE, health } from "../health";
 import type { Topic } from "../summarizer/schema";
 import { LANGS, type Lang, SHOWN, isLang, queueStatus, releaseStatus } from "../translator";
 import {
-  BLOCS,
-  COUNTRY_ERROR,
+  EU,
+  GROUPS,
   TOPIC_ERROR,
+  type Where,
   byName,
   countryName,
-  localCountries,
+  groupCountries,
+  groupName,
   rankTopics,
-  readCountry,
   readTopic,
+  readWhere,
+  whereCountries,
 } from "./filters";
 
 /** A row of `articles` joined with its source, as stored in D1. */
@@ -38,11 +41,23 @@ interface ArticleRow {
   added_at: string | null;
 }
 
-const ARTICLE_COLUMNS = `
-  a.id, s.country, a.source_id, s.name AS source_name, s.url AS source_url,
+/**
+ * The source's name (#76): in English, `name`; in a language of LANGS, its
+ * `config.names.<lang>` (loaded from docs/source-names.csv), else the English
+ * name. `lang` is one of LANGS, never text from the request, so it can sit in
+ * the SQL. A config that is not JSON gives the English name instead of failing
+ * the whole feed.
+ */
+const sourceName = (lang: Lang | null) =>
+  lang ? `COALESCE(CASE WHEN json_valid(s.config) THEN json_extract(s.config, '$.names.${lang}') END, s.name)` : "s.name";
+
+const articleColumns = (lang: Lang | null) => `
+  a.id, s.country, a.source_id, ${sourceName(lang)} AS source_name, s.url AS source_url,
   a.url, a.original_title, a.published_at, a.date_only, a.headline, a.short_summary,
   a.summary, a.decision_type, a.image_url, a.original_language, a.topics, a.tags, a.importance,
   a.feed_seq, a.added_at`;
+
+const ARTICLE_COLUMNS = articleColumns(null);
 
 const FROM_ARTICLES = "FROM articles a JOIN sources s ON s.id = a.source_id";
 
@@ -87,12 +102,14 @@ const topQuery = (columns: string, from: string, where: string) => `
   LIMIT 5
   ) ORDER BY feed_seq DESC`;
 
-/** The top stories among the feed's articles that pass `filters` (their values are bound first). */
-const englishTop = (filters: Filters) =>
-  topQuery(ARTICLE_COLUMNS, FROM_ARTICLES, ["a.is_news = 1", "a.feed_seq IS NOT NULL", ...filters.where].join(" AND "));
+const TOP_WHERE = "a.is_news = 1 AND a.feed_seq IS NOT NULL";
+/** The top-story conditions plus `filters` (their values are bound first). */
+const topWhere = (filters: Filters) => [TOP_WHERE, ...filters.where].join(" AND ");
+/** The top stories among the feed's articles that pass `filters`. */
+const englishTop = (filters: Filters) => topQuery(ARTICLE_COLUMNS, FROM_ARTICLES, topWhere(filters));
 
-// Filters (#67, #68): `country` (Local) and `topic`, the same on every page, in
-// `after=`, in top and in every language, so a cursor continues within its filter.
+// Filters (#67, #68): Where (`country` or `group`) and `topic`, the same on every
+// page, in `after=`, in top and in every language, so a cursor continues within its filter.
 
 /** The feed's filters as conditions on the article (`a`), with the values they bind, in order. */
 export interface Filters {
@@ -108,20 +125,24 @@ export interface Filters {
 const TOPIC_LIST = `CASE WHEN NOT json_valid(a.topics) THEN '[]' WHEN json_type(a.topics) = 'array' THEN a.topics ELSE '[]' END`;
 
 /**
- * Local (`country`): the articles of that country's sources, and of every bloc
- * it belongs to (BLOCS: an EU member also gets the EU's). `topic`: articles the
- * AI gave that topic. Neither: the whole feed (Global, all topics).
+ * Where: `country`, the articles of that country's sources only; `group`, the
+ * articles of its members' sources, and of the EU institutions' where the group
+ * includes them (GROUPS). `topic`: articles the AI gave that topic. Neither:
+ * the whole feed (all countries, all topics).
  *
- * The country is checked on the article's source_id against the matching
- * sources, read once (a few dozen rows), so a page skips another country's
- * article without reading its source: about 270 rows read for a page of a
- * country with few articles, against about 360 with `s.country` (live D1, 16 Oct).
+ * The source countries are checked on the article's source_id against the
+ * matching sources, read once (a few dozen rows), so a page skips another
+ * country's article without reading its source: about 270 rows read for a page
+ * of a country with few articles, against about 360 with `s.country` (live D1,
+ * 16 Oct). The unary + reads that list with one plain pass over sources: for a
+ * single country (`country IN (?)` is `country = ?`) SQLite would otherwise
+ * build an automatic index on sources for it, which reads them all as well.
  */
-export function feedFilters(country: string | null, topic: Topic | null): Filters {
+export function feedFilters(where: Where, topic: Topic | null): Filters {
   const filters: Filters = { where: [], binds: [] };
-  if (country) {
-    const countries = localCountries(country);
-    filters.where.push(`a.source_id IN (SELECT id FROM sources WHERE country IN (${countries.map(() => "?").join(", ")}))`);
+  const countries = whereCountries(where);
+  if (countries) {
+    filters.where.push(`a.source_id IN (SELECT id FROM sources WHERE +country IN (${countries.map(() => "?").join(", ")}))`);
     filters.binds.push(...countries);
   }
   if (topic) {
@@ -228,9 +249,9 @@ function nonNegativeInteger(value: string): number | null {
  * language is paused). `translationsDelayed` says the language is paused or
  * off, so its newest articles may be missing for a while.
  *
- * With `country` and/or `topic` (#67, #68), the same feed keeping only the
- * articles that pass the filters (feedFilters): items, cursors, `after` and
- * top alike.
+ * With `country` or `group`, and/or `topic` (#67, #68), the same feed keeping
+ * only the articles that pass the filters (feedFilters): items, cursors,
+ * `after` and top alike.
  */
 async function listArticles(url: URL, env: Env): Promise<Response> {
   const params = url.searchParams;
@@ -246,11 +267,11 @@ async function listArticles(url: URL, env: Env): Promise<Response> {
 
   const lang = readLang(params);
   if (lang === undefined) return badRequest(LANG_ERROR);
-  const country = readCountry(params);
-  if (country === undefined) return badRequest(COUNTRY_ERROR);
+  const place = readWhere(params);
+  if ("error" in place) return badRequest(place.error);
   const topic = readTopic(params);
   if (topic === undefined) return badRequest(TOPIC_ERROR);
-  const filters = feedFilters(country, topic);
+  const filters = feedFilters(place.where, topic);
 
   const where = [...PAGE_CONDITIONS, ...(lang ? TRANSLATED_CONDITIONS : []), ...filters.where];
   // The language is bound in the join (FROM_TRANSLATED), before the conditions.
@@ -305,7 +326,7 @@ async function listArticles(url: URL, env: Env): Promise<Response> {
 
   // One extra row tells whether there is a next page.
   const pageQuery = env.DB.prepare(
-    `SELECT ${lang ? TRANSLATED_COLUMNS : ARTICLE_COLUMNS} ${lang ? FROM_TRANSLATED : FROM_ARTICLES}
+    `SELECT ${lang ? translatedColumns(lang) : ARTICLE_COLUMNS} ${lang ? FROM_TRANSLATED : FROM_ARTICLES}
      WHERE ${where.join(" AND ")}
      ORDER BY a.feed_seq DESC
      LIMIT ?`,
@@ -314,7 +335,7 @@ async function listArticles(url: URL, env: Env): Promise<Response> {
   const firstPage = cursorParam === null && sinceParam === null && afterParam === null;
   const topQuery = firstPage
     ? lang
-      ? env.DB.prepare(translatedTop(filters)).bind(...filters.binds, lang)
+      ? env.DB.prepare(translatedTop(filters, lang)).bind(...filters.binds, lang)
       : env.DB.prepare(englishTop(filters)).bind(...filters.binds)
     : null;
   const switchQuery = lang ? env.DB.prepare(LANG_SWITCH).bind(lang) : null;
@@ -357,7 +378,8 @@ interface TranslatedRow extends ArticleRow {
   t_summary?: string;
 }
 
-const TRANSLATED_COLUMNS = `${ARTICLE_COLUMNS},
+/** The columns of a language feed: the article with its source named in `lang`, and the translation. */
+const translatedColumns = (lang: Lang) => `${articleColumns(lang)},
   t.headline AS t_headline, t.short_summary AS t_short_summary, t.summary AS t_summary`;
 
 /**
@@ -378,12 +400,13 @@ export const TRANSLATED_CONDITIONS = ["t.headline IS NOT NULL", SHOWN];
 /**
  * A language's top stories: the English top stories (same selection, same
  * order, same filters) that have a shown translation into it, so the language
- * never gets a top story the English feed does not have. Binds the filters'
- * values, then the language.
+ * never gets a top story the English feed does not have. Their sources are
+ * named in `lang` (#76). Binds the filters' values, then the language.
  */
-const translatedTop = (filters: Filters) => `
+const translatedTop = (filters: Filters, lang: Lang) => `
   SELECT top.*, t.headline AS t_headline, t.short_summary AS t_short_summary, t.summary AS t_summary
-  FROM (${englishTop(filters)}) top JOIN article_translations t ON t.article_id = top.id AND t.lang = ?
+  FROM (${topQuery(articleColumns(lang), FROM_ARTICLES, topWhere(filters))}) top
+  JOIN article_translations t ON t.article_id = top.id AND t.lang = ?
   WHERE ${TRANSLATED_CONDITIONS.join(" AND ")}
   ORDER BY top.feed_seq DESC`;
 
@@ -417,7 +440,7 @@ function toTranslatedArticle(row: TranslatedRow, lang: Lang) {
 /** `GET /articles/:id?lang=uk`: one article shown in the feed, translated into `lang`, or 404 when it is not (yet). */
 async function getTranslated(id: string, lang: Lang, env: Env): Promise<Response> {
   const row = await env.DB.prepare(
-    `SELECT ${TRANSLATED_COLUMNS} ${FROM_TRANSLATED}
+    `SELECT ${translatedColumns(lang)} ${FROM_TRANSLATED}
      WHERE a.id = ? AND a.is_news = 1 AND a.feed_seq IS NOT NULL AND ${TRANSLATED_CONDITIONS.join(" AND ")}`,
   )
     .bind(lang, id)
@@ -441,8 +464,8 @@ export const feedTopics = (filters: Filters, lang: Lang | null = null) =>
        WHERE ${[...PAGE_CONDITIONS, ...filters.where].join(" AND ")}`;
 
 /**
- * `GET /topics?lang=&country=` (#67): the topics with at least one article in
- * the feed's 7 days in `lang` (in that country's Local feed, with `country`),
+ * `GET /topics?lang=&country=|group=` (#67): the topics with at least one article in
+ * the feed's 7 days in `lang` (among that country's or group's, with `country` or `group`),
  * busiest first (ties in the order of TOPICS), named in `lang`. The app builds
  * its Topics menu from it, so a topic with no posts is never offered. Counted
  * on that language's own feed, not the English one: an article can be released
@@ -455,9 +478,9 @@ export const feedTopics = (filters: Filters, lang: Lang | null = null) =>
 async function listTopics(url: URL, env: Env): Promise<Response> {
   const lang = readLang(url.searchParams);
   if (lang === undefined) return badRequest(LANG_ERROR);
-  const country = readCountry(url.searchParams);
-  if (country === undefined) return badRequest(COUNTRY_ERROR);
-  const filters = feedFilters(country, null);
+  const place = readWhere(url.searchParams);
+  if ("error" in place) return badRequest(place.error);
+  const filters = feedFilters(place.where, null);
 
   const { results } = await env.DB.prepare(feedTopics(filters, lang))
     .bind(...(lang ? [lang] : []), ...filters.binds)
@@ -467,10 +490,12 @@ async function listTopics(url: URL, env: Env): Promise<Response> {
 }
 
 /**
- * `GET /countries?lang=` (#68): the countries the app can show a Local feed
- * for, the countries of active sources (real ones, not the Kickoff seed),
- * without blocs (BLOCS: the EU), named in `lang` and sorted by that name. The
- * sources table holds a few dozen rows.
+ * `GET /countries?lang=` (#68): the Where menu. `groups`: every group of
+ * GROUPS, always, in its fixed order, named in `lang`, with the source
+ * countries it shows (`EU` for the EU institutions). `countries`: the countries
+ * of active sources (real ones, not the Kickoff seed), without the EU
+ * institutions (in the European Union group instead), named in `lang` and
+ * sorted by that name. The sources table holds a few dozen rows.
  */
 async function listCountries(url: URL, env: Env): Promise<Response> {
   const lang = readLang(url.searchParams);
@@ -481,11 +506,12 @@ async function listCountries(url: URL, env: Env): Promise<Response> {
     `SELECT DISTINCT country FROM sources WHERE status = 'active' AND ${REAL_SOURCE}`,
   ).all<{ country: string }>();
 
+  const groups = GROUPS.map((group) => ({ id: group.id, name: groupName(group, nameLang), members: groupCountries(group) }));
   const countries = results
     .map((r) => r.country)
-    .filter((code) => /^[A-Z]{2}$/.test(code) && !(code in BLOCS))
+    .filter((code) => /^[A-Z]{2}$/.test(code) && code !== EU)
     .map((code) => ({ code, name: countryName(code, nameLang) }));
-  return json({ countries: byName(countries, nameLang) });
+  return json({ groups, countries: byName(countries, nameLang) });
 }
 
 async function route(request: Request, env: Env): Promise<Response> {

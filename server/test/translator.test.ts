@@ -872,6 +872,58 @@ describe("GET /articles with lang", () => {
     expect((await get("/articles/english-only")).status).toBe(200);
   });
 
+  describe("source names (#76)", () => {
+    const sourceOf = (article: unknown) => (article as { source: { id: string; name: string; url: string } }).source;
+    /** The source of every article in a feed's items and top, and of one article. */
+    const sources = async (lang: string) => {
+      const query = lang === "" ? "" : `?lang=${lang}`;
+      const page = (await get(`/articles${query}`)).body as ArticlesPage;
+      return [...page.items, ...page.top, (await get(`/articles/translated${query}`)).body].map(sourceOf);
+    };
+    const setConfig = (config: string | null) =>
+      env.DB.prepare("UPDATE sources SET config = ? WHERE id = 'de-federal-government'").bind(config).run();
+
+    beforeEach(async () => {
+      await env.DB.batch([
+        finished("translated", "es", 1, "Titular"),
+        // As docs/source-names.csv loads it: a Ukrainian and a Spanish name, no Russian one.
+        env.DB.prepare("UPDATE sources SET config = json_set(config, '$.names', json(?)) WHERE id = 'de-federal-government'").bind(
+          JSON.stringify({ uk: "Федеральний уряд Німеччини", es: "Gobierno Federal de Alemania" }),
+        ),
+      ]);
+    });
+
+    it("names the source in the reader's language in items, top and the article, else in English", async () => {
+      const named = (name: string) => ({ id: "de-federal-government", name, url: "https://www.bundesregierung.de" });
+      expect(await sources("uk")).toEqual([named("Федеральний уряд Німеччини"), named("Федеральний уряд Німеччини"), named("Федеральний уряд Німеччини")]);
+      expect(await sources("es")).toEqual([named("Gobierno Federal de Alemania"), named("Gobierno Federal de Alemania"), named("Gobierno Federal de Alemania")]);
+      // No Russian name: the English one.
+      expect(await sources("ru")).toEqual([named("Federal Government"), named("Federal Government"), named("Federal Government")]);
+    });
+
+    it("names the source in the reader's language with a country filter too (#68)", async () => {
+      const page = (await get("/articles?lang=uk&country=DE")).body as ArticlesPage;
+      expect(page.items.length).toBeGreaterThan(0);
+      expect(page.top.length).toBeGreaterThan(0);
+      expect(new Set([...page.items, ...page.top].map((a) => sourceOf(a).name))).toEqual(new Set(["Федеральний уряд Німеччини"]));
+    });
+
+    it("leaves English as it was, with or without lang=en", async () => {
+      for (const lang of ["", "en"]) {
+        const english = await sources(lang);
+        expect(english.length, lang).toBe(5); // english-only and translated in items and in top, and the article
+        for (const source of english) expect(source.name, lang).toBe("Federal Government");
+      }
+    });
+
+    it("falls back to the English name when the config has no name or is not JSON, instead of failing the feed", async () => {
+      for (const config of [null, '{"seed":true}', '{"names":{"uk":null}}', "not json"]) {
+        await setConfig(config);
+        expect(await sources("uk"), String(config)).toEqual(Array(3).fill({ id: "de-federal-government", name: "Federal Government", url: "https://www.bundesregierung.de" }));
+      }
+    });
+  });
+
   it("with lang=en or without lang, returns the English feed exactly as before", async () => {
     const english = await get("/articles");
     expect(await get("/articles?lang=en")).toEqual(english);

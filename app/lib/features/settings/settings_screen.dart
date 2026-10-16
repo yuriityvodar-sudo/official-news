@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/feed_language.dart';
+import '../../core/push.dart';
 import '../../core/theme.dart';
 import '../../l10n/app_localizations.dart';
 import '../detail/detail_screen.dart' show OpenLink, openOfficialPage;
@@ -18,6 +21,8 @@ class SettingsScreen extends StatelessWidget {
     required this.language,
     required this.onLanguage,
     this.openLink = openOfficialPage,
+    this.notifications,
+    this.openSettingsApp = openAppSettings,
   });
 
   /// The feed's language now, and how to change it (the feed reloads in it).
@@ -26,6 +31,13 @@ class SettingsScreen extends StatelessWidget {
 
   /// Opens a link (the support e-mail); tests pass their own.
   final OpenLink openLink;
+
+  /// The push notifications the Notifications row shows (#62): the app's
+  /// own [push] unless a test passes its own.
+  final Push? notifications;
+
+  /// Opens the iOS Settings app ([appSettingsPage]); tests pass their own.
+  final OpenAppSettings openSettingsApp;
 
   @override
   Widget build(BuildContext context) {
@@ -71,10 +83,9 @@ class SettingsScreen extends StatelessWidget {
                         ),
                       ),
                     ),
-                    CupertinoListTile(
-                      leading: const _Icon(CupertinoIcons.bell),
-                      title: Text(l10n.notifications),
-                      additionalInfo: Text(l10n.soon),
+                    _NotificationsTile(
+                      push: notifications ?? push,
+                      openSettingsApp: openSettingsApp,
                     ),
                   ],
                 ),
@@ -184,6 +195,69 @@ class _Icon extends StatelessWidget {
   @override
   Widget build(BuildContext context) =>
       Icon(icon, size: 24, color: CupertinoColors.label.resolveFrom(context));
+}
+
+/// Notifications (#62), following the phone's answer live:
+/// - iOS has not asked: "Turn On" in the accent colour; a tap shows iOS's
+///   question (no explanation first: the reader asked for it here).
+/// - On or Off: a tap opens the iOS Settings app ([appSettingsPage], meant to
+///   land on this app's page), the only place iOS lets an app's notifications
+///   be turned on again or off. Back in the app, [Push] reads the permission
+///   again and the row follows.
+/// - No push in this build (tests, local runs): "Unavailable", no tap.
+class _NotificationsTile extends StatelessWidget {
+  const _NotificationsTile({required this.push, required this.openSettingsApp});
+
+  final Push push;
+  final OpenAppSettings openSettingsApp;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return ValueListenableBuilder(
+      valueListenable: push.permission,
+      builder: (context, permission, _) {
+        const icon = _Icon(CupertinoIcons.bell);
+        final title = Text(l10n.notifications);
+        switch (permission) {
+          case PushPermission.unavailable:
+            return CupertinoListTile(
+              leading: icon,
+              title: title,
+              additionalInfo: Text(l10n.notificationsUnavailable),
+            );
+          case PushPermission.notAsked:
+            return CupertinoListTile(
+              leading: icon,
+              title: title,
+              additionalInfo: Text(
+                l10n.notificationsTurnOn,
+                style: const TextStyle(color: AppColors.accent),
+              ),
+              // Not awaited: the row follows [Push.permission] as soon as iOS
+              // answers, not after the topic is subscribed.
+              onTap: () => unawaited(push.enable(trigger: 'settings')),
+            );
+          case PushPermission.granted:
+          case PushPermission.denied:
+            return Semantics(
+              hint: l10n.notificationsOpensSettings,
+              child: CupertinoListTile(
+                leading: icon,
+                title: title,
+                additionalInfo: Text(
+                  permission == PushPermission.granted
+                      ? l10n.notificationsOn
+                      : l10n.notificationsOff,
+                ),
+                trailing: const CupertinoListTileChevron(),
+                onTap: () => unawaited(openSettingsApp()),
+              ),
+            );
+        }
+      },
+    );
+  }
 }
 
 /// A row that opens an information page.

@@ -79,7 +79,15 @@
   "settingsReading": "Lectura",
   "language": "Idioma",
   "notifications": "Notificaciones",
-  "soon": "Próximamente",
+  "notificationsOn": "Activadas",
+  "notificationsOff": "Desactivadas",
+  "notificationsTurnOn": "Activar",
+  "notificationsUnavailable": "No disponible",
+  "notificationsOpensSettings": "Abre los ajustes de tu teléfono",
+  "pushOfferTitle": "Decisiones importantes",
+  "pushOfferBody": "Recibe las decisiones oficiales más importantes como notificación: 2 al día como máximo y ninguna de noche.",
+  "pushOfferNotNow": "Ahora no",
+  "pushOfferTurnOn": "Activar",
   "settingsAboutHeader": "Información",
   "aboutApp": "Acerca de Official News",
   "aboutTitle": "Acerca de",
@@ -131,5 +139,11 @@
   "supportMessages": "¿Encontraste un error en un resumen, una fuente que no funciona o tienes una idea? Leemos todos los mensajes.",
   "supportMistakes": "Si nos informas de un error, el título del artículo y el idioma en que lo leíste nos ayudan a encontrarlo.",
   "supportAppStore": "Puedes contactarnos a través de la página de la app en el App Store.",
-  "supportWrite": "Escríbenos"
+  "supportWrite": "Escríbenos",
+
+  "countryCZ": "Chequia",
+  "countryES": "España",
+  "countryPL": "Polonia",
+  "countryUA": "Ucrania",
+  "languageCs": "checo"
 }

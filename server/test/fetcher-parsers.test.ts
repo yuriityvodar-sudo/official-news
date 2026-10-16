@@ -77,6 +77,20 @@ describe("parseDate", () => {
     expect(parseDate("2026. 10. 14. ~ 2026. 11. 24.", { format: "yyyy. mm. dd." }, NOW)?.publishedAt).toBe("2026-10-14T12:00:00Z");
   });
 
+  it("reads Ukrainian dates, with the time before or after and the year left out (kmu.gov.ua)", () => {
+    const now = new Date("2026-10-16T10:00:00Z");
+    const kyiv = { format: "uk", utcOffset: "+03:00" };
+    expect(parseDate("15 жовтня  17:34", kyiv, now)).toEqual({ publishedAt: "2026-10-15T14:34:00Z", dateOnly: false });
+    expect(parseDate("12:31, 16 жовтня", kyiv, now)?.publishedAt).toBe("2026-10-16T09:31:00Z");
+    expect(parseDate("14:20, 02 жовтня 2026", kyiv, now)?.publishedAt).toBe("2026-10-02T11:20:00Z");
+    expect(parseDate("16 Жовтня 2025", kyiv, now)).toEqual({ publishedAt: "2025-10-16T12:00:00Z", dateOnly: true });
+    // No year: the latest such date, so 31 December read on 1 January is last year's.
+    expect(parseDate("31 грудня 23:50", kyiv, new Date("2027-01-01T08:00:00Z"))?.publishedAt).toBe("2026-12-31T20:50:00Z");
+    expect(parseDate("1 січня 09:00", kyiv, new Date("2027-01-01T08:00:00Z"))?.publishedAt).toBe("2027-01-01T06:00:00Z");
+    expect(parseDate("16 жовтеня", kyiv, now)).toBeNull();
+    expect(parseDate("Засідання Уряду", kyiv, now)).toBeNull();
+  });
+
   it("drops a meaningless midnight when asked", () => {
     expect(parseDate("2026-08-10 00:00:00.0", { dateOnly: true }, NOW)).toEqual({ publishedAt: "2026-08-10T12:00:00Z", dateOnly: true });
   });
@@ -204,6 +218,28 @@ describe("parsePage", () => {
     const [meeting] = await parsePage(`<ul><li class="m"><a href="/jp/kakugi/2026/kakugi-2026101301.html">定例閣議案件</a></li></ul>`, "https://www.kantei.go.jp/jp/kakugi/index.html", { item: "li.m", date: { fromLink: "kakugi-(\\d{8})" } }, NOW);
     expect(meeting).toMatchObject({ title: "定例閣議案件", publishedAt: "2026-10-13T12:00:00Z" });
   });
+
+  it("keeps every part of a selector list inside the item", async () => {
+    // Two kinds of card on one page (kmu.gov.ua): the date is .card-time in one and .card-date in the other.
+    const html = `<div class="card"><a href="/news/a">Уряд затвердив Порядок</a><span class="card-time">15 жовтня  17:34</span></div>
+      <div class="card"><div class="card-date">12:31, 16 жовтня</div><a href="/news/b">Схвалено Стратегію</a></div>
+      <div class="card"><a href="/news/c">Уряд ухвалив рішення</a></div>
+      <div class="card-date">10:00, 16 жовтня</div>
+      <div class="card"><a href="/events/d, e">Подія</a></div>`;
+    const items = await parsePage(html, "https://www.kmu.gov.ua/", {
+      item: "div.card",
+      link: 'a[href*="/news/"], a[href*=", e"]',
+      date: { selector: ".card-time, .card-date", format: "uk", utcOffset: "+03:00" },
+    }, new Date("2026-10-16T10:00:00Z"));
+    expect(items.map((i) => [i.url, i.publishedAt])).toEqual([
+      ["https://www.kmu.gov.ua/news/a", "2026-10-15T14:34:00Z"],
+      ["https://www.kmu.gov.ua/news/b", "2026-10-16T09:31:00Z"],
+      // The date after this card is outside every card, so it stays undated.
+      ["https://www.kmu.gov.ua/news/c", null],
+      // A comma inside quotes is not a list separator.
+      ["https://www.kmu.gov.ua/events/d,%20e", null],
+    ]);
+  });
 });
 
 describe("extractContent", () => {
@@ -216,6 +252,16 @@ describe("extractContent", () => {
     const content = await extractContent(html, "https://www.bundesregierung.de/x");
     expect(content.imageUrl).toBe("https://www.bundesregierung.de/img/budget.jpg");
     expect(content.text).toBe(`Budget\n${paragraph.trim()}\nSecond & last.`);
+  });
+
+  it("drops a picture that is the site's root, and takes twitter:image instead", async () => {
+    // vlada.gov.cz pages without a photo: og:image is the home page, an HTML page.
+    const noPhoto = `<head><meta property="og:image" content="https://vlada.gov.cz" /></head><main><p>Vláda schválila nový statut.</p></main>`;
+    expect((await extractContent(noPhoto, "https://vlada.gov.cz/cz/x/")).imageUrl).toBeNull();
+    const second = `<head><meta property="og:image" content="/"><meta name="twitter:image" content="/media/foto.jpg"></head><main>x</main>`;
+    expect((await extractContent(second, "https://vlada.gov.cz/cz/x/")).imageUrl).toBe("https://vlada.gov.cz/media/foto.jpg");
+    const feed = `<rss><channel><item><title>A</title><link>https://vlada.gov.cz/a</link><enclosure url="https://vlada.gov.cz/" type="image/jpeg"/></item></channel></rss>`;
+    expect(parseFeed(feed, "https://vlada.gov.cz/rss.xml", {}, NOW)[0].imageUrl).toBeNull();
   });
 
   it("uses the source's text selector", async () => {
