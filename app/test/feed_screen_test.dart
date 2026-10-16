@@ -12,6 +12,7 @@ import 'package:official_news/core/feed_language.dart';
 import 'package:official_news/core/news_widgets.dart';
 import 'package:official_news/core/router.dart';
 import 'package:official_news/features/feed/feed_controller.dart';
+import 'package:official_news/features/feed/feed_filters.dart';
 import 'package:official_news/features/feed/feed_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -645,7 +646,16 @@ void main() {
             }),
           ),
         );
-        expect(find.byIcon(CupertinoIcons.globe), findsNothing);
+        // The language moved to Settings (#64): the feed's only globe is the
+        // Global filter (#67, prototype).
+        expect(
+          find.descendant(
+            of: find.byType(FeedFilterBar),
+            matching: find.byIcon(CupertinoIcons.globe),
+          ),
+          findsOneWidget,
+        );
+        expect(find.byIcon(CupertinoIcons.globe), findsOneWidget);
         final button = find.ancestor(
           of: find.byIcon(CupertinoIcons.gear_alt),
           matching: find.byType(CupertinoButton),

@@ -1,5 +1,4 @@
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 
 import '../../core/article.dart';
 import '../../core/countries.dart';
@@ -90,7 +89,7 @@ class FeedFilterBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
+    final l10n = AppLocalizations.of(context);
     final place = countryName(country, l10n);
     return Padding(
       padding: const EdgeInsets.only(top: 10),
@@ -211,12 +210,18 @@ class _PulldownState extends State<_Pulldown> {
             children: [
               Icon(widget.icon, size: 16, color: fg),
               const SizedBox(width: 6),
-              Text(
-                widget.label,
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                  color: fg,
+              // At the largest text sizes a long label ends in "…" instead
+              // of overflowing the chip.
+              Flexible(
+                child: Text(
+                  widget.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: fg,
+                  ),
                 ),
               ),
               const SizedBox(width: 4),

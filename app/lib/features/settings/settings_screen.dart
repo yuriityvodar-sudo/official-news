@@ -6,6 +6,7 @@ import '../../core/feed_language.dart';
 import '../../core/theme.dart';
 import '../../l10n/app_localizations.dart';
 import '../detail/detail_screen.dart' show OpenLink, openOfficialPage;
+import '../feed/feed_look.dart';
 import 'info_pages.dart';
 
 /// Settings (#64): a plain iOS list opened from the button at the top right of
@@ -48,6 +49,7 @@ class SettingsScreen extends StatelessWidget {
             ),
             SliverList.list(
               children: [
+                const _DesignSection(),
                 CupertinoListSection.insetGrouped(
                   header: _Header(l10n.settingsReading),
                   children: [
@@ -155,6 +157,38 @@ class SettingsScreen extends StatelessWidget {
       ),
     );
   }
+}
+
+/// PROTOTYPE (#66): switches the feed between today's look and the design
+/// options, to compare them in one build. English only; not for release.
+class _DesignSection extends StatelessWidget {
+  const _DesignSection();
+
+  @override
+  Widget build(BuildContext context) => CupertinoListSection.insetGrouped(
+    header: const _Header('Prototype'),
+    children: [
+      ValueListenableBuilder(
+        valueListenable: feedDesign,
+        builder: (context, design, _) => CupertinoListTile(
+          leading: const _Icon(CupertinoIcons.paintbrush),
+          title: const Text('Design'),
+          trailing: CupertinoSlidingSegmentedControl<FeedDesign>(
+            groupValue: design,
+            onValueChanged: (d) {
+              if (d != null) feedDesign.value = d;
+            },
+            children: const {
+              FeedDesign.now: Text('Now'),
+              FeedDesign.a: Text('A'),
+              FeedDesign.b: Text('B'),
+              FeedDesign.c: Text('C'),
+            },
+          ),
+        ),
+      ),
+    ],
+  );
 }
 
 /// A section header in the iOS grouped-list style: small, grey, upper case.
