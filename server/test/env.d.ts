@@ -7,6 +7,8 @@ declare global {
     interface Env extends WorkerEnv {
       TEST_MIGRATIONS: D1Migration[];
       TEST_CRONS: string[];
+      /** The country of each source in docs/sources.csv, once each. */
+      TEST_SOURCE_COUNTRIES: string[];
     }
     interface GlobalProps {
       mainModule: typeof import("../src/index");

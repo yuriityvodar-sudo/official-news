@@ -1,0 +1,25 @@
+id,licence,licence_url,wording,wording_lang,note
+us-presidential-actions,Public domain,https://www.whitehouse.gov/copyright/,,,US government work (17 U.S.C. §105)
+ca-parliament-bills,,,,,"Parliament of Canada copyright; our own words, nothing reproduced: generic line"
+mx-official-gazette,,,,,"DOF asks for a citation (dof.gob.mx/aviso_legal.html): copy its exact wording here in the legal review"
+br-chamber-bills,,,,,"Open data, free of licences: generic line"
+ar-saij-legislation,,,,,Not stated on saij.gob.ar: generic line
+gb-policy-consultations,Open Government Licence v3.0,https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/,Contains public sector information licensed under the Open Government Licence v3.0.,en,"The OGL's attribution statement. The OGL grants no right to suggest official status: the independence note is on every page"
+de-government-articles,,,,,Not stated (bundesregierung.de/breg-de/impressum): generic line
+fr-council-of-ministers,Licence Ouverte,https://www.elysee.fr/informations-legales-editoriales,,,"Text under the Licence ouverte, photos excluded: check its version and the citation it asks for in the legal review"
+it-council-of-ministers,CC BY 3.0 IT,https://creativecommons.org/licenses/by/3.0/it/,,,governo.it/it/note-legali
+eu-commission-press-releases,CC BY 4.0,https://creativecommons.org/licenses/by/4.0/,"© European Union, 1995-2026",en,"The copyright notice of commission.europa.eu/legal-notice_en (read 16 Oct 2026), kept as CC BY 4.0 §3(a)(1)(A) asks; its year range changes each year, so check it then. Changes indicated by the AI notice on every page"
+ru-kremlin-acts,CC BY 4.0,https://creativecommons.org/licenses/by/4.0/,,,kremlin.ru/about/copyrights
+tr-parliament-plenary,,,,,Not stated: generic line
+za-government-notices,,,,,"Non-commercial informational use (gov.za terms); our own words, nothing reproduced: generic line"
+au-treasurer-media-releases,CC BY 4.0,https://creativecommons.org/licenses/by/4.0/,© Commonwealth of Australia,en,"The attribution treasury.gov.au/copyright-disclaimer asks for (read 16 Oct 2026). Changes indicated by the AI notice on every page"
+cn-state-council-policies,,,,,Decisions of state organs are not protected (PRC Copyright Law art. 5): generic line
+in-parliament-bills,,,,,"Reproducing Acts and bills is allowed (Copyright Act s.52(1)(q)): generic line"
+jp-cabinet-meetings,Public Data License 1.0,https://www.kantei.go.jp/jp/terms.html,,,"PDL 1.0 asks, apart from the source, to state that the content was edited and by whom (kantei.go.jp/jp/terms.html, read 16 Oct 2026): the AI notice on every page says the text was written by AI for Official News (RS Elite Pro s.r.o.) and is not the official text. Legal review: whether its own example wording (…をもとに○○作成) is wanted as well"
+kr-legislative-notices,,,,,Korea Open Government Licence: confirm its type (MOLEG copyright policy) before showing it
+id-cabinet-secretariat,,,,,Laws and official speeches are not protected (UU 28/2014 art. 42): generic line
+pl-council-of-ministers,CC BY-SA 4.0,https://creativecommons.org/licenses/by-sa/4.0/,,,"Text CC BY-SA 4.0, photos, audio and video excluded (footer of every gov.pl page, docs/sources.csv). Legal review: whether ShareAlike reaches our AI headline and summary. Changes indicated by the AI notice on every page"
+pl-journal-of-laws,,,,,"Not stated by the Sejm's ELI API; normative acts and official documents are not protected (Polish Copyright Act art. 4, docs/sources.csv): generic line"
+cz-government-meetings,,,,,"Not stated on the pages read; resolutions and other official works are not protected (Czech Copyright Act 121/2000 Sb., s. 3, docs/sources.csv): generic line"
+es-council-of-ministers,,,Origen de los datos: sitio web de lamoncloa.gob.es. Ministerio de la Presidencia.,es,"The citation lamoncloa.gob.es/Paginas/es_AvisoLegal.aspx asks for (docs/sources.csv); it also asks for the date of the last update of the information used, which the article page's published date gives. Legal review: whether that is enough"
+ua-cabinet-of-ministers,CC BY 4.0,https://creativecommons.org/licenses/by/4.0/,,,"CC BY 4.0 unless stated otherwise (footer of every kmu.gov.ua page, docs/sources.csv). Changes indicated by the AI notice on every page"
