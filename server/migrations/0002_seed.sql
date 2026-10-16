@@ -1,4 +1,4 @@
--- 20 real official news items from the live source test (docs/test-feed-2026-10-11.html),
+-- 20 real official news items from the live source test (docs/research/2026-10-11 Live source test.html),
 -- one per G20 member. Headline and summaries are the test feed's English text;
 -- importance is left empty, and topics are a keyword guess, until the AI step (item 7) runs.
 -- Dates are relative to when the seed is loaded, so they stay inside the 7-day feed window for a week after loading.
