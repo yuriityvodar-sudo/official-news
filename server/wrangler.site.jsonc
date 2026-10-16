@@ -1,0 +1,31 @@
+{
+  // The website (#88): one page per article in each language it is shown in,
+  // the latest list per language and the app's information pages, rendered
+  // from the API's own handler (src/api) in the same request. Its own Worker,
+  // so a site failure never stops the app's API or the crons, and its usage
+  // shows under its own name. It reads D1 only through the API's code and has
+  // no AI binding and no secrets: it cannot call AI. scripts/site.check.mjs
+  // keeps it that way.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "site",
+  "main": "src/site/index.ts",
+  "compatibility_date": "2026-10-01",
+  // NewsApp account (see docs/setup.md). Not a secret.
+  "account_id": "8dc93578877d397a693094f3e2b01029",
+  // Served at site.officialnews.workers.dev until the domain (#65); then
+  // workers_dev becomes false and the domain a custom_domain route.
+  "workers_dev": true,
+  "preview_urls": false,
+  // The api Worker's database (wrangler.jsonc owns the schema and migrations).
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "official-news",
+      "database_id": "67052e61-5544-4c6d-a182-1321192f3d0a"
+    }
+  ],
+  // Every absolute URL on a page (canonical, alternates, Open Graph) starts
+  // with this, never with the request's host: the cache key has no host.
+  "vars": { "SITE_ORIGIN": "https://site.officialnews.workers.dev" },
+  "observability": { "enabled": true }
+}
