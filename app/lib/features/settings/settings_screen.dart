@@ -176,7 +176,14 @@ class _DesignSection extends StatelessWidget {
           trailing: CupertinoSlidingSegmentedControl<FeedDesign>(
             groupValue: design,
             onValueChanged: (d) {
-              if (d != null) feedDesign.value = d;
+              if (d == null || d == design) return;
+              feedDesign.value = d;
+              // Back to the feed to show the new look, once the segment has slid over.
+              Future.delayed(const Duration(milliseconds: 250), () {
+                if (context.mounted) {
+                  Navigator.of(context).popUntil((route) => route.isFirst);
+                }
+              });
             },
             children: const {
               FeedDesign.now: Text('Now'),
