@@ -12,6 +12,10 @@ import 'package:official_news/core/article.dart';
 import 'package:official_news/core/feed_language.dart';
 import 'package:official_news/core/push.dart';
 import 'package:official_news/core/router.dart';
+import 'package:official_news/core/theme.dart';
+import 'package:official_news/features/detail/detail_screen.dart';
+import 'package:official_news/features/feed/feed_controller.dart';
+import 'package:official_news/main.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Firebase Cloud Messaging as the tests want it: iOS answers [answer] when it
@@ -74,6 +78,51 @@ class FakeMessaging implements Messaging {
 
   @override
   Stream<void> get tokenChanges => tokenEvents.stream;
+}
+
+/// Topic changes as the Firebase iOS SDK (13) makes them: one that meets no
+/// network gets no answer, waits in Firebase's own queue (kept across
+/// launches) and is carried out, in order, once the phone is back online,
+/// even after the app stopped waiting for it.
+class QueuedMessaging extends FakeMessaging {
+  QueuedMessaging() : super(status: PushPermission.granted);
+
+  /// The topics FCM has for this phone.
+  final topics = <String>{};
+  bool online = true;
+
+  /// The network drops just before this call (`subscribe breaking_de`).
+  String? dropBefore;
+  final _queue = <(String, bool, Completer<void>)>[];
+
+  @override
+  Future<void> subscribe(String topic) => _send('subscribe', topic, true);
+
+  @override
+  Future<void> unsubscribe(String topic) => _send('unsubscribe', topic, false);
+
+  Future<void> _send(String call, String topic, bool add) {
+    calls.add('$call $topic');
+    if (dropBefore == '$call $topic') online = false;
+    final done = Completer<void>();
+    _queue.add((topic, add, done));
+    if (online) _deliver();
+    return done.future;
+  }
+
+  /// Back online: Firebase sends what waited.
+  void reconnect() {
+    online = true;
+    _deliver();
+  }
+
+  void _deliver() {
+    for (final (topic, add, done) in _queue) {
+      add ? topics.add(topic) : topics.remove(topic);
+      done.complete();
+    }
+    _queue.clear();
+  }
 }
 
 Map<String, dynamic> _article(String id, {String? lang}) => {
@@ -391,6 +440,78 @@ void main() {
       expect(prefs.getString('push.topic'), 'breaking_de');
     });
 
+    group('a change Firebase queues while offline', () {
+      /// [change] gets no answer: the app stops waiting after 30 seconds.
+      Future<void> unanswered(
+        WidgetTester tester,
+        Future<void> Function() change,
+      ) async {
+        final done = change();
+        await tester.pump(const Duration(seconds: 61));
+        await done;
+      }
+
+      Future<void> backInFront(WidgetTester tester) async {
+        tester.binding
+          ..handleAppLifecycleStateChanged(AppLifecycleState.inactive)
+          ..handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+        await tester.pump();
+      }
+
+      testWidgets('a subscribe the app gave up on is still undone later', (
+        tester,
+      ) async {
+        final messaging = QueuedMessaging();
+        final push = await started(messaging, saved: {'feed.lang': 'uk'});
+        expect(messaging.topics, {'breaking_uk'});
+
+        // The old topic goes, then the network drops before the new one.
+        messaging.dropBefore = 'subscribe breaking_de';
+        await unanswered(tester, () => push.setLanguage(FeedLanguage.de));
+        await unanswered(tester, () => push.setLanguage(FeedLanguage.ru));
+
+        messaging.reconnect();
+        await backInFront(tester);
+        expect(messaging.topics, {'breaking_ru'});
+        expect(prefs.getString('push.topic'), 'breaking_ru');
+      });
+
+      testWidgets('back to the first language offline: still subscribed', (
+        tester,
+      ) async {
+        final messaging = QueuedMessaging();
+        final push = await started(messaging);
+        expect(messaging.topics, {'breaking_en'});
+
+        messaging.online = false;
+        await unanswered(tester, () => push.setLanguage(FeedLanguage.de));
+        await unanswered(tester, () => push.setLanguage(FeedLanguage.en));
+
+        messaging.reconnect();
+        await backInFront(tester);
+        expect(messaging.topics, {'breaking_en'});
+        expect(prefs.getString('push.topic'), 'breaking_en');
+      });
+
+      testWidgets('a restart while still offline', (tester) async {
+        final messaging = QueuedMessaging();
+        final push = await started(messaging, saved: {'feed.lang': 'es'});
+        messaging.dropBefore = 'subscribe breaking_uk';
+        await unanswered(tester, () => push.setLanguage(FeedLanguage.uk));
+        await prefs.setString('feed.lang', 'uk'); // as the feed saves it
+
+        // Firebase keeps its queue across launches.
+        push.stop();
+        await unanswered(tester, () => push.start(messaging, prefs));
+        await unanswered(tester, () => push.setLanguage(FeedLanguage.de));
+
+        messaging.reconnect();
+        await backInFront(tester);
+        expect(messaging.topics, {'breaking_de'});
+        expect(prefs.getString('push.topic'), 'breaking_de');
+      });
+    });
+
     test(
       'waits for the APNs token; the FCM token that follows subscribes',
       () async {
@@ -521,6 +642,70 @@ void main() {
       expect(requests, isEmpty);
       expect(find.text('feed'), findsOneWidget);
       expect(sent('push_open').first, {'article_id': 'none', 'lang': 'en'});
+    });
+  });
+
+  group('wired into the app', () {
+    /// The app's own [push], turned on with [messaging].
+    Future<void> appPushStarted(FakeMessaging messaging) async {
+      SharedPreferences.setMockInitialValues({});
+      prefs = await SharedPreferences.getInstance();
+      await push.start(messaging, prefs);
+      addTearDown(push.stop);
+    }
+
+    testWidgets('an article open 15 seconds counts towards the offer', (
+      tester,
+    ) async {
+      await appPushStarted(FakeMessaging());
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: buildTheme(Brightness.light),
+          home: DetailScreen(article: Article.fromJson(_article('a1'))),
+        ),
+      );
+      await tester.pump(const Duration(seconds: 14));
+      expect(prefs.getStringList('push.readIds'), isNull);
+      await tester.pump(const Duration(seconds: 2));
+      expect(prefs.getStringList('push.readIds'), ['a1']);
+    });
+
+    test('the feed\'s language change moves the topic', () async {
+      final messaging = FakeMessaging(status: PushPermission.granted);
+      await appPushStarted(messaging);
+      final feed = FeedController(
+        api: ApiClient(
+          baseUrl: 'https://api.test',
+          client: MockClient(
+            (_) async =>
+                http.Response('{"items":[],"nextCursor":null,"top":[]}', 200),
+          ),
+        ),
+      );
+      addTearDown(feed.dispose);
+      await feed.setLanguage(FeedLanguage.uk);
+      await pumpEventQueue();
+      expect(messaging.calls, [
+        'subscribe breaking_en',
+        'unsubscribe breaking_en',
+        'subscribe breaking_uk',
+      ]);
+    });
+
+    testWidgets('the app offers on its navigator, and taps open on it', (
+      tester,
+    ) async {
+      late MaterialApp app;
+      await tester.pumpWidget(
+        Builder(
+          builder: (context) {
+            app = const OfficialNewsApp().build(context) as MaterialApp;
+            return const SizedBox();
+          },
+        ),
+      );
+      expect(app.navigatorObservers, contains(isA<PushOffer>()));
+      expect(app.navigatorKey, same(appNavigator));
     });
   });
 }

@@ -187,7 +187,12 @@ class Push with WidgetsBindingObserver {
   static const _offeredKey = 'push.offered';
   static const _topicKey = 'push.topic';
 
-  /// A topic change that gets no answer counts as failed and is tried again later.
+  /// How long the app waits for a topic change; then it is tried again at the
+  /// next trigger. Firebase may still carry it out later: on iOS a change that
+  /// meets no network waits in Firebase's own queue, kept across launches, and
+  /// is sent once the phone is back online (Firebase iOS SDK 13,
+  /// `FIRMessagingPendingTopicsList`). So the saved topic is the one that may
+  /// be subscribed, not only the one Firebase confirmed.
   static const _timeout = Duration(seconds: 30);
 
   /// Article ids are ULIDs; anything else in a notification is not opened.
@@ -202,8 +207,10 @@ class Push with WidgetsBindingObserver {
   SharedPreferences? _prefs;
   FeedLanguage _language = FeedLanguage.en;
 
-  /// The topic subscribed during this run, so a start (or a new FCM token)
-  /// subscribes again once: that repairs a subscription Firebase lost.
+  /// The topic Firebase confirmed during this run, so a start (or a new FCM
+  /// token) subscribes again once: that repairs a subscription Firebase lost.
+  /// Null from the moment a change is sent until Firebase answers it, so a
+  /// change without an answer is sent again at the next trigger.
   String? _confirmed;
   Future<void> _syncing = Future.value();
 
@@ -258,7 +265,8 @@ class Push with WidgetsBindingObserver {
     if (now != null) await _apply(now);
   }
 
-  /// Turns push off again (tests).
+  /// Turns push off again (tests), forgetting this run as an app quit would:
+  /// a [start] after it is the next launch.
   @visibleForTesting
   void stop() {
     WidgetsBinding.instance.removeObserver(this);
@@ -268,6 +276,9 @@ class Push with WidgetsBindingObserver {
     _subscriptions.clear();
     _messaging = null;
     _prefs = null;
+    _confirmed = null;
+    // A new chain: the old one may belong to an earlier test's fake clock.
+    _syncing = Future.value();
     _permission.value = PushPermission.unavailable;
   }
 
@@ -392,15 +403,20 @@ class Push with WidgetsBindingObserver {
     final have = prefs.getString(_topicKey);
     if (want == have && (want == null || want == _confirmed)) return;
     if (!await messaging.ready()) return;
-    // The old topic first: never two languages at once.
+    // Unknown until Firebase answers: a change without an answer may still be
+    // carried out, so the next trigger sends the wanted topic again.
+    _confirmed = null;
+    // The old topic first: never two languages at once. It stays saved until
+    // Firebase confirms it is gone.
     if (have != null && have != want) {
       await messaging.unsubscribe(have).timeout(_timeout);
-      await prefs.remove(_topicKey);
-      _confirmed = null;
+      if (want == null) await prefs.remove(_topicKey);
     }
     if (want != null) {
-      await messaging.subscribe(want).timeout(_timeout);
+      // Saved before it is sent, so a later change unsubscribes it even when
+      // this subscribe gets no answer and Firebase carries it out later.
       await prefs.setString(_topicKey, want);
+      await messaging.subscribe(want).timeout(_timeout);
       _confirmed = want;
     }
   }
