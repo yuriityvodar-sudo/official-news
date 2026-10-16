@@ -10,11 +10,12 @@ import 'feed_look_b_cards.dart';
 /// Design option B (#66), prototype: cards.
 ///
 /// iOS's grouped grey page with each decision in its own white card (dark
-/// grey in dark mode). A card reads top to bottom: the country and ministry
-/// with the decision type, the serif headline, what it means in two lines,
-/// then when it arrived and its topic. Pictures run across the top of their
-/// card; a card without one is complete as it is. Top stories are bigger
-/// cards. The filters and the settings button stay at the top while reading.
+/// grey in dark mode). A card reads top to bottom: who decided (the country
+/// and ministry), the serif headline, what it means in three lines (four in
+/// Top stories), then the decision type, the topic and when it arrived.
+/// Pictures run across the top of their card; a card without one is complete
+/// as it is. Top stories are bigger cards. The filters and the settings button
+/// stay at the top while reading, so the "N new" pill sits at the bottom.
 class BLook extends FeedLook {
   @override
   Color background(BuildContext context) => BStyle.of(context).page;
@@ -94,12 +95,16 @@ class BLook extends FeedLook {
     );
   }
 
+  /// At the bottom of the screen: the top is where B's filters stay pinned,
+  /// and a pill there would cover the "All topics" filter and take its taps.
   @override
   Widget newPill(
     BuildContext context, {
     required int count,
     required VoidCallback onTap,
-  }) => BNewPill(count: count, onTap: onTap);
+  }) => _AtBottom(
+    child: BNewPill(count: count, onTap: onTap),
+  );
 
   /// "Top stories", "Latest": black, not red, with room above so the
   /// sections read as separate.
@@ -135,6 +140,7 @@ class BLook extends FeedLook {
                 article: a,
                 read: section.isRead(a),
                 kind: kind,
+                lead: kind == BCardKind.top && i == 0,
                 onTap: () => section.open(i),
               ),
             );
@@ -240,25 +246,71 @@ class _Masthead extends StatelessWidget {
   }
 }
 
-/// The filters on the left and the settings button on the right.
+/// The filters on the left and the settings button on the right, the gear
+/// level with the first row of filters.
 class _Toolbar extends StatelessWidget {
   const _Toolbar(this.masthead);
 
   final FeedMasthead masthead;
 
   @override
-  Widget build(BuildContext context) => Padding(
-    // The filter bar brings 10 pt of its own above the chips.
-    padding: const EdgeInsets.fromLTRB(bMargin + 4, 0, bMargin - 6, 6),
-    child: Row(
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        Expanded(child: masthead.filterBar),
-        const SizedBox(width: 8),
-        masthead.settingsButton,
-      ],
-    ),
-  );
+  Widget build(BuildContext context) {
+    // The filter bar brings 10 pt of its own above its chips; a chip is its
+    // 15-pt label (about 1.2 lines' height in SF) plus 14 pt, in a target at
+    // least 36 pt high. The gear's target is 44 pt: centred on the chips'.
+    final chip = math.max(
+      36.0,
+      14 + MediaQuery.textScalerOf(context).scale(15) * 1.2,
+    );
+    final gearTop = math.max(0.0, 10 + chip / 2 - 22);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(bMargin + 4, 0, bMargin - 6, 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(child: masthead.filterBar),
+          const SizedBox(width: 8),
+          Padding(
+            padding: EdgeInsets.only(top: gearTop),
+            child: masthead.settingsButton,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// [child] at the bottom of the screen, centred, above the home indicator.
+///
+/// PROTOTYPE: the feed screen places the pill 12 pt below the top of the safe
+/// area and lets a look draw only the pill, so this reaches from there to the
+/// bottom and puts the pill at its end. Where it holds no pill it lets taps
+/// through to the feed. If B is chosen, the screen should place it instead
+/// (a `newPillAtBottom` on FeedLook), agreed in the pull request.
+class _AtBottom extends StatelessWidget {
+  const _AtBottom({required this.child});
+
+  final Widget child;
+
+  /// Where the screen puts the pill: 12 pt below the top of the safe area.
+  static const _screenTop = 12.0;
+
+  @override
+  Widget build(BuildContext context) {
+    // The safe area's top is taken out of the MediaQuery here, so it is read
+    // from the screen itself.
+    final screen = MediaQueryData.fromView(View.of(context));
+    final room =
+        MediaQuery.sizeOf(context).height -
+        screen.padding.top -
+        _screenTop -
+        16 -
+        MediaQuery.paddingOf(context).bottom;
+    return SizedBox(
+      height: math.max(0, room),
+      child: Align(alignment: Alignment.bottomCenter, child: child),
+    );
+  }
 }
 
 /// Top stories side by side, swiped one at a time, the next card peeking in.
@@ -295,21 +347,22 @@ class _CarouselState extends State<_Carousel> {
     final top = widget.top;
     double lines(double size, double height, int n) =>
         scaler.scale(size) * height * n;
-    // The card's own layout, line by line: the top line (stacked at the
-    // Accessibility sizes), the headline, the summary and the footer.
-    final kindTag = lines(11, 1.25, 1) + 6;
-    final topLine = bLargeText(context)
-        ? lines(13, 1.3, 3) + 8 + kindTag
-        : math.max(lines(13, 1.3, 1), kindTag);
+    // The card's own layout, line by line, at its most: who decided, the
+    // headline, the summary and the footer (the type tag, and the topic and
+    // time under it when they do not fit beside it).
+    final large = bLargeText(context);
+    final kindTag = scaler.clamp(maxScaleFactor: 2.0).scale(11) * 1.25 + 6;
     final text =
-        2 * k.padding +
-        topLine +
-        10 +
+        2 * (large ? 16 : k.padding) +
+        lines(13, 1.3, BCardKind.placeLines(large)) +
+        8 +
         lines(k.headline, k.headlineHeight, BCardKind.carouselHeadlineLines) +
         6 +
         lines(k.summary, 1.33, k.summaryLines) +
         12 +
-        lines(13, 1.3, 1);
+        kindTag +
+        6 +
+        lines(13, 1.3, BCardKind.footerLines(large));
     return SizedBox(
       // Room to spare (a line): the sum above comes out a little short at the
       // largest text sizes.

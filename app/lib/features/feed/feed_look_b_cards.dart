@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
@@ -7,9 +9,8 @@ import '../../core/decision_types.dart';
 import '../../core/news_widgets.dart';
 import '../../core/pictures.dart';
 import '../../core/theme.dart';
-import '../../core/topics.dart';
 import '../../l10n/app_localizations.dart';
-import 'feed_filters.dart';
+import 'feed_look_b_words.dart';
 
 /// Design option B (#66), prototype: the cards and the styles they use.
 
@@ -29,14 +30,138 @@ const _deepRed = Color(0xFFD1203A);
 /// Card corners: iOS's continuous corners (a superellipse, as on app icons).
 const bRadius = 18.0;
 
-/// Official pages' share pictures are mostly 1200 x 630 (1.91:1): a top
-/// story shows them whole.
+/// Official pages' share pictures are mostly 1200 x 630 (1.91:1): the first
+/// top story shows its picture whole.
 const _pictureRatio = 1.91;
 
-/// The iOS Accessibility text sizes (from 1.65x): the top line stacks and the
-/// filters no longer stay pinned.
+/// The iOS Accessibility text sizes, from AX1 (1.65x, body 28 pt). Up to the
+/// largest standard size, XXXL (1.35x), a card keeps its normal layout. From
+/// AX1 the filters take two rows, so they no longer stay pinned, and the
+/// cards' padding narrows to give the text room.
 bool bLargeText(BuildContext context) =>
-    MediaQuery.textScalerOf(context).scale(10) > 13.5;
+    MediaQuery.textScalerOf(context).scale(10) > 16.0;
+
+/// The largest a card's text grows, so that at the largest sizes each text
+/// keeps its rank: the headline stops at 40 pt (from about AX2), what it
+/// means at 36 pt and the labels (who decided, the topic and time) at 30 pt.
+/// A headline then keeps two or three words a line.
+enum _Largest {
+  headline(40),
+  summary(36),
+  label(30);
+
+  const _Largest(this.points);
+
+  final double points;
+}
+
+/// [scaler] for text of [size] on a card, stopped at [largest].
+TextScaler _capped(TextScaler scaler, double size, _Largest largest) =>
+    scaler.clamp(maxScaleFactor: math.max(1.0, largest.points / size));
+
+/// Where a line may break: at a space, and after a hyphen
+/// ("імідж-консультанта"). A non-breaking hyphen (U+2011) keeps its word.
+final _breaks = RegExp(r'\s+|(?<=-)');
+
+/// Flutter breaks a word that is wider than the line between two letters
+/// ("municipalitie / s"). This makes [scaler] smaller, for this text only, so
+/// its widest word fits in [width]: at large text sizes a long word
+/// ("головнокомандувача", "Bundesregierung") is drawn a little smaller
+/// rather than broken. Text whose words all fit keeps [scaler]. The words
+/// are measured in the font that draws them, so it holds for any font.
+TextScaler bFitWords(
+  BuildContext context,
+  TextScaler scaler,
+  double width,
+  List<(String, TextStyle)> parts,
+) {
+  if (!width.isFinite || width <= 0 || parts.isEmpty) return scaler;
+  final base = DefaultTextStyle.of(context).style;
+  final painter = TextPainter(
+    text: TextSpan(
+      children: [
+        for (final (text, style) in parts)
+          TextSpan(
+            text: '${text.trim().split(_breaks).join('\n')}\n',
+            style: base.merge(style),
+          ),
+      ],
+    ),
+    textDirection: Directionality.of(context),
+  );
+  final size = parts.first.$2.fontSize ?? 14;
+  var fitted = scaler;
+  // Letter spacing does not grow with the text, so a word's width is not in
+  // proportion to the scale: measured again until it fits (twice at most,
+  // in practice).
+  for (var tries = 0; tries < 4; tries++) {
+    painter
+      ..textScaler = fitted
+      ..layout();
+    final widest = painter.maxIntrinsicWidth;
+    // A point under the line, for rounding.
+    if (widest <= width - 0.5) break;
+    final factor = fitted.scale(size) / size;
+    fitted = scaler.clamp(maxScaleFactor: factor * (width - 1) / widest);
+  }
+  painter.dispose();
+  return fitted;
+}
+
+/// The words of [text] that fit in [maxLines] lines of [width], cut after a
+/// whole word with "…": Flutter's own ellipsis cuts inside a word
+/// ("identificati…"). When the cut would leave only a few words of a new
+/// sentence ("It requires…"), it ends with the sentence before instead.
+/// Null when the whole text fits.
+String? bCutAtWord(
+  String text, {
+  required TextStyle style,
+  required TextScaler scaler,
+  required int maxLines,
+  required double width,
+  required TextDirection direction,
+}) {
+  if (!width.isFinite || width <= 0) return null;
+  final painter = TextPainter(
+    textDirection: direction,
+    textScaler: scaler,
+    maxLines: maxLines,
+  );
+  bool fits(String s) {
+    painter
+      ..text = TextSpan(text: s, style: style)
+      ..layout(maxWidth: width);
+    return !painter.didExceedMaxLines;
+  }
+
+  try {
+    if (fits(text)) return null;
+    final words = text.split(' ');
+    String cut(int n) =>
+        '${words.take(n).join(' ').replaceFirst(RegExp(r'[\s,;:–—-]+$'), '')}…';
+    var best = 0;
+    var lo = 1, hi = words.length - 1;
+    while (lo <= hi) {
+      final mid = (lo + hi) ~/ 2;
+      if (fits(cut(mid))) {
+        best = mid;
+        lo = mid + 1;
+      } else {
+        hi = mid - 1;
+      }
+    }
+    // Not even one word fits: Flutter's ellipsis does what it can.
+    if (best == 0) return null;
+    for (var n = best; n > 0 && best - n <= 3; n--) {
+      if (RegExp(r'[.!?]["»”’)]?$').hasMatch(words[n - 1])) {
+        return words.take(n).join(' ');
+      }
+    }
+    return cut(best);
+  } finally {
+    painter.dispose();
+  }
+}
 
 /// The colours and text styles of option B, for light and dark.
 class BStyle {
@@ -131,13 +256,17 @@ class BStyle {
   );
 }
 
-/// The article's main topic in the app's language: the names exist only in
-/// English so far, so other languages show none rather than mix languages.
-String? _topicName(Article article, AppLocalizations l10n) {
-  if (article.topics.isEmpty || l10n.localeName != 'en') return null;
-  final id = article.topics.first;
-  return topicNames[id] ?? topicLabel(id);
-}
+/// How much of its colour grey text keeps on a read card. Faded as much as
+/// the headline (readOpacity), #6C6C70 fell to 2.2:1 on white; at 0.8 it is
+/// about 3.5:1 (4.3:1 in dark), and the card still reads as opened.
+const _readGrey = 0.8;
+
+/// [style], grey text, faded for a card already read.
+TextStyle _fadeGrey(TextStyle style, bool read) => read && style.color != null
+    ? style.copyWith(
+        color: style.color!.withValues(alpha: style.color!.a * _readGrey),
+      )
+    : style;
 
 /// [parts] as sentences for VoiceOver, each ending in one full stop: a summary
 /// that ends in its own is not read with a second.
@@ -148,14 +277,15 @@ String _sentences(List<String> parts) => [
 
 /// The sizes of a card.
 enum BCardKind {
-  /// A top story: more room, a bigger headline, three lines of summary.
+  /// A top story: more room, a bigger headline, four lines of summary.
   top(
     padding: 20,
     headline: 24,
     headlineHeight: 1.18,
     summary: 16,
-    summaryLines: 3,
-    pictureRatio: _pictureRatio,
+    summaryLines: 4,
+    // The band of Latest; only the first top story shows its picture whole.
+    pictureRatio: 2.4,
   ),
 
   /// A card in Latest.
@@ -164,7 +294,7 @@ enum BCardKind {
     headline: 20,
     headlineHeight: 1.22,
     summary: 15,
-    summaryLines: 2,
+    summaryLines: 3,
     // A band rather than the whole picture, so the list keeps moving.
     pictureRatio: 2.4,
   ),
@@ -194,11 +324,17 @@ enum BCardKind {
   final int summaryLines;
 
   static const carouselHeadlineLines = 4;
+
+  /// Lines for the country and ministry: two, four at the Accessibility sizes.
+  static int placeLines(bool large) => large ? 4 : 2;
+
+  /// Lines for the topic and time beside the type tag.
+  static int footerLines(bool large) => large ? 3 : 1;
 }
 
 /// One decision in its own card: picture (when the page has one), country and
-/// ministry with the decision type, the serif headline, what it means, and
-/// when it arrived with its topic.
+/// ministry, the serif headline, what it means, then the decision type, the
+/// topic and when it arrived.
 class BCard extends StatefulWidget {
   const BCard({
     super.key,
@@ -206,14 +342,18 @@ class BCard extends StatefulWidget {
     required this.read,
     required this.onTap,
     this.kind = BCardKind.latest,
+    this.lead = false,
   });
 
   final Article article;
 
-  /// Opened before: the card stays, its text and picture faded.
+  /// Opened before: the card stays, its headline and picture faded.
   final bool read;
   final VoidCallback onTap;
   final BCardKind kind;
+
+  /// The first top story: its picture is shown whole.
+  final bool lead;
 
   @override
   State<BCard> createState() => _BCardState();
@@ -236,114 +376,113 @@ class _BCardState extends State<BCard> {
     final read = widget.read;
     final fill = k == BCardKind.carousel;
     final large = bLargeText(context);
+    final padding = large ? 16.0 : k.padding;
     final country = countryName(a.country, l10n);
     final kind = decisionTypeLabel(a.decisionType, l10n);
-    final topic = _topicName(a, l10n);
+    final topic = bTopicName(a, l10n);
     final time = feedTime(a, l10n);
     final summary = a.shortSummary?.trim();
     final hasSummary = summary != null && summary.isNotEmpty;
 
-    final place = Text.rich(
-      TextSpan(
-        children: [
-          // The official-source seal, always in the same place.
-          WidgetSpan(
-            alignment: PlaceholderAlignment.middle,
-            child: Padding(
-              padding: const EdgeInsets.only(right: 5),
-              child: Icon(
-                CupertinoIcons.checkmark_seal_fill,
-                // A mark, not text: it grows with the text, but only so far.
-                size: scaler.clamp(maxScaleFactor: 1.4).scale(15),
-                color: read
-                    ? AppColors.verified.withValues(alpha: readOpacity)
-                    : AppColors.verified,
+    // Who decided: the country, the official-source seal and the ministry,
+    // in up to two lines, so a long ministry's name is not cut.
+    final place = LayoutBuilder(
+      builder: (context, constraints) {
+        final fitted = bFitWords(
+          context,
+          _capped(scaler, 13, _Largest.label),
+          constraints.maxWidth,
+          [(country, s.country), (a.source.name, s.source)],
+        );
+        // Flutter scales an inline widget with its text; the seal is a mark,
+        // not text, so it grows only to 1.4x.
+        final grow = fitted.scale(14) / 14;
+        return Text.rich(
+          TextSpan(
+            children: [
+              TextSpan(text: country, style: dim(s.country, read)),
+              // The official-source seal, outlined and grey as a quiet mark.
+              WidgetSpan(
+                alignment: PlaceholderAlignment.middle,
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 4),
+                  child: Icon(
+                    CupertinoIcons.checkmark_seal,
+                    size: 14 * math.min(grow, 1.4) / grow,
+                    color: _fadeGrey(s.source, read).color,
+                  ),
+                ),
               ),
-            ),
+              TextSpan(text: ' · ', style: _fadeGrey(s.source, read)),
+              TextSpan(text: a.source.name, style: _fadeGrey(s.source, read)),
+            ],
           ),
-          TextSpan(text: country, style: dim(s.country, read)),
-          TextSpan(text: ' · ', style: dim(s.source, read)),
-          TextSpan(text: a.source.name, style: dim(s.source, read)),
-        ],
-      ),
-      maxLines: large ? 3 : 1,
-      overflow: TextOverflow.ellipsis,
+          textScaler: fitted,
+          maxLines: BCardKind.placeLines(large),
+          overflow: TextOverflow.ellipsis,
+        );
+      },
     );
 
-    final kindTag = kind == null
-        ? null
-        : Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-            decoration: ShapeDecoration(
-              color: read
-                  ? s.fill.withValues(alpha: s.fill.a * readOpacity)
-                  : s.fill,
-              shape: const StadiumBorder(),
-            ),
-            child: Text(
-              kind.toUpperCase(),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: dim(s.kind, read),
-            ),
-          );
+    final headlineStyle = dim(s.headline(k.headline, k.headlineHeight), read);
+    final headline = LayoutBuilder(
+      builder: (context, constraints) => Text(
+        a.headline,
+        style: headlineStyle,
+        textScaler: bFitWords(
+          context,
+          _capped(scaler, k.headline, _Largest.headline),
+          constraints.maxWidth,
+          [(a.headline, headlineStyle)],
+        ),
+        // The headline is the news: never cut in the list, at any size.
+        // (An ellipsis without a line limit would cut it after one line.)
+        maxLines: fill ? BCardKind.carouselHeadlineLines : null,
+        overflow: fill ? TextOverflow.ellipsis : TextOverflow.clip,
+      ),
+    );
 
-    final topLine = kindTag == null
-        ? place
-        : large
-        ? Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [place, const SizedBox(height: 8), kindTag],
-          )
-        : Row(
+    // The decision type leads the footer, the topic and time beside it; they
+    // move under it when a long type and topic do not fit on one line.
+    final footerText = Text(
+      [?topic, time].join('  ·  '),
+      maxLines: BCardKind.footerLines(large),
+      overflow: TextOverflow.ellipsis,
+      style: _fadeGrey(s.footer, read),
+      textScaler: _capped(scaler, 13, _Largest.label),
+    );
+    final footer = kind == null
+        ? footerText
+        : Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
-              Expanded(child: place),
-              const SizedBox(width: 10),
-              ConstrainedBox(
-                // The country comes first and is never cut: a long type is.
-                constraints: BoxConstraints(
-                  maxWidth: MediaQuery.sizeOf(context).width * 0.42,
-                ),
-                child: kindTag,
-              ),
+              _KindTag(kind, read: read, large: large),
+              footerText,
             ],
           );
 
-    final summaryStyle = dim(s.summary(k.summary), read);
-    final footer = Text(
-      [?topic, time].join('  ·  '),
-      maxLines: 1,
-      overflow: TextOverflow.ellipsis,
-      style: dim(s.footer, read),
-    );
-
     final text = Padding(
       padding: EdgeInsets.fromLTRB(
-        k.padding,
-        a.imageUrl == null || fill ? k.padding : k.padding - 2,
-        k.padding,
-        k.padding,
+        padding,
+        a.imageUrl == null || fill ? padding : padding - 2,
+        padding,
+        padding,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          topLine,
-          SizedBox(height: k == BCardKind.top ? 12 : 10),
-          Text(
-            a.headline,
-            style: dim(s.headline(k.headline, k.headlineHeight), read),
-            // The headline is the news: never cut in the list, at any size.
-            // (An ellipsis without a line limit would cut it after one line.)
-            maxLines: fill ? BCardKind.carouselHeadlineLines : null,
-            overflow: fill ? TextOverflow.ellipsis : TextOverflow.clip,
-          ),
+          place,
+          SizedBox(height: k == BCardKind.top ? 10 : 8),
+          headline,
           if (hasSummary) ...[
             SizedBox(height: k == BCardKind.top ? 8 : 6),
-            Text(
+            _Teaser(
               summary,
-              style: summaryStyle,
+              style: _fadeGrey(s.summary(k.summary), read),
               maxLines: k.summaryLines,
-              overflow: TextOverflow.ellipsis,
+              scaler: _capped(scaler, k.summary, _Largest.summary),
             ),
           ],
           if (fill) const Spacer(),
@@ -353,13 +492,14 @@ class _BCardState extends State<BCard> {
       ),
     );
 
-    // One VoiceOver stop per card, read in the order that matters: what, what
-    // kind, who, what it means, when.
+    // One VoiceOver stop per card. The headline first, as it is the news,
+    // then the card's own order: who, what it means, what kind, the topic,
+    // when; "Read" after a card already opened.
     final spoken = _sentences([
       a.headline,
-      ?kind,
       '$country, ${a.source.name}',
       if (hasSummary) summary,
+      ?kind,
       ?topic,
       time,
     ]);
@@ -368,6 +508,7 @@ class _BCardState extends State<BCard> {
       container: true,
       button: true,
       label: spoken,
+      value: read ? bReadWord(l10n) : null,
       onTap: widget.onTap,
       excludeSemantics: true,
       child: GestureDetector(
@@ -390,7 +531,7 @@ class _BCardState extends State<BCard> {
                 BCardPicture(
                   url: a.imageUrl!,
                   dimmed: read,
-                  ratio: k.pictureRatio,
+                  ratio: widget.lead ? _pictureRatio : k.pictureRatio,
                 ),
               if (fill) Expanded(child: text) else text,
             ],
@@ -401,8 +542,82 @@ class _BCardState extends State<BCard> {
   }
 }
 
-/// The page's picture across the top of a card. If it cannot be loaded it is
-/// left out, so the card shows its text alone instead of an empty grey box.
+/// The decision type as a small grey tag: "BILL", "РІШЕННЯ УРЯДУ".
+class _KindTag extends StatelessWidget {
+  const _KindTag(this.kind, {required this.read, required this.large});
+
+  final String kind;
+  final bool read;
+  final bool large;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = BStyle.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: ShapeDecoration(
+        color: read ? s.fill.withValues(alpha: s.fill.a * _readGrey) : s.fill,
+        // A pill on one line; at the Accessibility sizes a long type may take
+        // two, and a pill's round ends would cut into them.
+        shape: large
+            ? RoundedSuperellipseBorder(borderRadius: BorderRadius.circular(10))
+            : const StadiumBorder(),
+      ),
+      child: Text(
+        kind.toUpperCase(),
+        maxLines: large ? 2 : 1,
+        overflow: TextOverflow.ellipsis,
+        style: _fadeGrey(s.kind, read),
+        // A label: it grows to twice its size (22 pt), not with the text.
+        textScaler: MediaQuery.textScalerOf(context).clamp(maxScaleFactor: 2.0),
+      ),
+    );
+  }
+}
+
+/// What it means, in at most [maxLines] lines, cut after a whole word.
+class _Teaser extends StatelessWidget {
+  const _Teaser(
+    this.text, {
+    required this.style,
+    required this.maxLines,
+    required this.scaler,
+  });
+
+  final String text;
+  final TextStyle style;
+  final int maxLines;
+  final TextScaler scaler;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final fitted = bFitWords(context, scaler, constraints.maxWidth, [
+        (text, style),
+      ]);
+      final cut = bCutAtWord(
+        text,
+        style: DefaultTextStyle.of(context).style.merge(style),
+        scaler: fitted,
+        maxLines: maxLines,
+        width: constraints.maxWidth,
+        direction: Directionality.of(context),
+      );
+      return Text(
+        cut ?? text,
+        style: style,
+        textScaler: fitted,
+        maxLines: maxLines,
+        // Only if the cut above came out a hair long.
+        overflow: TextOverflow.ellipsis,
+      );
+    },
+  );
+}
+
+/// The page's picture across the top of a card. A grey box holds its place
+/// while it loads and stays if it cannot be loaded, so the cards below never
+/// move while they are read.
 class BCardPicture extends StatelessWidget {
   const BCardPicture({
     super.key,
@@ -423,6 +638,10 @@ class BCardPicture extends StatelessWidget {
     final pixels = MediaQuery.devicePixelRatioOf(context);
     // Bright pictures (often a site's logo) are toned down a little on dark cards.
     final keep = (dimmed ? readOpacity : 1.0) * (s.dark ? 0.88 : 1.0);
+    Widget box([Widget? child]) => AspectRatio(
+      aspectRatio: ratio,
+      child: ColoredBox(color: s.fill, child: child),
+    );
     return LayoutBuilder(
       builder: (context, constraints) => ClipRSuperellipse(
         borderRadius: const BorderRadius.vertical(
@@ -438,11 +657,9 @@ class BCardPicture extends StatelessWidget {
           ),
           fit: BoxFit.cover,
           opacity: keep < 1 ? AlwaysStoppedAnimation(keep) : null,
-          frameBuilder: (context, child, frame, _) => AspectRatio(
-            aspectRatio: ratio,
-            child: ColoredBox(color: s.fill, child: child),
-          ),
-          errorBuilder: (_, _, _) => const SizedBox.shrink(),
+          frameBuilder: (context, child, frame, _) => box(child),
+          // Flutter skips frameBuilder on an error, so the box is drawn here too.
+          errorBuilder: (_, _, _) => box(),
         ),
       ),
     );
