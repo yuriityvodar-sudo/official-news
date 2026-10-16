@@ -6,6 +6,7 @@ import '../../core/api_client.dart';
 import '../../core/article.dart';
 import '../../core/feed_language.dart';
 import '../../core/feed_store.dart';
+import '../../core/push.dart';
 
 /// The feed's state: its language, articles, paging, errors, read articles and
 /// the check for new ones. The screen only draws it.
@@ -92,6 +93,8 @@ class FeedController extends ChangeNotifier {
     if (lang == language) return;
     language = lang;
     unawaited(_store?.saveLanguage(lang));
+    // Notifications come in the feed's language (#62).
+    unawaited(push.setLanguage(lang));
     final saved = _store?.lastPage(lang);
     _show(saved);
     newCount = 0;

@@ -11,6 +11,7 @@ import '../../core/countries.dart';
 import '../../core/languages.dart';
 import '../../core/news_widgets.dart';
 import '../../core/pictures.dart';
+import '../../core/push.dart';
 import '../../core/theme.dart';
 
 /// Opens the official page; tests pass their own.
@@ -150,9 +151,11 @@ class _CountsReadState extends State<_CountsRead> {
   @override
   void initState() {
     super.initState();
-    _timer = ArticleReadTimer(
-      () => unawaited(analytics.articleRead(widget.article)),
-    );
+    _timer = ArticleReadTimer(() {
+      unawaited(analytics.articleRead(widget.article));
+      // The third read makes notifications worth offering (#62).
+      unawaited(push.articleRead(widget.article.id));
+    });
   }
 
   @override

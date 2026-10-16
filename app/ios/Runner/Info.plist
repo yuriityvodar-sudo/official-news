@@ -76,5 +76,9 @@
 	<!-- The app sends its own screen views (feed, article); iOS's would all be one Flutter screen. -->
 	<key>FirebaseAutomaticScreenReportingEnabled</key>
 	<false/>
+	<!-- Push (#62): no FCM token until the reader allows notifications; the app
+	     turns it on then (setAutoInitEnabled, kept by Firebase across launches). -->
+	<key>FirebaseMessagingAutoInitEnabled</key>
+	<false/>
 </dict>
 </plist>

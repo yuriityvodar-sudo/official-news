@@ -1,0 +1,526 @@
+import 'dart:async';
+import 'dart:convert';
+
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+import 'package:official_news/core/analytics.dart';
+import 'package:official_news/core/api_client.dart';
+import 'package:official_news/core/article.dart';
+import 'package:official_news/core/feed_language.dart';
+import 'package:official_news/core/push.dart';
+import 'package:official_news/core/router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+/// Firebase Cloud Messaging as the tests want it: iOS answers [answer] when it
+/// asks; topic changes fail while [failTopics] is set.
+class FakeMessaging implements Messaging {
+  FakeMessaging({
+    this.status = PushPermission.notAsked,
+    this.answer = PushPermission.granted,
+    this.initial,
+  });
+
+  PushPermission status;
+  PushPermission answer;
+  PushTap? initial;
+  bool apnsToken = true;
+  Object? failTopics;
+  int asked = 0;
+  bool tokenAllowed = false;
+  bool banners = false;
+  final calls = <String>[];
+  final tapEvents = StreamController<PushTap>.broadcast();
+  final tokenEvents = StreamController<void>.broadcast();
+
+  @override
+  Future<PushPermission> permission() async => status;
+
+  @override
+  Future<PushPermission> requestPermission() async {
+    asked++;
+    if (status == PushPermission.notAsked) status = answer;
+    return status;
+  }
+
+  @override
+  Future<void> allowToken() async => tokenAllowed = true;
+
+  @override
+  Future<bool> ready() async => apnsToken;
+
+  @override
+  Future<void> subscribe(String topic) async {
+    calls.add('subscribe $topic');
+    if (failTopics != null) throw failTopics!;
+  }
+
+  @override
+  Future<void> unsubscribe(String topic) async {
+    calls.add('unsubscribe $topic');
+    if (failTopics != null) throw failTopics!;
+  }
+
+  @override
+  Future<void> showInForeground() async => banners = true;
+
+  @override
+  Future<PushTap?> initialTap() async => initial;
+
+  @override
+  Stream<PushTap> get taps => tapEvents.stream;
+
+  @override
+  Stream<void> get tokenChanges => tokenEvents.stream;
+}
+
+Map<String, dynamic> _article(String id, {String? lang}) => {
+  'id': id,
+  'country': 'DE',
+  'source': {
+    'id': 'de-gov',
+    'name': 'Federal Government',
+    'url': 'https://www.bundesregierung.de',
+  },
+  'publishedAt': '2026-10-16T09:00:00Z',
+  'dateOnly': false,
+  'headline': lang == null ? 'Decision $id' : 'Decision $id ($lang)',
+  'shortSummary': null,
+  'summary': 'Summary $id',
+  'decisionType': 'cabinet-decision',
+  'originalTitle': 'Original $id',
+  'originalLanguage': 'de',
+  'topics': ['economy'],
+  'tags': <String>[],
+  'importance': 5,
+  'imageUrl': null,
+  'originalUrl': 'https://www.bundesregierung.de/$id',
+  'lang': ?lang,
+};
+
+void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  late List<(String, Map<String, Object>)> events;
+  late Map<String, String> userProperties;
+  late List<Uri> requests;
+  late int articleStatus;
+
+  /// The phone's saved values, as [started] opened them.
+  late SharedPreferences prefs;
+
+  final api = ApiClient(
+    baseUrl: 'https://api.test',
+    client: MockClient((request) async {
+      requests.add(request.url);
+      if (articleStatus != 200) return http.Response('{"error":"x"}', 404);
+      final id = request.url.pathSegments.last;
+      final lang = request.url.queryParameters['lang'];
+      return http.Response.bytes(
+        utf8.encode(jsonEncode(_article(id, lang: lang))),
+        200,
+      );
+    }),
+  );
+
+  setUp(() {
+    events = [];
+    userProperties = {};
+    requests = [];
+    articleStatus = 200;
+    analytics = Analytics(
+      (name, parameters) async => events.add((name, parameters)),
+      (name, value) async => userProperties[name] = value,
+    );
+  });
+  tearDown(() => analytics = Analytics());
+
+  Iterable<Map<String, Object>> sent(String name) =>
+      events.where((e) => e.$1 == name).map((e) => e.$2);
+
+  /// Push turned on with [messaging], on a phone holding [saved].
+  Future<Push> started(
+    FakeMessaging messaging, {
+    Map<String, Object> saved = const {},
+    GlobalKey<NavigatorState>? navigator,
+  }) async {
+    SharedPreferences.setMockInitialValues(saved);
+    prefs = await SharedPreferences.getInstance();
+    final push = Push(api: api, navigator: navigator);
+    await push.start(messaging, prefs);
+    addTearDown(push.stop);
+    return push;
+  }
+
+  /// A feed and an article screen, as the app's routes are named.
+  Widget app(GlobalKey<NavigatorState> navigator, Push push) => MaterialApp(
+    navigatorKey: navigator,
+    navigatorObservers: [PushOffer(push)],
+    onGenerateRoute: (settings) => CupertinoPageRoute(
+      settings: settings,
+      builder: (_) => Scaffold(
+        body: Text(
+          settings.name == Routes.detail
+              ? 'article ${(settings.arguments! as Article).headline}'
+              : 'feed',
+        ),
+      ),
+    ),
+  );
+
+  /// Opens an article from the feed and goes back to it.
+  Future<void> readAndReturn(
+    WidgetTester tester,
+    GlobalKey<NavigatorState> navigator,
+  ) async {
+    unawaited(
+      navigator.currentState!.pushNamed(
+        Routes.detail,
+        arguments: Article.fromJson(_article('x')),
+      ),
+    );
+    await tester.pumpAndSettle();
+    navigator.currentState!.pop();
+    await tester.pumpAndSettle();
+  }
+
+  group('asking for notifications', () {
+    testWidgets('not before the third different article read', (tester) async {
+      final navigator = GlobalKey<NavigatorState>();
+      final push = await started(FakeMessaging(), navigator: navigator);
+      await tester.pumpWidget(app(navigator, push));
+      await push.articleRead('a1');
+      await push.articleRead('a2');
+      await push.articleRead('a2'); // the same article read again
+      await readAndReturn(tester, navigator);
+      expect(find.text(PushTexts.title), findsNothing);
+      expect(push.offerDue, isFalse);
+    });
+
+    testWidgets(
+      'after the third read, back on the feed: the app explains, then iOS asks',
+      (tester) async {
+        final navigator = GlobalKey<NavigatorState>();
+        final messaging = FakeMessaging();
+        final push = await started(messaging, navigator: navigator);
+        await tester.pumpWidget(app(navigator, push));
+        for (final id in ['a1', 'a2', 'a3']) {
+          await push.articleRead(id);
+        }
+        // Not over the article: only once the reader is back on the feed.
+        expect(find.text(PushTexts.title), findsNothing);
+        expect(messaging.asked, 0);
+
+        await readAndReturn(tester, navigator);
+        expect(find.text(PushTexts.title), findsOneWidget);
+        expect(find.text(PushTexts.body), findsOneWidget);
+        expect(messaging.asked, 0, reason: 'iOS asks only after Turn On');
+
+        await tester.tap(find.text(PushTexts.turnOn));
+        await tester.pumpAndSettle();
+        expect(messaging.asked, 1);
+        expect(push.permission.value, PushPermission.granted);
+        expect(messaging.tokenAllowed, isTrue);
+        expect(messaging.calls, ['subscribe breaking_en']);
+        expect(sent('push_permission').single, {
+          'result': 'granted',
+          'trigger': 'reads',
+        });
+        expect(userProperties['notifications'], 'on');
+      },
+    );
+
+    testWidgets('asks once: not on the next return, nor after a restart', (
+      tester,
+    ) async {
+      final navigator = GlobalKey<NavigatorState>();
+      final messaging = FakeMessaging(answer: PushPermission.denied);
+      final push = await started(messaging, navigator: navigator);
+      await tester.pumpWidget(app(navigator, push));
+      for (final id in ['a1', 'a2', 'a3']) {
+        await push.articleRead(id);
+      }
+      await readAndReturn(tester, navigator);
+      await tester.tap(find.text(PushTexts.turnOn));
+      await tester.pumpAndSettle();
+      expect(push.permission.value, PushPermission.denied);
+      expect(sent('push_permission').single['result'], 'denied');
+      expect(messaging.calls, isEmpty, reason: 'no topic without permission');
+
+      await push.articleRead('a4');
+      await readAndReturn(tester, navigator);
+      expect(find.text(PushTexts.title), findsNothing);
+      expect(messaging.asked, 1);
+
+      // A later launch: iOS says denied, and the app has asked before.
+      push.stop();
+      await push.start(messaging, prefs);
+      expect(push.offerDue, isFalse);
+    });
+
+    testWidgets('"Not Now": iOS never asks, and the app never asks again', (
+      tester,
+    ) async {
+      final navigator = GlobalKey<NavigatorState>();
+      final messaging = FakeMessaging();
+      final push = await started(messaging, navigator: navigator);
+      await tester.pumpWidget(app(navigator, push));
+      for (final id in ['a1', 'a2', 'a3']) {
+        await push.articleRead(id);
+      }
+      await readAndReturn(tester, navigator);
+      await tester.tap(find.text(PushTexts.notNow));
+      await tester.pumpAndSettle();
+      expect(messaging.asked, 0);
+      expect(push.permission.value, PushPermission.notAsked);
+      expect(sent('push_permission').single, {
+        'result': 'not_now',
+        'trigger': 'reads',
+      });
+
+      await readAndReturn(tester, navigator);
+      expect(find.text(PushTexts.title), findsNothing);
+
+      // After a restart iOS still has not asked, but the app does not offer again.
+      push.stop();
+      await push.start(messaging, prefs);
+      expect(push.permission.value, PushPermission.notAsked);
+      expect(push.offerDue, isFalse);
+
+      // The Settings screen can still turn them on.
+      expect(await push.enable(), PushPermission.granted);
+      expect(sent('push_permission').last, {
+        'result': 'granted',
+        'trigger': 'settings',
+      });
+      expect(messaging.calls, ['subscribe breaking_en']);
+    });
+
+    testWidgets('not when iOS was already answered (from Settings)', (
+      tester,
+    ) async {
+      final navigator = GlobalKey<NavigatorState>();
+      final push = await started(
+        FakeMessaging(status: PushPermission.granted),
+        navigator: navigator,
+      );
+      await tester.pumpWidget(app(navigator, push));
+      for (final id in ['a1', 'a2', 'a3']) {
+        await push.articleRead(id);
+      }
+      await readAndReturn(tester, navigator);
+      expect(find.text(PushTexts.title), findsNothing);
+    });
+
+    testWidgets('off without Firebase: no question, no counting', (
+      tester,
+    ) async {
+      SharedPreferences.setMockInitialValues({});
+      prefs = await SharedPreferences.getInstance();
+      final navigator = GlobalKey<NavigatorState>();
+      final push = Push(api: api, navigator: navigator);
+      await tester.pumpWidget(app(navigator, push));
+      for (final id in ['a1', 'a2', 'a3']) {
+        await push.articleRead(id);
+      }
+      await readAndReturn(tester, navigator);
+      expect(push.permission.value, PushPermission.unavailable);
+      expect(find.text(PushTexts.title), findsNothing);
+      expect(await push.enable(), PushPermission.unavailable);
+      expect(prefs.getKeys(), isEmpty);
+    });
+  });
+
+  group('topic per feed language', () {
+    test(
+      'allowed: subscribes to the feed language and saves the topic',
+      () async {
+        final messaging = FakeMessaging(status: PushPermission.granted);
+        await started(messaging, saved: {'feed.lang': 'uk'});
+        expect(messaging.calls, ['subscribe breaking_uk']);
+        expect(messaging.banners, isTrue);
+        expect(prefs.getString('push.topic'), 'breaking_uk');
+      },
+    );
+
+    test('a language change moves it: the old topic off first', () async {
+      final messaging = FakeMessaging(status: PushPermission.granted);
+      final push = await started(messaging, saved: {'feed.lang': 'uk'});
+      await push.setLanguage(FeedLanguage.ru);
+      await push.setLanguage(FeedLanguage.ru);
+      expect(messaging.calls, [
+        'subscribe breaking_uk',
+        'unsubscribe breaking_uk',
+        'subscribe breaking_ru',
+      ]);
+      expect(prefs.getString('push.topic'), 'breaking_ru');
+    });
+
+    test('a start corrects a topic saved for another language', () async {
+      final messaging = FakeMessaging(status: PushPermission.granted);
+      await started(
+        messaging,
+        saved: {'feed.lang': 'es', 'push.topic': 'breaking_en'},
+      );
+      expect(messaging.calls, [
+        'unsubscribe breaking_en',
+        'subscribe breaking_es',
+      ]);
+    });
+
+    test('a failed change is tried again when the app comes back', () async {
+      final messaging = FakeMessaging(status: PushPermission.granted);
+      final push = await started(messaging, saved: {'feed.lang': 'uk'});
+      messaging.failTopics = StateError('offline');
+      await push.setLanguage(FeedLanguage.de);
+      expect(prefs.getString('push.topic'), 'breaking_uk');
+
+      messaging
+        ..failTopics = null
+        ..calls.clear();
+      final binding = TestWidgetsFlutterBinding.instance;
+      binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await pumpEventQueue();
+      expect(messaging.calls, [
+        'unsubscribe breaking_uk',
+        'subscribe breaking_de',
+      ]);
+      expect(prefs.getString('push.topic'), 'breaking_de');
+    });
+
+    test(
+      'waits for the APNs token; the FCM token that follows subscribes',
+      () async {
+        final messaging = FakeMessaging(status: PushPermission.granted)
+          ..apnsToken = false;
+        await started(messaging);
+        expect(messaging.calls, isEmpty);
+
+        messaging.apnsToken = true;
+        messaging.tokenEvents.add(null);
+        await pumpEventQueue();
+        expect(messaging.calls, ['subscribe breaking_en']);
+
+        // Another new token: subscribed again, in case Firebase lost it.
+        messaging.tokenEvents.add(null);
+        await pumpEventQueue();
+        expect(messaging.calls, [
+          'subscribe breaking_en',
+          'subscribe breaking_en',
+        ]);
+      },
+    );
+
+    test('turned off in the iOS Settings app: the topic is dropped', () async {
+      final messaging = FakeMessaging(status: PushPermission.granted);
+      await started(messaging, saved: {'feed.lang': 'ru'});
+      messaging.status = PushPermission.denied;
+      final binding = TestWidgetsFlutterBinding.instance;
+      binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await pumpEventQueue();
+      expect(messaging.calls, [
+        'subscribe breaking_ru',
+        'unsubscribe breaking_ru',
+      ]);
+      expect(prefs.getString('push.topic'), isNull);
+      expect(userProperties['notifications'], 'off');
+    });
+
+    test('not allowed: no topic at all', () async {
+      final messaging = FakeMessaging();
+      final push = await started(messaging);
+      await push.setLanguage(FeedLanguage.uk);
+      expect(messaging.calls, isEmpty);
+    });
+  });
+
+  group('a tapped notification', () {
+    testWidgets('opens its article in its language, over the feed', (
+      tester,
+    ) async {
+      final navigator = GlobalKey<NavigatorState>();
+      final messaging = FakeMessaging(status: PushPermission.granted);
+      final push = await started(messaging, navigator: navigator);
+      await tester.pumpWidget(app(navigator, push));
+      // The reader was in another article.
+      unawaited(
+        navigator.currentState!.pushNamed(
+          Routes.detail,
+          arguments: Article.fromJson(_article('other')),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      messaging.tapEvents.add(const PushTap(articleId: 'a1', lang: 'uk'));
+      await tester.pumpAndSettle();
+      expect(
+        requests.single.toString(),
+        'https://api.test/articles/a1?lang=uk',
+      );
+      expect(find.text('article Decision a1 (uk)'), findsOneWidget);
+      expect(find.text('article Decision other'), findsNothing);
+      navigator.currentState!.pop();
+      await tester.pumpAndSettle();
+      expect(find.text('feed'), findsOneWidget);
+      expect(sent('push_open').single, {'article_id': 'a1', 'lang': 'uk'});
+    });
+
+    testWidgets('the tap that started the app opens its article', (
+      tester,
+    ) async {
+      final navigator = GlobalKey<NavigatorState>();
+      await tester.pumpWidget(app(navigator, Push()));
+      await started(
+        FakeMessaging(
+          status: PushPermission.granted,
+          initial: const PushTap(articleId: 'a1', lang: 'en'),
+        ),
+        navigator: navigator,
+      );
+      await tester.pumpAndSettle();
+      // English is the API without `lang`.
+      expect(requests.single.toString(), 'https://api.test/articles/a1');
+      expect(find.text('article Decision a1'), findsOneWidget);
+    });
+
+    testWidgets('an article that does not load: the feed', (tester) async {
+      articleStatus = 404;
+      final navigator = GlobalKey<NavigatorState>();
+      final messaging = FakeMessaging(status: PushPermission.granted);
+      final push = await started(messaging, navigator: navigator);
+      await tester.pumpWidget(app(navigator, push));
+      unawaited(
+        navigator.currentState!.pushNamed(
+          Routes.detail,
+          arguments: Article.fromJson(_article('other')),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      messaging.tapEvents.add(const PushTap(articleId: 'gone', lang: 'ru'));
+      await tester.pumpAndSettle();
+      expect(requests, hasLength(1));
+      expect(find.text('feed'), findsOneWidget);
+      expect(find.textContaining('article'), findsNothing);
+    });
+
+    testWidgets('no usable article id: the feed, without asking the API', (
+      tester,
+    ) async {
+      final navigator = GlobalKey<NavigatorState>();
+      final messaging = FakeMessaging(status: PushPermission.granted);
+      final push = await started(messaging, navigator: navigator);
+      await tester.pumpWidget(app(navigator, push));
+      messaging.tapEvents.add(PushTap.fromData({'articleId': '../health'}));
+      messaging.tapEvents.add(PushTap.fromData({'lang': 'uk'}));
+      await tester.pumpAndSettle();
+      expect(requests, isEmpty);
+      expect(find.text('feed'), findsOneWidget);
+      expect(sent('push_open').first, {'article_id': 'none', 'lang': 'en'});
+    });
+  });
+}

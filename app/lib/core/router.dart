@@ -12,6 +12,10 @@ abstract final class Routes {
   static const detail = '/article';
 }
 
+/// The app's navigator, for what opens a screen from outside one: a tapped
+/// notification opens its article (#62).
+final appNavigator = GlobalKey<NavigatorState>();
+
 Route<dynamic> onGenerateRoute(RouteSettings settings) {
   switch (settings.name) {
     case Routes.detail:
