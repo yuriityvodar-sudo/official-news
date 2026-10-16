@@ -26,7 +26,7 @@ After Roman's review (issues #3 to #11), these replace anything older further do
 - **Sources publish official decisions only:** laws, amendments, proposals, government and ministry meeting agendas, minutes and meeting outcomes. Opinion pieces, interviews, commentary, statements and call readouts are hidden (the AI's `isNews` flag).
 - **The AI summary reads like news**, not two fixed blocks, facts from the article only. One AI call per article returns one news-style summary, the same for everyone, and tags the article with 1 to 3 topics from the fixed list, so the topic features have data when they come.
 - **The app looks and feels like Apple News** on iOS and Android, light and dark: large bold titles, red accent, serif headlines, publisher line above each headline, big images, iOS navigation and gestures. Each headline has a red decision-type label (Law, Bill, Cabinet decision…). Screens: [docs/design/mvp.png](design/mvp.png).
-- **Countries:** G20 only in the MVP. Labels for disputed territories wait until after the MVP.
+- **Countries:** G20 in the MVP, and from 16 Oct also Poland, Czechia, Spain and Ukraine, the countries of the translation languages (#72; brought forward from Phases 2 and 3). Labels for disputed territories wait until after the MVP.
 - **Secrets:** no shared password vault. A key never travels between us: whoever creates it puts it straight into its one home. Yurii creates the keys that live in GitHub Secrets, the App Store Connect API key included (replaces Bitwarden, 14 Oct).
 - **Google Play:** Yurii's account, Roman as Admin.
 
@@ -224,7 +224,7 @@ Each item becomes one GitHub issue owned by one person. **Must** is what the ite
 
 ### 5. Source list (Yurii)
 
-- **Must:** `docs/sources.csv` with one source per G20 member (19 since 14 Oct: Saudi Arabia waits for consent), each with kind, URL, language, `verified_by` and licence, preferring pages that publish official decisions (laws, proposals, meeting agendas, minutes and outcomes); loaded into `sources`.
+- **Must:** `docs/sources.csv` with one source per G20 member (19 since 14 Oct: Saudi Arabia waits for consent), plus Poland, Czechia, Spain and Ukraine (5 sources since 16 Oct, #72), each with kind, URL, language, `verified_by` and licence, preferring pages that publish official decisions (laws, proposals, meeting agendas, minutes and outcomes); loaded into `sources`.
 - **Suggested:** grow to about 85 Phase 1 sources once the fetcher is stable.
 - **Done when:** the verified sources are in D1 (19 since 14 Oct: Saudi Arabia waits for the gazette's written consent, see `docs/sources.md`).
 

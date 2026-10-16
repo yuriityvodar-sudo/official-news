@@ -1,6 +1,6 @@
 # Sources
 
-The list of official sites the fetcher reads lives in [sources.csv](sources.csv): one row per source. Every source was checked by hand on 2026-10-14: official (how is in `verified_by` and `evidence`), allowed by `robots.txt`, no bot check, items and dates in the page itself, and mostly official decisions (laws, bills, decrees, cabinet decisions, meeting agendas and outcomes).
+The list of official sites the fetcher reads lives in [sources.csv](sources.csv): one row per source. Every source was checked by hand on 2026-10-14 (Poland, Czechia, Spain and Ukraine on 2026-10-16, #72): official (how is in `verified_by` and `evidence`), allowed by `robots.txt`, no bot check, items and dates in the page itself, and mostly official decisions (laws, bills, decrees, cabinet decisions, meeting agendas and outcomes).
 
 ## Changing the list
 
@@ -31,11 +31,11 @@ How the fetcher (item 6) reads a source, as JSON. Types: `server/src/fetcher/typ
 
 **Feeds (`kind: rss`)**: RSS 2.0, RSS 1.0 and Atom are read without settings. `title`: another element holds the title (e.g. `description`). `date.field`: another element holds the date (e.g. `valueDate`).
 
-**Pages (`kind: page`)**: `item` selects one list entry; inside it `link` (default `a`, reads `href`), `title` (default: the link's text), `summary`, `image`, `category` are CSS selectors. `selector@attr` reads an attribute; `@attr` reads the item element itself.
+**Pages (`kind: page`)**: `item` selects one list entry; inside it `link` (default `a`, reads `href`), `title` (default: the link's text), `summary`, `image`, `category` are CSS selectors. `selector@attr` reads an attribute; `@attr` reads the item element itself. A list such as `.card-time, .card-date` takes the first element in the item that matches any part; every part is looked for inside the item only.
 
 **APIs (`kind: api`)**: `items` is the dotted path to the list (empty for a top-level list); `itemRoot` a path inside each entry; `title`, `link`, `text` and `key` are paths or `{path}` templates. A string holding JSON is parsed when a path goes through it. `keep`: `{ "path": "regex" }`, entries that do not match are skipped. `key` is added to the stored URL so one link can hold several items.
 
-**Dates (`date`)**: without settings, ISO 8601, feed dates and day-first `dd/mm/yyyy` are understood. `selector` + `attr` (pages), `field` (feeds; APIs accept a list, first non-empty wins), `format` (`fr` for "14 octobre 2026", or a pattern with `yyyy mm dd HH MM`), `utcOffset` for local times without a zone (e.g. `+03:00`), `dateOnly` to ignore a meaningless time, `fromLink` (a regular expression whose group is `yyyymmdd` in the item link).
+**Dates (`date`)**: without settings, ISO 8601, feed dates and day-first `dd/mm/yyyy` are understood. `selector` + `attr` (pages), `field` (feeds; APIs accept a list, first non-empty wins), `format` (`fr` for "14 octobre 2026"; `uk` for "16 жовтня 2026", "15 жовтня 17:34" or "12:31, 16 жовтня", where no year means the latest such date; or a pattern with `yyyy mm dd HH MM`), `utcOffset` for local times without a zone (e.g. `+03:00`), `dateOnly` to ignore a meaningless time, `fromLink` (a regular expression whose group is `yyyymmdd` in the item link).
 
 ## Open points
 
@@ -43,7 +43,11 @@ How the fetcher (item 6) reads a source, as JSON. Types: `server/src/fetcher/typ
 - **India:** PIB cabinet decisions (`pib.gov.in`) is the better source but blocks our fetcher's user agent; we ask PIB to allow it. Until then: Parliament's bill list, which is quiet between sessions (the health check must not call it stale then).
 - **Russia:** the Kremlin site answered only over plain http from Kenya; the list now uses `https` (our rule). If Cloudflare cannot reach it either, source health shows it broken and we look for another source.
 - **Retest from Cloudflare** once the fetcher runs; these did not answer from a test machine in Kenya and would be better sources: Türkiye's Official Gazette (`resmigazete.gov.tr`), Australia's Federal Register of Legislation (`legislation.gov.au`), Argentina's Boletín Oficial (`boletinoficial.gob.ar`), Brazil's Planalto legislation (`planalto.gov.br`).
-- **Licences for a commercial launch:** Mexico (DOF), Canada (Parliament), South Africa (GCIS) and Saudi Arabia allow non-commercial use only without permission. Check before any paid feature.
+- **Spain: the Official State Gazette (BOE) comes with a robots.txt change.** Section I (`https://www.boe.es/rss/boe.php?s=1`: royal decrees, orders, laws, about 2 to 5 a day) reads with today's `rss` kind and an `exclude` for `Sumario`, `Corrección de errores` and `Sentencia`, and robots.txt allows the feed and the item pages (`/diario_boe/txt.php?id=…`, text in `#textoxslt`). But that robots.txt is 494 KB with 12,312 rules, and the fetcher reads and checks it in every run: measured 16 Oct in the Workers runtime on a laptop, parsing takes 2 to 4 ms and checking the 3 URLs of one run 14 ms warm and 88 ms cold, against 10 ms of CPU per run. Add it together with robots.txt handling that keeps the verdict between runs, or reads only the rules that can match. `boe.es` is not a `gob.es` domain, so its row needs `portal` or `wikidata`. Until then Spain has La Moncloa's weekly Council of Ministers summaries.
+- **Ukraine: only the Cabinet's home page.** The Verkhovna Rada (`zakon.rada.gov.ua`, `rada.gov.ua`, `data.rada.gov.ua`, `itd.rada.gov.ua`) resolves in DNS but did not answer a test machine abroad (TCP timeouts on 15 and 16 Oct); `president.gov.ua` answers its robots.txt with an Akamai 403; the Cabinet's RSS (`/api/rss`), its acts list (`/npas/`) and `/timeline` (where `/news` redirects) are disallowed by robots.txt. The home page dates its cards without a year in Kyiv time; on a busy meeting day, more decisions than the home page shows (about 12 latest) between two checks would be missed.
+- **Czechia:** the binding government resolutions (`odok.gov.cz`) are `Disallow: /`; e-Sbírka (`e-sbirka.gov.cz`) is a JavaScript app with a CAPTCHA key; the Chamber's Collection of Laws list (`https://www.psp.cz/sqw/sbirka.sqw`) is allowed but needs windows-1250 decoding and a parser for its flat list.
+- **Poland:** `dziennikustaw.gov.pl`, `monitorpolski.gov.pl`, `isap.sejm.gov.pl` and `www.sejm.gov.pl` disallow every agent except Googlebot, so the Journal of Laws comes from the Sejm's ELI API. gov.pl lists 10 decisions a page and only the first page is read.
+- **Licences for a commercial launch:** Mexico (DOF), Canada (Parliament), South Africa (GCIS) and Saudi Arabia allow non-commercial use only without permission. gov.pl text is CC BY-SA 4.0 (share-alike: check what it asks of our summaries). Check before any paid feature.
 - **Not used on purpose:** `hcdn.gob.ar` (Argentina's Chamber of Deputies) lists AI agents by name as disallowed in `robots.txt`.
 
 ## Backups
@@ -72,3 +76,6 @@ If a source breaks, the research found these second choices (same country, also 
 | KR | Cabinet meeting laws | `https://www.moleg.go.kr/board.es?mid=a10105040000&bid=0093` |
 | ID | State Secretariat legal database (POST API) | `https://jdih.setneg.go.id/api/hukumproduk/produkhukum` |
 | SA | Umm al-Qura, Council of Ministers news | `https://www.uqn.gov.sa/news/council-of-ministers` (same consent needed) |
+| PL | Sejm, legislative processes passed (API; checked 16 Oct: dates move in batches on old processes, and `term10` changes after the 2027 election) | `https://api.sejm.gov.pl/sejm/term10/processes/passed?limit=20&sort_by=-lastModified` |
+| CZ | Chamber of Deputies, Collection of Laws list (checked 16 Oct; needs windows-1250 and a parser first) | `https://www.psp.cz/sqw/sbirka.sqw` |
+| ES | La Moncloa, Council of Ministers references, the full record (checked 16 Oct) | `https://www.lamoncloa.gob.es/Paginas/rss.aspx?tipo=16` |
