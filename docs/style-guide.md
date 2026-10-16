@@ -43,7 +43,7 @@ Official decisions only, as agreed in `docs/decisions.md`. `isNews` is `true` fo
 | `meeting-agenda` | The published agenda of a government or parliamentary meeting |
 | `meeting-outcome` | The published results of such a meeting |
 
-`isNews` is `false` for statements, condolences, congratulations, readouts of calls or visits that announce no decision, speeches, interviews, opinion pieces, event announcements, a parliamentary debate or hearing where nothing was adopted (even about a bill), a page explaining a law or programme adopted earlier, and routine notices: exchange rates, interest rate tables, price indices, tenders, court notices, company notices, appointments below the top level, technical standards.
+`isNews` is `false` for statements, condolences, congratulations, readouts of calls or visits that announce no decision, speeches, interviews, opinion pieces, event announcements, a parliamentary debate or hearing where nothing was adopted (even about a bill), a page explaining a law or programme adopted earlier, and regular notices: exchange rates, interest rate tables, price indices, tenders, court notices, company notices, appointments below the top level, technical standards.
 
 ## Topic angles for `impact.byTopic`
 
@@ -67,7 +67,7 @@ Official decisions only, as agreed in `docs/decisions.md`. `isNews` is `true` fo
 | Score | Meaning | Example |
 | --- | --- | --- |
 | 5 | A major decision that affects a whole country or several countries | A national budget, a declaration of war or peace, a sweeping new law |
-| 4 | A significant national decision | A tax change, a new national programme, sanctions |
+| 4 | A national decision with wide effect | A tax change, a new national programme, sanctions |
 | 3 | A notable decision for one sector or region | Rules for one industry, a regional funding package |
 | 2 | Narrow, local or technical | An administrative procedure, a single grant |
 | 1 | Minor | A formal step with no visible effect |

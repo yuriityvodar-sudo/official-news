@@ -18,6 +18,42 @@ function numbers(text: string): string[] {
 }
 
 /**
+ * Dates written 13.10.2026, 13/10/2026 or 2026.10.19: their day and month count
+ * too, as a summary writes "13 October 2026" (#91 review: every Polish cabinet
+ * article dates itself this way). Only date-shaped tokens are split, so "521"
+ * from "13.521.937" still counts as invented.
+ */
+const DATES = [/(?<!\d)(\d{1,2})[./](\d{1,2})[./](\d{4}|\d{2})(?!\d)/g, /(?<!\d)(\d{4})\.\s?(\d{1,2})\.\s?(\d{1,2})(?!\d)/g];
+
+/** A number followed by a scale word ("5 tys. zł", "1천", "3 mln"): its full value counts too. */
+const N = String.raw`(\d+(?:[.,]\d+)?)\s?`;
+const SCALES: [RegExp, number][] = [
+  [new RegExp(N + "(?:tys\\.|tysięcy|thousand|bin\\b|천|千)", "gi"), 1e3],
+  [new RegExp(N + "(?:万|만)", "g"), 1e4],
+  [new RegExp(N + "(?:mln|million|milyon|millones|millón|milhões)", "gi"), 1e6],
+  [new RegExp(N + "(?:億|억)", "g"), 1e8],
+  [new RegExp(N + "(?:mld|mrd|billion|milyar|miliard)", "gi"), 1e9],
+];
+
+/** The numbers a summary may use: the source's, also as dates, scaled amounts and year ranges ("2026-2027" as "2026-27"). */
+function knownNumbers(source: string, year: number): Set<string> {
+  const known = new Set(numbers(source));
+  for (const re of DATES) {
+    for (const m of source.matchAll(re)) {
+      for (const part of m.slice(1)) known.add(part).add(String(Number(part)));
+    }
+  }
+  for (const [re, scale] of SCALES) {
+    for (const m of source.matchAll(re)) known.add(String(Math.round(parseFloat(m[1].replace(",", ".")) * scale)));
+  }
+  for (const m of source.matchAll(/(?<!\d)(\d{2})(\d{2})\s?[-–]\s?\1(\d{2})(?!\d)/g)) known.add(m[3]);
+  // Names like Korea's "5·18" (18 May), which a summary may write "5.18".
+  for (const m of source.matchAll(/\d+(?:·\d+)+/g)) known.add(m[0].replace(/·/g, ""));
+  for (const y of [year - 1, year, year + 1]) known.add(String(y));
+  return known;
+}
+
+/**
  * Common English words. They are at least 18% of the words of every English
  * summary in the 16 Oct test, and 0 to 2% of the 7 of 293 stored summaries the
  * old model wrote in the article's own language (German, Portuguese,
@@ -59,12 +95,12 @@ export interface CheckResult {
 /**
  * `source` is what the model read: the original title and text. `year` is the
  * year the article was fetched: a date in a calendar of its own (令和8年 is 2026)
- * comes out as that year, or the one before or after.
+ * comes out as that year, or the one before or after. Full-width digits
+ * (外１４６名, 第１２条) are read as plain ones (NFKC).
  */
 export function checkSummary(s: Summary, source: string, year: number): CheckResult {
-  const known = new Set(numbers(source));
-  for (const y of [year - 1, year, year + 1]) known.add(String(y));
-  const text = shown(s);
+  const known = knownNumbers(source.normalize("NFKC"), year);
+  const text = shown(s).normalize("NFKC");
   const invented = [...new Set(numbers(text).filter((n) => n.length >= 2 && !known.has(n)))];
   const banned = [...new Set((text.match(BANNED) ?? []).map((w) => w.toLowerCase()))];
   return { invented, banned, notEnglish: notEnglish(text) };

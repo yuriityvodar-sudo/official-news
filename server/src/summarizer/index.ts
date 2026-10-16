@@ -7,7 +7,10 @@ import { SUMMARY_SCHEMA, type Summary, parseJson, toSummary } from "./schema";
 /**
  * The Workers AI model that writes the summaries (docs/decisions.md). Gemma 4
  * since #63: in the 16 Oct test on 12 real articles it kept names and numbers
- * right where GLM-4.7 Flash invented some, at about the same cost.
+ * right where GLM-4.7 Flash invented some, at about 1.2 times its cost per call
+ * on the same prompt (estimate). With #63's longer prompt, "what it means" and
+ * retries, an article costs about 2 to 2.5 times what it did (estimate, to be
+ * measured after a day live).
  */
 export const MODEL = "@cf/google/gemma-4-26b-a4b-it";
 
@@ -161,19 +164,35 @@ export async function runSummarizer(
       if ("problems" in checked) throw new UnusableAnswer(checked.problems.join("; "));
       // A number the article does not give, or a summary not in English, is never
       // stored (#63); ruled-out words get another try, and on the last one the summary
-      // is stored anyway, so a decision is not hidden for a word.
-      const source = `${row.original_title}\n${(row.text ?? "").slice(0, MAX_TEXT)}`;
-      const found = checkSummary(checked.summary, source, Number(row.fetched_at.slice(0, 4)));
-      if (found.invented.length) throw new UnusableAnswer(`numbers not in the article: ${found.invented.join(", ")}`);
-      if (found.notEnglish) throw new UnusableAnswer("the summary is not in English");
-      const lastTry = row.summary_attempts >= MAX_ATTEMPTS - 1;
-      if (found.banned.length && !lastTry) throw new UnusableAnswer(`ruled-out words: ${found.banned.join(", ")}`);
-      await store(env, row.id, checked.summary, toStoredTime(new Date())).run();
+      // is stored anyway, so a decision is not hidden for a word. Readers never see an
+      // article that is not news, so its answer is not checked: a retry would only cost Neurons.
+      let summary = checked.summary;
+      const warnings: string[] = [];
+      if (summary.isNews) {
+        const source = `${row.original_title}\n${(row.text ?? "").slice(0, MAX_TEXT)}`;
+        const year = Number(row.fetched_at.slice(0, 4));
+        const lastTry = row.summary_attempts >= MAX_ATTEMPTS - 1;
+        let found = checkSummary(summary, source, year);
+        // On the last try, numbers only in "what it means" cost that part, not the decision.
+        if (found.invented.length && lastTry && summary.impact) {
+          const withoutImpact = checkSummary({ ...summary, impact: null }, source, year);
+          if (!withoutImpact.invented.length) {
+            warnings.push(`impact dropped: numbers not in the article: ${found.invented.join(", ")}`);
+            summary = { ...summary, impact: null };
+            found = withoutImpact;
+          }
+        }
+        if (found.invented.length) throw new UnusableAnswer(`numbers not in the article: ${found.invented.join(", ")}`);
+        if (found.notEnglish) throw new UnusableAnswer("the summary is not in English");
+        if (found.banned.length && !lastTry) throw new UnusableAnswer(`ruled-out words: ${found.banned.join(", ")}`);
+        if (found.banned.length) warnings.push(`stored on its last try with: ${found.banned.join(", ")}`);
+      }
+      await store(env, row.id, summary, toStoredTime(new Date())).run();
       results.push({
         articleId: row.id,
         ok: true,
-        isNews: checked.summary.isNews,
-        ...(found.banned.length ? { warning: `stored on its last try with: ${found.banned.join(", ")}` } : {}),
+        isNews: summary.isNews,
+        ...(warnings.length ? { warning: warnings.join("; ") } : {}),
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

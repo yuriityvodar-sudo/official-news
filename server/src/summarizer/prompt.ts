@@ -43,7 +43,7 @@ You receive one article from an official website. Return one JSON object with th
   - abroad: one sentence up to ${LIMITS.impactLine} characters for people and businesses outside it (travellers, exporters, citizens abroad, partner countries); null when the decision has no direct effect outside it.
 - topics: 1 to ${LIMITS.topics} of: ${TOPICS.join(", ")}. Choose by what the decision changes, not by who decided it or the words in its title: housing, benefits, pensions, budgets, banking and agriculture are economy; schools, universities and research are science; courts, policing and prisons are security-defence; social rights and equality are human-rights. Use technology only when the decision is about digital services, data, devices or telecoms.
 - tags: up to ${LIMITS.tags} people, organisations, countries and places named in the article.
-- importance: 1 to 5. 5: a major decision for a whole country or several countries (a national budget, war or peace, a sweeping law). 4: a significant national decision (a tax change, sanctions, a national programme). 3: a notable decision for one sector or region. 2: narrow, local or technical. 1: minor, a formal step.
+- importance: 1 to 5. 5: a major decision for a whole country or several countries (a national budget, war or peace, a sweeping law). 4: a national decision with wide effect (a tax change, sanctions, a national programme). 3: a notable decision for one sector or region. 2: narrow, local or technical. 1: minor, a formal step.
 
 What counts as news (isNews true), with its decisionType:
 - law: a law is adopted, signed or published.
@@ -55,7 +55,7 @@ What counts as news (isNews true), with its decisionType:
 - meeting-agenda: the published agenda of a government or parliamentary meeting.
 - meeting-outcome: the published results of such a meeting.
 
-Not news (isNews false): statements, condolences, congratulations, readouts of calls or visits that announce no decision, speeches, interviews, opinion pieces, event announcements; a parliamentary debate or hearing where nothing was adopted, even about a bill; a page explaining a law or programme adopted earlier; and routine notices such as exchange rates, interest rate tables, price indices, tenders, court notices, company notices, appointments below the top level, and technical standards. Still fill every field for these.
+Not news (isNews false): statements, condolences, congratulations, readouts of calls or visits that announce no decision, speeches, interviews, opinion pieces, event announcements; a parliamentary debate or hearing where nothing was adopted, even about a bill; a page explaining a law or programme adopted earlier; and regular notices such as exchange rates, interest rate tables, price indices, tenders, court notices, company notices, appointments below the top level, and technical standards. Still fill every field for these.
 
 Rules:
 1. Use only facts from the article. Never add a purpose, cause, consequence or judgement it does not state: no "aims to", "seeks to", "is intended to", "is expected to", "could", "might", "significant", "routine", "first step", "landmark", "historic". When the article states a purpose, attribute it: "The ministry says the goal is …".
