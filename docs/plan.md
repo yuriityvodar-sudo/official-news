@@ -271,6 +271,15 @@ Agreed on #46 (15 Oct): a second AI call per article, one per language; the summ
 - **Suggested:** the app's language setting: a small language icon next to the date at the top of the feed opens a native language menu (a local iOS Simulator run shown to Yurii before it is built); an editor pass that corrects grammar and wording before publishing (#54); Polish and Czech once a model writes them well enough; Workers AI as a provider if the free limits are not enough.
 - **Done when:** with the secrets set, new news articles get their text in each enabled language, `GET /articles?lang=uk` (or `ru`, `es`) lists the same articles in the same order as English, and `GET /queue` shows nothing waiting for long.
 
+### 10. Push notifications, after the MVP (Yurii)
+
+Yurii, 16 Oct (#62): pushes exist to bring a reader back to the app with something useful, so breaking decisions only, few, and none at night. Firebase Cloud Messaging in the project `official-news-48e16`, one topic per feed language; the rules are in `docs/contract.md` (Push notifications).
+
+- **Must, server (#62):** the translator's run (the summarizer's, while the translator is not running) ends with a push step: a released decision of importance 4 or 5 from the last 24 hours, never pushed before in that language (another language only with its translation published, and in that language); at most 2 a local day per language and at least 1 (the day's top story from 18:00 local); none from 21:00 to 08:00 in the language's main time zone; 3 hours apart. `push_log` (migration `0012`) is written before each send, so nothing goes out twice. A push FCM cannot take just then is tried again after a 10-minute pause. Sent as the service account `fcm-sender` (one role, Firebase Cloud Messaging API Admin), its key only the Worker secret `FCM_SERVICE_ACCOUNT`.
+- **Must, app:** subscribes to `breaking_<feed language>` and moves to the new topic when the language changes; asks for permission at a good moment (after a few articles read), not on first launch; a tap opens the article (`data.articleId` in `data.lang`); `push_open` in analytics. The APNs key uploaded to Firebase Cloud Messaging (`docs/setup.md`).
+- **Before an App Store release:** the privacy policy and the App Store privacy answers mention the push token.
+- **Done when:** with the secret and the APNs key set, a breaking decision reaches a test iPhone subscribed to its language's topic, and a tap opens it.
+
 ## How we work together
 
 We use GitHub flow: one public GitHub repo, one long-lived branch (main), short-lived feature branches, every change through a reviewed pull request, and each task small enough to finish in one evening with a visible result.
