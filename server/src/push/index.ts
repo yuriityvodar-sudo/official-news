@@ -21,23 +21,35 @@
 // summary cut to about 110 characters at a word, data { articleId, lang }.
 //
 // Each translator run ends with runPush (../index.ts), at most one push per
-// language, so a run stays small: the clocks first (no database read at all
-// while every language is in its quiet hours), then one statement for every
-// language's count and last push, then one per language that may send for its
-// best candidate (breaking news through its own small index): about 60 D1 rows
-// a run with nothing to send. Each push is claimed in push_log BEFORE the request to FCM,
+// language, and so does the summarizer's while the translator is not running
+// (its new trigger can take an hour to start, #50), as the release does. A run
+// stays small: the clocks first (no database read at all while every language
+// is in its quiet hours), then one statement for every language's count and
+// last push, then one per language that may send for its best candidate
+// (breaking news through its own small index): about 60 D1 rows a run with
+// nothing to send. Each push is claimed in push_log BEFORE the request to FCM,
 // in a statement that checks the cap and the spacing again (so two overlapping
-// runs cannot both send), and completed after it with FCM's message id or the
-// error. A run cut off in between leaves a claim with neither, which counts as
-// sent: nothing is ever sent twice. An article FCM refused is never tried
-// again; its row counts for the spacing, not for the daily cap, so a failing
-// setup tries at most once every 3 hours per language and the day's one push
-// can still go out.
+// runs cannot both send), and completed after it by what FCM answered:
+//   - Sent: FCM's message id.
+//   - Refused (FCM refused the message itself, HTTP 400): the error, and the
+//     article is never tried again in that language. The row counts for the
+//     spacing, not for the daily cap (it surely did not go out), so a message
+//     FCM refuses costs a language one try in 3 hours and the day's one push
+//     can still go out.
+//   - No answer (a network error, the 10 s timeout): the error. FCM may have
+//     sent it, so it counts for the cap and the spacing, and is never tried again.
+//   - Not now (401, 403, 408, 429, 5xx: the token, the permission, the quota,
+//     FCM itself; nothing about the message): the run stops sending, deletes
+//     its claims that were not sent, so a later run sends those articles,
+//     forgets the token on a 401, and pauses the step for 10 minutes or FCM's
+//     Retry-After (fcm.ts). Google giving no token pauses it the same way.
+// A run cut off between the claim and its completion leaves a claim with
+// neither, which counts as sent: nothing is ever sent twice.
 import type { Env } from "../env";
 import { toStoredTime } from "../fetcher/text";
 import { LANGS, type Lang } from "../translator/languages";
 import { DAY_MS, FEED_DAYS } from "../translator/release";
-import { DROP_CACHE, type ServiceAccount, accessToken, parseServiceAccount, sendMessage, tokenKey } from "./fcm";
+import { DROP_CACHE, type NotSent, type ServiceAccount, accessToken, parseServiceAccount, pause, sendMessage, tokenKey } from "./fcm";
 
 /** The languages a push can be in: English and every language the feed is translated into. */
 export type PushLang = "en" | Lang;
@@ -80,12 +92,13 @@ export const topicFor = (lang: PushLang) => `breaking_${lang}`;
  * For each language of ?1 (a JSON array of { lang, dayStart }, the languages
  * outside their quiet hours) that is English or enabled in translation_langs:
  * its pushes since the start of its local day that FCM did not refuse (sent,
- * or claimed by a run that did not finish), and its last push of any kind.
- * Through push_log_lang_time: a few rows per language.
+ * sent without an answer, or claimed by a run that did not finish: each may
+ * have reached readers), and its last push of any kind. Through
+ * push_log_lang_time: a few rows per language.
  */
 export const PUSH_STATE = `SELECT l.lang,
     (SELECT COUNT(*) FROM push_log p INDEXED BY push_log_lang_time
-     WHERE p.lang = l.lang AND p.sent_at >= l.day_start AND p.error IS NULL) AS sent_today,
+     WHERE p.lang = l.lang AND p.sent_at >= l.day_start AND p.refused = 0) AS sent_today,
     (SELECT MAX(p.sent_at) FROM push_log p INDEXED BY push_log_lang_time WHERE p.lang = l.lang) AS last_sent_at
   FROM (SELECT json_extract(value, '$.lang') AS lang, json_extract(value, '$.dayStart') AS day_start FROM json_each(?1)) l
   WHERE l.lang = 'en' OR EXISTS (SELECT 1 FROM translation_langs t WHERE t.lang = l.lang AND t.enabled = 1)`;
@@ -123,27 +136,40 @@ export const BREAKING_CANDIDATE = candidate("articles_breaking", ` AND a.importa
 /**
  * The day's top story, of any importance, for the daily slot (from 18:00, a
  * language without a push that day): reads the released decisions of the last
- * 24 hours (about 50) through articles_added_at. Binds as BREAKING_CANDIDATE.
+ * 24 hours (about 50) through articles_added_at. The last 24 hours, not the
+ * local day: a decision from the evening before that got no push can be it.
+ * Binds as BREAKING_CANDIDATE.
  */
 export const TOP_CANDIDATE = candidate("articles_added_at", "");
 
 /**
  * Claims one push before it is sent: writes its push_log row only if the
  * article was never pushed in that language, no push of the language is newer
- * than ?5 (SPACING_HOURS ago) and fewer than ?7 went out since ?6 (the start of
- * its local day), all in one statement, so an overlapping run cannot claim a
- * second one. Returns the row when it was written.
+ * than ?5 (SPACING_HOURS ago) and fewer than ?7 that FCM did not refuse went
+ * out since ?6 (the start of its local day; counted as in PUSH_STATE), all in
+ * one statement, so an overlapping run cannot claim a second one. Returns the
+ * row when it was written.
  * Binds: ?1 article, ?2 lang, ?3 now, ?4 topic, ?5 spacing cutoff, ?6 day start, ?7 MAX_PER_DAY.
  */
 export const CLAIM_PUSH = `INSERT OR IGNORE INTO push_log (article_id, lang, sent_at, topic)
   SELECT ?1, ?2, ?3, ?4
   WHERE NOT EXISTS (SELECT 1 FROM push_log p INDEXED BY push_log_lang_time WHERE p.lang = ?2 AND p.sent_at > ?5)
     AND (SELECT COUNT(*) FROM push_log p INDEXED BY push_log_lang_time
-         WHERE p.lang = ?2 AND p.sent_at >= ?6 AND p.error IS NULL) < ?7
+         WHERE p.lang = ?2 AND p.sent_at >= ?6 AND p.refused = 0) < ?7
   RETURNING article_id`;
 
-/** Completes a claim with FCM's answer. Binds: ?1 article, ?2 lang, ?3 message id or NULL, ?4 error or NULL. */
-export const COMPLETE_PUSH = "UPDATE push_log SET message_id = ?3, error = ?4 WHERE article_id = ?1 AND lang = ?2";
+/**
+ * Completes a claim with FCM's answer. Binds: ?1 article, ?2 lang, ?3 message
+ * id or NULL, ?4 error or NULL, ?5 1 when FCM refused the message, else 0.
+ */
+export const COMPLETE_PUSH = "UPDATE push_log SET message_id = ?3, error = ?4, refused = ?5 WHERE article_id = ?1 AND lang = ?2";
+
+/**
+ * Gives a claim back when FCM could not take the message just then, or the run
+ * stopped before sending it: a later run can claim that article again. Only a
+ * claim not yet completed. Binds: ?1 article, ?2 lang.
+ */
+export const RELEASE_CLAIM = "DELETE FROM push_log WHERE article_id = ?1 AND lang = ?2 AND message_id IS NULL AND error IS NULL";
 
 /** The time in a language's zone: the hour and minute, and when its local day began. */
 export interface LocalClock {
@@ -201,7 +227,7 @@ export function shorten(text: string, max = BODY_MAX): string {
   return `${words.replace(/[\s,;:.\-–—(]+$/u, "")}…`;
 }
 
-/** What a run did for one language: sent (with FCM's id), refused by FCM, or skipped with why. */
+/** What a run did for one language it sent to: sent (with FCM's id), or not, with why. */
 export interface PushResult {
   lang: PushLang;
   articleId: string;
@@ -210,6 +236,8 @@ export interface PushResult {
   ok: boolean;
   messageId?: string;
   error?: string;
+  /** Not sent: `refused` and `unknown` are never tried again, `retry` is tried by a later run (fcm.ts, NotSent). */
+  outcome?: NotSent;
 }
 
 export interface PushRun {
@@ -304,15 +332,13 @@ export async function runPush(env: Env, options: PushOptions = {}): Promise<Push
   });
   if (!picks.length) return log();
 
-  // The token before any claim: without one nothing is claimed, so nothing is lost.
-  let token: string;
-  try {
-    token = await accessToken(env, account, now, fetch);
-  } catch (error) {
-    const why = error instanceof Error ? error.message : String(error);
-    for (const pick of picks) run.skipped[pick.lang] = `no access token: ${why}`;
+  // The token before any claim: without one (or while the step is paused) nothing is claimed, so nothing is lost.
+  const got = await accessToken(env, account, now, fetch);
+  if ("error" in got) {
+    for (const pick of picks) run.skipped[pick.lang] = got.error;
     return log();
   }
+  const { token } = got;
 
   const sentAt = toStoredTime(now);
   const claims = await env.DB.batch(
@@ -327,29 +353,38 @@ export async function runPush(env: Env, options: PushOptions = {}): Promise<Push
   });
 
   // One request at a time, at most one per language (6 with the token: far below the 50 a run may make).
-  let tokenRefused = false;
+  // Every answer is written in one batch at the end: completions, claims given back, the pause.
+  const writes: D1PreparedStatement[] = [];
+  let paused: { until: string; why: string } | undefined;
   for (const pick of claimed) {
+    if (paused) {
+      // FCM could not take an earlier message: the same token and FCM would fail this one too.
+      writes.push(env.DB.prepare(RELEASE_CLAIM).bind(pick.articleId, pick.lang));
+      run.skipped[pick.lang] = `paused until ${paused.until} (${paused.why})`;
+      continue;
+    }
     const sent = await sendMessage(
       account,
       token,
       { topic: topicFor(pick.lang), title: pick.title, body: pick.body, data: { articleId: pick.articleId, lang: pick.lang } },
       fetch,
     );
-    if (!sent.ok && sent.status === 401) tokenRefused = true;
-    run.pushes.push({
-      lang: pick.lang,
-      articleId: pick.articleId,
-      kind: pick.kind,
-      ok: sent.ok,
-      ...(sent.ok ? { messageId: sent.messageId } : { error: sent.error }),
-    });
+    const result: PushResult = { lang: pick.lang, articleId: pick.articleId, kind: pick.kind, ok: sent.ok };
+    run.pushes.push(sent.ok ? { ...result, messageId: sent.messageId } : { ...result, error: sent.error, outcome: sent.outcome });
+    if (sent.ok) {
+      writes.push(env.DB.prepare(COMPLETE_PUSH).bind(pick.articleId, pick.lang, sent.messageId, null, 0));
+    } else if (sent.outcome !== "retry") {
+      writes.push(env.DB.prepare(COMPLETE_PUSH).bind(pick.articleId, pick.lang, null, sent.error, sent.outcome === "refused" ? 1 : 0));
+    } else {
+      writes.push(env.DB.prepare(RELEASE_CLAIM).bind(pick.articleId, pick.lang));
+      // FCM refused the token: the run after the pause asks Google for a new one.
+      if (sent.status === 401) writes.push(env.DB.prepare(DROP_CACHE).bind(tokenKey(account)));
+      const why = `FCM: ${sent.error}`;
+      const step = pause(env, account, now, why, sent.retryAfterSeconds);
+      writes.push(step.statement);
+      paused = { until: step.until, why };
+    }
   }
-  if (run.pushes.length || tokenRefused) {
-    await env.DB.batch([
-      ...run.pushes.map((p) => env.DB.prepare(COMPLETE_PUSH).bind(p.articleId, p.lang, p.messageId ?? null, p.error ?? null)),
-      // FCM refused the token: the next run asks Google for a new one.
-      ...(tokenRefused ? [env.DB.prepare(DROP_CACHE).bind(tokenKey(account))] : []),
-    ]);
-  }
+  if (writes.length) await env.DB.batch(writes);
   return log();
 }

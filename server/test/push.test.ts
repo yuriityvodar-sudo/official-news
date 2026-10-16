@@ -19,7 +19,7 @@ import {
   runPush,
   shorten,
 } from "../src/push";
-import { FCM_SCOPE, TOKEN_MARGIN_MS, TOKEN_URL, fcmUrl } from "../src/push/fcm";
+import { FCM_SCOPE, PAUSE_MINUTES, TOKEN_MARGIN_MS, TOKEN_URL, fcmUrl, retryLater } from "../src/push/fcm";
 import type { Lang } from "../src/translator";
 import { d1Rows, hideSeed, insertNews, only, stored, testEnv } from "./helpers";
 
@@ -97,7 +97,7 @@ const failed = (id: string, lang: Lang) =>
     .bind(id, lang)
     .run();
 
-type Reply = { status: number; body?: unknown } | Error;
+type Reply = { status: number; body?: unknown; headers?: Record<string, string> } | Error;
 
 interface Sent {
   url: string;
@@ -120,7 +120,7 @@ function fakeGoogle({ fcm = [] as Reply[], token = [] as Reply[] } = {}) {
   const json = (part: string) => JSON.parse(new TextDecoder().decode(decode(part))) as Record<string, unknown>;
   const answer = (reply: Reply) => {
     if (reply instanceof Error) throw reply;
-    return new Response(JSON.stringify(reply.body ?? {}), { status: reply.status, headers: { "content-type": "application/json" } });
+    return new Response(JSON.stringify(reply.body ?? {}), { status: reply.status, headers: { "content-type": "application/json", ...reply.headers } });
   };
   const fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
@@ -178,7 +178,7 @@ describe("push notifications", () => {
       },
     ]);
     expect(await pushLog()).toEqual([
-      { article_id: "a1", lang: "en", sent_at: stored(now), topic: "breaking_en", message_id: `projects/${PROJECT}/messages/1`, error: null },
+      { article_id: "a1", lang: "en", sent_at: stored(now), topic: "breaking_en", message_id: `projects/${PROJECT}/messages/1`, error: null, refused: 0 },
     ]);
     const lines = log.mock.calls.map((c) => JSON.parse(String(c[0])));
     expect(lines).toHaveLength(1);
@@ -411,48 +411,121 @@ describe("push notifications", () => {
     const log = quiet();
     const first = await push(london(10), google);
     expect(sent(first)).toEqual(["en a1 failed: HTTP 400 INVALID_ARGUMENT: Invalid value"]);
+    expect(first.pushes[0].outcome).toBe("refused");
     expect(await pushLog()).toEqual([
-      { article_id: "a1", lang: "en", sent_at: stored(london(10)), topic: "breaking_en", message_id: null, error: "HTTP 400 INVALID_ARGUMENT: Invalid value" },
+      { article_id: "a1", lang: "en", sent_at: stored(london(10)), topic: "breaking_en", message_id: null, error: "HTTP 400 INVALID_ARGUMENT: Invalid value", refused: 1 },
     ]);
     expect(JSON.parse(String(log.mock.calls[0][0])).pushes).toEqual(first.pushes);
 
-    // It counts for the spacing, so a failing setup tries once in 3 hours, and never for the same article.
+    // It counts for the spacing, so messages FCM keeps refusing cost one try in 3 hours, never the same article twice.
     expect((await push(london(11), google)).skipped.en).toBe(`spacing (last push ${stored(london(10))})`);
     expect(sent(await push(london(13), google))).toEqual(["en a2 breaking"]);
     // Not for the daily cap: a2 was today's first push that went out.
     await decision("a3", 4, london(15));
     expect(sent(await push(london(16), google))).toEqual(["en a3 breaking"]);
     expect(google.messages.map((m) => m.body.message.data.articleId)).toEqual(["a1", "a2", "a3"]);
+    // Only an answer about the token, the permission, the quota or FCM itself is tried again.
+    expect([400, 401, 403, 404, 408, 413, 429, 500, 503].filter(retryLater)).toEqual([401, 403, 408, 429, 500, 503]);
   });
 
-  it("records a failed request too, and forgets a token FCM refuses", async () => {
-    await decision("a1", 5, london(9));
-    await decision("a2", 5, london(9, 30));
-    const google = fakeGoogle({ fcm: [{ status: 401, body: { error: { status: "UNAUTHENTICATED", message: "Request had invalid authentication credentials." } } }, new Error("network down")] });
+  it("counts a request without an answer (the timeout, a network error) as sent: never tried again, and in the daily cap", async () => {
+    await decision("a1", 5, london(7, 30));
+    await decision("a2", 4, london(7, 40));
+    await decision("a3", 4, london(7, 50));
+    // FCM may have taken a1 before the 10 s timeout: readers may have it.
+    const timeout = Object.assign(new Error("The operation was aborted due to timeout"), { name: "TimeoutError" });
+    const google = fakeGoogle({ fcm: [timeout] });
     quiet();
-    expect(sent(await push(london(10), google))).toEqual([
-      "en a2 failed: HTTP 401 UNAUTHENTICATED: Request had invalid authentication credentials.",
-    ]);
-    expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM kv_cache").first("n")).toBe(0);
-    expect(sent(await push(london(13), google))).toEqual(["en a1 failed: request failed: network down"]);
-    expect(google.tokenRequests).toHaveLength(2);
-    expect((await pushLog()).map((r) => [r.article_id, r.message_id, r.error])).toEqual([
-      ["a2", null, "HTTP 401 UNAUTHENTICATED: Request had invalid authentication credentials."],
-      ["a1", null, "request failed: network down"],
+    const first = await push(london(8), google);
+    expect(sent(first)).toEqual(["en a1 failed: request failed: The operation was aborted due to timeout"]);
+    expect(first.pushes[0].outcome).toBe("unknown");
+    expect(sent(await push(london(11), google))).toEqual(["en a3 breaking"]);
+    const third = await push(london(14), google);
+    expect(third.pushes).toEqual([]);
+    expect(third.skipped.en).toBe("daily cap (2 today)");
+    // At most 2 requests to the topic in the local day.
+    expect(google.messages.map((m) => m.body.message.data.articleId)).toEqual(["a1", "a3"]);
+    expect((await pushLog()).map((r) => [r.article_id, r.message_id, r.error, r.refused])).toEqual([
+      ["a1", null, "request failed: The operation was aborted due to timeout", 0],
+      ["a3", `projects/${PROJECT}/messages/2`, null, 0],
     ]);
   });
 
-  it("claims nothing when Google gives no access token", async () => {
+  it("stops at a token FCM refuses (401): gives back every claim not sent, forgets the token, and sends them after the pause", async () => {
+    await only("uk", "ru");
+    await decision("a1", 5, london(9));
+    await translated("a1", "uk");
+    await translated("a1", "ru");
+    // A token cached before its own expiry that FCM no longer takes (its service account disabled, say).
+    await env.DB.prepare("INSERT INTO kv_cache (key, value, expires_at) VALUES (?1, 'revoked', ?2)").bind(`fcm_token:${EMAIL}`, stored(london(10, 40))).run();
+    const google = fakeGoogle({ fcm: [{ status: 401, body: { error: { status: "UNAUTHENTICATED", message: "Request had invalid authentication credentials." } } }] });
+    quiet();
+    const first = await push(london(10), google);
+    expect(sent(first)).toEqual(["en a1 failed: HTTP 401 UNAUTHENTICATED: Request had invalid authentication credentials."]);
+    expect(first.pushes[0].outcome).toBe("retry");
+    const why = "FCM: HTTP 401 UNAUTHENTICATED: Request had invalid authentication credentials.";
+    const until = stored(later(london(10), PAUSE_MINUTES));
+    expect(first.skipped).toMatchObject({ uk: `paused until ${until} (${why})`, ru: `paused until ${until} (${why})` });
+    // One request, not one per language; no claim kept; the token gone, the pause in its place.
+    expect(google.messages.map((m) => m.authorization)).toEqual(["Bearer revoked"]);
+    expect(await pushLog()).toEqual([]);
+    expect((await env.DB.prepare("SELECT key, value, expires_at FROM kv_cache").all()).results).toEqual([
+      { key: `fcm_pause:${EMAIL}`, value: why, expires_at: until },
+    ]);
+
+    // During the pause a run neither signs, nor asks Google, nor sends.
+    const during = await push(london(10, 8), google);
+    expect(during.skipped).toMatchObject({ en: `paused until ${until} (${why})`, uk: `paused until ${until} (${why})` });
+    expect(google.tokenRequests).toHaveLength(0);
+    // After it: a new token, and the article goes out in every language.
+    expect(sent(await push(later(london(10), PAUSE_MINUTES), google))).toEqual(["en a1 breaking", "uk a1 breaking", "ru a1 breaking"]);
+    expect(google.tokenRequests).toHaveLength(1);
+    expect(google.messages.slice(1).map((m) => m.authorization)).toEqual(["Bearer token-1", "Bearer token-1", "Bearer token-1"]);
+  });
+
+  it("tries again when FCM could not take a message (503, 429): after the pause, or FCM's Retry-After when longer", async () => {
+    // Nothing breaking that day, and FCM busy at the daily slot: the day's one push still goes out.
+    await decision("a1", 3, london(9));
+    await decision("a2", 2, london(10));
+    await decision("a3", 3, london(11));
+    const google = fakeGoogle({
+      fcm: [
+        { status: 503, body: { error: { status: "UNAVAILABLE", message: "The service is currently unavailable." } } },
+        { status: 429, body: { error: { status: "RESOURCE_EXHAUSTED", message: "Quota exceeded." } }, headers: { "retry-after": "1800" } },
+      ],
+    });
+    quiet();
+    expect(sent(await push(london(18), google))).toEqual(["en a3 failed: HTTP 503 UNAVAILABLE: The service is currently unavailable."]);
+    expect(await pushLog()).toEqual([]);
+    expect((await push(london(18, 8), google)).skipped.en).toBe(
+      `paused until ${stored(london(18, 10))} (FCM: HTTP 503 UNAVAILABLE: The service is currently unavailable.)`,
+    );
+    // Retry-After 30 minutes: longer than the pause, so honoured.
+    expect(sent(await push(london(18, 10), google))).toEqual(["en a3 failed: HTTP 429 RESOURCE_EXHAUSTED: Quota exceeded."]);
+    expect((await push(london(18, 30), google)).skipped.en).toBe(`paused until ${stored(london(18, 40))} (FCM: HTTP 429 RESOURCE_EXHAUSTED: Quota exceeded.)`);
+    expect(sent(await push(london(18, 40), google))).toEqual(["en a3 daily"]);
+    expect(google.messages).toHaveLength(3);
+    expect(google.tokenRequests).toHaveLength(1);
+  });
+
+  it("claims nothing when Google gives no access token, and asks again only after the pause", async () => {
     await decision("a1", 5, london(9));
     const google = fakeGoogle({ token: [{ status: 400, body: { error: "invalid_grant", error_description: "Invalid JWT Signature." } }] });
     quiet();
+    const why = "no access token: token request: HTTP 400 invalid_grant: Invalid JWT Signature.";
     const run = await push(london(10), google);
     expect(run.pushes).toEqual([]);
-    expect(run.skipped.en).toBe("no access token: token request: HTTP 400 invalid_grant: Invalid JWT Signature.");
+    expect(run.skipped.en).toBe(why);
     expect(await pushLog()).toEqual([]);
     expect(google.messages).toEqual([]);
-    // The next run tries again, and sends.
-    expect(sent(await push(london(10, 2), google))).toEqual(["en a1 breaking"]);
+    // The runs in between (every 2 minutes) neither sign a JWT nor ask Google.
+    for (const minute of [2, 4, 6, 8]) {
+      expect((await push(london(10, minute), google)).skipped.en).toBe(`paused until ${stored(london(10, 10))} (${why})`);
+    }
+    expect(google.tokenRequests).toHaveLength(1);
+    // Then it asks again, and sends.
+    expect(sent(await push(london(10, 10), google))).toEqual(["en a1 breaking"]);
+    expect(google.tokenRequests).toHaveLength(2);
   });
 
   it("does nothing without FCM_SERVICE_ACCOUNT: no request, no database read, one log line", async () => {
@@ -479,6 +552,10 @@ describe("push notifications", () => {
       { message: "push skipped", reason: "FCM_SERVICE_ACCOUNT is not JSON (it should be the service account's whole JSON key file)" },
       { message: "push skipped", reason: "FCM_SERVICE_ACCOUNT has no project_id" },
     ]);
+    // A private_key that is not a key: no token, and the step pauses as for any token failure.
+    const badKey = await push(london(10), google, pushEnv(JSON.stringify({ client_email: EMAIL, private_key: "not a key", project_id: PROJECT })));
+    expect(badKey.skipped.en).toMatch(/^no access token: FCM_SERVICE_ACCOUNT's private_key (is not a PEM key|cannot be read: )/);
+    expect(await env.DB.prepare("SELECT key FROM kv_cache").all().then((r) => r.results)).toEqual([{ key: `fcm_pause:${EMAIL}` }]);
     expect(google.tokenRequests).toEqual([]);
   });
 
@@ -496,6 +573,29 @@ describe("push notifications", () => {
     const first = await runPush(pushEnv(), { now: london(10), fetch: overlapping });
     expect(sent(first)).toEqual(["en a2 breaking"]);
     expect((await second)?.pushes).toEqual([]);
+    expect(google.messages).toHaveLength(1);
+  });
+
+  it("sends nothing twice when two runs read the state before either claims", async () => {
+    await decision("a1", 5, london(9));
+    await decision("a2", 5, london(9, 30));
+    // The second run starts and finishes while the first waits for its token: both read
+    // PUSH_STATE before either claimed, so only the claim keeps the first from sending.
+    let started = false;
+    let second: Awaited<ReturnType<typeof runPush>> | undefined;
+    const google = fakeGoogle();
+    const racing = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input) === TOKEN_URL && !started) {
+        started = true;
+        second = await push(london(10, 1), google);
+      }
+      return google.fetch(input, init);
+    }) as typeof globalThis.fetch;
+    quiet();
+    const first = await runPush(pushEnv(), { now: london(10), fetch: racing });
+    expect(second && sent(second)).toEqual(["en a2 breaking"]);
+    expect(first.pushes).toEqual([]);
+    expect(first.skipped.en).toBe("claimed by another run");
     expect(google.messages).toHaveLength(1);
   });
 
@@ -569,7 +669,7 @@ describe("push notifications", () => {
   });
 });
 
-describe("the translator's scheduled run", () => {
+describe("the scheduled runs", () => {
   const keyless = () => ({ ...testEnv(null, undefined, null) });
 
   it("ends with the push step, after the release; without the secret it logs that it skipped", async () => {
@@ -594,5 +694,25 @@ describe("the translator's scheduled run", () => {
     await expect(worker.scheduled(createScheduledController({ cron: CRONS.translator }), broken)).resolves.toBeUndefined();
     expect(await env.DB.prepare("SELECT feed_seq FROM articles WHERE id = 'a1'").first("feed_seq")).toEqual(expect.any(Number));
     expect(errors.mock.calls.map((c) => JSON.parse(String(c[0])))).toEqual([{ message: "push error", error: "push broke" }]);
+  });
+
+  it("sends from the summarizer's run while the translator is not running, and leaves it to the translator once it runs", async () => {
+    const log = quiet();
+    const summarizer = async () => {
+      log.mockClear();
+      await worker.scheduled(createScheduledController({ cron: CRONS.summarizer }), { ...keyless(), FCM_SERVICE_ACCOUNT: undefined });
+      return log.mock.calls.map((c) => JSON.parse(String(c[0])).message);
+    };
+    const translatorRan = (minutesAgo: number) =>
+      env.DB.prepare("INSERT INTO step_runs (step, at) VALUES ('translator', ?1) ON CONFLICT (step) DO UPDATE SET at = excluded.at")
+        .bind(stored(new Date(Date.now() - minutesAgo * 60_000)))
+        .run();
+    await env.DB.prepare("DELETE FROM step_runs").run();
+    // The push step ran (and, without the secret, said so).
+    expect(await summarizer()).toContain("push skipped: FCM_SERVICE_ACCOUNT not set");
+    await translatorRan(11);
+    expect(await summarizer()).toContain("push skipped: FCM_SERVICE_ACCOUNT not set");
+    await translatorRan(9);
+    expect(await summarizer()).not.toContain("push skipped: FCM_SERVICE_ACCOUNT not set");
   });
 });

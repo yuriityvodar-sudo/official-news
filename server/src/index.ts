@@ -5,7 +5,7 @@ import { runCleanup } from "./health/cleanup";
 import { recordChecks } from "./health/status";
 import { runPush } from "./push";
 import { runSummarizer } from "./summarizer";
-import { TRANSLATIONS_PER_RUN, releaseReady, runTranslator } from "./translator";
+import { TRANSLATIONS_PER_RUN, releaseReady, runTranslator, translatorRunning } from "./translator";
 
 /**
  * The cron triggers in wrangler.jsonc. Each trigger is its own run with its own
@@ -15,7 +15,8 @@ import { TRANSLATIONS_PER_RUN, releaseReady, runTranslator } from "./translator"
  * schedule can take about an hour to start firing (#50). Both end with the
  * release (translator/release.ts), so a decision reaches the feed also while
  * the translator's trigger is not firing. The translator's run then sends the
- * push notifications (push/index.ts, #62): at most one per language.
+ * push notifications (push/index.ts, #62): at most one per language; while the
+ * translator is not running, the summarizer's run sends them instead.
  */
 export const CRONS = {
   fetcher: "* * * * *",
@@ -28,6 +29,21 @@ export const CRONS = {
 export function stepFor(cron: string): keyof typeof CRONS {
   const steps = Object.keys(CRONS) as (keyof typeof CRONS)[];
   return steps.find((step) => CRONS[step] === cron) ?? "fetcher";
+}
+
+/**
+ * The push step at the end of a run. An error is logged, never thrown: a push
+ * never breaks the translator, the summarizer or their release. With
+ * `unlessTranslatorRuns` (the summarizer), it first reads whether the
+ * translator ran in the last 10 minutes and then leaves the pushes to it.
+ */
+async function pushStep(env: Env, unlessTranslatorRuns = false): Promise<void> {
+  try {
+    if (unlessTranslatorRuns && (await translatorRunning(env, new Date()))) return;
+    await runPush(env);
+  } catch (error) {
+    console.error(JSON.stringify({ message: "push error", error: error instanceof Error ? error.message : String(error) }));
+  }
 }
 
 export default {
@@ -44,18 +60,16 @@ export default {
         // Releases what is ready, and everything summarized while the translator is not running.
         const released = await releaseReady(env, new Date());
         if (released.length) console.log(JSON.stringify({ message: "summarizer release", released }));
+        // While the translator is not running, its pushes too (#62). A claim in push_log
+        // keeps the two runs from both sending, also when they overlap.
+        await pushStep(env, true);
       }
     } else if (step === "translator") {
       try {
         await runTranslator(env, { maxTranslations: TRANSLATIONS_PER_RUN });
       } finally {
-        // After the release, so a decision released in this run can go out at once. A push
-        // error is logged, never thrown: it never breaks the translator or the release.
-        try {
-          await runPush(env);
-        } catch (error) {
-          console.error(JSON.stringify({ message: "push error", error: error instanceof Error ? error.message : String(error) }));
-        }
+        // After the release, so a decision released in this run can go out at once.
+        await pushStep(env);
       }
     } else if (step === "cleanup") {
       await runCleanup(env);
