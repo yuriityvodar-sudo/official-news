@@ -635,6 +635,8 @@
   "@countryPL": { "description": "Country name." },
   "countryUA": "Ukraine",
   "@countryUA": { "description": "Country name." },
+  "countryUN": "United Nations",
+  "@countryUN": { "description": "Not a country: the code of the sources of the United Nations and its agencies, such as the ILO (docs/sources.csv)." },
   "languageCs": "Czech",
   "@languageCs": { "description": "As languageAr." }
 }
