@@ -60,6 +60,21 @@ export function decodeBody(bytes: ArrayBuffer, charset: string | null): string {
   return new TextDecoder().decode(bytes);
 }
 
+/**
+ * A picture's address, or null when it points at a site's root. Pages without a
+ * photo sometimes name their home page as the picture (vlada.gov.cz:
+ * og:image "https://vlada.gov.cz"), which is HTML and leaves an empty frame in the app.
+ * The feed, list page and item page readers pass their pictures through here.
+ */
+export function pictureUrl(url: string | null | undefined, baseUrl: string): string | null {
+  if (!url?.trim()) return null;
+  try {
+    return new URL(url.trim(), baseUrl).pathname === "/" ? null : url;
+  } catch {
+    return url;
+  }
+}
+
 /** Times are stored as `YYYY-MM-DDTHH:MM:SSZ` (docs/contract.md). */
 export function toStoredTime(date: Date): string {
   return `${date.toISOString().slice(0, 19)}Z`;

@@ -2,7 +2,7 @@
 // the main text of an item page. HTMLRewriter streams the page natively, so
 // big pages cost little CPU. It hands over raw text: entities are decoded here.
 import { parseDate } from "./dates";
-import { cleanText, decodeEntities } from "./text";
+import { cleanText, decodeEntities, pictureUrl } from "./text";
 import { type FoundItem, type SourceConfig, dateSpec } from "./types";
 
 type FieldName = "link" | "title" | "summary" | "image" | "category" | "date";
@@ -171,7 +171,7 @@ export async function parsePage(html: string, baseUrl: string, config: SourceCon
         publishedAt: parsed?.publishedAt ?? null,
         dateOnly: parsed?.dateOnly ?? false,
         text: summary || null,
-        imageUrl: absolute(raw.image, baseUrl),
+        imageUrl: pictureUrl(absolute(raw.image, baseUrl), baseUrl),
         category: raw.category ? cleanText(decodeEntities(raw.category)) : null,
       },
     ];
@@ -197,7 +197,8 @@ export async function extractContent(html: string, baseUrl: string, textSelector
   const rewriter = new HTMLRewriter()
     .on('meta[property="og:image"], meta[name="twitter:image"]', {
       element(el) {
-        image ??= el.getAttribute("content");
+        // The first usable one: a site root (no photo on the page) lets twitter:image answer.
+        image ??= pictureUrl(absolute(el.getAttribute("content") ?? undefined, baseUrl), baseUrl);
       },
     })
     .on(`${SKIPPED}, nav, header, footer, aside`, {
@@ -234,5 +235,5 @@ export async function extractContent(html: string, baseUrl: string, textSelector
 
   const texts = buffers.map((b) => cleanText(decodeEntities(b)));
   const text = texts.find((t) => t.length >= 200) ?? texts.reduce((a, b) => (b.length > a.length ? b : a), "");
-  return { text, imageUrl: absolute(image ?? undefined, baseUrl) };
+  return { text, imageUrl: image };
 }

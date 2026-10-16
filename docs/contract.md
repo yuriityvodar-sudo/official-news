@@ -103,7 +103,7 @@ What the fetcher writes (`server/src/fetcher/`):
 - Only items published in the last 7 days; an item already stored (same `url`) is never saved again. Items without a date are skipped, and a time later than the fetch is stored as the fetch time.
 - Only links on the source's own site (its host or a subdomain, or a host in `config.allowedHosts`), always as `https`.
 - A run claims its sources first (sets `last_checked_at` in the same statement that picks them), so a run cut off by a limit never blocks the others.
-- New articles: `is_news` `NULL` (the AI decides), `original_language` from the source, `text` up to 20,000 characters with `text_expires_at` 30 days after `fetched_at`, `image_url` from the list or the item page's preview image.
+- New articles: `is_news` `NULL` (the AI decides), `original_language` from the source, `text` up to 20,000 characters with `text_expires_at` 30 days after `fetched_at`, `image_url` from the list or the item page's preview image; an address that is a site's root (`https://vlada.gov.cz/`, given by pages without a photo) is not a picture and is left out.
 - A date without a time is stored at 12:00 UTC (or the fetch time if that is earlier) with `date_only = 1`.
 - `url` may end in `#…` when one link holds several items (bill stages); the part before `#` is the page.
 - Every check sets `last_checked_at`; `last_item_at` is the newest item seen. `runFetcher` returns one `SourceCheck` per source (`ok`, `httpStatus`, `found`, `saved`, `waiting`, `undated`, `offSite`, `error`), which source health (item 8) can use, and logs it as JSON.

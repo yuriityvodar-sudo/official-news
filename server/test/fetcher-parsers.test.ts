@@ -224,6 +224,16 @@ describe("extractContent", () => {
     expect(content.text).toBe(`Budget\n${paragraph.trim()}\nSecond & last.`);
   });
 
+  it("drops a picture that is the site's root, and takes twitter:image instead", async () => {
+    // vlada.gov.cz pages without a photo: og:image is the home page, an HTML page.
+    const noPhoto = `<head><meta property="og:image" content="https://vlada.gov.cz" /></head><main><p>Vláda schválila nový statut.</p></main>`;
+    expect((await extractContent(noPhoto, "https://vlada.gov.cz/cz/x/")).imageUrl).toBeNull();
+    const second = `<head><meta property="og:image" content="/"><meta name="twitter:image" content="/media/foto.jpg"></head><main>x</main>`;
+    expect((await extractContent(second, "https://vlada.gov.cz/cz/x/")).imageUrl).toBe("https://vlada.gov.cz/media/foto.jpg");
+    const feed = `<rss><channel><item><title>A</title><link>https://vlada.gov.cz/a</link><enclosure url="https://vlada.gov.cz/" type="image/jpeg"/></item></channel></rss>`;
+    expect(parseFeed(feed, "https://vlada.gov.cz/rss.xml", {}, NOW)[0].imageUrl).toBeNull();
+  });
+
   it("uses the source's text selector", async () => {
     const html = `<body><div class="top">首页 | 简 | 繁</div><div id="UCAP-CONTENT"><p>国务院关于发展新质生产力的意见</p></div></body>`;
     expect((await extractContent(html, "https://www.gov.cn/x", "#UCAP-CONTENT")).text).toBe("国务院关于发展新质生产力的意见");
