@@ -1,7 +1,6 @@
 import 'dart:convert';
 
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -9,11 +8,12 @@ import 'package:official_news/core/analytics.dart';
 import 'package:official_news/core/api_client.dart';
 import 'package:official_news/core/article.dart';
 import 'package:official_news/core/router.dart';
-import 'package:official_news/core/theme.dart';
 import 'package:official_news/features/detail/detail_screen.dart';
 import 'package:official_news/features/feed/feed_controller.dart';
 import 'package:official_news/features/feed/feed_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import 'test_app.dart';
 
 Map<String, dynamic> _article(
   String id, {
@@ -72,8 +72,7 @@ void main() {
 
   Future<void> pumpFeed(WidgetTester tester, {bool screens = true}) async {
     await tester.pumpWidget(
-      MaterialApp(
-        theme: buildTheme(Brightness.light),
+      testApp(
         onGenerateRoute: onGenerateRoute,
         navigatorObservers: [if (screens) ScreenViews()],
         home: FeedScreen(
@@ -155,17 +154,33 @@ void main() {
     expect(userProperties, {'feed_language': 'uk'});
   });
 
+  test(
+    'on a first launch, feed_language is the phone language the feed uses',
+    () async {
+      // Nothing saved: the app follows the phone (#52), and the property with it.
+      final feed = FeedController(
+        api: _api(),
+        phoneLanguages: () => const [Locale('uk', 'UA')],
+      );
+      await feed.open();
+      await useAnalytics(
+        Analytics(null, (name, value) async => userProperties[name] = value),
+        language: feed.languageChanges,
+      );
+      expect(userProperties, {'build': 'dev', 'feed_language': 'uk'});
+    },
+  );
+
   testWidgets('sends an opened official link and a share, with the article', (
     tester,
   ) async {
     final article = Article.fromJson(_article('a1'));
     await tester.pumpWidget(
-      MaterialApp(
-        theme: buildTheme(Brightness.light),
+      testApp(
         home: DetailScreen(
           article: article,
           openLink: (_) async {},
-          share: (_, _) async {},
+          share: (_, _, _) async {},
         ),
       ),
     );
@@ -180,12 +195,7 @@ void main() {
     'counts an article read after 15 seconds open, not while the app is away',
     (tester) async {
       final article = Article.fromJson(_article('a1'));
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: buildTheme(Brightness.light),
-          home: DetailScreen(article: article),
-        ),
-      );
+      await tester.pumpWidget(testApp(home: DetailScreen(article: article)));
       await tester.pump(const Duration(seconds: 10));
       // Away for a while: the wait starts again when the app is back.
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
@@ -207,10 +217,7 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(
-      MaterialApp(
-        theme: buildTheme(Brightness.light),
-        home: DetailScreen(article: Article.fromJson(_article('a1'))),
-      ),
+      testApp(home: DetailScreen(article: Article.fromJson(_article('a1')))),
     );
     await tester.pump(const Duration(seconds: 5));
     await tester.pumpWidget(const SizedBox());
@@ -232,8 +239,7 @@ void main() {
       ),
     );
     await tester.pumpWidget(
-      MaterialApp(
-        theme: buildTheme(Brightness.light),
+      testApp(
         onGenerateRoute: onGenerateRoute,
         home: FeedScreen(
           controller: FeedController(api: api),
@@ -264,8 +270,7 @@ void main() {
     );
     final feed = FeedController(api: api);
     await tester.pumpWidget(
-      MaterialApp(
-        theme: buildTheme(Brightness.light),
+      testApp(
         home: FeedScreen(
           controller: feed,
           newCheckEvery: const Duration(hours: 1),

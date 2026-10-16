@@ -9,7 +9,6 @@ import 'analytics.dart';
 import 'api_client.dart';
 import 'article.dart';
 import 'feed_language.dart';
-import 'feed_store.dart';
 import 'router.dart';
 
 /// Whether this phone gets notifications of breaking decisions (#62).
@@ -243,12 +242,18 @@ class Push with WidgetsBindingObserver {
     return now;
   }
 
-  /// Turns push on; [startPush] calls it once Firebase has started.
-  Future<void> start(Messaging messaging, SharedPreferences prefs) async {
+  /// Turns push on; [startPush] calls it once Firebase has started. [language]
+  /// is the feed's now ([FeedController.language]): the one chosen in
+  /// Settings or, with none chosen, the phone's (#52); [setLanguage] follows it.
+  Future<void> start(
+    Messaging messaging,
+    SharedPreferences prefs, {
+    required FeedLanguage language,
+  }) async {
     if (_messaging != null) return;
     _messaging = messaging;
     _prefs = prefs;
-    _language = FeedStore(prefs).language();
+    _language = language;
     WidgetsBinding.instance.addObserver(this);
     _subscriptions
       ..add(messaging.taps.listen((tap) => unawaited(open(tap))))
@@ -444,13 +449,15 @@ class Push with WidgetsBindingObserver {
 final push = Push();
 
 /// Starts push notifications; call only once Firebase has started
-/// ([startAnalytics] returned true).
-Future<void> startPush() async {
+/// ([startAnalytics] returned true). [language] is the feed's
+/// ([FeedController.languageChanges]), read when push starts, so a language
+/// chosen while Firebase was starting counts too.
+Future<void> startPush({
+  required ValueListenable<FeedLanguage> language,
+}) async {
   try {
-    await push.start(
-      FirebaseMessagingLayer(),
-      await SharedPreferences.getInstance(),
-    );
+    final prefs = await SharedPreferences.getInstance();
+    await push.start(FirebaseMessagingLayer(), prefs, language: language.value);
   } catch (error) {
     debugPrint('push: off: $error');
   }

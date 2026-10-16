@@ -13,12 +13,15 @@ import '../../core/news_widgets.dart';
 import '../../core/pictures.dart';
 import '../../core/push.dart';
 import '../../core/theme.dart';
+import '../../l10n/app_localizations.dart';
 
 /// Opens the official page; tests pass their own.
 typedef OpenLink = Future<void> Function(Uri uri);
 
-/// Opens the system share sheet; `origin` anchors it on iPad. Tests pass their own.
-typedef ShareArticle = Future<void> Function(Article article, Rect? origin);
+/// Opens the system share sheet with [text]; `origin` anchors it on iPad.
+/// Tests pass their own.
+typedef ShareArticle =
+    Future<void> Function(Article article, String text, Rect? origin);
 
 /// The official page in the in-app browser (Safari view on iOS, custom tab on Android).
 Future<void> openOfficialPage(Uri uri) async {
@@ -36,18 +39,24 @@ Uri? officialPage(String url) {
   return uri.removeFragment();
 }
 
-/// Shares the headline, the short summary and the official link.
-Future<void> shareArticle(Article article, Rect? origin) async {
+/// What is shared: the headline, the short summary and the official link,
+/// labelled in the app's language (#52).
+String shareText(Article article, AppLocalizations l10n) {
   final summary = article.shortSummary;
   final page = officialPage(article.originalUrl);
+  return [
+    article.headline,
+    if (summary != null && summary.isNotEmpty) summary,
+    if (page != null) l10n.shareOfficialSource(page.toString()),
+  ].join('\n\n');
+}
+
+/// Shares [text] with the headline as its subject.
+Future<void> shareArticle(Article article, String text, Rect? origin) async {
   await SharePlus.instance.share(
     ShareParams(
       subject: article.headline,
-      text: [
-        article.headline,
-        if (summary != null && summary.isNotEmpty) summary,
-        if (page != null) 'Official source: $page',
-      ].join('\n\n'),
+      text: text,
       sharePositionOrigin: origin,
     ),
   );
@@ -71,6 +80,7 @@ class DetailScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final text = NewsText.from(context);
+    final l10n = AppLocalizations.of(context);
     final scheme = Theme.of(context).colorScheme;
     final summary = article.summary?.trim();
     final hasSummary = summary != null && summary.isNotEmpty;
@@ -84,12 +94,16 @@ class DetailScreen extends StatelessWidget {
             padding: EdgeInsets.zero,
             onPressed: () {
               unawaited(analytics.shared(article));
-              share(article, _originOf(buttonContext));
+              share(
+                article,
+                shareText(article, l10n),
+                _originOf(buttonContext),
+              );
             },
-            child: const Icon(
+            child: Icon(
               CupertinoIcons.share,
               color: AppColors.accent,
-              semanticLabel: 'Share',
+              semanticLabel: l10n.share,
             ),
           ),
         ),
@@ -104,7 +118,7 @@ class DetailScreen extends StatelessWidget {
             KindLabel(article),
             Text(article.headline, style: text.articleHeadline),
             const SizedBox(height: 10),
-            Text(_published(article), style: text.meta),
+            Text(_published(article, l10n), style: text.meta),
             if (article.imageUrl != null) _Picture(article.imageUrl!),
             const SizedBox(height: 22),
             if (hasSummary) ...[
@@ -173,13 +187,12 @@ Rect? _originOf(BuildContext context) {
   return box is RenderBox ? box.localToGlobal(Offset.zero) & box.size : null;
 }
 
-/// "14 October 2026, 11:30", or only the day when the source gave no time.
-String _published(Article article) {
-  if (article.dateOnly) return fullDate(article.publishedAt);
-  final local = article.publishedAt.toLocal();
-  final time =
-      '${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
-  return '${fullDate(article.publishedAt)}, $time';
+/// "14 October 2026, 11:30" ("14 жовтня 2026 р. о 11:30"), or only the day
+/// when the source gave no time.
+String _published(Article article, AppLocalizations l10n) {
+  final date = fullDate(article.publishedAt, l10n);
+  if (article.dateOnly) return date;
+  return l10n.dateAndTime(date, clockTime(article.publishedAt, l10n));
 }
 
 /// The summary's paragraphs: the AI separates them with a blank line.
@@ -202,6 +215,7 @@ class _Publisher extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final text = NewsText.from(context);
+    final l10n = AppLocalizations.of(context);
     final scheme = Theme.of(context).colorScheme;
     return Row(
       children: [
@@ -230,22 +244,29 @@ class _Publisher extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
               ),
               const SizedBox(height: 2),
-              Row(
+              // Wraps instead of overflowing: "Official source" is longer in
+              // some languages ("Официальный источник"), and at large text sizes.
+              Wrap(
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  Flexible(
-                    child: Text(
-                      '${countryName(article.country)} · ',
-                      style: text.meta,
-                      overflow: TextOverflow.ellipsis,
-                    ),
+                  Text(
+                    '${countryName(article.country, l10n)} · ',
+                    style: text.meta,
                   ),
-                  const Icon(
-                    CupertinoIcons.checkmark_seal,
-                    size: 15,
-                    color: AppColors.verified,
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        CupertinoIcons.checkmark_seal,
+                        size: 15,
+                        color: AppColors.verified,
+                      ),
+                      const SizedBox(width: 3),
+                      Flexible(
+                        child: Text(l10n.officialSource, style: text.meta),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 3),
-                  Text('Official source', style: text.meta),
                 ],
               ),
             ],
@@ -288,14 +309,20 @@ class _Picture extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 6),
-          Text('Image: ${_site(url)}', style: text.meta.copyWith(fontSize: 12)),
+          Text(
+            AppLocalizations.of(context).imageCredit(_site(url)),
+            style: text.meta.copyWith(fontSize: 12),
+          ),
         ],
       ),
     );
   }
 }
 
-/// "Summary by AI · translated from German".
+/// "Summary by AI · translated from German" ("Стислий виклад від ШІ · переклад
+/// з німецької"): the note is there when the source is in another language than
+/// the article is read in, so a Russian source in the Russian feed has none and
+/// an English one there has "перевод с английского".
 class _AiLabel extends StatelessWidget {
   const _AiLabel(this.article);
 
@@ -304,10 +331,12 @@ class _AiLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final text = NewsText.from(context);
-    final language = article.originalLanguage;
-    final label = language == 'en'
-        ? 'Summary by AI'
-        : 'Summary by AI · translated from ${languageName(language)}';
+    final l10n = AppLocalizations.of(context);
+    final source = article.originalLanguage;
+    final reading = article.lang ?? 'en';
+    final label = source == reading
+        ? l10n.summaryByAi
+        : l10n.summaryByAiTranslated(languageName(source, l10n));
     return Row(
       children: [
         Icon(Icons.auto_awesome_outlined, size: 15, color: text.meta.color),
@@ -339,8 +368,7 @@ class _SummaryComing extends StatelessWidget {
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              'The AI summary is on its way. Until then, the headline is the '
-              'original title, and the official page has the full text.',
+              AppLocalizations.of(context).summaryComing,
               style: text.meta,
             ),
           ),
@@ -360,10 +388,11 @@ class _OfficialLink extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final text = NewsText.from(context);
+    final l10n = AppLocalizations.of(context);
     final scheme = Theme.of(context).colorScheme;
     return Semantics(
       button: true,
-      label: 'Read the official decision on ${_site(article.originalUrl)}',
+      label: l10n.readOfficialDecisionOn(_site(article.originalUrl)),
       excludeSemantics: true,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
@@ -380,7 +409,7 @@ class _OfficialLink extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Read the official decision', style: text.publisher),
+                    Text(l10n.readOfficialDecision, style: text.publisher),
                     const SizedBox(height: 3),
                     Text(
                       '${_site(article.originalUrl)} · ${article.originalTitle}',

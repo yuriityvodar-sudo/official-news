@@ -12,11 +12,12 @@ import 'package:official_news/core/article.dart';
 import 'package:official_news/core/feed_language.dart';
 import 'package:official_news/core/push.dart';
 import 'package:official_news/core/router.dart';
-import 'package:official_news/core/theme.dart';
 import 'package:official_news/features/detail/detail_screen.dart';
 import 'package:official_news/features/feed/feed_controller.dart';
 import 'package:official_news/main.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import 'test_app.dart';
 
 /// Firebase Cloud Messaging as the tests want it: iOS answers [answer] when it
 /// asks; topic changes fail while [failTopics] is set.
@@ -189,16 +190,18 @@ void main() {
   Iterable<Map<String, Object>> sent(String name) =>
       events.where((e) => e.$1 == name).map((e) => e.$2);
 
-  /// Push turned on with [messaging], on a phone holding [saved].
+  /// Push turned on with [messaging], on a phone holding [saved], the feed
+  /// read in [language].
   Future<Push> started(
     FakeMessaging messaging, {
     Map<String, Object> saved = const {},
+    FeedLanguage language = FeedLanguage.en,
     GlobalKey<NavigatorState>? navigator,
   }) async {
     SharedPreferences.setMockInitialValues(saved);
     prefs = await SharedPreferences.getInstance();
     final push = Push(api: api, navigator: navigator);
-    await push.start(messaging, prefs);
+    await push.start(messaging, prefs, language: language);
     addTearDown(push.stop);
     return push;
   }
@@ -305,7 +308,7 @@ void main() {
 
       // A later launch: iOS says denied, and the app has asked before.
       push.stop();
-      await push.start(messaging, prefs);
+      await push.start(messaging, prefs, language: FeedLanguage.en);
       expect(push.offerDue, isFalse);
     });
 
@@ -334,7 +337,7 @@ void main() {
 
       // After a restart iOS still has not asked, but the app does not offer again.
       push.stop();
-      await push.start(messaging, prefs);
+      await push.start(messaging, prefs, language: FeedLanguage.en);
       expect(push.permission.value, PushPermission.notAsked);
       expect(push.offerDue, isFalse);
 
@@ -387,7 +390,7 @@ void main() {
       'allowed: subscribes to the feed language and saves the topic',
       () async {
         final messaging = FakeMessaging(status: PushPermission.granted);
-        await started(messaging, saved: {'feed.lang': 'uk'});
+        await started(messaging, language: FeedLanguage.uk);
         expect(messaging.calls, ['subscribe breaking_uk']);
         expect(messaging.banners, isTrue);
         expect(prefs.getString('push.topic'), 'breaking_uk');
@@ -396,7 +399,7 @@ void main() {
 
     test('a language change moves it: the old topic off first', () async {
       final messaging = FakeMessaging(status: PushPermission.granted);
-      final push = await started(messaging, saved: {'feed.lang': 'uk'});
+      final push = await started(messaging, language: FeedLanguage.uk);
       await push.setLanguage(FeedLanguage.ru);
       await push.setLanguage(FeedLanguage.ru);
       expect(messaging.calls, [
@@ -411,7 +414,8 @@ void main() {
       final messaging = FakeMessaging(status: PushPermission.granted);
       await started(
         messaging,
-        saved: {'feed.lang': 'es', 'push.topic': 'breaking_en'},
+        language: FeedLanguage.es,
+        saved: {'push.topic': 'breaking_en'},
       );
       expect(messaging.calls, [
         'unsubscribe breaking_en',
@@ -421,7 +425,7 @@ void main() {
 
     test('a failed change is tried again when the app comes back', () async {
       final messaging = FakeMessaging(status: PushPermission.granted);
-      final push = await started(messaging, saved: {'feed.lang': 'uk'});
+      final push = await started(messaging, language: FeedLanguage.uk);
       messaging.failTopics = StateError('offline');
       await push.setLanguage(FeedLanguage.de);
       expect(prefs.getString('push.topic'), 'breaking_uk');
@@ -462,7 +466,7 @@ void main() {
         tester,
       ) async {
         final messaging = QueuedMessaging();
-        final push = await started(messaging, saved: {'feed.lang': 'uk'});
+        final push = await started(messaging, language: FeedLanguage.uk);
         expect(messaging.topics, {'breaking_uk'});
 
         // The old topic goes, then the network drops before the new one.
@@ -495,14 +499,16 @@ void main() {
 
       testWidgets('a restart while still offline', (tester) async {
         final messaging = QueuedMessaging();
-        final push = await started(messaging, saved: {'feed.lang': 'es'});
+        final push = await started(messaging, language: FeedLanguage.es);
         messaging.dropBefore = 'subscribe breaking_uk';
         await unanswered(tester, () => push.setLanguage(FeedLanguage.uk));
-        await prefs.setString('feed.lang', 'uk'); // as the feed saves it
 
-        // Firebase keeps its queue across launches.
+        // Firebase keeps its queue across launches; the feed reads Ukrainian.
         push.stop();
-        await unanswered(tester, () => push.start(messaging, prefs));
+        await unanswered(
+          tester,
+          () => push.start(messaging, prefs, language: FeedLanguage.uk),
+        );
         await unanswered(tester, () => push.setLanguage(FeedLanguage.de));
 
         messaging.reconnect();
@@ -537,7 +543,7 @@ void main() {
 
     test('turned off in the iOS Settings app: the topic is dropped', () async {
       final messaging = FakeMessaging(status: PushPermission.granted);
-      await started(messaging, saved: {'feed.lang': 'ru'});
+      await started(messaging, language: FeedLanguage.ru);
       messaging.status = PushPermission.denied;
       final binding = TestWidgetsFlutterBinding.instance;
       binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
@@ -650,7 +656,7 @@ void main() {
     Future<void> appPushStarted(FakeMessaging messaging) async {
       SharedPreferences.setMockInitialValues({});
       prefs = await SharedPreferences.getInstance();
-      await push.start(messaging, prefs);
+      await push.start(messaging, prefs, language: FeedLanguage.en);
       addTearDown(push.stop);
     }
 
@@ -659,10 +665,7 @@ void main() {
     ) async {
       await appPushStarted(FakeMessaging());
       await tester.pumpWidget(
-        MaterialApp(
-          theme: buildTheme(Brightness.light),
-          home: DetailScreen(article: Article.fromJson(_article('a1'))),
-        ),
+        testApp(home: DetailScreen(article: Article.fromJson(_article('a1')))),
       );
       await tester.pump(const Duration(seconds: 14));
       expect(prefs.getStringList('push.readIds'), isNull);
@@ -695,17 +698,31 @@ void main() {
     testWidgets('the app offers on its navigator, and taps open on it', (
       tester,
     ) async {
-      late MaterialApp app;
-      await tester.pumpWidget(
-        Builder(
-          builder: (context) {
-            app = const OfficialNewsApp().build(context) as MaterialApp;
-            return const SizedBox();
-          },
+      SharedPreferences.setMockInitialValues({});
+      final feed = FeedController(
+        api: ApiClient(
+          baseUrl: 'https://api.test',
+          client: MockClient(
+            (_) async =>
+                http.Response('{"items":[],"nextCursor":null,"top":[]}', 200),
+          ),
         ),
+        phoneLanguages: () => const [Locale('en')],
       );
-      expect(app.navigatorObservers, contains(isA<PushOffer>()));
-      expect(app.navigatorKey, same(appNavigator));
+      await feed.open();
+      await tester.pumpWidget(OfficialNewsApp(feed: feed));
+      await tester.pump();
+      MaterialApp app() => tester.widget(find.byType(MaterialApp));
+      final observers = app().navigatorObservers;
+      expect(observers, contains(isA<PushOffer>()));
+      expect(app().navigatorKey, same(appNavigator));
+
+      // A language change redraws the app (#52) with the same observers, so
+      // an offer waiting for an article to slide away is not lost.
+      await feed.setLanguage(FeedLanguage.uk);
+      await tester.pump();
+      expect(app().locale, const Locale('uk'));
+      expect(app().navigatorObservers, same(observers));
     });
   });
 }
