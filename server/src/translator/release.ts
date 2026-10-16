@@ -26,6 +26,19 @@ export const DAY_MS = 24 * 3_600_000;
 /** The release waits for translations only while the translator ran this recently (it runs every 2 minutes). */
 export const TRANSLATOR_ALIVE_MINUTES = 10;
 
+/** When the translator last ran (step_runs, one row). */
+export const TRANSLATOR_RAN_AT = "SELECT at FROM step_runs WHERE step = 'translator'";
+
+/**
+ * Whether the translator ran in the last TRANSLATOR_ALIVE_MINUTES, the same
+ * rule RELEASE uses (its ?4). The summarizer's run sends the push
+ * notifications only while this is false (../index.ts): one row read.
+ */
+export async function translatorRunning(env: Env, now: Date): Promise<boolean> {
+  const at = await env.DB.prepare(TRANSLATOR_RAN_AT).first<string>("at");
+  return !!at && at >= toStoredTime(new Date(now.getTime() - TRANSLATOR_ALIVE_MINUTES * 60_000));
+}
+
 /** Records that the translator runs now, for the release (?1 now). */
 export const TRANSLATOR_RAN = `INSERT INTO step_runs (step, at) VALUES ('translator', ?1)
   ON CONFLICT (step) DO UPDATE SET at = excluded.at`;
