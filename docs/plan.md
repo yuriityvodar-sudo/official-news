@@ -109,6 +109,20 @@ The MVP is a Kickoff plus 8 items, 4 each. This is our suggested split: Yurii ow
 | 8 | Source health and cleanup of old texts | Roman | 2 | Each source shows its status; expired texts are cleared |
 | 9 | Translations, after the MVP: Ukrainian, Russian, Spanish and German | Yurii | 3 | News in the feed gets its text in each language through a queue we can see and manage, and the API returns only translated articles with `lang` |
 
+**After the MVP, towards the App Store release (agreed on the call, 16 Oct).** Each item is a GitHub issue assigned to its owner; the issue holds the details.
+
+| Issue | Item | Owner | Done when |
+| --- | --- | --- | --- |
+| #63 | Better AI headlines and summaries (the prompt), backward compatible | Roman | Headlines and summaries are specific and only from the source; same fields, translations keep working, Groq quota respected |
+| #56 | Article text layout (justified text, smaller body font, paragraphs) | Roman | Before/after agreed in the issue, then built |
+| #64 | Settings screen from the top-right corner (language, notifications, privacy, terms, support, about, version); no login | Yurii (design and build) | Yurii approves it on the phone |
+| #65 | Domain (Cloudflare Registrar) and app name | Yurii | Name decided, domain bought |
+| #66 | Feed redesign: article cards, font, UI fixes | Yurii (design and build) | Yurii approves it on the phone |
+| #67 | News categories | To agree | Categories agreed in the issue, then built |
+| #68 | Global / Local feed switch | To agree | Agreed in the issue, then built |
+| #60 | Analytics (Google Analytics through Firebase) | Yurii | Events arrive in GA from TestFlight; release checklist done |
+| #62 | Push notifications, breaking decisions (importance 4+, max 2 a day) | Yurii | A breaking decision reaches a phone in its language |
+
 **Order:** Kickoff first, then item 1 (it gives everyone real data from Cloudflare). Items 2, 5 and 7 start at the same time; 3 and 4 follow the design; 6 follows 5; 8 comes last.
 
 **Milestones:** after item 7 the app works end to end with live, summarized official news. After item 8 the MVP is complete.
