@@ -6,6 +6,7 @@ import '../../core/countries.dart';
 import '../../core/decision_types.dart';
 import '../../core/news_widgets.dart';
 import '../../core/pictures.dart';
+import '../../core/read_mark.dart';
 import '../../core/theme.dart';
 import '../../l10n/app_localizations.dart';
 import 'feed_look.dart';
@@ -48,7 +49,7 @@ class ALook extends NowLook {
         padded(
           _Lead(
             article: top.articles.first,
-            read: top.isRead(top.articles.first),
+            mark: top.markOf(top.articles.first),
             onTap: () => top.open(0),
           ),
         ),
@@ -123,7 +124,7 @@ class ALook extends NowLook {
         final row = _Row(
           article: a,
           deck: deck,
-          read: section.isRead(a),
+          mark: section.markOf(a),
           onTap: () => section.open(i),
         );
         if (index == 0 && !ruleFirst) return row;
@@ -345,10 +346,13 @@ class _SectionHead extends StatelessWidget {
 /// Where a decision comes from: "BRAZIL  Chamber of Deputies". The
 /// country comes first so it is never cut; a long institution name is.
 /// It is grey already, so it looks the same once the article is read.
+/// PROTOTYPE: in the dot styles the unread dot stands between the two,
+/// "BRAZIL ● Chamber of Deputies", its room kept empty once read.
 class _Kicker extends StatelessWidget {
-  const _Kicker(this.article, {required this.maxLines});
+  const _Kicker(this.article, {required this.mark, required this.maxLines});
 
   final Article article;
+  final ReadMark mark;
   final int maxLines;
 
   @override
@@ -363,7 +367,16 @@ class _Kicker extends StatelessWidget {
             text: countryName(article.country, l10n).toUpperCase(),
             style: type.country,
           ),
-          TextSpan(text: '  ${article.source.name}'),
+          if (mark.dots) ...[
+            unreadDotSpan(
+              context,
+              mark,
+              fontSize: type.country.fontSize!,
+              scaler: MediaQuery.textScalerOf(context),
+            ),
+            TextSpan(text: article.source.name),
+          ] else
+            TextSpan(text: '  ${article.source.name}'),
         ],
       ),
       maxLines: maxLines,
@@ -427,18 +440,18 @@ String _readWord(BuildContext context) =>
     };
 
 /// A card that is one button for VoiceOver, with one label, and says "Read"
-/// once it was opened. It tints under the finger, across the whole width,
-/// as iOS lists do.
+/// once it was opened (in the dot styles, "Unread" until it is). It tints
+/// under the finger, across the whole width, as iOS lists do.
 class _Card extends StatefulWidget {
   const _Card({
     required this.label,
-    required this.read,
+    required this.mark,
     required this.onTap,
     required this.child,
   });
 
   final String label;
-  final bool read;
+  final ReadMark mark;
   final VoidCallback onTap;
   final Widget child;
 
@@ -460,7 +473,11 @@ class _CardState extends State<_Card> {
       container: true,
       button: true,
       label: widget.label,
-      value: widget.read ? _readWord(context) : null,
+      value: widget.mark.unread
+          ? AppLocalizations.of(context).feedUnread
+          : widget.mark.dimmed
+          ? _readWord(context)
+          : null,
       onTap: widget.onTap,
       excludeSemantics: true,
       child: GestureDetector(
@@ -529,13 +546,13 @@ final _sentenceEnd = RegExp(
 class _Row extends StatelessWidget {
   const _Row({
     required this.article,
-    required this.read,
+    required this.mark,
     required this.onTap,
     this.deck = false,
   });
 
   final Article article;
-  final bool read;
+  final ReadMark mark;
   final VoidCallback onTap;
 
   /// Shows the first sentence of the short summary under the headline (top
@@ -545,20 +562,21 @@ class _Row extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final type = _AType.of(context);
+    final read = mark.dimmed;
     final huge = _hugeText(context);
     // At the accessibility sizes the headline needs the whole width.
     final url = huge ? null : _pictureOf(article);
     final summary = deck ? _firstSentence(article.shortSummary) : null;
     return _Card(
       label: _spoken(context, article, deck: summary),
-      read: read,
+      mark: mark,
       onTap: onTap,
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _Kicker(article, maxLines: huge ? 3 : 1),
+            _Kicker(article, mark: mark, maxLines: huge ? 3 : 1),
             const SizedBox(height: 6),
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -602,22 +620,23 @@ class _Row extends StatelessWidget {
 /// The first top story: its picture when it has one, a large headline and its
 /// short summary. Without a picture it stands on its type alone.
 class _Lead extends StatelessWidget {
-  const _Lead({required this.article, required this.read, required this.onTap});
+  const _Lead({required this.article, required this.mark, required this.onTap});
 
   final Article article;
-  final bool read;
+  final ReadMark mark;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final type = _AType.of(context);
+    final read = mark.dimmed;
     final url = _pictureOf(article);
     final deck = article.shortSummary?.trim();
     final hasDeck = deck != null && deck.isNotEmpty;
     final huge = _hugeText(context);
     return _Card(
       label: _spoken(context, article, deck: hasDeck ? deck : null),
-      read: read,
+      mark: mark,
       onTap: onTap,
       child: Padding(
         // As far under "Top stories" as a Latest row is under "Latest".
@@ -626,7 +645,7 @@ class _Lead extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (url != null) _LeadPicture(url: url, dimmed: read),
-            _Kicker(article, maxLines: 3),
+            _Kicker(article, mark: mark, maxLines: 3),
             const SizedBox(height: 8),
             _WholeWords(
               article.headline,

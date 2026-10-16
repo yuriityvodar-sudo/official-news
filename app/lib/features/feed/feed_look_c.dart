@@ -10,6 +10,7 @@ import '../../core/article.dart';
 import '../../core/countries.dart';
 import '../../core/decision_types.dart';
 import '../../core/news_widgets.dart';
+import '../../core/read_mark.dart';
 import '../../l10n/app_localizations.dart';
 import 'feed_look.dart';
 
@@ -133,7 +134,7 @@ class CLook extends FeedLook {
           return _Item(
             article: a,
             number: numbered ? i + 1 : null,
-            read: section.isRead(a),
+            mark: section.markOf(a),
             onTap: () => section.open(i),
           );
         },
@@ -559,18 +560,22 @@ class _Item extends StatelessWidget {
   const _Item({
     required this.article,
     required this.number,
-    required this.read,
+    required this.mark,
     required this.onTap,
   });
 
   final Article article;
   final int? number;
-  final bool read;
+
+  /// Opened or not, and how that shows (prototype): greyed in Dim, or the
+  /// unread dot after the country in the dot styles.
+  final ReadMark mark;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final t = _Styles.of(context);
+    final read = mark.dimmed;
     final l10n = AppLocalizations.of(context);
     final country = countryName(article.country, l10n);
     final kind = decisionTypeLabel(article.decisionType, l10n);
@@ -597,6 +602,7 @@ class _Item extends StatelessWidget {
       if (summary.isNotEmpty) summary,
       feedTime(article, l10n),
       if (read) _words(l10n).opened,
+      if (mark.unread) l10n.feedUnread,
     ].map(_sentence).join(' ');
 
     final numeral = n == null
@@ -626,10 +632,18 @@ class _Item extends StatelessWidget {
     // Who decided, in full: the country first, then the institution, on up
     // to two lines. With large text the institution gets a line of its own
     // with the time, and a top story's numeral moves into the country's line
-    // to leave the headline the whole width.
+    // to leave the headline the whole width. PROTOTYPE: in the dot styles
+    // the unread dot follows the country, its room kept empty once read.
     final countryText = TextSpan(
       text: country.toUpperCase(),
       style: inked(t.country),
+    );
+    InlineSpan dot({bool trailing = false}) => unreadDotSpan(
+      context,
+      mark,
+      fontSize: t.country.fontSize!,
+      scaler: MediaQuery.textScalerOf(context),
+      trailing: trailing,
     );
     final who = large
         ? Column(
@@ -640,7 +654,15 @@ class _Item extends StatelessWidget {
                 textBaseline: TextBaseline.alphabetic,
                 children: [
                   if (numeral != null) ...[numeral, const SizedBox(width: 12)],
-                  Expanded(child: Text.rich(countryText)),
+                  Expanded(
+                    child: Text.rich(
+                      mark.dots
+                          ? TextSpan(
+                              children: [countryText, dot(trailing: true)],
+                            )
+                          : countryText,
+                    ),
+                  ),
                 ],
               ),
               // A time that does not fit starts the next line, with no
@@ -661,7 +683,11 @@ class _Item extends StatelessWidget {
             TextSpan(
               children: [
                 countryText,
-                TextSpan(text: '  ${article.source.name}', style: t.source),
+                if (mark.dots) ...[
+                  dot(),
+                  TextSpan(text: article.source.name, style: t.source),
+                ] else
+                  TextSpan(text: '  ${article.source.name}', style: t.source),
               ],
             ),
             maxLines: 2,

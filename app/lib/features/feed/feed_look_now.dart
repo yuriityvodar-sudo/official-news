@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../../core/article.dart';
 import '../../core/news_widgets.dart';
 import '../../core/pictures.dart';
+import '../../core/read_mark.dart';
 import '../../core/theme.dart';
 import '../../l10n/app_localizations.dart';
 import 'feed_look.dart';
@@ -61,7 +62,7 @@ class NowLook extends FeedLook {
           padded(
             NowTopCard(
               article: first,
-              read: top.isRead(first),
+              mark: top.markOf(first),
               onTap: () => top.open(0),
             ),
           ),
@@ -140,7 +141,7 @@ class NowLook extends FeedLook {
         section.shown(i);
         return NowArticleRow(
           article: a,
-          read: section.isRead(a),
+          mark: section.markOf(a),
           showDay: true,
           onTap: () => section.open(i),
         );
@@ -168,23 +169,26 @@ class NowArticleRow extends StatelessWidget {
   const NowArticleRow({
     super.key,
     required this.article,
-    required this.read,
+    required this.mark,
     required this.onTap,
     this.showDay = true,
   });
 
   final Article article;
-  final bool read;
+
+  /// Read or not, and how that shows (prototype): dimmed, or the unread dot.
+  final ReadMark mark;
   final VoidCallback onTap;
   final bool showDay;
 
   @override
   Widget build(BuildContext context) {
     final text = NewsText.from(context);
+    final read = mark.dimmed;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
-      // Opened articles stay in the feed, dimmed.
+      // Opened articles stay in the feed, dimmed (or without the unread dot).
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 16),
         child: Row(
@@ -195,7 +199,7 @@ class NowArticleRow extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   KindLabel(article, dimmed: read),
-                  PublisherLine(article, dimmed: read),
+                  PublisherLine(article, dimmed: read, mark: mark),
                   const SizedBox(height: 4),
                   Text(
                     article.headline,
@@ -236,17 +240,20 @@ class NowTopCard extends StatelessWidget {
   const NowTopCard({
     super.key,
     required this.article,
-    required this.read,
+    required this.mark,
     required this.onTap,
   });
 
   final Article article;
-  final bool read;
+
+  /// Read or not, and how that shows (prototype): dimmed, or the unread dot.
+  final ReadMark mark;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final text = NewsText.from(context);
+    final read = mark.dimmed;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
@@ -261,7 +268,7 @@ class NowTopCard extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             KindLabel(article, dimmed: read),
-            PublisherLine(article, dimmed: read),
+            PublisherLine(article, dimmed: read, mark: mark),
             const SizedBox(height: 4),
             Text(
               article.headline,

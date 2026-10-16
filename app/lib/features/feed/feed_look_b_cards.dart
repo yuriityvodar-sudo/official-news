@@ -8,6 +8,7 @@ import '../../core/countries.dart';
 import '../../core/decision_types.dart';
 import '../../core/news_widgets.dart';
 import '../../core/pictures.dart';
+import '../../core/read_mark.dart';
 import '../../core/theme.dart';
 import '../../l10n/app_localizations.dart';
 import 'feed_look_b_words.dart';
@@ -339,7 +340,7 @@ class BCard extends StatefulWidget {
   const BCard({
     super.key,
     required this.article,
-    required this.read,
+    required this.mark,
     required this.onTap,
     this.kind = BCardKind.latest,
     this.lead = false,
@@ -347,8 +348,10 @@ class BCard extends StatefulWidget {
 
   final Article article;
 
-  /// Opened before: the card stays, its headline and picture faded.
-  final bool read;
+  /// Opened before or not, and how that shows (prototype): in Dim the card
+  /// stays, its headline and picture faded; in the dot styles a card not yet
+  /// opened has the unread dot in place of the official-source seal.
+  final ReadMark mark;
   final VoidCallback onTap;
   final BCardKind kind;
 
@@ -373,7 +376,8 @@ class _BCardState extends State<BCard> {
     final scaler = MediaQuery.textScalerOf(context);
     final a = widget.article;
     final k = widget.kind;
-    final read = widget.read;
+    final mark = widget.mark;
+    final read = mark.dimmed;
     final fill = k == BCardKind.carousel;
     final large = bLargeText(context);
     final padding = large ? 16.0 : k.padding;
@@ -385,7 +389,10 @@ class _BCardState extends State<BCard> {
     final hasSummary = summary != null && summary.isNotEmpty;
 
     // Who decided: the country, the official-source seal and the ministry,
-    // in up to two lines, so a long ministry's name is not cut.
+    // in up to two lines, so a long ministry's name is not cut. PROTOTYPE:
+    // in the dot styles the unread dot stands between the country and the
+    // ministry instead of the seal and the " · ", and a read card keeps the
+    // " · " in the dot's room, so the ministry never moves.
     final place = LayoutBuilder(
       builder: (context, constraints) {
         final fitted = bFitWords(
@@ -401,19 +408,29 @@ class _BCardState extends State<BCard> {
           TextSpan(
             children: [
               TextSpan(text: country, style: dim(s.country, read)),
-              // The official-source seal, outlined and grey as a quiet mark.
-              WidgetSpan(
-                alignment: PlaceholderAlignment.middle,
-                child: Padding(
-                  padding: const EdgeInsets.only(left: 4),
-                  child: Icon(
-                    CupertinoIcons.checkmark_seal,
-                    size: 14 * math.min(grow, 1.4) / grow,
-                    color: _fadeGrey(s.source, read).color,
+              if (mark.dots)
+                unreadDotSpan(
+                  context,
+                  mark,
+                  fontSize: s.country.fontSize!,
+                  scaler: fitted,
+                  separator: s.source.color,
+                )
+              else ...[
+                // The official-source seal, outlined and grey as a quiet mark.
+                WidgetSpan(
+                  alignment: PlaceholderAlignment.middle,
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 4),
+                    child: Icon(
+                      CupertinoIcons.checkmark_seal,
+                      size: 14 * math.min(grow, 1.4) / grow,
+                      color: _fadeGrey(s.source, read).color,
+                    ),
                   ),
                 ),
-              ),
-              TextSpan(text: ' · ', style: _fadeGrey(s.source, read)),
+                TextSpan(text: ' · ', style: _fadeGrey(s.source, read)),
+              ],
               TextSpan(text: a.source.name, style: _fadeGrey(s.source, read)),
             ],
           ),
@@ -494,7 +511,8 @@ class _BCardState extends State<BCard> {
 
     // One VoiceOver stop per card. The headline first, as it is the news,
     // then the card's own order: who, what it means, what kind, the topic,
-    // when; "Read" after a card already opened.
+    // when; "Read" after a card already opened (in the dot styles,
+    // "Unread" after one not opened yet).
     final spoken = _sentences([
       a.headline,
       '$country, ${a.source.name}',
@@ -508,7 +526,11 @@ class _BCardState extends State<BCard> {
       container: true,
       button: true,
       label: spoken,
-      value: read ? bReadWord(l10n) : null,
+      value: mark.unread
+          ? l10n.feedUnread
+          : read
+          ? bReadWord(l10n)
+          : null,
       onTap: widget.onTap,
       excludeSemantics: true,
       child: GestureDetector(

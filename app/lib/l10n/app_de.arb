@@ -10,6 +10,7 @@
   "feedRefreshFailed": "Aktualisierung fehlgeschlagen. Zum Wiederholen nach unten ziehen.",
   "feedLoadMoreFailed": "Laden fehlgeschlagen. Zum Wiederholen tippen.",
   "feedEnd": "Sie sind auf dem neuesten Stand",
+  "feedUnread": "Ungelesen",
   "feedEmpty": "Heute noch keine Entscheidungen.",
   "feedNoTranslations": "Noch keine übersetzten Entscheidungen.",
   "feedTranslationsComing": "Übersetzungen erscheinen hier, sobald sie verfügbar sind.",

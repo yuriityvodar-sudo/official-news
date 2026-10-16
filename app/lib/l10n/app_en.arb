@@ -37,6 +37,10 @@
   "@feedEnd": {
     "description": "At the end of the feed (it shows 7 days)."
   },
+  "feedUnread": "Unread",
+  "@feedUnread": {
+    "description": "What VoiceOver says for an article in the feed that has not been opened yet (it shows a small dot)."
+  },
   "feedEmpty": "No decisions yet today.",
   "@feedEmpty": {
     "description": "The English feed is empty."

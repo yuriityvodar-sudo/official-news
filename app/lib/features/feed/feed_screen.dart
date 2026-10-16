@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' show min;
 
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/analytics.dart';
@@ -59,6 +60,7 @@ class _FeedScreenState extends State<FeedScreen> {
     super.initState();
     _feed.addListener(_changed);
     feedDesign.addListener(_designChanged);
+    readStyle.addListener(_designChanged);
     _scroll.addListener(_nearEnd);
     unawaited(_feed.start());
     _newCheck = Timer.periodic(widget.newCheckEvery, (_) {
@@ -73,18 +75,21 @@ class _FeedScreenState extends State<FeedScreen> {
     _newCheck?.cancel();
     _feed.removeListener(_changed);
     feedDesign.removeListener(_designChanged);
+    readStyle.removeListener(_designChanged);
     if (widget.controller == null) _feed.dispose();
     _scroll.dispose();
     super.dispose();
   }
 
-  /// Another look chosen in Settings (#66, prototype): the feed redraws in it.
+  /// Another look, or another way to show read articles, chosen in Settings
+  /// (#66, prototype): the feed redraws in it.
   void _designChanged() => setState(() {});
 
   void _changed() {
     final failed = _feed.error != null;
     if (failed && !_failed) unawaited(analytics.feedFailed());
     _failed = failed;
+    _readAtStart();
     setState(() {});
     // A page dropped because a refresh replaced the feed leaves the list at its end:
     // look again once the new feed is drawn.
@@ -107,6 +112,24 @@ class _FeedScreenState extends State<FeedScreen> {
     _scroll.jumpTo(
       min(_startScroll.toDouble(), _scroll.position.maxScrollExtent),
     );
+  }
+
+  /// PROTOTYPE, for screenshots only: a script cannot tap the simulator, so a
+  /// debug build with `--dart-define=READ_DEMO=2` shows the first 2 articles
+  /// of the feed (top stories first) as read, once the feed has articles.
+  /// Kept in memory only, never saved; ignored by release builds.
+  static const _readDemo = int.fromEnvironment('READ_DEMO');
+  bool _readDemoDone = false;
+  void _readAtStart() {
+    if (!kDebugMode || _readDemo <= 0 || _readDemoDone) return;
+    if (_feed.items.isEmpty && _feed.top.isEmpty) return;
+    _readDemoDone = true;
+    final topIds = _feed.top.map((a) => a.id).toSet();
+    final shown = [
+      ..._feed.top,
+      ..._feed.items.where((a) => !topIds.contains(a.id)),
+    ];
+    _feed.readIds.addAll(shown.take(_readDemo).map((a) => a.id));
   }
 
   void _nearEnd() {
@@ -326,6 +349,7 @@ class _FeedScreenState extends State<FeedScreen> {
             title: l10n.topStories,
             articles: top,
             readIds: _feed.readIds,
+            readStyle: readStyle.value,
             open: (i) => _open(top[i], section: 'top', position: i),
           ),
         ),
@@ -339,6 +363,7 @@ class _FeedScreenState extends State<FeedScreen> {
             title: l10n.latest,
             articles: latest,
             readIds: _feed.readIds,
+            readStyle: readStyle.value,
             open: (i) => _open(latest[i], section: 'latest', position: i),
             shown: (i) => _shownRow(i + 1),
           ),

@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/feed_language.dart';
+import '../../core/read_mark.dart';
 import '../../core/theme.dart';
 import '../../l10n/app_localizations.dart';
 import '../detail/detail_screen.dart' show OpenLink, openOfficialPage;
@@ -161,8 +162,8 @@ class SettingsScreen extends StatelessWidget {
 }
 
 /// PROTOTYPE (#66): switches the feed between today's look and the design
-/// options, and plays the splash styles, to compare them in one build.
-/// English only; not for release.
+/// options, plays the splash styles, and switches how read articles look, to
+/// compare them in one build. English only; not for release.
 class _DesignSection extends StatelessWidget {
   const _DesignSection();
 
@@ -232,6 +233,33 @@ class _DesignSection extends StatelessWidget {
           // frame).
           Navigator.of(context).popUntil((route) => route.isFirst);
         },
+      ),
+      // How read articles look (Yurii, 16 Oct): faded as today, or a blue or
+      // red dot on the unread ones instead of the official-source tick.
+      ValueListenableBuilder(
+        valueListenable: readStyle,
+        builder: (context, style, _) => CupertinoListTile(
+          leading: const _Icon(CupertinoIcons.eye),
+          title: const Text('Read'),
+          trailing: CupertinoSlidingSegmentedControl<ReadStyle>(
+            groupValue: style,
+            onValueChanged: (r) {
+              if (r == null || r == style) return;
+              readStyle.value = r;
+              // Back to the feed to show it, once the segment has slid over.
+              Future.delayed(const Duration(milliseconds: 250), () {
+                if (context.mounted) {
+                  Navigator.of(context).popUntil((route) => route.isFirst);
+                }
+              });
+            },
+            children: const {
+              ReadStyle.dim: Text('Dim'),
+              ReadStyle.blue: Text('Blue'),
+              ReadStyle.red: Text('Red'),
+            },
+          ),
+        ),
       ),
     ],
   );

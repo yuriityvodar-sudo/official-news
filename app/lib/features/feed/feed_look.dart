@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/article.dart';
+import '../../core/read_mark.dart';
 import 'feed_filters.dart';
 import 'feed_look_a.dart';
 import 'feed_look_b.dart';
@@ -25,6 +26,17 @@ final feedDesign = ValueNotifier<FeedDesign>(
 /// `now`, `a`, `b` or `c`, in any case; anything else is [FeedDesign.now].
 FeedDesign designNamed(String name) =>
     FeedDesign.values.asNameMap()[name.trim().toLowerCase()] ?? FeedDesign.now;
+
+/// PROTOTYPE (Yurii, 16 Oct): how read articles look, in every design.
+/// Settings switches it (the "Read" row); the preview starts with the blue
+/// dot, and a build can start with another: `--dart-define=READ_STYLE=dim`.
+final readStyle = ValueNotifier<ReadStyle>(
+  readStyleNamed(const String.fromEnvironment('READ_STYLE')),
+);
+
+/// `dim`, `blue` or `red`, in any case; anything else is [ReadStyle.blue].
+ReadStyle readStyleNamed(String name) =>
+    ReadStyle.values.asNameMap()[name.trim().toLowerCase()] ?? ReadStyle.blue;
 
 /// The look for [design]. Looks are created for each build of the feed, so
 /// they keep no state: a look that needs some (a carousel's page) keeps it
@@ -152,14 +164,19 @@ class FeedSection {
     required this.readIds,
     required this.open,
     this.shown = _nothing,
+    this.readStyle = ReadStyle.dim,
   });
 
   /// "Top stories", "Latest", in the reader's language.
   final String title;
   final List<Article> articles;
 
-  /// Articles already opened: they stay in the feed, dimmed.
+  /// Articles already opened: they stay in the feed, dimmed or without the
+  /// unread dot ([readStyle]).
   final Set<String> readIds;
+
+  /// How read articles look (prototype): give each row [markOf] its article.
+  final ReadStyle readStyle;
 
   /// Opens `articles[index]`: `onTap: () => section.open(i)`. Analytics
   /// records the section and the index as the article's position, so pass
@@ -175,6 +192,11 @@ class FeedSection {
 
   int get length => articles.length;
   bool isRead(Article article) => readIds.contains(article.id);
+
+  /// What the row of [article] shows of it being read: faded (Dim), or the
+  /// unread dot in place of the official-source tick (Blue, Red).
+  ReadMark markOf(Article article) =>
+      ReadMark(readStyle, read: isRead(article));
 }
 
 /// What the bottom of the feed shows for [FeedLook.feedEnd].

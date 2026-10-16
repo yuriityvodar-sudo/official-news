@@ -44,6 +44,12 @@ void main() {
       expect(find.text(row), findsOneWidget, reason: row);
     }
     expect(find.text('English'), findsOneWidget);
+    // Below the prototype's rows, which push it off the test's screen.
+    await tester.scrollUntilVisible(
+      find.textContaining('not affiliated with any government'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(
       find.textContaining('not affiliated with any government'),
       findsOneWidget,

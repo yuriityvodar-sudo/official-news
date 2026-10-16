@@ -5,6 +5,7 @@ import '../l10n/app_localizations.dart';
 import 'article.dart';
 import 'countries.dart';
 import 'decision_types.dart';
+import 'read_mark.dart';
 import 'theme.dart';
 
 /// The red decision type above a headline ("CABINET DECISION", "РІШЕННЯ
@@ -42,12 +43,21 @@ TextStyle dim(TextStyle style, bool dimmed) => dimmed && style.color != null
       )
     : style;
 
-/// "Federal Government · Germany" with the blue official-source mark.
+/// "Federal Government · Germany" with the blue official-source mark, or,
+/// in the prototype's dot styles ([mark]), the unread dot in its place.
 class PublisherLine extends StatelessWidget {
-  const PublisherLine(this.article, {super.key, this.dimmed = false});
+  const PublisherLine(
+    this.article, {
+    super.key,
+    this.dimmed = false,
+    this.mark,
+  });
 
   final Article article;
   final bool dimmed;
+
+  /// PROTOTYPE: how read articles look; null or Dim shows the mark as today.
+  final ReadMark? mark;
 
   @override
   Widget build(BuildContext context) {
@@ -61,14 +71,19 @@ class PublisherLine extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
           ),
         ),
-        const SizedBox(width: 4),
-        Icon(
-          CupertinoIcons.checkmark_seal,
-          size: 15,
-          color: dimmed
-              ? AppColors.verified.withValues(alpha: readOpacity)
-              : AppColors.verified,
-        ),
+        if (mark?.dots ?? false) ...[
+          const SizedBox(width: 5),
+          UnreadDot(mark!),
+        ] else ...[
+          const SizedBox(width: 4),
+          Icon(
+            CupertinoIcons.checkmark_seal,
+            size: 15,
+            color: dimmed
+                ? AppColors.verified.withValues(alpha: readOpacity)
+                : AppColors.verified,
+          ),
+        ],
       ],
     );
   }

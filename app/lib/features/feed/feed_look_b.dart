@@ -138,7 +138,7 @@ class BLook extends FeedLook {
               padding: const EdgeInsets.only(bottom: 12),
               child: BCard(
                 article: a,
-                read: section.isRead(a),
+                mark: section.markOf(a),
                 kind: kind,
                 lead: kind == BCardKind.top && i == 0,
                 onTap: () => section.open(i),
@@ -379,7 +379,7 @@ class _CarouselState extends State<_Carousel> {
             padding: const EdgeInsets.only(left: bMargin),
             child: BCard(
               article: a,
-              read: top.isRead(a),
+              mark: top.markOf(a),
               kind: k,
               onTap: () => top.open(i),
             ),

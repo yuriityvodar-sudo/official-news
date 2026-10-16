@@ -1,0 +1,141 @@
+import 'dart:math' as math;
+
+import 'package:flutter/cupertino.dart';
+
+import '../l10n/app_localizations.dart';
+import 'theme.dart';
+
+/// PROTOTYPE (Yurii, 16 Oct): how the feed shows the articles already read,
+/// to compare in one build (Settings > Prototype > Read). Read articles greyed
+/// out did not convince (Roman); the dot styles mark the unread ones instead,
+/// as Mail and Podcasts do, and leave the read ones in their full colours.
+enum ReadStyle {
+  /// Today's: a read article fades, its text and its picture.
+  dim,
+
+  /// A small blue dot (iOS's systemBlue) on an article not opened yet, in
+  /// place of the official-source tick; it goes once the article is opened.
+  blue,
+
+  /// The same dot in the app's red.
+  red,
+}
+
+/// What a row shows of an article having been read, in [style].
+@immutable
+class ReadMark {
+  const ReadMark(this.style, {required this.read});
+
+  final ReadStyle style;
+  final bool read;
+
+  /// Faded, as today: a read article in [ReadStyle.dim].
+  bool get dimmed => read && style == ReadStyle.dim;
+
+  /// The dot styles: the row keeps the dot's place, read or not, so nothing
+  /// on its line moves when the dot goes. The official-source tick is not
+  /// shown then: every source is official, and the dot takes its place.
+  bool get dots => style != ReadStyle.dim;
+
+  /// Not opened yet, in a dot style: the dot shows, VoiceOver says "Unread".
+  bool get unread => dots && !read;
+
+  /// The dot's colour.
+  Color color(BuildContext context) => style == ReadStyle.red
+      ? AppColors.accent
+      : CupertinoColors.systemBlue.resolveFrom(context);
+}
+
+/// The dot's size, and the room on each side of it on a line of text.
+const unreadDotSize = 8.0;
+const _gap = 4.0;
+
+/// The dot grows with the reader's text size up to 1.4x, as the official-source
+/// tick does: it is a mark, not text.
+const _maxGrow = 1.4;
+
+/// The dot in a row of widgets ([PublisherLine]): a filled circle for an
+/// unread article, the same room left empty for a read one. The row centres
+/// it on the line.
+class UnreadDot extends StatelessWidget {
+  const UnreadDot(this.mark, {super.key});
+
+  final ReadMark mark;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!mark.unread) {
+      return const SizedBox.square(dimension: unreadDotSize);
+    }
+    return Semantics(
+      label: AppLocalizations.of(context).feedUnread,
+      child: _circle(unreadDotSize, mark.color(context)),
+    );
+  }
+}
+
+/// A filled circle; a DecoratedBox, no layer of its own.
+Widget _circle(double size, Color color) => SizedBox.square(
+  dimension: size,
+  child: DecoratedBox(
+    decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+  ),
+);
+
+/// The dot inside a line of text, between two words ("GERMANY ● Federal
+/// Government") or after the last one ([trailing]). It is always the same
+/// width, so the words after it stay where they are when it goes.
+///
+/// [fontSize] is the size of the text it follows and [scaler] the line's:
+/// Flutter scales an inline widget with its text, so the dot is drawn smaller
+/// to grow only to 1.4x. Its middle sits about at the middle of a capital
+/// letter (half a point lower, measured on the iPhone 16e).
+/// A read article shows nothing in its place, or [separator], a small round
+/// dot in that colour, for a line whose words are otherwise separated by " · ".
+/// VoiceOver does not read it: the card's own label says "Unread".
+InlineSpan unreadDotSpan(
+  BuildContext context,
+  ReadMark mark, {
+  required double fontSize,
+  required TextScaler scaler,
+  Color? separator,
+  bool trailing = false,
+}) {
+  final grow = scaler.scale(fontSize) / fontSize;
+  final keep = math.min(grow, _maxGrow) / grow;
+  final dot = unreadDotSize * keep;
+  final gap = _gap * keep;
+  // Measured from the baseline, in the text's own (unscaled) points.
+  final middle = 0.35 * fontSize;
+  final Widget? shown;
+  final double top;
+  if (mark.unread) {
+    shown = _circle(dot, mark.color(context));
+    top = middle + dot / 2;
+  } else if (separator != null) {
+    // About the size and height of the " · " it stands for.
+    final size = 0.2 * fontSize;
+    shown = _circle(size, separator);
+    top = 0.3 * fontSize + size / 2;
+  } else {
+    shown = null;
+    top = middle + dot / 2;
+  }
+  final slot = SizedBox(
+    width: (trailing ? gap : 2 * gap) + dot,
+    height: top,
+    child: shown == null
+        ? null
+        : Align(
+            alignment: trailing ? Alignment.topRight : Alignment.topCenter,
+            child: shown,
+          ),
+  );
+  return WidgetSpan(
+    // Its bottom on the line's baseline, whatever the line's height.
+    alignment: PlaceholderAlignment.aboveBaseline,
+    baseline: TextBaseline.alphabetic,
+    style: TextStyle(fontSize: fontSize),
+    child: slot,
+  );
+}

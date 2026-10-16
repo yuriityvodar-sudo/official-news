@@ -10,6 +10,7 @@
   "feedRefreshFailed": "No se pudo actualizar. Desliza hacia abajo para reintentar.",
   "feedLoadMoreFailed": "No se pudieron cargar más noticias. Toca para reintentar.",
   "feedEnd": "Ya estás al día",
+  "feedUnread": "No leído",
   "feedEmpty": "Aún no hay decisiones hoy.",
   "feedNoTranslations": "Aún no hay decisiones traducidas.",
   "feedTranslationsComing": "Las traducciones aparecerán aquí a medida que estén listas.",
