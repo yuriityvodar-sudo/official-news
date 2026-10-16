@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../../core/article.dart';
 import '../../core/feed_language.dart';
 import '../../core/news_widgets.dart';
+import '../../core/pictures.dart';
 import '../../core/router.dart';
 import '../../core/theme.dart';
 import 'feed_controller.dart';
@@ -453,12 +454,14 @@ class _Picture extends StatelessWidget {
             // so it is decoded twice as wide as the box to stay sharp.
             final square = width != null && height != null && width == height;
             final shown = (width ?? constraints.maxWidth) * (square ? 2 : 1);
-            return Image.network(
-              url,
+            return Image(
+              image: picture(
+                url,
+                width: shown.isFinite ? (shown * ratio).round() : null,
+              ),
               fit: BoxFit.cover,
               width: width,
               height: height,
-              cacheWidth: shown.isFinite ? (shown * ratio).round() : null,
               opacity: dimmed
                   ? const AlwaysStoppedAnimation(readOpacity)
                   : null,
