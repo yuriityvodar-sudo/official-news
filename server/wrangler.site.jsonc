@@ -27,5 +27,11 @@
   // Every absolute URL on a page (canonical, alternates, Open Graph) starts
   // with this, never with the request's host: the cache key has no host.
   "vars": { "SITE_ORIGIN": "https://site.officialnews.workers.dev" },
+  // Workers Cache in front of the Worker, by the headers respond() sets
+  // (src/site/respond.ts). It saves D1 rows and CPU, not requests: a cache hit
+  // is still a request of the account's 100,000 a day. Keyed by path, query
+  // and Worker version (a deploy starts cold), never the host. If it is not
+  // available on the Free plan, the first deploy fails here: drop this line.
+  "cache": { "enabled": true },
   "observability": { "enabled": true }
 }
