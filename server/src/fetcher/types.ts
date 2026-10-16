@@ -32,6 +32,28 @@ export interface DateFieldSpec extends DateSpec {
   fromLink?: string;
 }
 
+/**
+ * One step towards an item's whole text when its item page does not hold it
+ * (#71): a JSON data endpoint, or a page that links to the text.
+ */
+export interface FullTextStep {
+  /** Regular expression matched on the item link (first step) or the previous step's result; its groups fill `{1}`, `{2}`… in `url`. */
+  from?: string;
+  /** What to read; default `{0}`, the whole match (the previous step's result as it is). */
+  url?: string;
+  /**
+   * The answer is JSON: dotted path to the result (HTML or plain text in the
+   * last step). A list of paths joins what each finds, in order, in the last
+   * step (the first found is used before it); `*` goes through a list, and
+   * after `*.` a `{path}` template is filled from each entry.
+   */
+  json?: string | string[];
+  /** The answer is a page: the result is the link of the first element matching this selector (`selector@attr`, default `href`). */
+  link?: string;
+  /** Character set of the answer when the server does not say it, e.g. "iso-8859-1". */
+  encoding?: string;
+}
+
 /** The `config` column of a source (docs/sources.md). */
 export interface SourceConfig {
   seed?: boolean;
@@ -40,10 +62,16 @@ export interface SourceConfig {
   exclude?: Partial<Record<"title" | "category", string>>;
   /** Character set when the server does not say it, e.g. "iso-8859-1". */
   encoding?: string;
-  /** false: never open item pages (robots.txt forbids it); use the list text only. */
+  /** false: never open item pages (robots.txt forbids it, or they are built by JavaScript); `fullText` is still read when set. */
   itemPages?: boolean;
-  /** CSS selector of the main text on item pages; default: main, then article. */
+  /** CSS selector of the main text on item pages (and on the last page of `fullText`); default: main, then article, then body. */
   textSelector?: string;
+  /**
+   * Where the whole text is when the item page does not have it (#71). Read
+   * instead of the item page, for items whose list text is a teaser; the last
+   * step's answer is the text (its `json` value, or the page's main text).
+   */
+  fullText?: FullTextStep | FullTextStep[];
   /** A new stage of the same item (same link, new date) counts as a new item. */
   newStageIsNewItem?: boolean;
   /** Seconds between our requests to this site (from its robots.txt). */
