@@ -1,7 +1,8 @@
 name: Deploy
 
 # On every merge to main: apply new D1 migrations, load docs/sources.csv, then
-# deploy the Worker.
+# deploy the Worker, then the website (the Worker `site`, #88), which bundles
+# the API's code and so shows its rules from this deploy on.
 # Needs the repository secret CLOUDFLARE_API_TOKEN (see docs/setup.md). Until
 # it exists, the run ends with a warning instead of failing.
 
@@ -62,3 +63,9 @@ jobs:
       - if: steps.token.outputs.ready == 'true'
         name: Deploy the Worker
         run: npm run deploy
+      # After the api, so a failing site deploy never holds back the app's API or
+      # the crons. The site's texts and credits are generated files in server/
+      # (npm run site:texts), so an ARB or credits change reaches here through them.
+      - if: steps.token.outputs.ready == 'true'
+        name: Deploy the website
+        run: npm run deploy:site
