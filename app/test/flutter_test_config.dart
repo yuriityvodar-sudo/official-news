@@ -1,13 +1,19 @@
 import 'dart:async';
 
+import 'package:flutter/widgets.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:official_news/core/pictures.dart';
 
 /// Tests have no files on a phone: pictures come from a stand-in that has none
 /// (each picture shows its empty placeholder, as when a download fails).
+///
+/// Dates outside a screen use the same date data the app's MaterialApp loads
+/// (#52), so a test can format "Saturday 28 March" without pumping a widget.
 Future<void> testExecutable(FutureOr<void> Function() testMain) async {
   pictureCache = NoPictures();
+  await GlobalMaterialLocalizations.delegate.load(const Locale('en'));
   await testMain();
 }
 

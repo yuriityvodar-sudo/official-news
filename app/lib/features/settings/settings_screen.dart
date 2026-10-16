@@ -4,12 +4,14 @@ import 'package:flutter/material.dart';
 
 import '../../core/feed_language.dart';
 import '../../core/theme.dart';
+import '../../l10n/app_localizations.dart';
 import '../detail/detail_screen.dart' show OpenLink, openOfficialPage;
 import 'info_pages.dart';
 
 /// Settings (#64): a plain iOS list opened from the button at the top right of
 /// the feed, as in Apple's own apps, with black-and-white symbols (Yurii). No
-/// login. The feed language lives here, with the pages an App Store app needs.
+/// login. The language lives here, for the news and the app's words alike
+/// (#52), with the pages an App Store app needs.
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({
     super.key,
@@ -27,6 +29,7 @@ class SettingsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final grouped = CupertinoColors.systemGroupedBackground.resolveFrom(
       context,
     );
@@ -38,21 +41,21 @@ class SettingsScreen extends StatelessWidget {
         child: CustomScrollView(
           slivers: [
             CupertinoSliverNavigationBar(
-              largeTitle: const Text('Settings'),
-              previousPageTitle: 'Today',
+              largeTitle: Text(l10n.settings),
+              previousPageTitle: l10n.today,
               backgroundColor: grouped,
               border: null,
             ),
             SliverList.list(
               children: [
                 CupertinoListSection.insetGrouped(
-                  header: const _Header('Reading'),
+                  header: _Header(l10n.settingsReading),
                   children: [
                     ValueListenableBuilder(
                       valueListenable: language,
                       builder: (context, lang, _) => CupertinoListTile(
                         leading: const _Icon(CupertinoIcons.globe),
-                        title: const Text('Language'),
+                        title: Text(l10n.language),
                         additionalInfo: Text(lang.nativeName),
                         trailing: const CupertinoListTileChevron(),
                         onTap: () => Navigator.of(context).push(
@@ -68,63 +71,73 @@ class SettingsScreen extends StatelessWidget {
                         ),
                       ),
                     ),
-                    const CupertinoListTile(
-                      leading: _Icon(CupertinoIcons.bell),
-                      title: Text('Notifications'),
-                      additionalInfo: Text('Soon'),
+                    CupertinoListTile(
+                      leading: const _Icon(CupertinoIcons.bell),
+                      title: Text(l10n.notifications),
+                      additionalInfo: Text(l10n.soon),
                     ),
                   ],
                 ),
                 CupertinoListSection.insetGrouped(
-                  header: const _Header('About'),
+                  header: _Header(l10n.settingsAboutHeader),
                   children: [
                     _PageTile(
                       icon: CupertinoIcons.info_circle,
-                      title: 'About Official News',
+                      title: l10n.aboutApp,
                       route: '/settings/about',
-                      page: (_) => const InfoPage(
-                        title: 'About',
-                        sections: aboutSections,
-                      ),
+                      page: (context) {
+                        final l10n = AppLocalizations.of(context);
+                        return InfoPage(
+                          title: l10n.aboutTitle,
+                          sections: aboutSections(l10n),
+                        );
+                      },
                     ),
                     _PageTile(
                       icon: CupertinoIcons.hand_raised,
-                      title: 'Privacy Policy',
+                      title: l10n.privacyPolicy,
                       route: '/settings/privacy',
-                      page: (_) => const InfoPage(
-                        title: 'Privacy Policy',
-                        sections: privacySections,
-                        updated: policyUpdated,
-                      ),
+                      page: (context) {
+                        final l10n = AppLocalizations.of(context);
+                        return InfoPage(
+                          title: l10n.privacyPolicy,
+                          sections: privacySections(l10n),
+                          updated: policyUpdatedLine(l10n),
+                        );
+                      },
                     ),
                     _PageTile(
                       icon: CupertinoIcons.doc_text,
-                      title: 'Terms of Use',
+                      title: l10n.termsOfUse,
                       route: '/settings/terms',
-                      page: (_) => const InfoPage(
-                        title: 'Terms of Use',
-                        sections: termsSections,
-                        updated: policyUpdated,
-                      ),
+                      page: (context) {
+                        final l10n = AppLocalizations.of(context);
+                        return InfoPage(
+                          title: l10n.termsOfUse,
+                          sections: termsSections(l10n),
+                          updated: policyUpdatedLine(l10n),
+                        );
+                      },
                     ),
                     _PageTile(
                       icon: CupertinoIcons.envelope,
-                      title: 'Contact & Support',
+                      title: l10n.contactSupport,
                       route: '/settings/support',
-                      page: (context) => InfoPage(
-                        title: 'Contact & Support',
-                        sections: supportSections,
-                        footer: supportFooter(context, open: openLink),
-                      ),
+                      page: (context) {
+                        final l10n = AppLocalizations.of(context);
+                        return InfoPage(
+                          title: l10n.contactSupport,
+                          sections: supportSections(l10n),
+                          footer: supportFooter(context, open: openLink),
+                        );
+                      },
                     ),
                   ],
                 ),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(32, 8, 32, 40),
                   child: Text(
-                    'Independent app, not affiliated with any government. '
-                    'Summaries are written by AI from official sources; '
-                    'every article links to the original.\n\nVersion 0.1.0',
+                    '${l10n.settingsFooter}\n\n${l10n.version('0.1.0')}',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 13,
@@ -203,7 +216,8 @@ class _PageTile extends StatelessWidget {
   );
 }
 
-/// The feed languages in their own names, a checkmark on the current one.
+/// The languages in their own names, a checkmark on the current one. Choosing
+/// one redraws this page, and the whole app, in it at once (#52).
 class _LanguagePage extends StatelessWidget {
   const _LanguagePage({required this.language, required this.onLanguage});
 
@@ -212,14 +226,15 @@ class _LanguagePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final grouped = CupertinoColors.systemGroupedBackground.resolveFrom(
       context,
     );
     return CupertinoPageScaffold(
       backgroundColor: grouped,
       navigationBar: CupertinoNavigationBar(
-        middle: const Text('Language'),
-        previousPageTitle: 'Settings',
+        middle: Text(l10n.language),
+        previousPageTitle: l10n.settings,
         backgroundColor: grouped,
         border: null,
       ),
@@ -232,7 +247,7 @@ class _LanguagePage extends StatelessWidget {
               children: [
                 CupertinoListSection.insetGrouped(
                   footer: Text(
-                    'News shows in this language. The app itself is in English for now.',
+                    l10n.languageFooter,
                     style: TextStyle(
                       fontSize: 13,
                       color: CupertinoColors.secondaryLabel.resolveFrom(

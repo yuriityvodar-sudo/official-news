@@ -9,3 +9,8 @@ GROQ_API_KEY=
 # Z.ai, for the Spanish and German translations (#46). Read by the local Worker;
 # empty means those languages wait in the queue.
 ZAI_API_KEY=
+
+# The Google service account that sends push notifications (#62): its whole JSON
+# key file on one line. Leave it empty locally: with it, the local Worker sends
+# real pushes to the app's topics (breaking_en, breaking_uk …). Empty means no push.
+FCM_SERVICE_ACCOUNT=
