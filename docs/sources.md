@@ -41,7 +41,7 @@ How the fetcher (item 6) reads a source, as JSON. Types: `server/src/fetcher/typ
 
 - **Saudi Arabia: not in the list yet.** The only reachable official source, the Umm al-Qura gazette (`https://www.uqn.gov.sa/rssFeed/21`), forbids automated monitoring without written consent. We ask them before adding it. Everything else official there did not answer from abroad.
 - **India:** PIB cabinet decisions (`pib.gov.in`) is the better source but blocks our fetcher's user agent; we ask PIB to allow it. Until then: Parliament's bill list, which is quiet between sessions (the health check must not call it stale then).
-- **Russia:** the Kremlin site answered only over plain http from Kenya; the list now uses `https` (our rule). If Cloudflare cannot reach it either, source health shows it broken and we look for another source.
+- **Russia: removed (Yurii, 16 Oct, #42).** The Kremlin site (`kremlin.ru/acts`) never answered from Cloudflare (broken since the first check, no article), and the earlier research excludes Russia as a source country. Russian stays as a reading language for readers outside Russia.
 - **Retest from Cloudflare** once the fetcher runs; these did not answer from a test machine in Kenya and would be better sources: Türkiye's Official Gazette (`resmigazete.gov.tr`), Australia's Federal Register of Legislation (`legislation.gov.au`), Argentina's Boletín Oficial (`boletinoficial.gob.ar`), Brazil's Planalto legislation (`planalto.gov.br`).
 - **Licences for a commercial launch:** Mexico (DOF), Canada (Parliament), South Africa (GCIS) and Saudi Arabia allow non-commercial use only without permission. Check before any paid feature.
 - **Not used on purpose:** `hcdn.gob.ar` (Argentina's Chamber of Deputies) lists AI agents by name as disallowed in `robots.txt`.
@@ -62,7 +62,6 @@ If a source breaks, the research found these second choices (same country, also 
 | FR | Senate texts | `https://www.senat.fr/rss/textes.rss` |
 | IT | Official Gazette, general series | `https://www.gazzettaufficiale.it/rss/SG` |
 | EU | Official Journal acts of Council and Parliament (SPARQL) | `https://publications.europa.eu/webapi/rdf/sparql` |
-| RU | Government documents | `http://government.ru/docs/rss/` |
 | TR | Parliament committee news | `https://www.tbmm.gov.tr/meclis-haber/komisyon` |
 | ZA | Cabinet statements | `https://www.gov.za/news/cabinet-statements` |
 | AU | Treasury consultations (proposals; item pages are JavaScript-only, so list titles only) | `https://treasury.gov.au/consultation` |
