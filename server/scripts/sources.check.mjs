@@ -85,7 +85,7 @@ test("docs/sources.csv is valid", () => {
 
 test("the app has a name for every country and language in docs/sources.csv", () => {
   // Cards show "source · country" and "translated from <language>"; a missing name shows the bare code.
-  const names = (file) => new Set([...readFileSync(new URL(`../../app/lib/core/${file}`, import.meta.url), "utf8").matchAll(/^\s*'([A-Za-z]{2})':/gm)].map((m) => m[1]));
+  const names = (file) => new Set([...readFileSync(new URL(`../../app/lib/core/${file}`, import.meta.url), "utf8").matchAll(/^\s*'([A-Za-z]{2})'\s*(?::|=>)/gm)].map((m) => m[1]));
   const countries = names("countries.dart");
   const languages = names("languages.dart");
   const sources = toSources(readFileSync(csvPath, "utf8"));
