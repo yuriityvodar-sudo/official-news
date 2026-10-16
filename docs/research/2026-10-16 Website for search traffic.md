@@ -11,7 +11,7 @@ Should we publish our summaries and translations as a website, so Google brings 
 - **Index a small reviewed set; the rest is `noindex`.** Google lists AI and auto-translated feed pages "without adding value" as scaled content abuse. Index pages a person has fact-checked (translations native-reviewed) and country or topic pages that add what the original lacks: what changed, who is affected, dates.
 - **Lead with Ukrainian and Russian.** Google machine-translates results into Spanish, German and about 20 other languages, not these two; English pages compete with the originals, which rank first. The niche is an estimate.
 - **Measure for 4–8 weeks:** Search Console clicks, "Web referrer" installs, crawler requests and Apple Ads keyword popularity.
-- **Scale one language or page type at a time** once indexed pages earn clicks and review keeps up. At about 6,500 page views a day (10% of free requests), move HTML to R2 or the site to its own Cloudflare account.
+- **Scale one language or page type at a time** once indexed pages earn clicks and review keeps up. At about 6,500 page views a day (10% of free requests), plan the next step inside our one account (for example pages stored in R2 and served without a Worker request). One project stays in one Cloudflare account (Yurii, 16 Oct).
 - **Search is one channel of several.** Localized App Store pages, a featuring nomination and Telegram for UA/RU are nearly free and better evidenced.
 
 ## Google's rules that matter
