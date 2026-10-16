@@ -113,6 +113,20 @@ class Analytics {
   /// The feed's first page did not load (offline, or the server failed).
   Future<void> feedFailed() => _event('feed_load_failed', const {});
 
+  /// The answer about notifications (#62): `granted` or `denied` to the iOS
+  /// question, `not_now` to the app's own explanation before it. [trigger] is
+  /// what asked: `reads` (after the third article read) or `settings`.
+  Future<void> pushPermission(String result, {required String trigger}) =>
+      _event('push_permission', {'result': result, 'trigger': trigger});
+
+  /// A notification tapped: the article it opens, in its language.
+  Future<void> pushOpened({required String articleId, required String lang}) =>
+      _event('push_open', {'article_id': articleId, 'lang': lang});
+
+  /// Whether this phone gets notifications, on its later events: `on`, `off`
+  /// or `not_asked`, so returns can be compared with and without them.
+  Future<void> pushState(String state) => _user('notifications', state);
+
   /// What an event says about its article: no text of it, only where it is from and what it is.
   static Map<String, Object> _about(Article a) => {
     'article_id': a.id,
@@ -207,10 +221,13 @@ const _build = String.fromEnvironment('APP_BUILD', defaultValue: 'dev');
 /// Turns analytics on when the build has the Firebase values; otherwise it stays off.
 /// [language] is the feed's ([FeedController.languageChanges]), so the user
 /// property is the language the app is read in, the phone's on a first launch.
-Future<void> startAnalytics({
+/// True when Firebase started, so push notifications can start too (#62).
+Future<bool> startAnalytics({
   required ValueListenable<FeedLanguage> language,
 }) async {
-  if ([_apiKey, _appId, _senderId, _projectId].any((v) => v.isEmpty)) return;
+  if ([_apiKey, _appId, _senderId, _projectId].any((v) => v.isEmpty)) {
+    return false;
+  }
   try {
     await Firebase.initializeApp(
       options: const FirebaseOptions(
@@ -221,6 +238,11 @@ Future<void> startAnalytics({
         iosBundleId: 'com.officialnews.app',
       ),
     );
+  } catch (error) {
+    debugPrint('analytics: off, Firebase did not start: $error');
+    return false;
+  }
+  try {
     final ga = FirebaseAnalytics.instance;
     await ga.setAnalyticsCollectionEnabled(true);
     await useAnalytics(
@@ -236,8 +258,9 @@ Future<void> startAnalytics({
       language: language,
     );
   } catch (error) {
-    debugPrint('analytics: off, Firebase did not start: $error');
+    debugPrint('analytics: not fully started: $error');
   }
+  return true;
 }
 
 /// Makes [instance] the app's analytics and sets this phone's user properties:

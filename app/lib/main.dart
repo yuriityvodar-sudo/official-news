@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import 'core/analytics.dart';
+import 'core/push.dart';
 import 'core/router.dart';
 import 'core/theme.dart';
 import 'features/feed/feed_controller.dart';
@@ -15,9 +16,16 @@ Future<void> main() async {
   final feed = FeedController();
   await feed.open();
   // Not awaited: the feed shows at once; events before Firebase is up are not sent.
-  // Its language is the feed's, so a first launch reports the phone's.
-  unawaited(startAnalytics(language: feed.languageChanges));
+  unawaited(_startFirebase(feed));
   runApp(OfficialNewsApp(feed: feed));
+}
+
+/// Analytics, then push notifications, which need Firebase too (#62). Both
+/// take the feed's language, so a first launch uses the phone's.
+Future<void> _startFirebase(FeedController feed) async {
+  if (await startAnalytics(language: feed.languageChanges)) {
+    await startPush(language: feed.languageChanges);
+  }
 }
 
 /// The app. One language setting drives everything (#52): the feed's language
@@ -25,10 +33,14 @@ Future<void> main() async {
 /// own words (the back button, VoiceOver hints), so changing it in Settings
 /// redraws the whole app in it at once.
 class OfficialNewsApp extends StatelessWidget {
-  const OfficialNewsApp({super.key, required this.feed});
+  OfficialNewsApp({super.key, required this.feed});
 
   /// The feed lives as long as the app: its language is the app's language.
   final FeedController feed;
+
+  /// Made once, so a language change keeps the same observers (an offer
+  /// waiting for the article to slide away is not lost).
+  final navigatorObservers = <NavigatorObserver>[ScreenViews(), PushOffer()];
 
   @override
   Widget build(BuildContext context) {
@@ -44,7 +56,8 @@ class OfficialNewsApp extends StatelessWidget {
         darkTheme: buildTheme(Brightness.dark),
         themeMode: ThemeMode.system,
         onGenerateRoute: (settings) => onGenerateRoute(settings, feed: feed),
-        navigatorObservers: [ScreenViews()],
+        navigatorKey: appNavigator,
+        navigatorObservers: navigatorObservers,
         initialRoute: Routes.feed,
       ),
     );
