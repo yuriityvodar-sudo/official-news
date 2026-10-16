@@ -426,23 +426,31 @@ async function getTranslated(id: string, lang: Lang, env: Env): Promise<Response
 }
 
 /**
- * The topics of the feed's articles that pass `filters`, one row per article.
- * Counted in the Worker: a GROUP BY over json_each would also count every
- * article's topics, in its temporary table, as rows read (about 850 instead of
- * 180 for the whole feed, live D1, 16 Oct).
+ * The topics of the feed's articles that pass `filters`, one row per article:
+ * the English feed's, or with `lang` that language's feed (its articles with a
+ * shown translation, as listArticles), whose language is bound first. Counted
+ * in the Worker: a GROUP BY over json_each would also count every article's
+ * topics, in its temporary table, as rows read (about 850 instead of 180 for
+ * the whole feed, live D1, 16 Oct).
  */
-export const feedTopics = (filters: Filters) => `
-  SELECT a.topics FROM articles a
-  WHERE ${[...PAGE_CONDITIONS, ...filters.where].join(" AND ")}`;
+export const feedTopics = (filters: Filters, lang: Lang | null = null) =>
+  lang
+    ? `SELECT a.topics FROM articles a CROSS JOIN article_translations t ON t.article_id = a.id AND t.lang = ?
+       WHERE ${[...PAGE_CONDITIONS, ...TRANSLATED_CONDITIONS, ...filters.where].join(" AND ")}`
+    : `SELECT a.topics FROM articles a
+       WHERE ${[...PAGE_CONDITIONS, ...filters.where].join(" AND ")}`;
 
 /**
  * `GET /topics?lang=&country=` (#67): the topics with at least one article in
- * the feed's 7 days (in that country's Local feed, with `country`), busiest
- * first (ties in the order of TOPICS), named in `lang`. The app builds its
- * Topics menu from it, so a topic with no posts is never offered. Counted on
- * the feed's articles, the same in every language (release together), read as
- * toArticle reads them. Walks the feed's 7 days through articles_feed_seq:
- * about as many rows as the feed holds (150 to 250).
+ * the feed's 7 days in `lang` (in that country's Local feed, with `country`),
+ * busiest first (ties in the order of TOPICS), named in `lang`. The app builds
+ * its Topics menu from it, so a topic with no posts is never offered. Counted
+ * on that language's own feed, not the English one: an article can be released
+ * without a language's translation (the language paused or off, the translator
+ * not running, the translation failed), so a topic can have posts in English
+ * and none in that language. Topics read as toArticle reads them. Walks the
+ * feed's 7 days through articles_feed_seq: about as many rows as the feed
+ * holds (150 to 250), plus one translation per article in a language.
  */
 async function listTopics(url: URL, env: Env): Promise<Response> {
   const lang = readLang(url.searchParams);
@@ -451,8 +459,8 @@ async function listTopics(url: URL, env: Env): Promise<Response> {
   if (country === undefined) return badRequest(COUNTRY_ERROR);
   const filters = feedFilters(country, null);
 
-  const { results } = await env.DB.prepare(feedTopics(filters))
-    .bind(...filters.binds)
+  const { results } = await env.DB.prepare(feedTopics(filters, lang))
+    .bind(...(lang ? [lang] : []), ...filters.binds)
     .all<{ topics: string | null }>();
 
   const counts = new Map<string, number>();

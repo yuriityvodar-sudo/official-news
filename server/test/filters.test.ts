@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { FROM_TRANSLATED, PAGE_CONDITIONS, TRANSLATED_CONDITIONS, feedFilters, feedTopics } from "../src/api";
 import { BLOCS, TOPIC_NAMES, hasCountryName, localCountries } from "../src/api/filters";
 import { TOPICS } from "../src/summarizer/schema";
-import { LANGS } from "../src/translator";
+import { LANGS, type Lang } from "../src/translator";
 import { type ArticlesPage, QWEN, get, hideSeed, hoursAgo, ids, minutesAgo, rowsRead } from "./helpers";
 
 /** A source per country: Kickoff seed rows, and one for Ukraine, which has none. */
@@ -53,19 +53,22 @@ async function add(...items: Item[]) {
   );
 }
 
-/** A finished Ukrainian translation, as the translator stores it. */
-const translated = (...articleIds: string[]) =>
+/** A finished translation into `lang`, as the translator stores it. */
+const translatedInto = (lang: Lang, ...articleIds: string[]) =>
   env.DB.batch(
     articleIds.map((id) =>
       env.DB.prepare(
         `INSERT INTO article_translations (article_id, lang, headline, short_summary, summary, model, source_summarized_at,
                                            attempts_source, lang_seq, translated_at, published_at, state)
-         SELECT id, 'uk', 'Заголовок ' || id, 'Коротко.', 'Підсумок.', ?2, summarized_at, summarized_at,
-                (SELECT COALESCE(MAX(lang_seq), 0) + 1 FROM article_translations WHERE lang = 'uk'), ?3, ?3, 'published'
+         SELECT id, ?4, 'Headline ' || ?4 || ' ' || id, 'Short.', 'Summary.', ?2, summarized_at, summarized_at,
+                (SELECT COALESCE(MAX(lang_seq), 0) + 1 FROM article_translations WHERE lang = ?4), ?3, ?3, 'published'
          FROM articles WHERE id = ?1`,
-      ).bind(id, QWEN, minutesAgo(5)),
+      ).bind(id, QWEN, minutesAgo(5), lang),
     ),
   );
+
+/** A finished Ukrainian translation. */
+const translated = (...articleIds: string[]) => translatedInto("uk", ...articleIds);
 
 type Page = Omit<ArticlesPage, "items"> & { items: (ArticlesPage["items"][number] & { country: string })[] };
 
@@ -76,6 +79,8 @@ async function page(path: string): Promise<Page> {
 }
 
 const topIds = async (path: string) => (await page(path)).top.map((a) => a.id);
+
+const topicIds = async (path: string) => ((await get(path)).body as { topics: { id: string }[] }).topics.map((t) => t.id);
 
 beforeEach(async () => {
   // Only the articles each test adds are in the feed.
@@ -263,11 +268,13 @@ describe("GET /articles with filters: paging, after= and top", () => {
        WHERE ${[...PAGE_CONDITIONS, ...filters.where].join(" AND ")} ORDER BY a.feed_seq DESC LIMIT 21`,
       `SELECT a.id ${FROM_TRANSLATED}
        WHERE ${[...PAGE_CONDITIONS, ...TRANSLATED_CONDITIONS, ...filters.where].join(" AND ")} ORDER BY a.feed_seq DESC LIMIT 21`,
-      // The topics menu, with and without a country.
+      // The topics menu, with and without a country, in English and in a language.
       feedTopics(feedFilters("DE", null)),
       feedTopics(feedFilters(null, null)),
+      feedTopics(feedFilters("DE", null), "uk"),
+      feedTopics(feedFilters(null, null), "uk"),
     ];
-    const binds = [filters.binds, ["uk", ...filters.binds], ["DE", "EU"], []];
+    const binds = [filters.binds, ["uk", ...filters.binds], ["DE", "EU"], [], ["uk", "DE", "EU"], ["uk"]];
 
     for (const analyzed of [false, true]) {
       // Statistics of a nearly empty table make other plans look cheaper.
@@ -280,8 +287,10 @@ describe("GET /articles with filters: paging, after= and top", () => {
         expect(plan, `${analyzed ? "analyzed" : "fresh"} ${i}: ${plan}`).toMatch(/^SEARCH a USING INDEX articles_feed_seq \(feed_seq>\?\)/);
         expect(plan).not.toMatch(/SCAN (a|s|t)\b|AUTOMATIC|TEMP B-TREE/);
         // The country: the matching sources read once, not a join that drives the walk.
-        if (i !== 3) expect(plan).toContain("LIST SUBQUERY");
+        if (i !== 3 && i !== 5) expect(plan).toContain("LIST SUBQUERY");
         if (i < 2) expect(plan).toMatch(/SEARCH s USING (COVERING )?INDEX sqlite_autoindex_sources_1 \(id=\?\)/);
+        // A language: each article's translation found by its primary key.
+        if (i === 1 || i >= 4) expect(plan).toMatch(/SEARCH t USING INDEX sqlite_autoindex_article_translations_1 \(article_id=\? AND lang=\?\)/);
       }
     }
 
@@ -291,6 +300,9 @@ describe("GET /articles with filters: paging, after= and top", () => {
     expect(await rowsRead(() => get("/articles?country=DE&topic=health"))).toBeLessThan(2 * sources + 40);
     expect(await rowsRead(() => get("/topics?country=DE"))).toBeLessThan(sources + 10);
     expect(await rowsRead(() => get("/topics"))).toBeLessThan(10);
+    await translated("now-de", "now-us", "now-eu");
+    expect(await rowsRead(() => get("/topics?lang=uk&country=DE"))).toBeLessThan(sources + 15);
+    expect(await rowsRead(() => get("/topics?lang=uk"))).toBeLessThan(15);
   });
 });
 
@@ -325,6 +337,7 @@ describe("GET /topics", () => {
 
   it("names the topics in the language asked for, in the same order", async () => {
     await add({ id: "a", topics: ["security-defence", "human-rights"] }, { id: "b", topics: ["human-rights"] });
+    for (const lang of LANGS) await translatedInto(lang, "a", "b");
     for (const lang of LANGS) {
       const { body } = await get(`/topics?lang=${lang}`);
       expect(body, lang).toEqual({
@@ -358,11 +371,43 @@ describe("GET /topics", () => {
       { id: "us-2", country: "US", topics: ["health"] },
       { id: "us-3", country: "US", topics: ["health"] },
     );
-    const topicIds = async (path: string) => ((await get(path)).body as { topics: { id: string }[] }).topics.map((t) => t.id);
+    await translatedInto("de", "us-1", "us-2", "us-3");
     expect(await topicIds("/topics")).toEqual(["health", "economy", "trade"]);
     expect(await topicIds("/topics?country=DE")).toEqual(["economy", "trade"]);
     expect(await topicIds("/topics?country=US&lang=de")).toEqual(["health"]);
     expect(await get("/topics?country=UA")).toEqual({ status: 200, body: { topics: [] } });
+  });
+
+  it("in a language, counts that language's feed: a topic whose articles are not translated into it is not offered", async () => {
+    // Released together, but only some translated: the language was paused or off, the translator
+    // was not running, or the translation failed (release.ts releases without it then).
+    await add(
+      { id: "de-economy", country: "DE", topics: ["economy"] },
+      { id: "de-rights", country: "DE", topics: ["human-rights"] },
+      { id: "us-health", country: "US", topics: ["health"] },
+      { id: "us-health-2", country: "US", topics: ["health", "trade"] },
+    );
+    await translated("de-economy", "us-health");
+    expect(await topicIds("/topics")).toEqual(["health", "economy", "trade", "human-rights"]);
+    expect(await topicIds("/topics?lang=uk")).toEqual(["economy", "health"]);
+    expect(await topicIds("/topics?lang=uk&country=DE")).toEqual(["economy"]);
+    expect(await topicIds("/topics?lang=uk&country=US")).toEqual(["health"]);
+    // Every topic offered has posts in that feed, and none left out has.
+    for (const topic of TOPICS) {
+      const offered = (await topicIds("/topics?lang=uk&country=DE")).includes(topic);
+      expect((await ids(`/articles?lang=uk&country=DE&topic=${topic}`)).length > 0, topic).toBe(offered);
+    }
+
+    // A translation that is not shown (failed for the article's current English) does not count.
+    await env.DB.prepare(
+      "UPDATE article_translations SET state = 'failed', attempts_source = 'newer' WHERE article_id = 'de-economy' AND lang = 'uk'",
+    ).run();
+    expect(await ids("/articles?lang=uk&country=DE")).toEqual([]);
+    expect(await topicIds("/topics?lang=uk&country=DE")).toEqual([]);
+
+    // A language with no translations at all (off, as German is live): no topics, as its feed is empty.
+    expect(await topicIds("/topics?lang=de")).toEqual([]);
+    expect(await ids("/articles?lang=de")).toEqual([]);
   });
 });
 
