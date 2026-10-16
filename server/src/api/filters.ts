@@ -1,28 +1,52 @@
-// The feed's filters (#67, #68): Where (Global, or Local: one country plus the
-// blocs it belongs to) and one topic, and the names the app shows in their menus.
+// The feed's filters (#67, #68): Where (all countries, a group of countries
+// or one country) and one topic, and the names the app shows in their menus.
 import { TOPICS, type Topic } from "../summarizer/schema";
 import type { Lang } from "../translator";
 
 /** The languages names are given in: English and every language of LANGS. */
 export type NameLang = "en" | Lang;
 
-/**
- * Blocs that publish as one source country, with their members (ISO 3166-1
- * alpha-2). A member's Local feed also shows the bloc's articles; a bloc is
- * never in the list of countries. Greece is GR here, as phones report it (the
- * EU itself writes EL).
- */
-export const BLOCS: Record<string, readonly string[]> = {
-  EU: [
-    "AT", "BE", "BG", "CY", "CZ", "DE", "DK", "EE", "ES", "FI", "FR", "GR", "HR", "HU",
-    "IE", "IT", "LT", "LU", "LV", "MT", "NL", "PL", "PT", "RO", "SE", "SI", "SK",
-  ],
-};
+/** The source country of the EU's own institutions (the European Commission): not a country, but in groups. */
+export const EU = "EU";
 
-/** The source countries a country's Local feed shows: the country itself, then every bloc it belongs to. */
-export function localCountries(country: string): string[] {
-  return [country, ...Object.keys(BLOCS).filter((bloc) => BLOCS[bloc].includes(country))];
-}
+/**
+ * The groups of countries in the Where menu (Yurii, 16 Oct), in the menu's
+ * order: official organizations, with their members among the countries we
+ * have or plan sources for (ISO 3166-1 alpha-2; memberships read on the
+ * organizations' official pages, 16 Oct). `includesEU`: the group also shows
+ * the EU institutions' own decisions (the EU is a member of the G7 and the
+ * G20, not of NATO). Russia is not a source country (#42), so it is in none.
+ * Saudi Arabia has no source yet: the G20 shows it once it has one. The
+ * single place groups are defined: the filter, GET /countries and their
+ * names all read it.
+ */
+export const GROUPS = [
+  { id: "eu", members: ["CZ", "DE", "ES", "FR", "IT", "PL"], includesEU: true },
+  { id: "g7", members: ["CA", "DE", "FR", "GB", "IT", "JP", "US"], includesEU: true },
+  {
+    id: "g20",
+    members: ["AR", "AU", "BR", "CA", "CN", "DE", "FR", "GB", "ID", "IN", "IT", "JP", "KR", "MX", "SA", "TR", "US", "ZA"],
+    includesEU: true,
+  },
+  { id: "nato", members: ["CA", "CZ", "DE", "ES", "FR", "GB", "IT", "PL", "TR", "US"], includesEU: false },
+] as const satisfies readonly { id: string; members: readonly string[]; includesEU: boolean }[];
+
+export type Group = (typeof GROUPS)[number];
+export type GroupId = Group["id"];
+
+/** The source countries a group shows: its members, then the EU institutions where the group includes them. */
+export const groupCountries = (group: Group): string[] => [...group.members, ...(group.includesEU ? [EU] : [])];
+
+/**
+ * Where the feed's articles come from: one country alone (only that
+ * country's sources, never the EU's mixed in), or a group; null is all
+ * countries.
+ */
+export type Where = { country: string } | { group: Group } | null;
+
+/** The source countries `where` shows, or null for all countries. */
+export const whereCountries = (where: Where): string[] | null =>
+  where === null ? null : "country" in where ? [where.country] : groupCountries(where.group);
 
 /** The fixed topic list (TOPICS, docs/contract.md) in each language. */
 export const TOPIC_NAMES: Record<NameLang, Record<Topic, string>> = {
@@ -137,10 +161,21 @@ const COUNTRIES: Record<string, Names> = {
 
 const NAME_INDEX: Record<NameLang, number> = { en: 0, uk: 1, ru: 2, es: 3, de: 4 };
 
-/** Whether the country (or bloc) has a name in every language. */
+/** The groups' names: the European Union as the EU institutions are named; G7 and G20 written so in every language. */
+const GROUP_NAMES: Record<GroupId, Names> = {
+  eu: COUNTRIES[EU],
+  g7: ["G7", "G7", "G7", "G7", "G7"],
+  g20: ["G20", "G20", "G20", "G20", "G20"],
+  nato: ["NATO", "НАТО", "НАТО", "OTAN", "NATO"],
+};
+
+/** The group's name in `lang`. */
+export const groupName = (group: Group, lang: NameLang): string => GROUP_NAMES[group.id][NAME_INDEX[lang]];
+
+/** Whether the country (or the EU institutions, `EU`) has a name in every language. */
 export const hasCountryName = (code: string) => code in COUNTRIES;
 
-/** The country's (or bloc's) name in `lang`; an unknown code is shown as it is. */
+/** The country's (or the EU institutions') name in `lang`; an unknown code is shown as it is. */
 export function countryName(code: string, lang: NameLang): string {
   return COUNTRIES[code]?.[NAME_INDEX[lang]] ?? code;
 }
@@ -179,14 +214,24 @@ export function byName<T extends { name: string }>(items: T[], lang: NameLang): 
   return keyed.map(({ item }) => item);
 }
 
-/** `country`: null when absent (Global), undefined when it is not 2 capital letters. */
-export function readCountry(params: URLSearchParams): string | null | undefined {
-  const value = params.get("country");
-  if (value === null) return null;
-  return /^[A-Z]{2}$/.test(value) ? value : undefined;
-}
-
 export const COUNTRY_ERROR = "country must be a country code of 2 capital letters, such as DE";
+export const GROUP_ERROR = `group must be one of: ${GROUPS.map((g) => g.id).join(", ")}`;
+export const WHERE_ERROR = "country and group cannot be used together: send one of them";
+
+/**
+ * The Where filter of a request: `country=XX` (2 capital letters) or
+ * `group=<id>` (one of GROUPS), at most one of them; neither is all
+ * countries. A message for a 400 otherwise.
+ */
+export function readWhere(params: URLSearchParams): { where: Where } | { error: string } {
+  const country = params.get("country");
+  if (country !== null && !/^[A-Z]{2}$/.test(country)) return { error: COUNTRY_ERROR };
+  const groupId = params.get("group");
+  const group = groupId === null ? null : GROUPS.find((g) => g.id === groupId);
+  if (group === undefined) return { error: GROUP_ERROR };
+  if (country !== null && group !== null) return { error: WHERE_ERROR };
+  return { where: country !== null ? { country } : group !== null ? { group } : null };
+}
 
 /** `topic`: null when absent (All topics), undefined when it is not one of TOPICS. */
 export function readTopic(params: URLSearchParams): Topic | null | undefined {
