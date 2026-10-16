@@ -61,7 +61,7 @@ jobs:
       - name: Build the iOS app without signing
         # The live API, not the laptop default (app/lib/core/config.dart), and
         # the Firebase values when there are any.
-        run: flutter build ios --release --no-codesign --build-number=${{ github.run_number }} --dart-define=API_URL=https://api.officialnews.workers.dev --dart-define=APP_BUILD=testflight $FIREBASE_DEFINES
+        run: flutter build ios --release --no-codesign --build-number=${{ github.run_number }} --dart-define=API_URL=https://api.officialnews.workers.dev --dart-define=APP_BUILD=testflight --dart-define=FEED_DESIGN=b $FIREBASE_DEFINES
 
       - name: Archive with automatic signing
         working-directory: app/ios
