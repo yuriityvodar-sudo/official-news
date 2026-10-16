@@ -13,6 +13,10 @@ Never add media, aggregators or trending lists, and never a site that needs a bo
 
 **Official gazettes are allowed** (that is where decisions take effect), always with a title filter (`exclude`) for routine entries: exchange and interest rates, price indices, court edicts, company notices, tenders, routine appointments, technical standards. They never reach the AI, so they cost nothing.
 
+## Credits on the website
+
+`docs/source-credits.csv` (#88) says how the website credits each source, one row per source id of `sources.csv` (`npm test` fails without one): `licence` (its name, shown as a link to `licence_url`), `wording` (the exact credit line a source asks for, in `wording_lang`) and `note` (for people). An empty `licence` gives the generic line, "Source: <name>", with "The headline and summary were written by AI from the official text; they are not the official text." under every credit. The `licence` column of `sources.csv` stays the evidence. The rows are proposals to check on each source's terms page in the legal review (not legal advice). A row may stay after its source leaves `sources.csv`: its articles stay on the site. After a change run `npm run site:texts` in `server/` and commit the generated `server/src/site/credits.generated.ts`. Temporary home: after #84 the credits move into the sources' config and the API, so the app shows them too.
+
 ## `config`
 
 How the fetcher (item 6) reads a source, as JSON. Types: `server/src/fetcher/types.ts`.

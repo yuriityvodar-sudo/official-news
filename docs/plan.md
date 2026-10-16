@@ -122,6 +122,7 @@ The MVP is a Kickoff plus 8 items, 4 each. This is our suggested split: Yurii ow
 | #68 | Global / Local feed switch | To agree | Agreed in the issue, then built |
 | #60 | Analytics (Google Analytics through Firebase) | Yurii | Events arrive in GA from TestFlight; release checklist done |
 | #62 | Push notifications, breaking decisions (importance 4+, max 2 a day) | Yurii | A breaking decision reaches a phone in its language |
+| #88 | Website: a page per article in each language it is shown in, the latest list per language, the app's information pages; noindex until the domain (#65) | Yurii | Every API article is served in each language it is shown in, with the AI label, credit line and official link, in one request per page view |
 
 **Order:** Kickoff first, then item 1 (it gives everyone real data from Cloudflare). Items 2, 5 and 7 start at the same time; 3 and 4 follow the design; 6 follows 5; 8 comes last.
 
@@ -147,6 +148,7 @@ official-news/
     src/fetcher/            source readers (item 6)
     src/summarizer/         AI step and prompt (item 7)
     src/health/             source status and cleanup (item 8)
+    src/site/               the website, its own Worker `site` (#88)
     migrations/             D1 SQL: schema and the 20 seed articles
     eval/                   summary test set and results (item 7)
   docs/  contract.md  style-guide.md  sources.csv  decisions.md
@@ -348,6 +350,7 @@ The app is Flutter; everything behind it runs on one Cloudflare account, with Wo
 | Cloudflare Workers | All backend code: fetching sources and the API the app calls |
 | Cloudflare Cron Triggers | Runs the fetcher every minute, 1 source at a time |
 | Cloudflare D1 | Database: sources, articles, summaries, tags |
+| Cloudflare Workers (`site`) | The website (#88): article pages, latest lists and the information pages, rendered from the API's own code in the same request; its own Worker, deployed after the api, with Workers Cache in front |
 | Cloudflare Browser Rendering | After the MVP: reading official sites whose news lists are built by JavaScript |
 | Workers AI or Claude API (Haiku) | Summary, translation, tags and news-or-noise check, once per article |
 | GitHub | Repo, issues, project board, Actions for CI and deploys |
@@ -373,6 +376,8 @@ The whole MVP fits Cloudflare's free plan; the first cost appears at about 10,00
 | D1 rows read | 5 million a day | Fetcher: about 40,000 | under 1% |
 | D1 rows written | 100,000 a day | Fetcher and AI: about 7,000 | about 7% |
 | Workers AI | 10,000 Neurons a day | Phase 1: about 85–540 summaries a day fit, depending on the model | — |
+| Worker requests, website (#88) | the same 100,000 a day, per account | 1 per page view (cache hits count too) | 6.5% at 6,500 views a day, the line to plan the next step at (research note, #85) |
+| D1 rows read, website (#88) | the same 5 million a day | measured 16 Oct: article page 13, list page 1 about 260, later pages 45–65; 6,500 views a day (30% lists) about 0.57M without cache; with Workers Cache the lists are capped near 0.37M (estimate) | about 8–11% |
 
 **Daily users before any cost:** about 2,500 with a basic app (around 40 calls per user a day); about 10,000 with the speed rules (around 10 calls). The limit we reach first is Worker requests.
 
@@ -479,6 +484,7 @@ The feed shows 7 days; the database keeps every article record permanently, so s
 | Feed visibility | 7 days | Product choice; one number in the query |
 | Article record: headline, summary, tags, link, dates | Permanently | Archive, search, personalization |
 | Full extracted text of the official page | 30–90 days, or permanently where the licence allows | Only used to regenerate summaries |
+| Article pages on the website (#88) | Permanently, as long as the API serves the article (`GET /articles/:id` has no date limit); lists show 7 days | Shared links keep working. A hidden article is a 404 (it was never shown); a 410 comes with a real takedown state, in the API |
 
 Estimate, to be measured in discovery: about 200 articles a day at about 3 KB per record is roughly 200 MB a year.
 
@@ -615,3 +621,4 @@ We read the latest official news (4–11 Oct) from all Phase 2 sources and the P
 - [ ] Home countries in Phase 1: move Kenya, and Roman's country, up from Phase 2?
 - [ ] Labels for territories with disputed status (Taiwan, Palestine, Kosovo)
 - [ ] Later: app name
+- [ ] Website (#88), before its link is shared: the publisher's registered address and company ID (IČO) on the privacy and support pages, and a support e-mail address, so the privacy policy names a way to reach the data controller (GDPR Art. 13; for the legal review). Each source's credit wording in `docs/source-credits.csv` (legal review). Native review of the site's own uk, ru, es and de texts (`server/src/site/texts.ts`). Whether the app's AI label should also say "not reviewed by a person", as the site does

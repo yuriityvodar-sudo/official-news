@@ -1,6 +1,6 @@
 # Contract
 
-The shared definitions both the app and the backend build against. Changed only by agreement, in a pull request that also updates `docs/decisions.md`. The code that implements it: `app/lib/core/article.dart`, `app/lib/core/decision_types.dart`, `app/lib/core/topics.dart`, `server/src/api/index.ts`, `server/src/translator/languages.ts` (languages), `server/src/translator/queue.ts` (the translation queue), `server/migrations/`.
+The shared definitions both the app and the backend build against. Changed only by agreement, in a pull request that also updates `docs/decisions.md`. The code that implements it: `app/lib/core/article.dart`, `app/lib/core/decision_types.dart`, `app/lib/core/topics.dart`, `server/src/api/index.ts`, `server/src/site/` (the website), `server/src/translator/languages.ts` (languages), `server/src/translator/queue.ts` (the translation queue), `server/migrations/`.
 
 ## Article
 
@@ -73,6 +73,26 @@ Base URL: `https://api.officialnews.workers.dev` (deployed), `http://localhost:8
 - `GET /articles/:id` → `Article` shown in the feed, or 404 (hidden articles too).
 - `GET /health` → `{ "sources": { "<status>": <count> }, "lastFetcherRun": "<ISO time>" | null, "articles": { "fetchedLast24h": <n>, "waitingForSummary": <n>, "inFeed": <n> } }`: real sources only (seed rows skipped); `lastFetcherRun` is the latest `last_checked_at`; `inFeed` counts official decisions of the last 7 days. Open in a browser to see whether the fetcher and the AI step are running.
 - Errors are JSON `{ "error": "<message>" }`: 400 for a bad `limit`, `cursor`, `after` or `since`, 404, 405 for any method other than GET, 500.
+
+## Website (#88)
+
+Base URL: `https://site.officialnews.workers.dev` (deployed; temporary until the domain, so never in App Store Connect or a share), `http://localhost:8788` (local, `npm run dev:site` in `server/`). The Worker `site`, `server/src/site/`. Plain HTML, the same for everyone, in `en`, `uk`, `ru`, `es` and `de`.
+
+| Path | Page | Status |
+| --- | --- | --- |
+| `/` | Landing page: what Official News is, a link to each language's list | 200 |
+| `/{lang}` | The latest list: what `GET /articles?lang=` returns, 20 at a time, top stories on the first page | 200 |
+| `/{lang}?before=<feedSeq>` | The next page: the articles after that `feedSeq` (the last one on the page before); the same positions in every language | 200 |
+| `/{lang}/{cc}/{id}-{slug}` | An article in that language; `cc` is the source's country in lower case, the slug its headline (only the 26-character id is looked up; a wrong `cc` or slug, a missing slug, or a query still give the page) | 200 when `GET /articles/:id?lang=` is 200; 404 otherwise, naming the languages it is in when there are some |
+| `/{lang}/about`, `/privacy`, `/terms`, `/support` | The app's information pages | 200 |
+| `/robots.txt` | `User-agent: *` / `Disallow: /` | 200 |
+| `/{lang}/`, and `/` or `/{lang}` with any query other than one valid `before` | A 301 to the clean URL | 301 |
+| `/favicon.ico`, `/apple-touch-icon*.png`, anything else (reserved for later: `/.well-known/apple-app-site-association`, sitemaps) | | 404 |
+| Any method but GET and HEAD | | 405 |
+
+What it reads: only through the API's own handler (`handleApi`, in the same request): `GET /articles?limit=20&lang=<lang>&cursor=<c>` (no `lang` for English; the cursor is the API's `encodeCursor(before)`) and `GET /articles/:id` with each `lang` of the site. No SQL of its own, no other binding than D1, no AI. So the site shows exactly what the API shows, and a change to the API's rules reaches the site with its next deploy (after the api's). It relies on `GET /articles/:id` serving a released article of any age (no 7-day limit): article pages are permanent because of it.
+
+Every response: `X-Robots-Tag: noindex` (and the robots meta tag in every page), `Content-Security-Policy: default-src 'none'; style-src '<sha256 of the inline CSS>'; img-src data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`, `X-Content-Type-Options: nosniff`, `Content-Language` on pages, `Cache-Control` and `Cloudflare-CDN-Cache-Control` per kind of page (`server/src/site/respond.ts`), no cookie and no `Vary`. Every absolute URL starts with `SITE_ORIGIN`, never the request's host. A page loads nothing else: one request per page view.
 
 ## Database (D1)
 
