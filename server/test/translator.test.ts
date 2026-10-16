@@ -901,6 +901,13 @@ describe("GET /articles with lang", () => {
       expect(await sources("ru")).toEqual([named("Federal Government"), named("Federal Government"), named("Federal Government")]);
     });
 
+    it("names the source in the reader's language with a country filter too (#68)", async () => {
+      const page = (await get("/articles?lang=uk&country=DE")).body as ArticlesPage;
+      expect(page.items.length).toBeGreaterThan(0);
+      expect(page.top.length).toBeGreaterThan(0);
+      expect(new Set([...page.items, ...page.top].map((a) => sourceOf(a).name))).toEqual(new Set(["Федеральний уряд Німеччини"]));
+    });
+
     it("leaves English as it was, with or without lang=en", async () => {
       for (const lang of ["", "en"]) {
         const english = await sources(lang);
