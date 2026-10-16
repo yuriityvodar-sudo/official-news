@@ -347,7 +347,8 @@ class _SectionHead extends StatelessWidget {
 /// country comes first so it is never cut; a long institution name is.
 /// It is grey already, so it looks the same once the article is read.
 /// PROTOTYPE: in the dot styles the unread dot stands between the two,
-/// "BRAZIL ● Chamber of Deputies", its room kept empty once read.
+/// "BRAZIL ● Chamber of Deputies"; once read its room shows a small grey
+/// " · ", as B does, so the institution does not move.
 class _Kicker extends StatelessWidget {
   const _Kicker(this.article, {required this.mark, required this.maxLines});
 
@@ -373,6 +374,7 @@ class _Kicker extends StatelessWidget {
               mark,
               fontSize: type.country.fontSize!,
               scaler: MediaQuery.textScalerOf(context),
+              separator: type.kicker.color,
             ),
             TextSpan(text: article.source.name),
           ] else

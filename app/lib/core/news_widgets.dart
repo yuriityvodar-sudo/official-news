@@ -62,19 +62,26 @@ class PublisherLine extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final country = countryName(article.country, AppLocalizations.of(context));
+    final style = dim(NewsText.from(context).publisher, dimmed);
+    final dots = mark?.dots ?? false;
     return Row(
       children: [
         Flexible(
           child: Text(
             '${article.source.name} · $country',
-            style: dim(NewsText.from(context).publisher, dimmed),
+            style: style,
             overflow: TextOverflow.ellipsis,
+            // A line cut with "…" is as wide as its last letter, not as the
+            // room it was given, so the dot stays 5 pt after the "…". Dim
+            // keeps today's tick where it was.
+            textWidthBasis: dots
+                ? TextWidthBasis.longestLine
+                : TextWidthBasis.parent,
           ),
         ),
-        if (mark?.dots ?? false) ...[
-          const SizedBox(width: 5),
-          UnreadDot(mark!),
-        ] else ...[
+        if (dots)
+          UnreadDot(mark!, fontSize: style.fontSize!)
+        else ...[
           const SizedBox(width: 4),
           Icon(
             CupertinoIcons.checkmark_seal,

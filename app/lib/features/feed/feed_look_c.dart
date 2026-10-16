@@ -633,16 +633,19 @@ class _Item extends StatelessWidget {
     // to two lines. With large text the institution gets a line of its own
     // with the time, and a top story's numeral moves into the country's line
     // to leave the headline the whole width. PROTOTYPE: in the dot styles
-    // the unread dot follows the country, its room kept empty once read.
+    // the unread dot follows the country, its room kept once read.
     final countryText = TextSpan(
       text: country.toUpperCase(),
       style: inked(t.country),
     );
+    // Once read, the room between the country and the institution shows a
+    // small grey " · ", as B does; after the country alone, nothing.
     InlineSpan dot({bool trailing = false}) => unreadDotSpan(
       context,
       mark,
       fontSize: t.country.fontSize!,
       scaler: MediaQuery.textScalerOf(context),
+      separator: trailing ? null : t.source.color,
       trailing: trailing,
     );
     final who = large
@@ -696,7 +699,8 @@ class _Item extends StatelessWidget {
 
     // Importance in Latest: a red rule beside the headline, in the gap of
     // the left column (in the page margin with large text). Not a dot: a dot
-    // before a row reads as "unread" on iOS.
+    // before a row reads as "unread" on iOS. Grey once read, in Dim and in
+    // the Red prototype style, where red on a row means not opened yet.
     Widget headline = Text(
       article.headline,
       style: inked(t.headline(top: n != null)),
@@ -711,7 +715,7 @@ class _Item extends StatelessWidget {
             top: 3,
             bottom: 3,
             width: 3,
-            child: ColoredBox(color: read ? t.secondary : t.accent),
+            child: ColoredBox(color: mark.greyAccent ? t.secondary : t.accent),
           ),
         ],
       );

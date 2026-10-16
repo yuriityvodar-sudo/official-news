@@ -185,50 +185,55 @@ class NowArticleRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final text = NewsText.from(context);
     final read = mark.dimmed;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      // Opened articles stay in the feed, dimmed (or without the unread dot).
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  KindLabel(article, dimmed: read),
-                  PublisherLine(article, dimmed: read, mark: mark),
-                  const SizedBox(height: 4),
-                  Text(
-                    article.headline,
-                    style: dim(text.headline, read),
-                    maxLines: 4,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  if (showDay ||
-                      !article.dateOnly ||
-                      article.addedAt != null) ...[
-                    const SizedBox(height: 6),
+    // PROTOTYPE: in the dot styles VoiceOver says "Unread" after the row, as
+    // in the other designs, not in the middle where the dot is.
+    return Semantics(
+      value: mark.unread ? AppLocalizations.of(context).feedUnread : null,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        // Opened articles stay in the feed, dimmed (or without the unread dot).
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    KindLabel(article, dimmed: read),
+                    PublisherLine(article, dimmed: read, mark: mark),
+                    const SizedBox(height: 4),
                     Text(
-                      feedTime(article, AppLocalizations.of(context)),
-                      style: dim(text.meta, read),
+                      article.headline,
+                      style: dim(text.headline, read),
+                      maxLines: 4,
+                      overflow: TextOverflow.ellipsis,
                     ),
+                    if (showDay ||
+                        !article.dateOnly ||
+                        article.addedAt != null) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        feedTime(article, AppLocalizations.of(context)),
+                        style: dim(text.meta, read),
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
-            ),
-            if (article.imageUrl != null) ...[
-              const SizedBox(width: 14),
-              FeedPicture(
-                url: article.imageUrl!,
-                width: 84,
-                height: 84,
-                dimmed: read,
-              ),
+              if (article.imageUrl != null) ...[
+                const SizedBox(width: 14),
+                FeedPicture(
+                  url: article.imageUrl!,
+                  width: 84,
+                  height: 84,
+                  dimmed: read,
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );
@@ -254,34 +259,37 @@ class NowTopCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final text = NewsText.from(context);
     final read = mark.dimmed;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.only(top: 8, bottom: 16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            AspectRatio(
-              aspectRatio: 16 / 9,
-              child: FeedPicture(url: article.imageUrl!, dimmed: read),
-            ),
-            const SizedBox(height: 12),
-            KindLabel(article, dimmed: read),
-            PublisherLine(article, dimmed: read, mark: mark),
-            const SizedBox(height: 4),
-            Text(
-              article.headline,
-              style: dim(text.headline.copyWith(fontSize: 25), read),
-              maxLines: 4,
-              overflow: TextOverflow.ellipsis,
-            ),
-            const SizedBox(height: 6),
-            Text(
-              feedTime(article, AppLocalizations.of(context)),
-              style: dim(text.meta, read),
-            ),
-          ],
+    return Semantics(
+      value: mark.unread ? AppLocalizations.of(context).feedUnread : null,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.only(top: 8, bottom: 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              AspectRatio(
+                aspectRatio: 16 / 9,
+                child: FeedPicture(url: article.imageUrl!, dimmed: read),
+              ),
+              const SizedBox(height: 12),
+              KindLabel(article, dimmed: read),
+              PublisherLine(article, dimmed: read, mark: mark),
+              const SizedBox(height: 4),
+              Text(
+                article.headline,
+                style: dim(text.headline.copyWith(fontSize: 25), read),
+                maxLines: 4,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 6),
+              Text(
+                feedTime(article, AppLocalizations.of(context)),
+                style: dim(text.meta, read),
+              ),
+            ],
+          ),
         ),
       ),
     );

@@ -26,7 +26,7 @@ const bMargin = 16.0;
 
 /// The brand red made deeper, for small text on light grounds and white text
 /// on red: 4.7:1 on the grey page, 5.3:1 with white.
-const _deepRed = Color(0xFFD1203A);
+const _deepRed = AppColors.deepRed;
 
 /// Card corners: iOS's continuous corners (a superellipse, as on app icons).
 const bRadius = 18.0;
@@ -415,6 +415,8 @@ class _BCardState extends State<BCard> {
                   fontSize: s.country.fontSize!,
                   scaler: fitted,
                   separator: s.source.color,
+                  // The red of B's date line and labels, not a second red.
+                  red: s.accentText,
                 )
               else ...[
                 // The official-source seal, outlined and grey as a quiet mark.

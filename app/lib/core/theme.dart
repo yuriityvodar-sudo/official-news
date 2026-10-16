@@ -8,6 +8,10 @@ import 'package:flutter/material.dart';
 abstract final class AppColors {
   static const accent = Color(0xFFFA2D48);
   static const verified = Color(0xFF1A8CFF);
+
+  /// The brand red made deeper, for small text on light grounds and white
+  /// text on red (design B): 4.7:1 on B's grey page, 5.3:1 with white.
+  static const deepRed = Color(0xFFD1203A);
 }
 
 /// The system serif: Georgia on iOS, Noto Serif on Android.

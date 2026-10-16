@@ -24,12 +24,17 @@ import 'test_app.dart';
 /// a dot on the unread ones instead of the official-source tick, in every
 /// design, in Top stories and in Latest.
 
-Map<String, dynamic> _article(String id, {String? imageUrl}) => {
+Map<String, dynamic> _article(
+  String id, {
+  String? imageUrl,
+  String source = 'Federal Government',
+  int importance = 3,
+}) => {
   'id': id,
   'country': 'DE',
   'source': {
     'id': 'de-gov',
-    'name': 'Federal Government',
+    'name': source,
     'url': 'https://www.bundesregierung.de',
   },
   'publishedAt': DateTime.now().toUtc().toIso8601String(),
@@ -42,13 +47,14 @@ Map<String, dynamic> _article(String id, {String? imageUrl}) => {
   'originalLanguage': 'de',
   'topics': ['economy'],
   'tags': <String>[],
-  'importance': 3,
+  'importance': importance,
   'imageUrl': imageUrl,
   'originalUrl': 'https://www.bundesregierung.de/$id',
 };
 
 /// Top stories t1 (with a picture) to t3, then Latest a1 and a2 (a1 with a
-/// picture). t1 and a1 were opened before.
+/// picture). t1 and a1 were opened before. a1 and a2 are important (C's red
+/// rule), and a2's institution has a long name, cut with "…" in today's rows.
 final _top = [
   _article('t1', imageUrl: 'https://example.test/t1.jpg'),
   _article('t2'),
@@ -56,8 +62,14 @@ final _top = [
 ];
 final _items = [
   ..._top,
-  _article('a1', imageUrl: 'https://example.test/a1.jpg'),
-  _article('a2'),
+  _article('a1', imageUrl: 'https://example.test/a1.jpg', importance: 4),
+  _article(
+    'a2',
+    source:
+        'Federal Government Press and Information Office of the Federal '
+        'Republic',
+    importance: 4,
+  ),
 ];
 const _read = ['t1', 'a1'];
 const _unread = ['t2', 't3', 'a2'];
@@ -140,6 +152,34 @@ double _sourceX(WidgetTester tester, String id) {
   return paragraph.localToGlobal(caret).dx - tester.getTopLeft(row).dx;
 }
 
+/// Today's rows (Now): the unread dot's room after "Source · Country".
+Size _dotRoom(WidgetTester tester, String id) => tester.getSize(
+  find.descendant(of: _row(id), matching: find.byType(UnreadDot)),
+);
+
+/// Today's rows (Now): the "Source · Country" text of the row of [id].
+Finder _publisher(String id) => find.descendant(
+  of: _row(id),
+  matching: find.byWidgetPredicate(
+    (w) => w is Text && (w.data?.contains(' · Germany') ?? false),
+  ),
+);
+
+/// C's importance rule beside the headline of [id]: its colour.
+Color _rule(WidgetTester tester, String id) => tester
+    .widget<ColoredBox>(
+      find.descendant(
+        of: find.descendant(
+          of: _row(id),
+          matching: find.byWidgetPredicate(
+            (w) => w is Positioned && w.width == 3,
+          ),
+        ),
+        matching: find.byType(ColoredBox),
+      ),
+    )
+    .color;
+
 /// The semantics of the article [id]'s card: one VoiceOver stop with the
 /// headline as a sentence (C starts a top story's with its number), or, in
 /// today's rows, as a line of its own.
@@ -149,6 +189,14 @@ SemanticsNode _card(WidgetTester tester, String id) => tester.getSemantics(
 
 /// The colour of the blue dot in the light theme tests use.
 final _blue = CupertinoColors.systemBlue.color;
+
+/// The grey of secondary text in the light theme: a read row's " · ".
+const _grey = Color(0xFF6C6C70);
+
+/// The red dot in the light theme: B's own deeper red there, the app's red
+/// in the other designs.
+Color _red(FeedDesign design) =>
+    design == FeedDesign.b ? AppColors.deepRed : AppColors.accent;
 
 void main() {
   setUp(() {
@@ -176,7 +224,7 @@ void main() {
 
       for (final (style, color) in [
         (ReadStyle.blue, _blue),
-        (ReadStyle.red, AppColors.accent),
+        (ReadStyle.red, _red(design)),
       ]) {
         testWidgets('${style.name}: a dot on each unread article instead of '
             'the tick, and read ones in full colour', (tester) async {
@@ -191,6 +239,22 @@ void main() {
             // the dot's room is kept.
             final unread = id.startsWith('t') ? 't2' : 'a2';
             expect(_sourceX(tester, id), _sourceX(tester, unread), reason: id);
+            // The designs show a small grey " · " in the dot's room, between
+            // the country and the institution; today's rows nothing.
+            expect(
+              _dots(_row(id), _grey),
+              design == FeedDesign.now ? findsNothing : findsOneWidget,
+              reason: id,
+            );
+            // Today's rows keep the dot's room at the line's end, the size
+            // of the dot and its gap.
+            if (design == FeedDesign.now) {
+              expect(
+                _dotRoom(tester, id),
+                _dotRoom(tester, unread),
+                reason: id,
+              );
+            }
             // Not faded: the same colour as an unread headline.
             expect(
               _headlineColor(tester, id),
@@ -214,6 +278,17 @@ void main() {
         expect(_dots(_row('a2'), _blue), findsOneWidget);
         final words = _sourceX(tester, 'a2');
         final headline = tester.getTopLeft(find.text('Decision a2'));
+        // Today's rows: a2's long "Source · Country" is cut with "…"; it
+        // would show more of it if the dot's room went with the dot.
+        final now = design == FeedDesign.now;
+        RenderParagraph cut() => tester.renderObject(
+          find.descendant(
+            of: _publisher('a2'),
+            matching: find.byType(RichText),
+          ),
+        );
+        final width = now ? tester.getSize(_publisher('a2')).width : null;
+        if (now) expect(cut().didExceedMaxLines, isTrue);
         await tester.tap(find.text('Decision a2'));
         await tester.pumpAndSettle();
         await tester.pageBack();
@@ -222,7 +297,27 @@ void main() {
         expect(_dots(_row('t2'), _blue), findsOneWidget);
         expect(_sourceX(tester, 'a2'), words);
         expect(tester.getTopLeft(find.text('Decision a2')), headline);
+        if (now) {
+          expect(tester.getSize(_publisher('a2')).width, width);
+          expect(cut().didExceedMaxLines, isTrue);
+        }
       });
+
+      if (design == FeedDesign.c) {
+        for (final (style, grey) in [
+          (ReadStyle.dim, true),
+          (ReadStyle.blue, false),
+          (ReadStyle.red, true),
+        ]) {
+          testWidgets('${style.name}: the importance rule of a read article '
+              '${grey ? 'turns grey' : 'stays red'}', (tester) async {
+            readStyle.value = style;
+            await _pumpFeed(tester);
+            expect(_rule(tester, 'a2'), AppColors.accent);
+            expect(_rule(tester, 'a1'), grey ? _grey : AppColors.accent);
+          });
+        }
+      }
 
       testWidgets('dim: read articles fade as before, with no dot', (
         tester,
@@ -254,8 +349,7 @@ void main() {
         readStyle.value = ReadStyle.red;
         final handle = tester.ensureSemantics();
         await _pumpFeed(tester);
-        // Today's rows say it after the publisher, where the dot is; the
-        // designs' cards after the rest.
+        // After the rest of the row or card, in every design.
         for (final id in [..._read, ..._unread]) {
           final node = _card(tester, id);
           final said = '${node.label} ${node.value}';
@@ -264,6 +358,14 @@ void main() {
             _unread.contains(id),
             reason: '$id: $said',
           );
+          if (_unread.contains(id)) {
+            // C says it as a sentence of its label: "… 1m ago. Unread."
+            expect(
+              said.trim(),
+              matches(RegExp(r'Unread\.?$')),
+              reason: '$id: $said',
+            );
+          }
           // Read ones say nothing more: the dot style marks the unread.
           expect(said, isNot(contains('Opened')), reason: id);
           expect(node.value, isNot('Read'), reason: id);
@@ -297,6 +399,25 @@ void main() {
         },
       );
     });
+  });
+
+  group("today's dot grows with the reader's text, up to 1.4x", () {
+    for (final (scale, size) in [(1.0, 8.0), (1.2, 9.6), (2.0, 11.2)]) {
+      testWidgets('at ${scale}x', (tester) async {
+        readStyle.value = ReadStyle.red;
+        tester.platformDispatcher.textScaleFactorTestValue = scale;
+        addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+        await _pumpFeed(tester);
+        final dot = find.descendant(
+          of: _row('t2'),
+          matching: find.byWidgetPredicate((w) => w is DecoratedBox),
+        );
+        expect(tester.getSize(dot.last).width, closeTo(size, 0.01));
+        // The room of a read row's dot grows with it.
+        expect(_dotRoom(tester, 't1'), _dotRoom(tester, 't2'));
+        expect(_dotRoom(tester, 't2').height, closeTo(size, 0.01));
+      });
+    }
   });
 
   testWidgets('the Read row in Settings switches the style and goes back to '

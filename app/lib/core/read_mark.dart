@@ -2,7 +2,6 @@ import 'dart:math' as math;
 
 import 'package:flutter/cupertino.dart';
 
-import '../l10n/app_localizations.dart';
 import 'theme.dart';
 
 /// PROTOTYPE (Yurii, 16 Oct): how the feed shows the articles already read,
@@ -40,9 +39,15 @@ class ReadMark {
   /// Not opened yet, in a dot style: the dot shows, VoiceOver says "Unread".
   bool get unread => dots && !read;
 
-  /// The dot's colour.
-  Color color(BuildContext context) => style == ReadStyle.red
-      ? AppColors.accent
+  /// A read article's red marks (C's importance rule) turn grey: in Dim, as
+  /// today, and in Red, where red on a row must mean "not opened yet". In
+  /// Blue they keep their red: it is not the dot's colour there.
+  bool get greyAccent => read && style != ReadStyle.blue;
+
+  /// The dot's colour. [red] is the look's own red for Red, where it has one
+  /// (B's deeper red in light mode), so a screen has one red, not two.
+  Color color(BuildContext context, {Color? red}) => style == ReadStyle.red
+      ? red ?? AppColors.accent
       : CupertinoColors.systemBlue.resolveFrom(context);
 }
 
@@ -54,22 +59,30 @@ const _gap = 4.0;
 /// tick does: it is a mark, not text.
 const _maxGrow = 1.4;
 
-/// The dot in a row of widgets ([PublisherLine]): a filled circle for an
-/// unread article, the same room left empty for a read one. The row centres
-/// it on the line.
+/// The dot in a row of widgets ([PublisherLine]), after [gap] points: a
+/// filled circle for an unread article, the same room left empty for a read
+/// one. The row centres it on the line. It grows with the reader's text size
+/// as the text of [fontSize] it follows does, up to 1.4x, and so does the
+/// gap. VoiceOver does not read it: the row's own value says "Unread".
 class UnreadDot extends StatelessWidget {
-  const UnreadDot(this.mark, {super.key});
+  const UnreadDot(this.mark, {super.key, required this.fontSize, this.gap = 5});
 
   final ReadMark mark;
+  final double fontSize;
+  final double gap;
 
   @override
   Widget build(BuildContext context) {
-    if (!mark.unread) {
-      return const SizedBox.square(dimension: unreadDotSize);
-    }
-    return Semantics(
-      label: AppLocalizations.of(context).feedUnread,
-      child: _circle(unreadDotSize, mark.color(context)),
+    final grow = math.min(
+      MediaQuery.textScalerOf(context).scale(fontSize) / fontSize,
+      _maxGrow,
+    );
+    final size = unreadDotSize * grow;
+    return Padding(
+      padding: EdgeInsetsDirectional.only(start: gap * grow),
+      child: mark.unread
+          ? _circle(size, mark.color(context))
+          : SizedBox.square(dimension: size),
     );
   }
 }
@@ -92,6 +105,7 @@ Widget _circle(double size, Color color) => SizedBox.square(
 /// letter (half a point lower, measured on the iPhone 16e).
 /// A read article shows nothing in its place, or [separator], a small round
 /// dot in that colour, for a line whose words are otherwise separated by " · ".
+/// [red] is the look's own red for Red ([ReadMark.color]).
 /// VoiceOver does not read it: the card's own label says "Unread".
 InlineSpan unreadDotSpan(
   BuildContext context,
@@ -99,6 +113,7 @@ InlineSpan unreadDotSpan(
   required double fontSize,
   required TextScaler scaler,
   Color? separator,
+  Color? red,
   bool trailing = false,
 }) {
   final grow = scaler.scale(fontSize) / fontSize;
@@ -110,7 +125,7 @@ InlineSpan unreadDotSpan(
   final Widget? shown;
   final double top;
   if (mark.unread) {
-    shown = _circle(dot, mark.color(context));
+    shown = _circle(dot, mark.color(context, red: red));
     top = middle + dot / 2;
   } else if (separator != null) {
     // About the size and height of the " · " it stands for.
