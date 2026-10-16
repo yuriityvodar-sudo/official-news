@@ -789,5 +789,8 @@
   "supportWrite": "Write to us",
   "@supportWrite": {
     "description": "Contact & Support page: the button that opens an e-mail to us."
-  }
+  },
+
+  "languageCs": "Czech",
+  "@languageCs": { "description": "As languageAr." }
 }
