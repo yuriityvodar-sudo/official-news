@@ -25,6 +25,38 @@ function splitSpec(spec: string, defaultAttr: string | null): Target {
   return { selector: spec.trim(), attr: defaultAttr };
 }
 
+/** The parts of a selector list, split at commas outside brackets, parentheses and quotes. */
+function selectorList(selector: string): string[] {
+  const parts: string[] = [];
+  let depth = 0;
+  let quote: string | null = null;
+  let start = 0;
+  for (let i = 0; i < selector.length; i++) {
+    const c = selector[i];
+    if (quote) {
+      if (c === quote) quote = null;
+    } else if (c === '"' || c === "'") {
+      quote = c;
+    } else if (c === "[" || c === "(") {
+      depth++;
+    } else if (c === "]" || c === ")") {
+      depth--;
+    } else if (c === "," && depth === 0) {
+      parts.push(selector.slice(start, i).trim());
+      start = i + 1;
+    }
+  }
+  parts.push(selector.slice(start).trim());
+  return parts.filter(Boolean);
+}
+
+/** `item field` for every part of both lists, so ".time, .date" finds both inside the item, never outside it. */
+function withinItem(item: string, field: string): string {
+  return selectorList(item)
+    .flatMap((i) => selectorList(field).map((f) => `${i} ${f}`))
+    .join(", ");
+}
+
 /** Runs `fn` at the element's end tag; elements that cannot have one (br, img) end at once. */
 function atEnd(el: Element, fn: () => void): void {
   try {
@@ -94,7 +126,7 @@ export async function parsePage(html: string, baseUrl: string, config: SourceCon
       continue;
     }
     let capturing = false;
-    rewriter.on(`${config.item} ${selector}`, {
+    rewriter.on(withinItem(config.item, selector), {
       element(el) {
         const item = current();
         if (!item || item[field] !== undefined) return; // the first match wins
