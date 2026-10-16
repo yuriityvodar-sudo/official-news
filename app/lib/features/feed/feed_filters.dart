@@ -2,7 +2,6 @@ import 'package:flutter/cupertino.dart';
 
 import '../../core/article.dart';
 import '../../core/countries.dart';
-import '../../core/theme.dart';
 import '../../l10n/app_localizations.dart';
 
 /// PROTOTYPE (#67, #68): the feed's two filters, shown to Yurii on the phone
@@ -24,6 +23,9 @@ import '../../l10n/app_localizations.dart';
 const countryGroups = <String, Set<String>>{
   'EU': {'EU', 'DE', 'FR', 'IT', 'ES', 'PL', 'CZ'},
   'G7': {'US', 'GB', 'CA', 'FR', 'DE', 'IT', 'JP', 'EU'},
+  // The African Union is a member too (since 2023); no source of the AU's own
+  // institutions yet. Give it a code other than 'AU' (Australia's) when one
+  // is added.
   'G20': {
     'AR',
     'AU',
@@ -51,6 +53,11 @@ const countryGroups = <String, Set<String>>{
 /// app's language; G7 and G20 are written so in every language.
 String groupName(String group, AppLocalizations l10n) =>
     group == 'EU' ? l10n.countryEU : group;
+
+/// A group's chip: the EU's abbreviation in the app's language (ЄС, ЕС,
+/// UE); G7 and G20 are written so in every language.
+String groupShort(String group, AppLocalizations l10n) =>
+    group == 'EU' ? l10n.filterGroupEUShort : group;
 
 /// Where the feed's articles come from: every country, a group of countries
 /// ([countryGroups]) or one country.
@@ -120,38 +127,37 @@ String topicName(String id, AppLocalizations l10n) => switch (id) {
 };
 
 /// What the Topics chip shows instead of the name once a topic is chosen:
-/// an SF Symbols-style glyph per topic. One map, for the real build too.
+/// an SF Symbols-style glyph per topic; the Topics menu shows each beside its
+/// name, so the reader learns them. None means something else in the app
+/// (no heart, which reads as a favourite; no ticked box, which reads as
+/// chosen; no weather). One map, for the real build too.
 const topicIcons = <String, IconData>{
   'foreign-affairs': CupertinoIcons.globe,
   'economy': CupertinoIcons.chart_bar_alt_fill,
   'security-defence': CupertinoIcons.shield_fill,
-  'health': CupertinoIcons.heart_fill,
-  'climate': CupertinoIcons.cloud_sun_fill,
+  'health': CupertinoIcons.staroflife_fill,
+  'climate': CupertinoIcons.leaf_arrow_circlepath,
   'trade': CupertinoIcons.arrow_right_arrow_left,
   'technology': CupertinoIcons.desktopcomputer,
   'energy': CupertinoIcons.bolt_fill,
   'migration': CupertinoIcons.person_2_fill,
-  'elections': CupertinoIcons.checkmark_square_fill,
+  'elections': CupertinoIcons.doc_checkmark_fill,
   'human-rights': CupertinoIcons.hand_raised_fill,
   'science': CupertinoIcons.lab_flask_solid,
 };
 
-/// English topic names, still read by design B's cards
-/// (feed_look_b_words.dart). The filters use [topicName], in every language.
-const topicNames = {
-  'economy': 'Economy',
-  'technology': 'Technology',
-  'health': 'Health',
-  'security-defence': 'Security & defence',
-  'human-rights': 'Human rights',
-  'trade': 'Trade',
-  'energy': 'Energy',
-  'climate': 'Climate',
-  'science': 'Science',
-  'foreign-affairs': 'Foreign affairs',
-  'elections': 'Elections',
-  'migration': 'Migration',
-};
+/// A topic the app has no icon for: a neutral grid.
+const _otherTopicIcon = CupertinoIcons.square_grid_2x2;
+
+/// The red that says a filter is on: the chip's label, icon and chevron, the
+/// menu's checkmark and the buttons that undo a filter. On the grey chip it
+/// is at least 4.5:1 for 15-pt text: #C41230 is 4.7:1 on B's light chip and
+/// 5.3:1 on the white looks' chip; in dark mode #FF3B55 is 4.9:1 on the dark
+/// chip (the brand red #FA2D48 is 4.48:1 there, and 3.0:1 on B's light chip).
+const filterRed = CupertinoDynamicColor.withBrightness(
+  color: Color(0xFFC41230),
+  darkColor: Color(0xFFFF3B55),
+);
 
 /// The filters a demo build starts with: `--dart-define=FILTER_DEMO=GB:economy`
 /// is the United Kingdom and Economy, `G7` the G7 and every topic, `:health`
@@ -249,7 +255,11 @@ class FeedFilterBar extends StatelessWidget {
     final placeCode = place.code;
     final where = _Pulldown(
       key: const ValueKey('filter-where'),
-      label: placeCode ?? l10n.filterGlobalDetail,
+      label: switch (placeCode) {
+        null => l10n.filterGlobalDetail,
+        final g when place.isGroup => groupShort(g, l10n),
+        final c => c,
+      },
       active: !place.isAll,
       semanticLabel: switch (placeCode) {
         null => l10n.filterGlobalDetail,
@@ -287,9 +297,7 @@ class FeedFilterBar extends StatelessWidget {
     final topics = _Pulldown(
       key: const ValueKey('filter-topic'),
       label: l10n.filterAllTopics,
-      icon: chosen == null
-          ? null
-          : topicIcons[chosen] ?? CupertinoIcons.square_grid_2x2,
+      icon: chosen == null ? null : topicIcons[chosen] ?? _otherTopicIcon,
       active: chosen != null,
       semanticLabel: chosen == null
           ? l10n.filterAllTopics
@@ -301,12 +309,18 @@ class FeedFilterBar extends StatelessWidget {
           // The chosen topic stays in the menu, checked, while it has nothing
           // under the Where choice.
           if (chosen != null && !topicCounts.any((e) => e.key == chosen))
-            _Item(topicName(chosen, l10n), true, () => onTopic(chosen)),
+            _Item(
+              topicName(chosen, l10n),
+              true,
+              () => onTopic(chosen),
+              icon: topicIcons[chosen] ?? _otherTopicIcon,
+            ),
           for (final e in topicCounts)
             _Item(
               topicName(e.key, l10n),
               e.key == chosen,
               () => onTopic(e.key),
+              icon: topicIcons[e.key] ?? _otherTopicIcon,
             ),
         ],
       ],
@@ -327,18 +341,14 @@ class FeedFilterBar extends StatelessWidget {
 }
 
 class _Item {
-  const _Item(this.title, this.selected, this.onTap);
+  const _Item(this.title, this.selected, this.onTap, {this.icon});
   final String title;
   final bool selected;
   final VoidCallback onTap;
-}
 
-/// The red of a chip that narrows the feed: the brand red, made deeper on
-/// light grounds, where the brand red on the grey chip is under 3:1.
-const _activeRed = CupertinoDynamicColor.withBrightness(
-  color: Color(0xFFD1203A),
-  darkColor: AppColors.accent,
-);
+  /// A topic's icon, before its name: the one its chip shows once chosen.
+  final IconData? icon;
+}
 
 /// A rounded grey chip that opens an iOS pull-down menu, like the old
 /// language menu: [label] (or [icon]) and a chevron, both red while [active].
@@ -394,8 +404,10 @@ class _PulldownState extends State<_Pulldown> {
   Widget build(BuildContext context) {
     _openForDemo();
     final fg = widget.active
-        ? _activeRed.resolveFrom(context)
+        ? filterRed.resolveFrom(context)
         : CupertinoColors.label.resolveFrom(context);
+    final check = filterRed.resolveFrom(context);
+    final iconColour = CupertinoColors.secondaryLabel.resolveFrom(context);
     final sections = widget.sections.where((s) => s.isNotEmpty).toList();
     return CupertinoMenuAnchor(
       controller: _menu,
@@ -406,11 +418,13 @@ class _PulldownState extends State<_Pulldown> {
           for (final item in section)
             CupertinoMenuItem(
               onPressed: item.onTap,
+              // A topic's icon beside its name: what its chip shows. Items
+              // without one keep the same indent (the menu lines them up).
+              leading: item.icon == null
+                  ? null
+                  : Icon(item.icon, size: 17, color: iconColour),
               trailing: item.selected
-                  ? const Icon(
-                      CupertinoIcons.checkmark_alt,
-                      color: AppColors.accent,
-                    )
+                  ? Icon(CupertinoIcons.checkmark_alt, color: check)
                   : null,
               // VoiceOver says which one is current.
               child: Semantics(

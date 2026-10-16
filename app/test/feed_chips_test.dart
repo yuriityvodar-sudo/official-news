@@ -12,6 +12,7 @@ import 'package:official_news/core/feed_language.dart';
 import 'package:official_news/core/router.dart';
 import 'package:official_news/core/theme.dart';
 import 'package:official_news/features/feed/feed_controller.dart';
+import 'package:official_news/features/feed/feed_look_b_cards.dart';
 import 'package:official_news/features/feed/feed_filters.dart';
 import 'package:official_news/features/feed/feed_look.dart';
 import 'package:official_news/features/feed/feed_screen.dart';
@@ -140,6 +141,46 @@ List<String> _menu(WidgetTester tester) => [
       '—',
 ];
 
+/// The leading icon of the open menu's item named [item], or null.
+IconData? _menuIcon(WidgetTester tester, String item) {
+  final entry = tester
+      .widgetList<CupertinoMenuItem>(find.byType(CupertinoMenuItem))
+      .singleWhere((e) => ((e.child as Semantics).child! as Text).data == item);
+  return (entry.leading as Icon?)?.icon;
+}
+
+/// The Where chip's 44-pt target, wherever it is (above the screen once a
+/// masthead that scrolls has gone). B and C also lay out copies of their
+/// masthead to measure it, inside ExcludeSemantics, never painted.
+Rect _whereTarget(WidgetTester tester) {
+  final real = find
+      .byKey(const ValueKey('filter-where'), skipOffstage: false)
+      .evaluate()
+      .where((e) {
+        var copy = false;
+        e.visitAncestorElements((a) {
+          final w = a.widget;
+          copy = w is ExcludeSemantics && w.excluding;
+          return !copy;
+        });
+        return !copy;
+      })
+      .toList();
+  expect(real, hasLength(1));
+  RenderBox? button;
+  void visit(Element e) {
+    if (button != null) return;
+    if (e.widget is CupertinoButton) {
+      button = e.renderObject! as RenderBox;
+      return;
+    }
+    e.visitChildren(visit);
+  }
+
+  visit(real.single);
+  return button!.localToGlobal(Offset.zero) & button!.size;
+}
+
 Future<void> _choose(WidgetTester tester, Finder chip, String item) async {
   await tester.tap(chip);
   await tester.pumpAndSettle();
@@ -240,7 +281,9 @@ void main() {
     await _choose(tester, _where, 'United Kingdom');
     expect(find.descendant(of: _where, matching: find.text('GB')), findsOne);
     expect(find.text('United Kingdom'), findsNothing);
-    const red = Color(0xFFD1203A);
+    // #C41230: at least 4.5:1 on the grey chip (#D1203A was 4.1:1 on B's).
+    final red = Color(filterRed.color.toARGB32());
+    expect(red, const Color(0xFFC41230));
     expect(_colours(tester, _where), (label: red, fill: grey));
     expect(
       find.descendant(
@@ -277,19 +320,64 @@ void main() {
     );
     expect(Color(icon.color!.toARGB32()), red);
 
-    // The menu keeps the full names.
+    // The menu keeps the full names, each topic beside the icon its chip
+    // shows, so the reader learns what the icon means.
     await tester.tap(_topics);
     await tester.pumpAndSettle();
     expect(_menu(tester), ['All topics', '—', 'Economy', 'Health']);
+    expect(_menuIcon(tester, 'All topics'), isNull);
+    expect(_menuIcon(tester, 'Economy'), CupertinoIcons.chart_bar_alt_fill);
+    expect(_menuIcon(tester, 'Health'), CupertinoIcons.staroflife_fill);
+    // The checkmark is the same red.
+    final check = tester.widget<Icon>(
+      find.byIcon(CupertinoIcons.checkmark_alt),
+    );
+    expect(Color(check.color!.toARGB32()), red);
   });
 
-  testWidgets('in dark mode the chosen chip is the brand red', (tester) async {
+  testWidgets('the Topics menu shows each icon beside its name, in Ukrainian '
+      'too', (tester) async {
+    SharedPreferences.setMockInitialValues({'feed.lang': 'uk'});
+    await _pump(
+      tester,
+      _world(lang: 'uk'),
+      language: FeedLanguage.uk,
+      screen: _tall,
+    );
+    await tester.tap(_topics);
+    await tester.pumpAndSettle();
+    final economy = find.ancestor(
+      of: find.text('Економіка'),
+      matching: find.byType(CupertinoMenuItem),
+    );
+    expect(
+      find.descendant(
+        of: economy,
+        matching: find.byIcon(CupertinoIcons.chart_bar_alt_fill),
+      ),
+      findsOne,
+    );
+    // The icon comes first, on the same line as the name.
+    final icon = tester.getRect(
+      find.descendant(
+        of: economy,
+        matching: find.byIcon(CupertinoIcons.chart_bar_alt_fill),
+      ),
+    );
+    final name = tester.getRect(find.text('Економіка'));
+    expect(icon.right, lessThan(name.left));
+    expect(icon.center.dy, closeTo(name.center.dy, 2));
+  });
+
+  testWidgets('in dark mode the chosen chip is a red that reads on the dark '
+      'chip', (tester) async {
     tester.platformDispatcher.platformBrightnessTestValue = Brightness.dark;
     addTearDown(tester.platformDispatcher.clearPlatformBrightnessTestValue);
     await _pump(tester, _world(), brightness: Brightness.dark, screen: _tall);
     await _choose(tester, _where, 'United Kingdom');
     final colours = _colours(tester, _where);
-    expect(colours.label, const Color(0xFFFA2D48));
+    // #FF3B55: 4.9:1 on the dark chip (the brand red #FA2D48 is 4.48:1).
+    expect(colours.label, const Color(0xFFFF3B55));
     expect(
       colours.fill,
       Color(CupertinoColors.tertiarySystemFill.darkColor.toARGB32()),
@@ -363,7 +451,82 @@ void main() {
       'США',
       'Україна',
     ]);
+    await tester.tap(_where);
+    await tester.pumpAndSettle();
+
+    // The European Union's chip is its Ukrainian abbreviation, not "EU";
+    // G7 is written so in every language.
+    await _choose(tester, _where, 'Європейський Союз');
+    expect(find.descendant(of: _where, matching: find.text('ЄС')), findsOne);
+    expect(
+      find.descendant(of: _where, matching: find.text('EU')),
+      findsNothing,
+    );
+    await _choose(tester, _where, 'G7');
+    expect(find.descendant(of: _where, matching: find.text('G7')), findsOne);
   });
+
+  test('the EU\'s abbreviation in each language', () {
+    expect(
+      {
+        for (final l in FeedLanguage.values)
+          l.code: groupShort('EU', l10nFor(l)),
+      },
+      {'en': 'EU', 'uk': 'ЄС', 'ru': 'ЕС', 'es': 'UE', 'de': 'EU'},
+    );
+    expect(groupShort('G20', l10nFor(FeedLanguage.uk)), 'G20');
+  });
+
+  testWidgets('B\'s cards name the chosen topic, not another of theirs', (
+    tester,
+  ) async {
+    await _pump(tester, [
+      _article('gb', 'GB', topics: ['technology', 'economy'], seq: 2),
+      _article('de', 'DE', topics: ['health', 'economy'], seq: 1),
+    ], screen: _tall);
+    Finder footer(String id, String topic) => find.descendant(
+      of: find.ancestor(
+        of: find.text('Decision $id'),
+        matching: find.byType(BCard),
+      ),
+      matching: find.textContaining(topic),
+    );
+    // No topic chosen: each card's main topic.
+    expect(footer('gb', 'Technology'), findsOne);
+    expect(footer('de', 'Health'), findsOne);
+    await _choose(tester, _topics, 'Economy');
+    expect(footer('gb', 'Economy'), findsOne);
+    expect(footer('gb', 'Technology'), findsNothing);
+    expect(footer('de', 'Economy'), findsOne);
+    expect(footer('de', 'Health'), findsNothing);
+  });
+
+  testWidgets(
+    'B\'s cards and the Topics menu name a topic alike in Ukrainian',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({'feed.lang': 'uk'});
+      await _pump(
+        tester,
+        [
+          _article('de', 'DE', topics: ['health'], lang: 'uk'),
+        ],
+        language: FeedLanguage.uk,
+        screen: _tall,
+      );
+      final card = find.ancestor(
+        of: find.text('Decision de'),
+        matching: find.byType(BCard),
+      );
+      expect(
+        find.descendant(of: card, matching: find.textContaining('Здоров’я')),
+        findsOne,
+      );
+      expect(
+        find.descendant(of: card, matching: find.textContaining('Охорона')),
+        findsNothing,
+      );
+    },
+  );
 
   testWidgets('VoiceOver hears the whole choice; targets are 44 pt', (
     tester,
@@ -522,6 +685,69 @@ void main() {
           }
         }
         expect(pillBox().top, lessThan(150));
+      });
+    }
+  });
+
+  group('the "N new" pill stays clear of the chips in every frame of a '
+      'scroll back to the top', () {
+    for (final design in FeedDesign.values) {
+      testWidgets('design ${design.name}', (tester) async {
+        feedDesign.value = design;
+        final feed = await _pump(
+          tester,
+          [for (var i = 30; i >= 1; i--) _article('n$i', 'DE', seq: i)],
+          newer: [_article('new', 'DE', seq: 31)],
+        );
+        await feed.checkForNew();
+        await tester.pump();
+        await tester.pump();
+        final pill = find.text('1 new decision');
+        expect(pill, findsOne);
+
+        // Down the list first, then a finger pulling it back fast: 40 pt a
+        // frame (about 5,000 pt/s at 120 Hz), past the top.
+        await tester.drag(find.byType(CustomScrollView), const Offset(0, -600));
+        await tester.pumpAndSettle();
+        final scroll = tester
+            .state<ScrollableState>(find.byType(Scrollable).first)
+            .position;
+        expect(scroll.pixels, greaterThan(500));
+        final gesture = await tester.startGesture(const Offset(201, 600));
+        var frames = 0;
+        for (var i = 0; i < 18; i++) {
+          await gesture.moveBy(const Offset(0, 40));
+          await tester.pump(const Duration(milliseconds: 8));
+          final where = _whereTarget(tester);
+          final box = tester.getRect(pill);
+          expect(
+            box.overlaps(where),
+            isFalse,
+            reason: 'frame $i at ${scroll.pixels}: pill $box, Where $where',
+          );
+          if (where.bottom > 0) frames++;
+        }
+        await gesture.up();
+        await tester.pumpAndSettle();
+        // The chips were on screen for several of those frames.
+        expect(frames, greaterThanOrEqualTo(5));
+        expect(scroll.pixels, 0);
+      });
+    }
+  });
+
+  group('the gear is level with the chips', () {
+    for (final design in [FeedDesign.b, FeedDesign.c]) {
+      testWidgets('design ${design.name}', (tester) async {
+        feedDesign.value = design;
+        await _pump(tester, _world());
+        final gear = tester.getRect(
+          find.ancestor(
+            of: find.byIcon(CupertinoIcons.gear_alt).hitTestable(),
+            matching: find.byType(CupertinoButton),
+          ),
+        );
+        expect(gear.center.dy, closeTo(_whereTarget(tester).center.dy, 0.5));
       });
     }
   });

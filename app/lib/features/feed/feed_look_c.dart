@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -312,6 +314,15 @@ class _Bar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = _Styles.of(context);
+    // The filter bar centres its chips 10 pt plus half a chip down; a chip
+    // is its 15-pt label (about 1.2 lines' height in SF) plus 14 pt, and at
+    // least 36 pt. The gear's 44-pt target is centred on the same line, at
+    // every text size (as B's toolbar does).
+    final chip = math.max(
+      36.0,
+      14 + MediaQuery.textScalerOf(context).scale(15) * 1.2,
+    );
+    final gearTop = math.max(0.0, 10 + chip / 2 - 22);
     return ColoredBox(
       color: Theme.of(context).scaffoldBackgroundColor,
       child: Column(
@@ -321,13 +332,12 @@ class _Bar extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.fromLTRB(0, 0, 12, 8),
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(child: _Chips(masthead.filterBar)),
-                // The filter bar starts 10 pt down: the gear too, so both
-                // stay centred on each other at every text size.
                 const SizedBox(width: 6),
                 Padding(
-                  padding: const EdgeInsets.only(top: 10),
+                  padding: EdgeInsets.only(top: gearTop),
                   child: masthead.settingsButton,
                 ),
               ],

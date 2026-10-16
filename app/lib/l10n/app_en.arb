@@ -112,6 +112,10 @@
       }
     }
   },
+  "filterGroupEUShort": "EU",
+  "@filterGroupEUShort": {
+    "description": "The Where chip while the European Union group is chosen: the EU's usual abbreviation in this language (EU, ЄС, ЕС, UE). G7 and G20 stay as they are."
+  },
   "filterTopicChip": "Topic: {name}",
   "@filterTopicChip": {
     "description": "What VoiceOver says for the Topics chip while a topic is chosen: the chip itself shows only the topic's icon. {name} is the topic's name.",

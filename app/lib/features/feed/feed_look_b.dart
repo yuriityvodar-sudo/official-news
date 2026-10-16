@@ -138,6 +138,7 @@ class BLook extends FeedLook {
                 read: section.isRead(a),
                 kind: kind,
                 lead: kind == BCardKind.top && i == 0,
+                topic: section.topic,
                 onTap: () => section.open(i),
               ),
             );
@@ -345,6 +346,7 @@ class _CarouselState extends State<_Carousel> {
               article: a,
               read: top.isRead(a),
               kind: k,
+              topic: top.topic,
               onTap: () => top.open(i),
             ),
           );

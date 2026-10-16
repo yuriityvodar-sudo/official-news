@@ -4,7 +4,6 @@ import 'dart:math' show max, min;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
-import 'package:flutter/scheduler.dart';
 
 import '../../core/analytics.dart';
 import '../../core/article.dart';
@@ -48,11 +47,11 @@ class _FeedScreenState extends State<FeedScreen> {
   bool _shown(Article a) =>
       _place.includes(a) && (_topic == null || a.topics.contains(_topic));
 
-  /// Where the masthead ends on screen now, in points from the top of the
-  /// safe area: all of it at the top of the feed, a pinned bar once folded,
-  /// 0 once a masthead that scrolls has gone. The "N new" pill floats just
-  /// under it, so it never covers the name or the filters, in any look.
-  final _mastheadBottom = ValueNotifier<double>(0);
+  /// The masthead's sliver, wherever it is on screen: all of it at the top
+  /// of the feed, a pinned bar once folded, nothing once a masthead that
+  /// scrolls has gone. The "N new" pill floats just under it, so it never
+  /// covers the name or the filters, in any look.
+  final _masthead = _MastheadLink();
 
   late final FeedController _feed = widget.controller ?? FeedController();
   final _scroll = ScrollController();
@@ -84,7 +83,7 @@ class _FeedScreenState extends State<FeedScreen> {
     feedDesign.removeListener(_designChanged);
     if (widget.controller == null) _feed.dispose();
     _scroll.dispose();
-    _mastheadBottom.dispose();
+    _masthead.dispose();
     super.dispose();
   }
 
@@ -213,7 +212,7 @@ class _FeedScreenState extends State<FeedScreen> {
                 // Pull to refresh works in every state, including error and empty.
                 CupertinoSliverRefreshControl(onRefresh: _feed.refresh),
                 _MastheadEdge(
-                  onBottom: (bottom) => _mastheadBottom.value = bottom,
+                  link: _masthead,
                   sliver: look.masthead(
                     context,
                     FeedMasthead(
@@ -236,15 +235,12 @@ class _FeedScreenState extends State<FeedScreen> {
               ],
             ),
             if (_feed.newCount > 0)
-              ValueListenableBuilder<double>(
-                valueListenable: _mastheadBottom,
-                builder: (context, bottom, pill) => Positioned(
-                  top: max(_pillTop, bottom + _pillGap),
-                  left: 0,
-                  right: 0,
-                  child: pill!,
-                ),
-                child: Center(
+              Positioned.fill(
+                child: _UnderMasthead(
+                  masthead: _masthead,
+                  scroll: _scroll,
+                  top: _pillTop,
+                  gap: _pillGap,
                   child: look.newPill(
                     context,
                     count: _feed.newCount,
@@ -338,7 +334,7 @@ class _FeedScreenState extends State<FeedScreen> {
         child: Text(
           label,
           style: text.meta.copyWith(
-            color: AppColors.accent,
+            color: filterRed.resolveFrom(context),
             fontWeight: FontWeight.w600,
           ),
         ),
@@ -378,6 +374,7 @@ class _FeedScreenState extends State<FeedScreen> {
             articles: top,
             readIds: _feed.readIds,
             open: (i) => _open(top[i], section: 'top', position: i),
+            topic: _topic,
           ),
         ),
       );
@@ -392,6 +389,7 @@ class _FeedScreenState extends State<FeedScreen> {
             readIds: _feed.readIds,
             open: (i) => _open(latest[i], section: 'latest', position: i),
             shown: (i) => _shownRow(i + 1),
+            topic: _topic,
           ),
         ),
       );
@@ -419,62 +417,193 @@ class _FeedScreenState extends State<FeedScreen> {
   );
 }
 
-/// The masthead's sliver, telling where it ends on screen after each frame
-/// that lays it out or paints it: scrolling, folding, pull to refresh. Any
-/// look's masthead, so the screen can keep the "N new" pill under it.
+/// Where the masthead's sliver is, for the "N new" pill: [_MastheadEdge]
+/// registers its render object here and tells each time it is laid out
+/// (scrolling, folding, pull to refresh, a new size), so the pill moves in
+/// the same frame as the masthead, never a frame behind it.
+class _MastheadLink extends ChangeNotifier {
+  _RenderMastheadEdge? _edge;
+
+  /// Where the masthead ends on screen, in [box]'s coordinates: 0 once it
+  /// has scrolled away, or before it is laid out. Read while painting, when
+  /// this frame's layout is done.
+  double bottomIn(RenderBox box) {
+    final edge = _edge;
+    if (edge == null || !edge.attached || !box.attached) return 0;
+    final shown = edge.geometry?.paintExtent ?? 0;
+    if (shown <= 0) return 0;
+    return MatrixUtils.transformPoint(
+      edge.getTransformTo(box),
+      Offset(0, shown),
+    ).dy;
+  }
+
+  void _laidOut() => notifyListeners();
+}
+
+/// The masthead's sliver, any look's, registered with a [_MastheadLink].
 class _MastheadEdge extends SingleChildRenderObjectWidget {
-  const _MastheadEdge({required this.onBottom, required Widget sliver})
+  const _MastheadEdge({required this.link, required Widget sliver})
     : super(child: sliver);
 
-  final ValueChanged<double> onBottom;
+  final _MastheadLink link;
 
   @override
   RenderObject createRenderObject(BuildContext context) =>
-      _RenderMastheadEdge(onBottom);
+      _RenderMastheadEdge(link);
 
   @override
   void updateRenderObject(
     BuildContext context,
     _RenderMastheadEdge renderObject,
-  ) => renderObject.onBottom = onBottom;
+  ) => renderObject.link = link;
 }
 
 class _RenderMastheadEdge extends RenderProxySliver {
-  _RenderMastheadEdge(this.onBottom);
+  _RenderMastheadEdge(this._link);
 
-  ValueChanged<double> onBottom;
-  bool _asked = false;
+  _MastheadLink _link;
+  set link(_MastheadLink value) {
+    if (identical(value, _link)) return;
+    if (identical(_link._edge, this)) _link._edge = null;
+    _link = value;
+    if (attached) _link._edge = this;
+  }
+
+  @override
+  void attach(PipelineOwner owner) {
+    super.attach(owner);
+    _link._edge = this;
+  }
+
+  @override
+  void detach() {
+    if (identical(_link._edge, this)) _link._edge = null;
+    super.detach();
+  }
 
   @override
   void performLayout() {
     super.performLayout();
-    _tell();
+    // Only marks the pill to be painted again: allowed during layout.
+    _link._laidOut();
+  }
+}
+
+/// Places [child] (the "N new" pill) across the middle, [gap] under where
+/// the masthead ends on screen and never higher than [top]. The place is
+/// worked out while painting, after this frame's layout, so the pill moves
+/// with the masthead in the same frame; taps beside the pill reach the feed.
+class _UnderMasthead extends SingleChildRenderObjectWidget {
+  const _UnderMasthead({
+    required this.masthead,
+    required this.scroll,
+    required this.top,
+    required this.gap,
+    required Widget super.child,
+  });
+
+  final _MastheadLink masthead;
+  final Listenable scroll;
+  final double top;
+  final double gap;
+
+  @override
+  RenderObject createRenderObject(BuildContext context) =>
+      _RenderUnderMasthead(masthead, scroll, top, gap);
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    _RenderUnderMasthead renderObject,
+  ) => renderObject
+    ..masthead = masthead
+    ..scroll = scroll
+    ..top = top
+    ..gap = gap;
+}
+
+class _RenderUnderMasthead extends RenderShiftedBox {
+  _RenderUnderMasthead(this._masthead, this._scroll, this._top, this._gap)
+    : super(null);
+
+  _MastheadLink _masthead;
+  set masthead(_MastheadLink value) {
+    if (identical(value, _masthead)) return;
+    if (attached) _masthead.removeListener(markNeedsPaint);
+    _masthead = value;
+    if (attached) _masthead.addListener(markNeedsPaint);
+    markNeedsPaint();
+  }
+
+  /// The list's scrolling: the pill is painted again as it scrolls, as well
+  /// as each time the masthead is laid out.
+  Listenable _scroll;
+  set scroll(Listenable value) {
+    if (identical(value, _scroll)) return;
+    if (attached) _scroll.removeListener(markNeedsPaint);
+    _scroll = value;
+    if (attached) _scroll.addListener(markNeedsPaint);
+    markNeedsPaint();
+  }
+
+  double _top;
+  set top(double value) {
+    if (value == _top) return;
+    _top = value;
+    markNeedsPaint();
+  }
+
+  double _gap;
+  set gap(double value) {
+    if (value == _gap) return;
+    _gap = value;
+    markNeedsPaint();
+  }
+
+  @override
+  void attach(PipelineOwner owner) {
+    super.attach(owner);
+    _masthead.addListener(markNeedsPaint);
+    _scroll.addListener(markNeedsPaint);
+  }
+
+  @override
+  void detach() {
+    _masthead.removeListener(markNeedsPaint);
+    _scroll.removeListener(markNeedsPaint);
+    super.detach();
+  }
+
+  // Its own layer: moving the pill repaints only the pill.
+  @override
+  bool get isRepaintBoundary => true;
+
+  @override
+  Size computeDryLayout(BoxConstraints constraints) => constraints.biggest;
+
+  @override
+  void performLayout() {
+    size = constraints.biggest;
+    // As small as the pill looks, as high as it likes (as under a Positioned
+    // with only a top): taps beside it reach the feed.
+    child?.layout(
+      BoxConstraints(maxWidth: constraints.maxWidth),
+      parentUsesSize: true,
+    );
   }
 
   @override
   void paint(PaintingContext context, Offset offset) {
+    final child = this.child;
+    if (child == null) return;
+    (child.parentData! as BoxParentData).offset = Offset(
+      (size.width - child.size.width) / 2,
+      max(_top, _masthead.bottomIn(this) + _gap),
+    );
     super.paint(context, offset);
-    _tell();
   }
 
-  /// After the frame: the list's own place for the masthead is only known
-  /// once it is laid out, and nothing may change during layout or paint.
-  void _tell() {
-    if (_asked) return;
-    _asked = true;
-    SchedulerBinding.instance.addPostFrameCallback((_) {
-      _asked = false;
-      final list = parent;
-      if (!attached || list is! RenderBox) return;
-      final shown = geometry?.paintExtent ?? 0;
-      onBottom(
-        shown <= 0
-            ? 0
-            : MatrixUtils.transformPoint(
-                getTransformTo(list),
-                Offset(0, shown),
-              ).dy,
-      );
-    });
-  }
+  @override
+  bool hitTestSelf(Offset position) => false;
 }

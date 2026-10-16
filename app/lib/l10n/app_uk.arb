@@ -22,6 +22,7 @@
   "filterAllTopics": "Усі теми",
   "filterCountryChip": "Країна: {name}",
   "filterGroupChip": "Країни: {name}",
+  "filterGroupEUShort": "ЄС",
   "filterTopicChip": "Тема: {name}",
   "filterEmpty": "За останні 7 днів тут немає рішень.",
   "filterShowGlobal": "Показати всі країни",

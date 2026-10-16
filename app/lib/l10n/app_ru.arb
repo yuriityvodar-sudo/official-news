@@ -22,6 +22,7 @@
   "filterAllTopics": "Все темы",
   "filterCountryChip": "Страна: {name}",
   "filterGroupChip": "Страны: {name}",
+  "filterGroupEUShort": "ЕС",
   "filterTopicChip": "Тема: {name}",
   "filterEmpty": "За последние 7 дней здесь нет решений.",
   "filterShowGlobal": "Показать все страны",

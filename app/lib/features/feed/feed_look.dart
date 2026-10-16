@@ -158,11 +158,17 @@ class FeedSection {
     required this.readIds,
     required this.open,
     this.shown = _nothing,
+    this.topic,
   });
 
   /// "Top stories", "Latest", in the reader's language.
   final String title;
   final List<Article> articles;
+
+  /// The topic the feed is filtered by (an id, as [Article.topics] has it),
+  /// or null for every topic. A card that names one topic names this one, so
+  /// it agrees with the Topics chip: every article here has it.
+  final String? topic;
 
   /// Articles already opened: they stay in the feed, dimmed.
   final Set<String> readIds;

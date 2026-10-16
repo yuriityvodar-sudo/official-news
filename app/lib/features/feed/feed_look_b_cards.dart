@@ -343,9 +343,14 @@ class BCard extends StatefulWidget {
     required this.onTap,
     this.kind = BCardKind.latest,
     this.lead = false,
+    this.topic,
   });
 
   final Article article;
+
+  /// The topic the feed is filtered by: the card names it rather than the
+  /// article's main topic ([FeedSection.topic]).
+  final String? topic;
 
   /// Opened before: the card stays, its headline and picture faded.
   final bool read;
@@ -379,7 +384,7 @@ class _BCardState extends State<BCard> {
     final padding = large ? 16.0 : k.padding;
     final country = countryName(a.country, l10n);
     final kind = decisionTypeLabel(a.decisionType, l10n);
-    final topic = bTopicName(a, l10n);
+    final topic = bTopicName(a, l10n, prefer: widget.topic);
     final time = feedTime(a, l10n);
     final summary = a.shortSummary?.trim();
     final hasSummary = summary != null && summary.isNotEmpty;
