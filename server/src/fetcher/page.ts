@@ -2,7 +2,7 @@
 // the main text of an item page. HTMLRewriter streams the page natively, so
 // big pages cost little CPU. It hands over raw text: entities are decoded here.
 import { parseDate } from "./dates";
-import { cleanText, decodeEntities } from "./text";
+import { cleanText, decodeEntities, pictureUrl } from "./text";
 import { type FoundItem, type SourceConfig, dateSpec } from "./types";
 
 type FieldName = "link" | "title" | "summary" | "image" | "category" | "date";
@@ -23,6 +23,38 @@ function splitSpec(spec: string, defaultAttr: string | null): Target {
     return { selector: spec.slice(0, at).trim(), attr: spec.slice(at + 1).trim() };
   }
   return { selector: spec.trim(), attr: defaultAttr };
+}
+
+/** The parts of a selector list, split at commas outside brackets, parentheses and quotes. */
+function selectorList(selector: string): string[] {
+  const parts: string[] = [];
+  let depth = 0;
+  let quote: string | null = null;
+  let start = 0;
+  for (let i = 0; i < selector.length; i++) {
+    const c = selector[i];
+    if (quote) {
+      if (c === quote) quote = null;
+    } else if (c === '"' || c === "'") {
+      quote = c;
+    } else if (c === "[" || c === "(") {
+      depth++;
+    } else if (c === "]" || c === ")") {
+      depth--;
+    } else if (c === "," && depth === 0) {
+      parts.push(selector.slice(start, i).trim());
+      start = i + 1;
+    }
+  }
+  parts.push(selector.slice(start).trim());
+  return parts.filter(Boolean);
+}
+
+/** `item field` for every part of both lists, so ".time, .date" finds both inside the item, never outside it. */
+function withinItem(item: string, field: string): string {
+  return selectorList(item)
+    .flatMap((i) => selectorList(field).map((f) => `${i} ${f}`))
+    .join(", ");
 }
 
 /** HTML elements that never have an end tag. */
@@ -106,7 +138,7 @@ export async function parsePage(html: string, baseUrl: string, config: SourceCon
       continue;
     }
     let capturing = false;
-    rewriter.on(`${config.item} ${selector}`, {
+    rewriter.on(withinItem(config.item, selector), {
       element(el) {
         const item = current();
         if (!item || item[field] !== undefined) return; // the first match wins
@@ -151,7 +183,7 @@ export async function parsePage(html: string, baseUrl: string, config: SourceCon
         publishedAt: parsed?.publishedAt ?? null,
         dateOnly: parsed?.dateOnly ?? false,
         text: summary || null,
-        imageUrl: absolute(raw.image, baseUrl),
+        imageUrl: pictureUrl(absolute(raw.image, baseUrl), baseUrl),
         category: raw.category ? cleanText(decodeEntities(raw.category)) : null,
       },
     ];
@@ -229,7 +261,8 @@ export async function extractContent(html: string, baseUrl: string, textSelector
   const rewriter = new HTMLRewriter()
     .on('meta[property="og:image"], meta[name="twitter:image"]', {
       element(el) {
-        image ??= el.getAttribute("content");
+        // The first usable one: a site root (no photo on the page) lets twitter:image answer.
+        image ??= pictureUrl(absolute(el.getAttribute("content") ?? undefined, baseUrl), baseUrl);
       },
     })
     // Picture captions and credits ("Foto: …") are not the article's text.
@@ -286,5 +319,5 @@ export async function extractContent(html: string, baseUrl: string, textSelector
 
   const texts = buffers.map((b) => cleanText(decodeEntities(b)));
   const text = texts.find((t) => t.length >= 200) ?? texts.reduce((a, b) => (b.length > a.length ? b : a), "");
-  return { text, imageUrl: absolute(image ?? undefined, baseUrl) };
+  return { text, imageUrl: image };
 }
