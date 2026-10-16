@@ -10,6 +10,7 @@ import '../../core/countries.dart' show hasCountryName;
 import '../../core/feed_language.dart';
 import '../../core/feed_store.dart';
 import '../../core/filters.dart';
+import '../../core/push.dart';
 
 /// The feed's state: its language and filters, articles, paging, errors, read
 /// articles and the check for new ones. The screen only draws it.
@@ -223,6 +224,8 @@ class FeedController extends ChangeNotifier {
     unawaited(_store?.saveLanguage(lang));
     if (lang == language) return;
     _language.value = lang;
+    // Notifications come in the feed's language (#62).
+    unawaited(push.setLanguage(lang));
     // The menus as saved in that language, until the server answers in it;
     // the app names their countries and topics in it either way.
     if (!_noCountries) _countries = _store?.countries(lang) ?? _countries;
