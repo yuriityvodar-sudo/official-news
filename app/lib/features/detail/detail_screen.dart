@@ -93,40 +93,76 @@ class DetailScreen extends StatelessWidget {
           ),
         ),
       ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 48),
-        children: [
-          _Publisher(article),
-          const SizedBox(height: 18),
-          KindLabel(article),
-          Text(article.headline, style: text.articleHeadline),
-          const SizedBox(height: 10),
-          Text(_published(article), style: text.meta),
-          if (article.imageUrl != null) _Picture(article.imageUrl!),
-          const SizedBox(height: 22),
-          if (hasSummary) ...[
-            _AiLabel(article),
+      body: _CountsRead(
+        article: article,
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 48),
+          children: [
+            _Publisher(article),
+            const SizedBox(height: 18),
+            KindLabel(article),
+            Text(article.headline, style: text.articleHeadline),
             const SizedBox(height: 10),
-            for (final paragraph in _paragraphs(summary)) ...[
-              Text(paragraph, style: text.body),
-              const SizedBox(height: 14),
-            ],
-          ] else
-            const _SummaryComing(),
-          const SizedBox(height: 14),
-          _OfficialLink(
-            article: article,
-            onTap: () {
-              final page = officialPage(article.originalUrl);
-              if (page == null) return;
-              unawaited(analytics.officialLinkOpened(article));
-              openLink(page);
-            },
-          ),
-        ],
+            Text(_published(article), style: text.meta),
+            if (article.imageUrl != null) _Picture(article.imageUrl!),
+            const SizedBox(height: 22),
+            if (hasSummary) ...[
+              _AiLabel(article),
+              const SizedBox(height: 10),
+              for (final paragraph in _paragraphs(summary)) ...[
+                Text(paragraph, style: text.body),
+                const SizedBox(height: 14),
+              ],
+            ] else
+              const _SummaryComing(),
+            const SizedBox(height: 14),
+            _OfficialLink(
+              article: article,
+              onTap: () {
+                final page = officialPage(article.originalUrl);
+                if (page == null) return;
+                unawaited(analytics.officialLinkOpened(article));
+                openLink(page);
+              },
+            ),
+          ],
+        ),
       ),
     );
   }
+}
+
+/// Counts the article as read once it has been open, with the app in front,
+/// for [ArticleReadTimer.after] (#60).
+class _CountsRead extends StatefulWidget {
+  const _CountsRead({required this.article, required this.child});
+
+  final Article article;
+  final Widget child;
+
+  @override
+  State<_CountsRead> createState() => _CountsReadState();
+}
+
+class _CountsReadState extends State<_CountsRead> {
+  late final ArticleReadTimer _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = ArticleReadTimer(
+      () => unawaited(analytics.articleRead(widget.article)),
+    );
+  }
+
+  @override
+  void dispose() {
+    _timer.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }
 
 Rect? _originOf(BuildContext context) {

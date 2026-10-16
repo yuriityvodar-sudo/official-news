@@ -34,6 +34,11 @@ class _FeedScreenState extends State<FeedScreen> {
   final _scroll = ScrollController();
   Timer? _newCheck;
 
+  /// Analytics (#60): the deepest Latest row shown this visit, and whether the
+  /// feed's first page failed last time it changed.
+  int _deepest = 0;
+  bool _failed = false;
+
   @override
   void initState() {
     super.initState();
@@ -57,6 +62,9 @@ class _FeedScreenState extends State<FeedScreen> {
   }
 
   void _changed() {
+    final failed = _feed.error != null;
+    if (failed && !_failed) unawaited(analytics.feedFailed());
+    _failed = failed;
     setState(() {});
     // A page dropped because a refresh replaced the feed leaves the list at its end:
     // look again once the new feed is drawn.
@@ -93,6 +101,17 @@ class _FeedScreenState extends State<FeedScreen> {
     unawaited(_feed.markRead(article));
     // The article as the feed has it, so a translated one opens translated.
     Navigator.of(context).pushNamed(Routes.detail, arguments: article);
+  }
+
+  /// The first time this visit a Latest row at a depth of [feedDepths] is drawn.
+  void _shownRow(int row) {
+    if (row <= _deepest) return;
+    for (final depth in feedDepths) {
+      if (_deepest < depth && row >= depth) {
+        unawaited(analytics.feedDepth(depth));
+      }
+    }
+    _deepest = row;
   }
 
   /// A language picked in the menu: another language is another feed, from the top.
@@ -316,6 +335,7 @@ class _FeedScreenState extends State<FeedScreen> {
       separatorBuilder: (_, _) => const Divider(),
       itemBuilder: (context, index) {
         final a = articles[index];
+        if (section == 'latest') _shownRow(index + 1);
         return _ArticleRow(
           article: a,
           read: _feed.readIds.contains(a.id),

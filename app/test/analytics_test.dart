@@ -57,12 +57,15 @@ ApiClient _api() => ApiClient(
 
 void main() {
   late List<(String, Map<String, Object>)> events;
+  late Map<String, String> userProperties;
 
   setUp(() {
     SharedPreferences.setMockInitialValues({});
     events = [];
+    userProperties = {};
     analytics = Analytics(
       (name, parameters) async => events.add((name, parameters)),
+      (name, value) async => userProperties[name] = value,
     );
   });
   tearDown(() => analytics = Analytics());
@@ -146,6 +149,7 @@ void main() {
       'language': 'uk',
       'previous_language': 'en',
     });
+    expect(userProperties, {'feed_language': 'uk'});
   });
 
   testWidgets('sends an opened official link and a share, with the article', (
@@ -167,5 +171,107 @@ void main() {
     expect(events.map((e) => e.$1), ['open_official_link', 'share']);
     expect(events.last.$2, containsPair('item_id', 'a1'));
     expect(events.last.$2, containsPair('content_type', 'article'));
+  });
+
+  testWidgets(
+    'counts an article read after 15 seconds open, not while the app is away',
+    (tester) async {
+      final article = Article.fromJson(_article('a1'));
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: buildTheme(Brightness.light),
+          home: DetailScreen(article: article),
+        ),
+      );
+      await tester.pump(const Duration(seconds: 10));
+      // Away for a while: the wait starts again when the app is back.
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      await tester.pump(const Duration(minutes: 1));
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump(const Duration(seconds: 10));
+      expect(events.where((e) => e.$1 == 'article_read'), isEmpty);
+      await tester.pump(const Duration(seconds: 6));
+      expect(
+        events.where((e) => e.$1 == 'article_read').single.$2['article_id'],
+        'a1',
+      );
+      await tester.pump(const Duration(minutes: 1));
+      expect(events.where((e) => e.$1 == 'article_read'), hasLength(1));
+    },
+  );
+
+  testWidgets('no read when the article closes before 15 seconds', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildTheme(Brightness.light),
+        home: DetailScreen(article: Article.fromJson(_article('a1'))),
+      ),
+    );
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump(const Duration(seconds: 30));
+    expect(events.where((e) => e.$1 == 'article_read'), isEmpty);
+  });
+
+  testWidgets('sends each feed depth once, as the reader scrolls down', (
+    tester,
+  ) async {
+    final items = [for (var i = 1; i <= 30; i++) _article('n$i')];
+    final api = ApiClient(
+      baseUrl: 'https://api.test',
+      client: MockClient(
+        (_) async => http.Response(
+          jsonEncode({'items': items, 'nextCursor': null, 'top': []}),
+          200,
+        ),
+      ),
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildTheme(Brightness.light),
+        onGenerateRoute: onGenerateRoute,
+        home: FeedScreen(
+          controller: FeedController(api: api),
+          newCheckEvery: const Duration(hours: 1),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+    Iterable<String> depths() =>
+        events.map((e) => e.$1).where((n) => n.startsWith('feed_scroll_'));
+    expect(depths(), isEmpty);
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -6000));
+    await tester.pumpAndSettle();
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, 6000));
+    await tester.pumpAndSettle();
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -6000));
+    await tester.pumpAndSettle();
+    expect(depths(), ['feed_scroll_10', 'feed_scroll_25']);
+  });
+
+  testWidgets('sends a failed first page once, not on every redraw', (
+    tester,
+  ) async {
+    final api = ApiClient(
+      baseUrl: 'https://api.test',
+      client: MockClient((_) async => http.Response('{"error":"down"}', 500)),
+    );
+    final feed = FeedController(api: api);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildTheme(Brightness.light),
+        home: FeedScreen(
+          controller: feed,
+          newCheckEvery: const Duration(hours: 1),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+    await tester.pump();
+    expect(events.where((e) => e.$1 == 'feed_load_failed'), hasLength(1));
   });
 }
