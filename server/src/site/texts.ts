@@ -45,21 +45,26 @@ interface SiteTexts {
   prevails: string;
   /**
    * The filters' words (#67, #68), word for word from the app's ARB keys of
-   * the same names (Yurii's compact chips, prototype/chips, 16 Oct, and #87,
-   * origin/feature/67-filters-app), which main does not have yet. Once #87 is
-   * on main, they move to KEYS in scripts/site-texts.mjs and leave this file.
-   * `filterGlobalDetail` is "All countries", the Where chip and its menu's first item.
+   * the same names (#87, feature/67-filters-app, after the chips prototype's
+   * review, prototype/chips 3d88cf3, 16 Oct), which main does not have yet;
+   * scripts/site-texts.check.mjs fails when a copy differs from an ARB file
+   * that has the key. Whichever of #87 and #89 merges second moves them to
+   * KEYS in scripts/site-texts.mjs, out of this file, and runs `npm run
+   * site:texts` in server/. `filterAllCountries` is "All countries", the
+   * Where chip and its menu's first item.
    */
-  filterGlobalDetail: string;
+  filterAllCountries: string;
   filterAllTopics: string;
   /** What a screen reader says for the Where chip, which shows only the country's code (GB). */
   filterCountryChip: string;
-  /** The same for a group, whose chip shows its short name (EU, G7, G20, NATO). */
+  /** The same for a group, whose chip shows its short name (ЄС, G7, G20, НАТО). */
   filterGroupChip: string;
+  /** The European Union's chip: the EU's abbreviation in the language. NATO's chip is its name (GROUPS' names, the app's groupNato); G7 and G20 are written so in every language. */
+  filterGroupEUShort: string;
   /** The same for the Topics chip, which shows only the topic's icon. */
   filterTopicChip: string;
   filterEmpty: string;
-  filterShowGlobal: string;
+  filterShowAllCountries: string;
   filterShowAllTopics: string;
   /** The filter bar's name for screen readers (the site's own). */
   filters: string;
@@ -89,13 +94,14 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     siteBanner: "On iPhone and iPad, Safari may show a banner for our app, using information it loads from Apple's App Store.",
     siteCovers: "The privacy policy and the terms of use cover both the Official News app and this website.",
     prevails: "The English version prevails ({link}).",
-    filterGlobalDetail: "All countries",
+    filterAllCountries: "All countries",
     filterAllTopics: "All topics",
     filterCountryChip: "Country: {name}",
     filterGroupChip: "Countries: {name}",
+    filterGroupEUShort: "EU",
     filterTopicChip: "Topic: {name}",
     filterEmpty: "No decisions here in the last 7 days.",
-    filterShowGlobal: "Show all countries",
+    filterShowAllCountries: "Show all countries",
     filterShowAllTopics: "Show all topics",
     filters: "Filters",
   },
@@ -122,13 +128,14 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     siteBanner: "На iPhone та iPad Safari може показати банер нашого застосунку з даними, які він завантажує з App Store від Apple.",
     siteCovers: "Політика конфіденційності й умови використання стосуються і застосунку Official News, і цього сайту.",
     prevails: "Це переклад; у разі розбіжностей переважну силу має англійська версія ({link}).",
-    filterGlobalDetail: "Усі країни",
+    filterAllCountries: "Усі країни",
     filterAllTopics: "Усі теми",
     filterCountryChip: "Країна: {name}",
     filterGroupChip: "Країни: {name}",
+    filterGroupEUShort: "ЄС",
     filterTopicChip: "Тема: {name}",
     filterEmpty: "За останні 7 днів тут немає рішень.",
-    filterShowGlobal: "Показати всі країни",
+    filterShowAllCountries: "Показати всі країни",
     filterShowAllTopics: "Показати всі теми",
     filters: "Фільтри",
   },
@@ -155,13 +162,14 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     siteBanner: "На iPhone и iPad Safari может показать баннер нашего приложения с данными, которые он загружает из App Store от Apple.",
     siteCovers: "Политика конфиденциальности и условия использования относятся и к приложению Official News, и к этому сайту.",
     prevails: "Это перевод; в случае расхождений преимущественную силу имеет английская версия ({link}).",
-    filterGlobalDetail: "Все страны",
+    filterAllCountries: "Все страны",
     filterAllTopics: "Все темы",
     filterCountryChip: "Страна: {name}",
     filterGroupChip: "Страны: {name}",
+    filterGroupEUShort: "ЕС",
     filterTopicChip: "Тема: {name}",
     filterEmpty: "За последние 7 дней здесь нет решений.",
-    filterShowGlobal: "Показать все страны",
+    filterShowAllCountries: "Показать все страны",
     filterShowAllTopics: "Показать все темы",
     filters: "Фильтры",
   },
@@ -188,13 +196,14 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     siteBanner: "En iPhone y iPad, Safari puede mostrar un banner de nuestra app con información que obtiene del App Store de Apple.",
     siteCovers: "La política de privacidad y los términos de uso se aplican tanto a la app Official News como a este sitio web.",
     prevails: "Esto es una traducción; en caso de discrepancia, prevalece la versión en inglés ({link}).",
-    filterGlobalDetail: "Todos los países",
+    filterAllCountries: "Todos los países",
     filterAllTopics: "Todos los temas",
     filterCountryChip: "País: {name}",
     filterGroupChip: "Países: {name}",
+    filterGroupEUShort: "UE",
     filterTopicChip: "Tema: {name}",
     filterEmpty: "No hay decisiones aquí en los últimos 7 días.",
-    filterShowGlobal: "Mostrar todos los países",
+    filterShowAllCountries: "Mostrar todos los países",
     filterShowAllTopics: "Mostrar todos los temas",
     filters: "Filtros",
   },
@@ -221,13 +230,14 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     siteBanner: "Auf iPhone und iPad kann Safari ein Banner für unsere App zeigen, mit Angaben, die es aus Apples App Store lädt.",
     siteCovers: "Die Datenschutzerklärung und die Nutzungsbedingungen gelten für die App Official News und für diese Website.",
     prevails: "Dies ist eine Übersetzung; bei Abweichungen ist die englische Fassung maßgeblich ({link}).",
-    filterGlobalDetail: "Alle Länder",
+    filterAllCountries: "Alle Länder",
     filterAllTopics: "Alle Themen",
     filterCountryChip: "Land: {name}",
     filterGroupChip: "Länder: {name}",
+    filterGroupEUShort: "EU",
     filterTopicChip: "Thema: {name}",
     filterEmpty: "In den letzten 7 Tagen gab es hier keine Entscheidungen.",
-    filterShowGlobal: "Alle Länder anzeigen",
+    filterShowAllCountries: "Alle Länder anzeigen",
     filterShowAllTopics: "Alle Themen anzeigen",
     filters: "Filter",
   },
@@ -284,6 +294,13 @@ export function countryName(lang: SiteLang, code: string): string {
 
 /** A group's name, as GET /countries names it (GROUPS in api/filters.ts): "European Union", "G7", "НАТО". */
 export const groupName = (lang: SiteLang, id: GroupId) => apiGroupName(GROUPS.find((g) => g.id === id)!, lang);
+
+/**
+ * A group's chip, short in the language, as the app's groupShortName: the
+ * EU's abbreviation (EU, ЄС, ЕС, UE), the others their name, already short
+ * (G7, G20; NATO, НАТО, OTAN), so the chip and its checked menu item agree.
+ */
+export const groupShort = (lang: SiteLang, id: GroupId) => (id === "eu" ? text(lang, "filterGroupEUShort") : groupName(lang, id));
 
 /** A topic's name, as GET /topics names it (TOPIC_NAMES in api/filters.ts). */
 export const topicName = (lang: SiteLang, topic: Topic) => TOPIC_NAMES[lang][topic];

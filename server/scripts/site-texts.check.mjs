@@ -112,7 +112,7 @@ describe("the site's own texts (src/site/texts.ts)", () => {
   test("say what the app's ARB files say for a key they share: a copy waiting for the app's PR (#87's filter words, the chips' prototype) is moved, never forked", () => {
     const own = siteOwn();
     const all = arbs();
-    assert.ok("filterGlobalDetail" in own.en, "the filter words are not found in texts.ts");
+    assert.ok("filterAllCountries" in own.en, "the filter words are not found in texts.ts");
     for (const lang of SITE_LANGS) {
       for (const [key, value] of Object.entries(own[lang])) {
         if (key in all[lang]) assert.equal(value, all[lang][key], `texts.ts ${lang}.${key} differs from app_${lang}.arb: use the app's text (move the key to KEYS in site-texts.mjs)`);

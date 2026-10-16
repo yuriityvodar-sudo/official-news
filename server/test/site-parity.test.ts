@@ -1,6 +1,7 @@
 // The website shows exactly what the app's API shows (#88): for every article
 // and language, the page is there exactly when GET /articles/:id?lang= is, with
-// the API's texts; the lists are the API's pages, in the same order. Written
+// the API's texts; the lists are the API's pages, in the same order (page 1's
+// Latest without its Top stories, as the app). Written
 // as loops over the API, so a change to its rules (#84 source names, #86
 // filters) is covered without touching these tests.
 import { env } from "cloudflare:workers";
@@ -174,14 +175,20 @@ describe("latest lists", () => {
     return pages;
   }
 
-  it("are the API's pages, in the same order, with the same top stories, in every language", async () => {
+  it("are the API's pages, in the same order, with the same top stories (not repeated under Latest), in every language", async () => {
     for (const lang of SITE_LANGS) {
       const api = await apiPages(lang);
       const ours = await sitePages(lang);
-      expect(ours.map((p) => p.items), lang).toEqual(api.map((p) => p.items.map((a) => a.id)));
+      // Page 1's Latest leaves out its Top stories, as the app's feed does (#89 review); the API gives top on page 1 only.
+      expect(ours.map((p) => p.items), lang).toEqual(api.map((p) => p.items.filter((a) => !p.top.some((t) => t.id === a.id)).map((a) => a.id)));
       expect(ours.map((p) => p.top), lang).toEqual(api.map((p) => p.top.map((a) => a.id)));
+      // The next page starts after the API's whole first page, Top stories included.
+      if (api.length > 1) expect(ours[1].items[0], lang).toBe(api[1].items[0].id);
     }
     expect((await apiPages("en")).length).toBe(3);
+    // The fixtures have Top stories that are also among the first page's latest 20, so the rule is exercised.
+    const first = (await apiPages("en"))[0];
+    expect(first.top.filter((t) => first.items.some((a) => a.id === t.id)).length).toBeGreaterThan(0);
   });
 
   it("say so when a language has nothing yet (German is off)", async () => {

@@ -6,13 +6,13 @@
 // list; every link is a list's one URL, so each view has one cache entry.
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
-import { GROUPS, hasCountryName } from "../src/api/filters";
+import { EU, GROUPS, hasCountryName } from "../src/api/filters";
 import type { ApiList, ApiWhere } from "../src/site/data";
 import { CSS } from "../src/site/layout";
 import { TOPIC_ICONS, filterBar } from "../src/site/pages/filters";
 import { CACHE } from "../src/site/respond";
 import { SITE_LANGS, type SiteLang, text } from "../src/site/texts";
-import { ALL, INFO_PAGES, isCountryPage } from "../src/site/urls";
+import { ALL, COUNTRY_PAGES, INFO_PAGES, isCountryPage } from "../src/site/urls";
 import { TOPICS } from "../src/summarizer/schema";
 import { get, hideSeed } from "./helpers";
 import { ORIGIN, hreflangs, insertArticle, insertTranslation, linkedIds, site, siteRowsRead as rowsRead, testId } from "./site-helpers";
@@ -52,12 +52,25 @@ beforeEach(fixtures);
 
 type Link = readonly [href: string, label: string, current: boolean];
 
+/** A menu item's link, its icon or empty icon slot (the Topics menu), and its name. */
+const MENU_ITEM = /<li><a href="([^"]+)"( aria-current="page")?>(<svg class="glyph"[\s\S]*?<\/svg>|<span class="glyph" aria-hidden="true"><\/span>)?<span>([^<]+)<\/span>/g;
+
 /** A menu's lists (its sections: All, groups, countries), each as links [href, label, current]. */
 function sections(body: string, which: 0 | 1): Link[][] {
   const details = [...body.matchAll(/<details class="pick"[\s\S]*?<\/details>/g)].map((m) => m[0])[which] ?? "";
   return [...details.matchAll(/<ul>([\s\S]*?)<\/ul>/g)].map((ul) =>
-    [...ul[1].matchAll(/<li><a href="([^"]+)"( aria-current="page")?><span>([^<]+)<\/span>/g)].map((m) => [m[1].replaceAll("&amp;", "&"), m[3], !!m[2]] as const),
+    [...ul[1].matchAll(MENU_ITEM)].map((m) => [m[1].replaceAll("&amp;", "&"), m[4], !!m[2]] as const),
   );
+}
+
+/** A menu's items as [what is before the name: "slot", the topic of its icon or "", name]. */
+function leads(body: string, which: 0 | 1): [string, string][] {
+  const details = [...body.matchAll(/<details class="pick"[\s\S]*?<\/details>/g)].map((m) => m[0])[which] ?? "";
+  return [...details.matchAll(MENU_ITEM)].map((m) => {
+    const lead = m[3] ?? "";
+    const icon = Object.entries(TOPIC_ICONS).find(([, svg]) => lead.includes(svg))?.[0];
+    return [lead.startsWith("<span") ? "slot" : (icon ?? (lead ? "unknown icon" : "")), m[4]];
+  });
 }
 const menu = (body: string, which: 0 | 1) => sections(body, which).flat();
 
@@ -100,12 +113,16 @@ describe("routing", () => {
     expect(article.body).not.toContain('class="filters"');
   });
 
-  it("has a page for every country the API names but the EU institutions, one per group, and none for anything else (no D1 read)", async () => {
+  it("has a page for every source country of docs/sources.csv but the EU institutions, one per group, and none for anything else (no D1 read)", async () => {
+    // COUNTRY_PAGES is the source countries: a new one in docs/sources.csv fails here until it is added.
+    expect([...COUNTRY_PAGES].sort()).toEqual(env.TEST_SOURCE_COUNTRIES.filter((c) => c !== EU).sort());
+    for (const code of COUNTRY_PAGES) expect(hasCountryName(code), code).toBe(true);
     for (const code of env.TEST_SOURCE_COUNTRIES) expect((await site(`/en/${code.toLowerCase()}`)).status, code).toBe(200);
     for (const group of GROUPS) expect((await site(`/uk/${group.id}`)).status, group.id).toBe(200);
-    for (const path of ["/en/ua", "/en/pl", "/en/sa", "/de/cz"]) expect((await site(path)).status, path).toBe(200);
+    for (const path of ["/en/ua", "/en/pl", "/de/cz"]) expect((await site(path)).status, path).toBe(200);
     // The EU's other members were Local's pages: a country alone shows only its own sources, so they have none.
-    for (const path of ["/en/zz", "/en/xx", "/en/no", "/en/at", "/en/fi", "/en/local", "/en/global", "/en/brics", "/en/g8", "/en/d1", "/en/deu", "/en/g/g7", "/en/groups"]) {
+    // Russia is no source country (#42), Saudi Arabia not yet: the API names both, but neither is a page (#89 review).
+    for (const path of ["/en/ru", "/uk/ru", "/ru/ru?topic=economy", "/en/sa", "/es/sa", "/en/zz", "/en/xx", "/en/no", "/en/at", "/en/fi", "/en/local", "/en/global", "/en/brics", "/en/g8", "/en/d1", "/en/deu", "/en/g/g7", "/en/groups"]) {
       let status = 0;
       expect(await rowsRead(async () => (status = (await site(path)).status)), path).toBe(0);
       expect(status, path).toBe(404);
@@ -202,7 +219,8 @@ describe("the lists are the API's filtered pages", () => {
         const sitePath = `/${lang}${path}`;
         const api = await apiPages(apiQuery(sitePath));
         const ours = await sitePages(sitePath);
-        expect(ours.map((p) => p.items), sitePath).toEqual(api.map((p) => p.items.map((a) => a.id)));
+        // Page 1's Latest leaves out its Top stories, as the app does (#89 review).
+        expect(ours.map((p) => p.items), sitePath).toEqual(api.map((p) => p.items.filter((a) => !p.top.some((t) => t.id === a.id)).map((a) => a.id)));
         expect(ours.map((p) => p.top), sitePath).toEqual(api.map((p) => p.top.map((a) => a.id)));
         if (api.length > 1) multiPage++;
       }
@@ -213,7 +231,8 @@ describe("the lists are the API's filtered pages", () => {
 
   it("show one country alone, and a group its members together (the EU institutions in the European Union, the G7 and the G20, not NATO)", async () => {
     const countries = async (path: string) => {
-      const ids = (await sitePages(path)).flatMap((p) => p.items);
+      // Top stories and Latest: France's one decision is a top story, not repeated under Latest.
+      const ids = (await sitePages(path)).flatMap((p) => [...p.top, ...p.items]);
       const all = ((await get("/articles?limit=50")).body as ApiList).items;
       return new Set(ids.map((id) => all.find((a) => a.id === id)!.country));
     };
@@ -233,7 +252,7 @@ describe("the menus", () => {
       expect(where.groups.map((g) => g.id)).toEqual(["eu", "g7", "g20", "nato"]);
       expect(where.countries.map((c) => c.code).sort()).toEqual(["DE", "FR", "GB", "TR", "US"]);
       const [all, groups, countries] = sections((await site(`/${lang}?topic=health`)).body, 0);
-      expect(all).toEqual([[`/${lang}?topic=health`, text(lang, "filterGlobalDetail"), true]]);
+      expect(all).toEqual([[`/${lang}?topic=health`, text(lang, "filterAllCountries"), true]]);
       expect(groups).toEqual(where.groups.map((g) => [`/${lang}/${g.id}?topic=health`, g.name, false]));
       expect(countries).toEqual(where.countries.map((c) => [`/${lang}/${c.code.toLowerCase()}?topic=health`, c.name, false]));
     }
@@ -282,17 +301,54 @@ describe("the menus", () => {
     expect(chips((await site("/en/de?topic=health")).body)).toEqual([["DE", "Country: Germany", true], ["icon", "Topic: Health", true]]);
     expect(chips((await site("/en/gb")).body)).toEqual([["GB", "Country: United Kingdom", true], ["All topics", "All topics", false]]);
     expect(chips((await site("/uk/g7")).body)).toEqual([["G7", "Країни: G7", true], ["Усі теми", "Усі теми", false]]);
-    expect(chips((await site("/uk/nato?topic=economy")).body)).toEqual([["NATO", "Країни: НАТО", true], ["icon", "Тема: Економіка", true]]);
+    expect(chips((await site("/uk/nato?topic=economy")).body)).toEqual([["НАТО", "Країни: НАТО", true], ["icon", "Тема: Економіка", true]]);
     expect(chips((await site("/de/eu")).body)).toEqual([["EU", "Länder: Europäische Union", true], ["Alle Themen", "Alle Themen", false]]);
+    // A group's short name is the language's (#89 review): the chip and its checked menu item agree.
+    expect(chips((await site("/uk/eu")).body)[0]).toEqual(["ЄС", "Країни: Європейський Союз", true]);
+    expect(chips((await site("/ru/eu")).body)[0]).toEqual(["ЕС", "Страны: Европейский союз", true]);
+    expect(chips((await site("/es/eu")).body)[0]).toEqual(["UE", "Países: Unión Europea", true]);
+    expect(chips((await site("/es/nato")).body)[0]).toEqual(["OTAN", "Países: OTAN", true]);
+    expect(chips((await site("/en/nato")).body)[0]).toEqual(["NATO", "Countries: NATO", true]);
+    for (const lang of SITE_LANGS) {
+      const { body } = await site(`/${lang}/nato`);
+      expect(menu(body, 0).find(([, , current]) => current)?.[1], lang).toBe(chips(body)[0][0]);
+    }
     expect(chips((await site("/es/g20?topic=health")).body)).toEqual([["G20", "Países: G20", true], ["icon", "Tema: Salud", true]]);
     expect(chips((await site("/ru/tr")).body)).toEqual([["TR", "Страна: Турция", true], ["Все темы", "Все темы", false]]);
   });
 
-  it("keep the chip grey when it is on: only its label and chevron turn red", () => {
+  it("keep the chip grey when it is on: only its label and chevron turn red, the app's chip and filter red", () => {
     expect(CSS).toContain(".chip.on{color:var(--on)}");
     expect(CSS).not.toMatch(/\.chip\.on\{[^}]*background/);
-    expect(CSS).toMatch(/--on:#c00e2b/);
-    expect(CSS).toMatch(/prefers-color-scheme:dark\)\{:root\{[^}]*--on:#ff5a6e/);
+    // The app's filterRed (feed_filters.dart) on iOS's tertiarySystemFill, as the app's chips (#89 review).
+    expect(CSS).toMatch(/:root\{[^}]*--fill:rgba\(118,118,128,\.12\);--on:#c41230/);
+    expect(CSS).toMatch(/prefers-color-scheme:dark\)\{:root\{[^}]*--fill:rgba\(118,118,128,\.24\);--on:#ff3b55/);
+    expect(CSS).toMatch(/\.chip\{[^}]*background:var\(--fill\)/);
+    expect(CSS).toContain(".menu .check{width:18px;height:18px;flex:none;color:var(--on)}");
+  });
+
+  it("open over the list under the chips, so neither chip moves (#89 review)", () => {
+    // Below 720px too: no rule gives an open menu's chip its own row.
+    expect(CSS).not.toMatch(/\.pick\[open\]\{[^}]*flex-basis/);
+    expect(CSS).toContain(".filters{position:relative;");
+    expect(CSS).toMatch(/\n\.menu\{position:absolute;z-index:2;left:0;right:0;top:100%;/);
+    expect(CSS).toMatch(/\n\.pick\[open\]>summary::before\{content:"";position:fixed;inset:0;z-index:1;/);
+    expect(CSS).toMatch(/@media \(min-width:720px\)\{[^\n]*\.pick\{position:relative\}\.menu\{right:auto;width:320px\}/);
+  });
+
+  it("Topics: each topic's icon before its name, the one its chip shows; All topics an empty slot so the names line up; Where has none", async () => {
+    for (const path of ["/en", "/uk/de?topic=health", "/en/nato"]) {
+      const { body } = await site(path);
+      const items = leads(body, 1);
+      expect(items[0], path).toEqual(["slot", text(path.startsWith("/uk") ? "uk" : "en", "filterAllTopics")]);
+      expect(items.length, path).toBeGreaterThan(1);
+      for (const [lead, name] of items.slice(1)) expect(TOPICS as readonly string[], `${path} ${name}`).toContain(lead);
+      expect(leads(body, 0).every(([lead]) => lead === ""), path).toBe(true);
+    }
+    // The chosen topic's icon in the menu is its chip's.
+    const { body } = await site("/en/de?topic=health");
+    expect(leads(body, 1).find(([, name]) => name === "Health")?.[0]).toBe("health");
+    expect(body).toContain(`<span class="label" aria-hidden="true"><svg class="glyph" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">${TOPIC_ICONS.health}</svg></span>`);
   });
 
   it("have an icon for every topic, drawn here and never loaded", () => {
@@ -344,18 +400,18 @@ describe("empty lists", () => {
   it("say so with the app's words and lead to all countries and all topics", async () => {
     const ua = (await site("/en/ua")).body;
     expect(ua).toContain(`<p class="meta">${text("en", "filterEmpty")}</p>`);
-    expect(ua).toContain(`<a class="more" href="/en">${text("en", "filterShowGlobal")}</a>`);
+    expect(ua).toContain(`<a class="more" href="/en">${text("en", "filterShowAllCountries")}</a>`);
     expect(ua).not.toContain(text("en", "filterShowAllTopics"));
     expect(ua).not.toContain('class="notice"');
 
     const both = (await site("/uk/de?topic=science")).body;
     expect(both).toContain(text("uk", "filterEmpty"));
-    expect(both).toContain(`<a class="more" href="/uk?topic=science">${text("uk", "filterShowGlobal")}</a>`);
+    expect(both).toContain(`<a class="more" href="/uk?topic=science">${text("uk", "filterShowAllCountries")}</a>`);
     expect(both).toContain(`<a class="more" href="/uk/de">${text("uk", "filterShowAllTopics")}</a>`);
 
     const topic = (await site("/es?topic=science")).body;
     expect(topic).toContain(`<a class="more" href="/es">${text("es", "filterShowAllTopics")}</a>`);
-    expect(topic).not.toContain(text("es", "filterShowGlobal"));
+    expect(topic).not.toContain(text("es", "filterShowAllCountries"));
   });
 
   it("a group with nothing in it is still a page and still offered (a fixed choice)", async () => {
@@ -363,7 +419,7 @@ describe("empty lists", () => {
     const nato = await site("/de/nato");
     expect(nato.status).toBe(200);
     expect(nato.body).toContain(text("de", "filterEmpty"));
-    expect(nato.body).toContain(`<a class="more" href="/de">${text("de", "filterShowGlobal")}</a>`);
+    expect(nato.body).toContain(`<a class="more" href="/de">${text("de", "filterShowAllCountries")}</a>`);
     expect(sections(nato.body, 0)[1].map(([href, , current]) => [href, current])).toEqual([
       ["/de/eu", false],
       ["/de/g7", false],
@@ -507,7 +563,7 @@ describe("every new page", () => {
 describe("texts", () => {
   it("every filter word is in every language, with its name where it has one", () => {
     for (const lang of SITE_LANGS as readonly SiteLang[]) {
-      for (const key of ["filterGlobalDetail", "filterAllTopics", "filterEmpty", "filterShowGlobal", "filterShowAllTopics", "filters"] as const) {
+      for (const key of ["filterAllCountries", "filterAllTopics", "filterGroupEUShort", "filterEmpty", "filterShowAllCountries", "filterShowAllTopics", "filters"] as const) {
         expect(text(lang, key), `${lang} ${key}`).toMatch(/\S/);
       }
       for (const key of ["filterCountryChip", "filterGroupChip", "filterTopicChip"] as const) {

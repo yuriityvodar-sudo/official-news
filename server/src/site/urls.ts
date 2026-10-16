@@ -1,7 +1,7 @@
 // The site's addresses (#88). Every absolute URL starts with SITE_ORIGIN,
 // never the request's host: Workers Cache keys a page by path and query only,
 // so a page rendered for one host is served on every other.
-import { EU, GROUPS, type GroupId, hasCountryName } from "../api/filters";
+import { GROUPS, type GroupId } from "../api/filters";
 import { TOPICS, type Topic } from "../summarizer/schema";
 import type { SiteLang } from "./texts";
 
@@ -38,14 +38,23 @@ export interface ListFilter {
 export const ALL: ListFilter = { place: null, topic: null };
 
 /**
- * Whether `/{lang}/{cc}` is a country's page: a code the API names in every
- * language (COUNTRIES in api/filters.ts: the source countries and the ones
- * planned next), so it needs no D1 read and the set of cached URLs is
- * bounded. A named country without sources is a page with the empty state.
- * Not the EU institutions (`EU`): they are in the European Union group, and
- * `/{lang}/eu` is that group's page.
+ * The countries with a page `/{lang}/{cc}`: the source countries of
+ * docs/sources.csv (site-filters.test.ts checks this list against it, so a
+ * new source country fails the tests until it is here). Written out, so no D1
+ * read decides a page and the set of cached URLs is bounded. Only source
+ * countries (#89 review): Russia is no longer one (#42), and Saudi Arabia, a
+ * G20 member, has a name in the API (COUNTRIES) but no source yet, so both
+ * are a 404 rather than a page that can only be empty. A source country
+ * with nothing in the feed's 7 days is a page with the empty state, as a
+ * group is. Not the EU institutions (`EU`): they are in the European Union
+ * group, and `/{lang}/eu` is that group's page.
  */
-export const isCountryPage = (code: string) => /^[A-Z]{2}$/.test(code) && code !== EU && hasCountryName(code);
+export const COUNTRY_PAGES: ReadonlySet<string> = new Set([
+  "AR", "AU", "BR", "CA", "CN", "CZ", "DE", "ES", "FR", "GB", "ID", "IN", "IT", "JP", "KR", "MX", "PL", "TR", "UA", "US", "ZA",
+]);
+
+/** Whether `/{lang}/{cc}` is a country's page (COUNTRY_PAGES), from the code in capitals. */
+export const isCountryPage = (code: string) => COUNTRY_PAGES.has(code);
 
 /** The group with this id (GROUPS: eu, g7, g20, nato), or null. */
 export const groupOf = (id: string): GroupId | null => GROUPS.find((g) => g.id === id)?.id ?? null;
