@@ -1,11 +1,22 @@
 // Item 5: turns docs/sources.csv into SQL that adds or updates rows in the
 // `sources` table. Status and check times are left alone: the fetcher and the
-// health checks own them. Run with `npm run sources:local` or `sources:remote`.
+// health checks own them. Each source's names in the app's other languages
+// (#76) come from docs/source-names.csv and go into its config as `names`.
+// Run with `npm run sources:local` or `sources:remote`.
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 /** Columns of docs/sources.csv, in order. `evidence` is for people only and is not loaded. */
 export const COLUMNS = ["id", "country", "name", "kind", "url", "language", "verified_by", "verified_at", "licence", "config", "evidence"];
+
+/** Columns of docs/source-names.csv, in order. */
+export const NAME_COLUMNS = ["id", "lang", "name"];
+
+/**
+ * The languages a source can be named in: the API's languages other than
+ * English (LANGS in server/src/translator/languages.ts; a check keeps them equal).
+ */
+export const NAME_LANGS = ["uk", "ru", "es", "de"];
 
 const KINDS = new Set(["rss", "page", "api"]);
 const VERIFIED_BY = new Set(["domain", "portal", "wikidata"]);
@@ -84,6 +95,7 @@ export function toSources(text, { reserved = new Set() } = {}) {
       try {
         const config = JSON.parse(s.config);
         if (typeof config !== "object" || config === null || Array.isArray(config)) fail("config must be a JSON object");
+        else if ("names" in config) fail("config.names comes from docs/source-names.csv; put the names there");
       } catch {
         fail("config is not valid JSON");
       }
@@ -92,6 +104,50 @@ export function toSources(text, { reserved = new Set() } = {}) {
   });
   if (problems.length) throw new Error(`docs/sources.csv has problems:\n${problems.join("\n")}`);
   return sources;
+}
+
+/**
+ * Reads docs/source-names.csv (#76): each source's name in the languages of
+ * NAME_LANGS, as a Map from source id to `{ uk: "…", ru: "…", … }`. Every id
+ * must be a source of `sources` (from toSources), and a source has at most one
+ * name per language. Throws one error listing all problems.
+ */
+export function toNames(text, sources) {
+  const [header, ...rows] = parseCsv(text);
+  if (header?.join(",") !== NAME_COLUMNS.join(",")) {
+    throw new Error(`source-names.csv header must be: ${NAME_COLUMNS.join(",")}`);
+  }
+  const ids = new Set(sources.map((s) => s.id));
+  const names = new Map();
+  const problems = [];
+  rows.forEach((cells, index) => {
+    const n = Object.fromEntries(NAME_COLUMNS.map((column, i) => [column, (cells[i] ?? "").trim()]));
+    const before = problems.length;
+    const fail = (message) => problems.push(`line ${index + 2} (${n.id || "no id"}, ${n.lang || "no lang"}): ${message}`);
+    if (cells.length !== NAME_COLUMNS.length) fail(`has ${cells.length} fields, expected ${NAME_COLUMNS.length}`);
+    if (!ids.has(n.id)) fail("id is not a source in docs/sources.csv");
+    if (!NAME_LANGS.includes(n.lang)) fail(`lang must be one of ${NAME_LANGS.join(", ")} (the English name is the one in docs/sources.csv)`);
+    if (!n.name) fail("name is empty");
+    if (names.get(n.id)?.[n.lang] !== undefined) fail("this source has a name in this language already");
+    if (problems.length === before) names.set(n.id, { ...names.get(n.id), [n.lang]: n.name });
+  });
+  if (problems.length) throw new Error(`docs/source-names.csv has problems:\n${problems.join("\n")}`);
+  return names;
+}
+
+/**
+ * The sources with their names (from toNames) in `config.names`, which the API
+ * reads for `?lang=` (docs/contract.md). A source without names keeps its
+ * config exactly as written in docs/sources.csv.
+ */
+export function withNames(sources, names) {
+  return sources.map((s) => {
+    const own = names.get(s.id);
+    if (!own) return s;
+    // In NAME_LANGS order, so the stored JSON does not depend on the order of the rows.
+    const ordered = Object.fromEntries(NAME_LANGS.filter((lang) => lang in own).map((lang) => [lang, own[lang]]));
+    return { ...s, config: JSON.stringify({ ...(s.config ? JSON.parse(s.config) : {}), names: ordered }) };
+  });
 }
 
 const sqlValue = (v) => (v === "" ? "NULL" : `'${v.replaceAll("'", "''")}'`);
@@ -122,12 +178,19 @@ export function toSql(sources) {
 }
 
 export const csvPath = fileURLToPath(new URL("../../docs/sources.csv", import.meta.url));
+export const namesPath = fileURLToPath(new URL("../../docs/source-names.csv", import.meta.url));
 export const seedPath = fileURLToPath(new URL("../migrations/0002_seed.sql", import.meta.url));
+
+/** The sources of docs/sources.csv with their names from docs/source-names.csv, checked: what the deploy loads. */
+export function readSources() {
+  const reserved = seedIds(readFileSync(seedPath, "utf8"));
+  const sources = toSources(readFileSync(csvPath, "utf8"), { reserved });
+  return withNames(sources, toNames(readFileSync(namesPath, "utf8"), sources));
+}
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   try {
-    const reserved = seedIds(readFileSync(seedPath, "utf8"));
-    process.stdout.write(toSql(toSources(readFileSync(csvPath, "utf8"), { reserved })));
+    process.stdout.write(toSql(readSources()));
   } catch (error) {
     console.error(error.message);
     process.exit(1);

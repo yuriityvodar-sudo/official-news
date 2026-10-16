@@ -15,4 +15,13 @@ export interface Env {
    * Without it German waits in the queue.
    */
   ZAI_API_KEY?: string;
+  /**
+   * The Google service account that sends push notifications (#62): the whole
+   * JSON key file of `fcm-sender` (client_email, private_key, project_id), whose
+   * only role is Firebase Cloud Messaging API Admin. A Worker secret, never in
+   * the repo (`npx wrangler secret put FCM_SERVICE_ACCOUNT`; locally in
+   * `.dev.vars` on one line). Without it no push is sent and each run logs
+   * `push skipped`.
+   */
+  FCM_SERVICE_ACCOUNT?: string;
 }
