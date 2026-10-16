@@ -28,7 +28,7 @@ export async function health(env: Env): Promise<Health> {
       `SELECT
          SUM(fetched_at >= strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-24 hours')) AS fetched,
          SUM(summarized_at IS NULL AND summary_attempts < ?1) AS waiting,
-         SUM(is_news = 1 AND published_at >= strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-7 days')) AS in_feed
+         SUM(is_news = 1 AND feed_seq IS NOT NULL AND published_at >= strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-7 days')) AS in_feed
        FROM articles`,
     ).bind(MAX_ATTEMPTS),
   ]);

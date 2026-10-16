@@ -5,7 +5,11 @@ import { CRONS, stepFor } from "../src/index";
 describe("cron triggers", () => {
   it("runs each step in its own trigger", () => {
     expect(stepFor(CRONS.summarizer)).toBe("summarizer");
+    expect(stepFor(CRONS.translator)).toBe("translator");
     expect(stepFor(CRONS.fetcher)).toBe("fetcher");
+    // The translator on even minutes, the summarizer on odd ones (#46, #45).
+    expect(CRONS.translator).toBe("0-58/2 * * * *");
+    expect(CRONS.summarizer).toBe("1-59/2 * * * *");
     expect(stepFor(CRONS.cleanup)).toBe("cleanup");
   });
 

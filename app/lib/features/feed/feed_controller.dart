@@ -19,7 +19,8 @@ class FeedController extends ChangeNotifier {
   FeedStore? _store;
 
   /// The language the feed is read in (#46), saved on the phone. Each language is
-  /// its own feed on the server: its own order, pages and feed positions.
+  /// its own feed on the server, with its own pages, in the English order and
+  /// feed positions (release together).
   FeedLanguage language = FeedLanguage.en;
 
   /// False until the saved language is read, so the header never shows English first.

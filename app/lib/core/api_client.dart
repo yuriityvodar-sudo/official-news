@@ -30,8 +30,9 @@ class ApiClient {
   final String _baseUrl;
 
   /// `GET /articles`: news from the last 7 days, newest first, 20 per page.
-  /// With `lang` (`uk`, `ru`) only the articles translated into it, in that
-  /// language's own order; `en` or none is the English feed, without the parameter.
+  /// With `lang` (`uk`, `ru`, `es`, `de`) only the articles translated into it, in
+  /// the English order (release together); `en` or none is the English feed,
+  /// without the parameter.
   /// An article that is not in `lang` is dropped here, whatever the server sends
   /// ([ArticlesPage.inLanguage]).
   Future<ArticlesPage> fetchArticles({

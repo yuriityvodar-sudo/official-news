@@ -52,7 +52,7 @@ The plan has three levels. Only the first is fixed; everything else is a startin
 
 | Level | What it covers | Can it change? |
 | --- | --- | --- |
-| Fixed | Official sources only, never media or trending lists; GitHub flow with every pull request approved by the other person; the shared definitions (article format, API, database); one AI call per article; the fetcher's small-runs rule | Only if we both agree, in a pull request |
+| Fixed | Official sources only, never media or trending lists; GitHub flow with every pull request approved by the other person; the shared definitions (article format, API, database); one AI call per article (for the summary; translations add one per language, agreed 15 Oct, #46); the fetcher's small-runs rule | Only if we both agree, in a pull request |
 | Must for the MVP | The "Done when" check of each of the 8 items: news comes in, gets summarized, and shows in the feed and the detail screen | The goal stays; how we reach it is up to the owner |
 | Suggestion | Details such as Top today, the 7-day window, the "new updates" pill, dimmed read items, filters, layout and wording, cache times and other numbers | Yes. The owner decides; the app still works without them |
 
@@ -107,6 +107,7 @@ The MVP is a Kickoff plus 8 items, 4 each. This is our suggested split: Yurii ow
 | 6 | Fetcher: small run every minute, 1 source at a time | Yurii | 4 | All sources checked at least hourly, new articles saved without duplicates |
 | 7 | AI summaries, noise filter and tags | Roman | 4 | New articles get all summary fields within an hour |
 | 8 | Source health and cleanup of old texts | Roman | 2 | Each source shows its status; expired texts are cleared |
+| 9 | Translations, after the MVP: Ukrainian, Russian, Spanish and German | Yurii | 3 | News in the feed gets its text in each language through a queue we can see and manage, and the API returns only translated articles with `lang` |
 
 **Order:** Kickoff first, then item 1 (it gives everyone real data from Cloudflare). Items 2, 5 and 7 start at the same time; 3 and 4 follow the design; 6 follows 5; 8 comes last.
 
@@ -244,6 +245,16 @@ Each item becomes one GitHub issue owned by one person. **Must** is what the ite
 - **Must:** each source gets a status (active, stale, moved, broken, blocked) after every check; a daily job clears `text` once `text_expires_at` has passed and keeps the summary.
 - **Suggested:** `GET /health` summary; a GitHub issue opened automatically for a broken source.
 - **Done when:** a broken test source shows "broken", and a row with a past expiry loses its text but keeps its summary.
+
+### 9. Translations, after the MVP (Yurii)
+
+Agreed on #46 (15 Oct): a second AI call per article, one per language; the summarizer (item 7) stays as it is. Consistency first, speed second (Yurii): a post shows in a language only when it is fully and correctly translated, and the feed is the same in every language (release together, Yurii 15 Oct). Spanish goes through Groq; German is configured on Z.ai but off, since Z.ai blocks requests from Cloudflare Workers (`docs/decisions.md`).
+
+- **Must:** `article_translations` (migration `0008`); a translator step on its own cron trigger (every even minute) that translates the headline, short summary and summary of news in the feed into Ukrainian, Russian, Spanish and German and stores which model wrote each one; the three fields checked and stored together, each in the language, with every number of the English in the translation; a re-summarized article translated again, the old translation served until then (or until the new English has used its 3 tries); providers per language in one constant (`TRANSLATORS`): Groq for Ukrainian (Qwen then GPT-OSS), Russian (GPT-OSS then Qwen) and Spanish (gpt-oss-20b then gpt-oss-120b), Z.ai for German (`glm-4.5-flash` then `glm-4.7-flash`, off for now), the Worker secrets `GROQ_API_KEY` and `ZAI_API_KEY`; `lang=uk|ru|es|de` on `GET /articles` (only translated articles, in the English order with the English `feedSeq`, cursors and `after=`; `translationsDelayed` while the language is paused) and `GET /articles/:id` (404 until released and translated).
+- **Must, release together (Yurii, 15 Oct; migration `0010`):** the same feed in every language. A summarized decision is released (gets `feed_seq`) only when every enabled, not paused language has published it or failed it 3 times, and then appears in English and every language at once; the summarizer gives no `feed_seq`. A post that failed 3 times is absent from that language only. A language whose provider is down for more than 2 hours is paused automatically, still probed once a run, unpaused on its first answer, and catches up at the English places. While the translator is not running (no run for 10 minutes, as for about an hour after its trigger is added), the summarizer's run releases each decision at once (migration `0011`). Top stories per language are the English ones translated into it.
+- **Must, the queue (Yurii: the centre of the design; migration `0009`, `docs/queue.md`):** an explicit state per article and language (`queued` → `translating` → `published`; `retrying` with `next_attempt_at` and a growing wait; `failed` after 3 unusable answers, with the reason; `updating` while a re-summarized article is redone, the old text visible; `skipped` when it left the feed), every change timestamped; nothing lost (every news article queued for every enabled language, stale claims back to `queued`, an outage never counts a try); a switch per language (enabled, paused by hand or automatically); `GET /queue` per language and the articles waiting for release; `server/scripts/queue.mjs` to list, requeue one item or a whole language, pause and resume, and enable a language with its 7-day backlog.
+- **Suggested:** the app's language setting: a small language icon next to the date at the top of the feed opens a native language menu (a local iOS Simulator run shown to Yurii before it is built); an editor pass that corrects grammar and wording before publishing (#54); Polish and Czech once a model writes them well enough; Workers AI as a provider if the free limits are not enough.
+- **Done when:** with the secrets set, new news articles get their text in each enabled language, `GET /articles?lang=uk` (or `ru`, `es`) lists the same articles in the same order as English, and `GET /queue` shows nothing waiting for long.
 
 ## How we work together
 

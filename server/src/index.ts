@@ -4,15 +4,21 @@ import { runFetcher } from "./fetcher";
 import { runCleanup } from "./health/cleanup";
 import { recordChecks } from "./health/status";
 import { runSummarizer } from "./summarizer";
+import { TRANSLATIONS_PER_RUN, releaseReady, runTranslator } from "./translator";
 
 /**
  * The cron triggers in wrangler.jsonc. Each trigger is its own run with its own
  * free-plan budget (at most 50 outside requests and 10 ms of CPU), so the AI
- * step never shares the fetcher's CPU (#41).
+ * steps never share the fetcher's CPU (#41). The summarizer runs every odd
+ * minute, the translator (#46) every even one. A newly added Cloudflare
+ * schedule can take about an hour to start firing (#50). Both end with the
+ * release (translator/release.ts), so a decision reaches the feed also while
+ * the translator's trigger is not firing.
  */
 export const CRONS = {
   fetcher: "* * * * *",
   summarizer: "1-59/2 * * * *",
+  translator: "0-58/2 * * * *",
   cleanup: "17 3 * * *",
 } as const;
 
@@ -30,7 +36,15 @@ export default {
   async scheduled(controller: ScheduledController, env: Env): Promise<void> {
     const step = stepFor(controller.cron);
     if (step === "summarizer") {
-      await runSummarizer(env, { maxArticles: 5 });
+      try {
+        await runSummarizer(env, { maxArticles: 5 });
+      } finally {
+        // Releases what is ready, and everything summarized while the translator is not running.
+        const released = await releaseReady(env, new Date());
+        if (released.length) console.log(JSON.stringify({ message: "summarizer release", released }));
+      }
+    } else if (step === "translator") {
+      await runTranslator(env, { maxTranslations: TRANSLATIONS_PER_RUN });
     } else if (step === "cleanup") {
       await runCleanup(env);
     } else {
