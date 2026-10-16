@@ -40,19 +40,22 @@ String? topicLabel(String id, AppLocalizations l10n) => switch (id) {
   _ => null,
 };
 
-/// What the Topics chip shows instead of the name once a topic is chosen
-/// (Yurii, 16 Oct): one glyph per topic, as in the chips prototype.
+/// What the Topics chip shows instead of the name once a topic is chosen, as
+/// in the chips prototype after Yurii's review (prototype/chips 3d88cf3,
+/// 16 Oct): one glyph per topic. The Topics menu shows each beside its name,
+/// so the reader learns them. None means something else in the app: no
+/// heart (reads as a favourite), no ticked box (reads as chosen), no weather.
 const topicIcons = <String, IconData>{
   'foreign-affairs': CupertinoIcons.globe,
   'economy': CupertinoIcons.chart_bar_alt_fill,
   'security-defence': CupertinoIcons.shield_fill,
-  'health': CupertinoIcons.heart_fill,
-  'climate': CupertinoIcons.cloud_sun_fill,
+  'health': CupertinoIcons.staroflife_fill,
+  'climate': CupertinoIcons.leaf_arrow_circlepath,
   'trade': CupertinoIcons.arrow_right_arrow_left,
   'technology': CupertinoIcons.desktopcomputer,
   'energy': CupertinoIcons.bolt_fill,
   'migration': CupertinoIcons.person_2_fill,
-  'elections': CupertinoIcons.checkmark_square_fill,
+  'elections': CupertinoIcons.doc_checkmark_fill,
   'human-rights': CupertinoIcons.hand_raised_fill,
   'science': CupertinoIcons.lab_flask_solid,
 };

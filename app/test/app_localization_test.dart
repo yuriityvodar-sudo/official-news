@@ -79,7 +79,7 @@ ApiClient _api({List<Uri>? log}) => ApiClient(
     if (request.url.path == '/countries') {
       return _ok({
         'groups': [
-          for (final id in groupShortNames.keys)
+          for (final id in groupIds)
             {'id': id, 'name': groupName(id, null, l10n), 'members': []},
         ],
         'countries': [
@@ -528,7 +528,8 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text(l10n.countryEU));
       await tester.pumpAndSettle();
-      expect(find.text('EU'), findsOneWidget);
+      // The EU's chip in the language: EU, ЄС, ЕС, UE.
+      expect(find.text(l10n.filterGroupEUShort), findsOneWidget);
       await tester.tap(find.text(l10n.filterAllTopics));
       await tester.pumpAndSettle();
       await tester.tap(find.text(_longTopic[lang.code]!));

@@ -136,29 +136,39 @@ class WhereMenu {
   );
 }
 
-/// What a chosen group's chip shows: its short name, in Latin letters in
-/// every language, as the chip of one country shows its ISO code. One map.
-const groupShortNames = {'eu': 'EU', 'g7': 'G7', 'g20': 'G20', 'nato': 'NATO'};
+/// The groups the app names itself (ARB files), by the server's ids. The
+/// server may list others; they show the server's name.
+const groupIds = ['eu', 'g7', 'g20', 'nato'];
 
-String groupShortName(String id) => groupShortNames[id] ?? id.toUpperCase();
+/// What a chosen group's chip shows: its short name in the app's language,
+/// as in the chips prototype after Yurii's review (16 Oct): the EU as the
+/// language abbreviates it (EU, ЄС, ЕС, UE: `filterGroupEUShort`), NATO as
+/// the menu names it (NATO, НАТО, OTAN: `groupNato`), G7 and G20 as written
+/// in every language. A group the app does not know: its id in capitals.
+String groupShortName(String id, AppLocalizations l10n) => switch (id) {
+  'eu' => l10n.filterGroupEUShort,
+  'nato' => l10n.groupNato,
+  _ => id.toUpperCase(),
+};
 
 /// Group [id]'s full name in the app's language, for the menu and VoiceOver:
 /// the app's own for the groups it knows, so a menu saved in another language
-/// is never shown in it; else the server's, from [menu]; else its short name.
+/// is never shown in it; else the server's, from [menu]; else its id in
+/// capitals.
 String groupName(String id, WhereMenu? menu, AppLocalizations l10n) {
   switch (id) {
     case 'eu':
       return l10n.countryEU;
     case 'g7':
     case 'g20':
-      return groupShortName(id);
+      return id.toUpperCase();
     case 'nato':
       return l10n.groupNato;
   }
   for (final g in menu?.groups ?? const <FeedGroup>[]) {
     if (g.id == id) return g.name;
   }
-  return groupShortName(id);
+  return id.toUpperCase();
 }
 
 /// Country [code]'s name in the app's language ([countryName]); for a code

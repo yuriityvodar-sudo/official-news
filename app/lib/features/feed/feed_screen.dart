@@ -409,8 +409,9 @@ class _FilteredEmpty extends StatelessWidget {
       onPressed: onPressed,
       child: Text(
         label,
+        // The filters' red: these buttons undo a filter.
         style: text.meta.copyWith(
-          color: AppColors.accent,
+          color: filterRed.resolveFrom(context),
           fontWeight: FontWeight.w600,
         ),
       ),

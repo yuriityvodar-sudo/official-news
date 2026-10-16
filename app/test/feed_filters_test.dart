@@ -391,6 +391,28 @@ List<String> _menu(WidgetTester tester) => [
     ((item.child as Semantics).child! as Text).data!,
 ];
 
+/// The icon before [title] in the open menu, or null.
+IconData? _menuIcon(WidgetTester tester, String title) {
+  final item = tester
+      .widgetList<CupertinoMenuItem>(find.byType(CupertinoMenuItem))
+      .singleWhere(
+        (i) => ((i.child as Semantics).child! as Text).data == title,
+      );
+  return (item.leading as Icon?)?.icon;
+}
+
+/// The colour of the open menu's checkmark, as ARGB.
+int _checkmark(WidgetTester tester) => tester
+    .widget<Icon>(find.byIcon(CupertinoIcons.checkmark_alt))
+    .color!
+    .toARGB32();
+
+/// The WCAG contrast of [fg] on [bg] (both opaque).
+double _contrast(Color fg, Color bg) {
+  final a = fg.computeLuminance(), b = bg.computeLuminance();
+  return (a > b ? a + 0.05 : b + 0.05) / (a > b ? b + 0.05 : a + 0.05);
+}
+
 /// The checked item of the open menu.
 String _checked(WidgetTester tester) => [
   for (final item in tester.widgetList<CupertinoMenuItem>(
@@ -400,7 +422,8 @@ String _checked(WidgetTester tester) => [
 ].single;
 
 const _black = 0xFF000000;
-const _lightRed = 0xFFD1203A;
+const _lightRed = 0xFFC41230;
+const _darkRed = 0xFFFF3B55;
 
 void main() {
   late List<(String, Map<String, Object>)> events;
@@ -581,7 +604,7 @@ void main() {
     expect(last.containsKey('country'), isFalse);
   });
 
-  testWidgets('in dark mode a chosen chip is the brand red, the rest white', (
+  testWidgets('in dark mode a chosen chip is the filter red, the rest white', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -602,9 +625,14 @@ void main() {
       ),
     );
     expect(_label(tester, _where), 'G20');
-    expect(_ink(tester, _where), 0xFFFA2D48);
-    expect(_chevron(tester, _topics), 0xFFFA2D48);
-    expect(filterActiveRed.darkColor.toARGB32(), 0xFFFA2D48);
+    expect(_ink(tester, _where), _darkRed);
+    expect(_chevron(tester, _topics), _darkRed);
+    expect(filterRed.darkColor.toARGB32(), _darkRed);
+    // The menu's checkmark is the same red.
+    await tester.tap(find.byKey(_topics));
+    await tester.pumpAndSettle();
+    expect(_checkmark(tester), _darkRed);
+    await _close(tester);
     await tester.pumpWidget(
       testApp(
         home: CupertinoTheme(
@@ -624,6 +652,24 @@ void main() {
     );
     expect(_ink(tester, _where), 0xFFFFFFFF);
     expect(_ink(tester, _topics), 0xFFFFFFFF);
+  });
+
+  test('the filter red is at least 4.5:1 on the grey chip, light and dark', () {
+    // The chip's grey over the feed's white or black page, as it is drawn.
+    Color chip(Color fill, Color page) => Color.alphaBlend(fill, page);
+    final light = chip(
+      CupertinoColors.tertiarySystemFill.color,
+      const Color(0xFFFFFFFF),
+    );
+    final dark = chip(
+      CupertinoColors.tertiarySystemFill.darkColor,
+      const Color(0xFF000000),
+    );
+    expect(filterRed.color.toARGB32(), _lightRed);
+    expect(_contrast(filterRed.color, light), greaterThanOrEqualTo(4.5));
+    expect(_contrast(filterRed.darkColor, dark), greaterThanOrEqualTo(4.5));
+    // The brand red is not, in dark mode: why the filters have their own.
+    expect(_contrast(const Color(0xFFFA2D48), dark), lessThan(4.5));
   });
 
   testWidgets(
@@ -647,6 +693,29 @@ void main() {
             .map((i) => i.subtitle),
         everyElement(isNull),
       );
+      // Each topic after the icon its chip shows, so the reader learns what
+      // the chip's icon means; All topics has none.
+      expect(_menuIcon(tester, 'All topics'), isNull);
+      for (final (name, id) in [
+        ('Economy', 'economy'),
+        ('Health', 'health'),
+        ('Trade', 'trade'),
+        ('Security and defence', 'security-defence'),
+      ]) {
+        expect(_menuIcon(tester, name), topicIcons[id], reason: name);
+      }
+      // The checkmark is the filters' red.
+      expect(_checked(tester), 'All topics');
+      expect(_checkmark(tester), _lightRed);
+
+      // Once chosen, the chip shows the same icon as the menu item.
+      await tester.tap(find.text('Health'));
+      await tester.pumpAndSettle();
+      expect(_icon(tester, _topics), CupertinoIcons.staroflife_fill);
+      await tester.tap(find.byKey(_topics));
+      await tester.pumpAndSettle();
+      expect(_menuIcon(tester, 'Health'), _icon(tester, _topics));
+      expect(_checked(tester), 'Health');
     },
   );
 
@@ -658,7 +727,7 @@ void main() {
     await _pick(tester, _topics, 'Health');
     expect(server.feedRequests.last.queryParameters['topic'], 'health');
     expect(_shown(tester), ['us1', 'de2', 'tr1']);
-    expect(_icon(tester, _topics), CupertinoIcons.heart_fill);
+    expect(_icon(tester, _topics), CupertinoIcons.staroflife_fill);
     expect(_label(tester, _topics), '');
     expect(
       find.descendant(of: find.byKey(_topics), matching: find.text('Health')),
@@ -667,7 +736,7 @@ void main() {
     final icon = tester.widget<Icon>(
       find.descendant(
         of: find.byKey(_topics),
-        matching: find.byIcon(CupertinoIcons.heart_fill),
+        matching: find.byIcon(CupertinoIcons.staroflife_fill),
       ),
     );
     expect(icon.color!.toARGB32(), _lightRed);
@@ -693,6 +762,36 @@ void main() {
     expect(topicIcons.keys.toSet(), topicIds.toSet());
     expect(topicIcons.values.toSet(), hasLength(topicIds.length));
     expect(topicIcons.values, isNot(contains(otherTopicIcon)));
+    // No icon that means something else in an app (Yurii's review, 16 Oct):
+    // a heart reads as a favourite, a ticked box as chosen.
+    for (final other in [
+      CupertinoIcons.heart_fill,
+      CupertinoIcons.checkmark_square_fill,
+      CupertinoIcons.cloud_sun_fill,
+    ]) {
+      expect(topicIcons.values, isNot(contains(other)));
+    }
+  });
+
+  test("a group's chip is its short name in the app's language", () {
+    const expected = {
+      FeedLanguage.en: ['EU', 'G7', 'G20', 'NATO'],
+      FeedLanguage.uk: ['ЄС', 'G7', 'G20', 'НАТО'],
+      FeedLanguage.ru: ['ЕС', 'G7', 'G20', 'НАТО'],
+      FeedLanguage.es: ['UE', 'G7', 'G20', 'OTAN'],
+      FeedLanguage.de: ['EU', 'G7', 'G20', 'NATO'],
+    };
+    expect(expected.keys.toSet(), FeedLanguage.values.toSet());
+    for (final MapEntry(key: lang, value: short) in expected.entries) {
+      final l10n = l10nFor(lang);
+      expect(
+        [for (final id in groupIds) groupShortName(id, l10n)],
+        short,
+        reason: lang.code,
+      );
+    }
+    // A group the app does not know: its id in capitals.
+    expect(groupShortName('brics', l10nFor()), 'BRICS');
   });
 
   testWidgets('the topics follow the Where choice', (tester) async {
@@ -912,11 +1011,15 @@ void main() {
     await _pick(tester, _where, 'United Kingdom');
     await _pick(tester, _where, 'All countries');
     expect(filterEvents(), [
-      {'where': 'group', 'value': 'g7', 'topic': 'all'},
-      {'where': 'group', 'value': 'g7', 'topic': 'health'},
-      {'where': 'country', 'value': 'GB', 'topic': 'health'},
-      {'where': 'all', 'value': 'all', 'topic': 'health'},
+      {'where': 'group', 'place': 'g7', 'topic': 'all'},
+      {'where': 'group', 'place': 'g7', 'topic': 'health'},
+      {'where': 'country', 'place': 'GB', 'topic': 'health'},
+      {'where': 'all', 'place': 'all', 'topic': 'health'},
     ]);
+    // Never `value`: Google Analytics keeps it for a number and drops a text.
+    for (final e in filterEvents()) {
+      expect(e.containsKey('value'), isFalse);
+    }
   });
 
   testWidgets('a chosen country the menu does not list stays in it, checked', (
@@ -930,6 +1033,15 @@ void main() {
     expect(_spoken(tester, _where), 'Country: Canada');
     expect(_shown(tester), isEmpty);
     expect(find.text('Show all countries'), findsOneWidget);
+    // The button that undoes a filter is the filters' red.
+    expect(
+      tester
+          .widget<Text>(find.text('Show all countries'))
+          .style!
+          .color!
+          .toARGB32(),
+      _lightRed,
+    );
     await tester.tap(find.byKey(_where));
     await tester.pumpAndSettle();
     expect(_menu(tester).sublist(5, 7), ['Canada', 'Germany']);
@@ -1177,11 +1289,23 @@ void main() {
       // The code stays the ISO code, in Latin letters.
       expect(_label(tester, _where), 'GB');
       expect(_spoken(tester, _where), 'Країна: Велика Британія');
+      // A group's chip is its short name in the language, as the menu
+      // writes it: НАТО, ЄС; G7 and G20 as everywhere.
       await _pick(tester, _where, 'НАТО');
-      expect(_label(tester, _where), 'NATO');
+      expect(_label(tester, _where), 'НАТО');
       expect(_spoken(tester, _where), 'Країни: НАТО');
+      await _pick(tester, _where, 'Європейський Союз');
+      expect(_label(tester, _where), 'ЄС');
+      expect(_spoken(tester, _where), 'Країни: Європейський Союз');
+      await _pick(tester, _where, 'G7');
+      expect(_label(tester, _where), 'G7');
       await _pick(tester, _topics, 'Економіка');
       expect(_spoken(tester, _topics), 'Тема: Економіка');
+      // The Topics menu in Ukrainian has the same icons.
+      await tester.tap(find.byKey(_topics));
+      await tester.pumpAndSettle();
+      expect(_menuIcon(tester, 'Економіка'), topicIcons['economy']);
+      expect(_menuIcon(tester, 'Усі теми'), isNull);
     });
 
     test('another language, offline: names in it, not the old one', () async {

@@ -80,13 +80,14 @@ class Analytics {
   }
 
   /// The reader changed a filter (#67, #68) on a chip: the filters as they
-  /// are now. `where` is `all`, `group` or `country`; `value` the group's id
+  /// are now. `where` is `all`, `group` or `country`; `place` the group's id
   /// (`g7`), the country's code (`GB`), or `all`; `topic` the topic's id, or
-  /// `all`.
+  /// `all`. Not `value`: Google Analytics keeps that name for an event's
+  /// number, and drops a text in it (`firebase_error` 18).
   Future<void> filterChanged({required FeedWhere where, String? topic}) =>
       _event('filter_changed', {
         'where': where.kind.name,
-        'value': where.id ?? 'all',
+        'place': where.id ?? 'all',
         'topic': topic ?? 'all',
       });
 

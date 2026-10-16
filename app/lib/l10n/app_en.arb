@@ -105,12 +105,16 @@
   },
   "filterGroupChip": "Countries: {name}",
   "@filterGroupChip": {
-    "description": "What VoiceOver says for the Where chip while a group of countries is chosen: the chip shows its short name (EU, G7, G20, NATO). {name} is the group's name (European Union, G7, G20, NATO).",
+    "description": "What VoiceOver says for the Where chip while a group of countries is chosen: the chip shows its short name in this language (EU, G7, G20, NATO; ЄС, НАТО). {name} is the group's name (European Union, G7, G20, NATO).",
     "placeholders": {
       "name": {
         "type": "String"
       }
     }
+  },
+  "filterGroupEUShort": "EU",
+  "@filterGroupEUShort": {
+    "description": "The Where chip while the European Union group is chosen: the EU's usual abbreviation in this language (EU, ЄС, ЕС, UE), as in the chips prototype after review. NATO's chip is groupNato; G7 and G20 stay as they are."
   },
   "filterTopicChip": "Topic: {name}",
   "@filterTopicChip": {
@@ -254,7 +258,7 @@
   },
   "groupNato": "NATO",
   "@groupNato": {
-    "description": "A group of countries in the Where menu (#68): the North Atlantic Treaty Organization, as the language writes its short name. The European Union is countryEU; G7 and G20 are written so in every language."
+    "description": "A group of countries in the Where menu (#68): the North Atlantic Treaty Organization, as the language writes its short name; also its chip once chosen. The European Union is countryEU (its chip filterGroupEUShort); G7 and G20 are written so in every language."
   },
   "countryFR": "France",
   "@countryFR": {

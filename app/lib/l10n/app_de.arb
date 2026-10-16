@@ -22,6 +22,7 @@
   "filterAllTopics": "Alle Themen",
   "filterCountryChip": "Land: {name}",
   "filterGroupChip": "Länder: {name}",
+  "filterGroupEUShort": "EU",
   "filterTopicChip": "Thema: {name}",
   "filterEmpty": "In den letzten 7 Tagen gab es hier keine Entscheidungen.",
   "filterShowAllCountries": "Alle Länder anzeigen",
