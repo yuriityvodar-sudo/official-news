@@ -348,6 +348,25 @@ void main() {
       expect(find.text('Top stories'), findsNothing);
     });
 
+    testWidgets('choosing the language it already shows saves it', (
+      tester,
+    ) async {
+      final log = <Uri>[];
+      final feed = await _launch(
+        tester,
+        phone: const [Locale('uk', 'UA')],
+        log: log,
+      );
+      final asked = log.length;
+      await _chooseInSettings(tester, 'Українська', 'Мова');
+      // A choice made in Settings: the app no longer follows the phone.
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getString('feed.lang'), 'uk');
+      expect(feed.language, FeedLanguage.uk);
+      // The same feed, so nothing loads again.
+      expect(log, hasLength(asked));
+    });
+
     testWidgets('a phone in another language opens the app in English', (
       tester,
     ) async {
@@ -381,7 +400,7 @@ void main() {
       await tester.pageBack();
       await tester.pumpAndSettle();
       // The large title, and the small one the bar shows when scrolled.
-      expect(find.text('Налаштування'), findsWidgets);
+      expect(find.text('Параметри'), findsWidgets);
       for (final word in [
         'ЧИТАННЯ',
         'Мова',
@@ -411,7 +430,7 @@ void main() {
       expect(find.text('РІШЕННЯ УРЯДУ'), findsNWidgets(2));
       expect(find.text('Federal Government · Німеччина'), findsNWidgets(2));
       expect(find.text('5 хв тому'), findsNWidgets(2));
-      expect(find.bySemanticsLabel('Налаштування'), findsOneWidget);
+      expect(find.bySemanticsLabel('Параметри'), findsOneWidget);
 
       // An article opened now has "< Сьогодні" as its back button.
       await tester.tap(find.text('Закон uk'));

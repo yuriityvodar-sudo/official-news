@@ -10,12 +10,13 @@ import 'l10n/app_localizations.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // Not awaited: the feed shows at once; events before Firebase is up are not sent.
-  unawaited(startAnalytics());
   // The language is read before the first frame (#52), so no word shows in
   // another language first; the launch screen stays up meanwhile.
   final feed = FeedController();
   await feed.open();
+  // Not awaited: the feed shows at once; events before Firebase is up are not sent.
+  // Its language is the feed's, so a first launch reports the phone's.
+  unawaited(startAnalytics(language: feed.languageChanges));
   runApp(OfficialNewsApp(feed: feed));
 }
 

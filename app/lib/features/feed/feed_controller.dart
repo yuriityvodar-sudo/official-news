@@ -118,10 +118,12 @@ class FeedController extends ChangeNotifier {
 
   /// Reads the feed in [lang] from now on: the page saved for it at once, if any,
   /// then the fresh one. Anything still loading for the previous language is dropped.
+  /// Saved even when it is the language shown, the phone's on a first launch:
+  /// a choice made in Settings wins over the phone's language from then on (#52).
   Future<void> setLanguage(FeedLanguage lang) async {
+    unawaited(_store?.saveLanguage(lang));
     if (lang == language) return;
     _language.value = lang;
-    unawaited(_store?.saveLanguage(lang));
     final saved = _store?.lastPage(lang);
     _show(saved);
     newCount = 0;

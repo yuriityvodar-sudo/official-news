@@ -317,7 +317,9 @@ class _Picture extends StatelessWidget {
 }
 
 /// "Summary by AI · translated from German" ("Стислий виклад від ШІ · переклад
-/// з німецької").
+/// з німецької"): the note is there when the source is in another language than
+/// the article is read in, so a Russian source in the Russian feed has none and
+/// an English one there has "перевод с английского".
 class _AiLabel extends StatelessWidget {
   const _AiLabel(this.article);
 
@@ -327,10 +329,11 @@ class _AiLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     final text = NewsText.from(context);
     final l10n = AppLocalizations.of(context);
-    final language = article.originalLanguage;
-    final label = language == 'en'
+    final source = article.originalLanguage;
+    final reading = article.lang ?? 'en';
+    final label = source == reading
         ? l10n.summaryByAi
-        : l10n.summaryByAiTranslated(languageName(language, l10n));
+        : l10n.summaryByAiTranslated(languageName(source, l10n));
     return Row(
       children: [
         Icon(Icons.auto_awesome_outlined, size: 15, color: text.meta.color),

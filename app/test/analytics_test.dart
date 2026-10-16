@@ -154,6 +154,23 @@ void main() {
     expect(userProperties, {'feed_language': 'uk'});
   });
 
+  test(
+    'on a first launch, feed_language is the phone language the feed uses',
+    () async {
+      // Nothing saved: the app follows the phone (#52), and the property with it.
+      final feed = FeedController(
+        api: _api(),
+        phoneLanguages: () => const [Locale('uk', 'UA')],
+      );
+      await feed.open();
+      await useAnalytics(
+        Analytics(null, (name, value) async => userProperties[name] = value),
+        language: feed.languageChanges,
+      );
+      expect(userProperties, {'build': 'dev', 'feed_language': 'uk'});
+    },
+  );
+
   testWidgets('sends an opened official link and a share, with the article', (
     tester,
   ) async {

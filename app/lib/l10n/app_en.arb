@@ -267,11 +267,11 @@
 
   "summaryByAi": "Summary by AI",
   "@summaryByAi": {
-    "description": "Above an article's summary, for a source in English."
+    "description": "Above an article's summary, for a source in the language the article is read in."
   },
   "summaryByAiTranslated": "Summary by AI · translated from {language}",
   "@summaryByAiTranslated": {
-    "description": "Above an article's summary, for a source in another language.",
+    "description": "Above an article's summary, for a source in another language than the one the article is read in.",
     "placeholders": {
       "language": {
         "type": "String",

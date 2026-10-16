@@ -11,6 +11,7 @@ Article _article({
   String? summary =
       'The federal cabinet approved the draft budget for 2027.\n\nThe Bundestag now debates it.',
   String language = 'de',
+  String? lang,
   bool dateOnly = false,
   String? imageUrl,
   String originalUrl =
@@ -36,6 +37,7 @@ Article _article({
   'importance': 4,
   'imageUrl': imageUrl,
   'originalUrl': originalUrl,
+  'lang': lang,
 });
 
 Future<void> _pump(
@@ -98,6 +100,25 @@ void main() {
       expect(find.text('Summary by AI'), findsOneWidget);
     },
   );
+
+  // The note is about the text the reader sees: in the Russian feed, a Russian
+  // source has none, an English or German one says where it came from.
+  testWidgets('in a translated feed, the note compares the source with it', (
+    tester,
+  ) async {
+    for (final (source, label) in [
+      ('ru', 'Краткое изложение от ИИ'),
+      ('en', 'Краткое изложение от ИИ · перевод с английского'),
+      ('de', 'Краткое изложение от ИИ · перевод с немецкого'),
+    ]) {
+      await _pump(
+        tester,
+        _article(language: source, lang: 'ru'),
+        language: FeedLanguage.ru,
+      );
+      expect(find.text(label), findsOneWidget, reason: source);
+    }
+  });
 
   testWidgets('shows only the day when the source gave no time', (
     tester,
@@ -220,7 +241,7 @@ void main() {
     expect(find.text('РІШЕННЯ УРЯДУ'), findsOneWidget);
     expect(find.text('14 жовтня 2026\u202Fр. о 11:30'), findsOneWidget);
     expect(find.text('Зображення: bundesregierung.de'), findsOneWidget);
-    expect(find.bySemanticsLabel('Поділитися'), findsOneWidget);
+    expect(find.bySemanticsLabel('Поширити'), findsOneWidget);
     await tester.tap(find.byIcon(CupertinoIcons.share));
     expect(
       shared.single,
@@ -249,7 +270,7 @@ void main() {
   ) async {
     for (final (language, label) in [
       (FeedLanguage.ru, 'Краткое изложение от ИИ · перевод с немецкого'),
-      (FeedLanguage.es, 'Resumen de IA · traducido del alemán'),
+      (FeedLanguage.es, 'Resumido por IA · traducido del alemán'),
       (FeedLanguage.de, 'KI-Zusammenfassung · aus dem Deutschen übersetzt'),
     ]) {
       await _pump(tester, _article(), language: language);

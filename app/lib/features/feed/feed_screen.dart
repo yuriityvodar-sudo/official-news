@@ -129,11 +129,14 @@ class _FeedScreenState extends State<FeedScreen> {
   }
 
   /// A language picked in Settings: another language is another feed, from the
-  /// top, and the app's words change with it (#52).
+  /// top, and the app's words change with it (#52). The one already shown is
+  /// saved too, so the app stops following the phone, but is no new choice to
+  /// count or reload.
   Future<void> _chooseLanguage(FeedLanguage chosen) async {
-    if (chosen == _feed.language) return;
-    unawaited(analytics.languageChosen(chosen, from: _feed.language));
-    if (_scroll.hasClients) _scroll.jumpTo(0);
+    if (chosen != _feed.language) {
+      unawaited(analytics.languageChosen(chosen, from: _feed.language));
+      if (_scroll.hasClients) _scroll.jumpTo(0);
+    }
     await _feed.setLanguage(chosen);
   }
 
