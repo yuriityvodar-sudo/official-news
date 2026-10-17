@@ -2,7 +2,7 @@
 
 What exists right now, outside the code. Update this file whenever an account, service or resource is created or changed, in the same commit or pull request. Secrets never go here, only names and where they live.
 
-Last updated: 2026-10-16 (#62, push notifications: what is still to set up)
+Last updated: 2026-10-17 (#96, one signing certificate for TestFlight builds)
 
 ## Accounts and services
 
@@ -33,6 +33,7 @@ Last updated: 2026-10-16 (#62, push notifications: what is still to set up)
 | Bundle ID and package name | Created 2026-10-14 | Roman | `com.officialnews.app` on both platforms: the iOS App ID is registered on the RS Elite Pro team (explicit), and it is the Android `applicationId`. Permanent. Capabilities: Push Notifications from the app part of #62 (`app/ios/Runner/Runner.entitlements`); not enabled by hand: the TestFlight workflow's automatic signing (`-allowProvisioningUpdates`) is expected to add it to the App ID on its first build after that merge, not checked yet. If that build fails on the `aps-environment` entitlement, Yurii turns on Push Notifications for this identifier in the Apple Developer portal (Identifiers) and runs it again |
 | Firebase project and Google Analytics | Created 2026-10-16 | Yurii | Firebase project `official-news` (id `official-news-48e16`, Spark plan, free) in Yurii's Google account, linked to a new Google Analytics account "Official News" (location Kenya; Google data sharing settings off). iOS app `com.officialnews.app` (nickname "Official News iOS", App Store ID `6822820350`) registered in it. Used for Analytics (#60) and Cloud Messaging push (#62). Roman gets access in Firebase (Project settings, Users and permissions) and Analytics when he needs it |
 | GitHub secret `GOOGLE_SERVICE_INFO_PLIST` | Created 2026-10-16 | Yurii | Base64 of the iOS config file `GoogleService-Info.plist` from the Firebase project above, put there by Yurii (`base64 -i … \| gh secret set`). The TestFlight workflow reads its four values into `--dart-define`s; the file itself is never in the repo or the app bundle. Without it a build sends no analytics. A new config file (another Firebase app) replaces it the same way |
+| Apple Distribution certificate for CI, GitHub secrets `DIST_CERT_P12_BASE64` and `DIST_CERT_P12_PASSWORD` | Created 2026-10-17 | Yurii | An Apple Distribution certificate "RS Elite Pro s.r.o. (YSF2FQGT86)", created by Yurii in Xcode (Settings, Apple Accounts, RS Elite Pro, Manage Certificates) on 2026-10-17, valid until 2027-10-17. Exported from his login keychain as a .p12 with a password and put straight into the two GitHub Secrets (`base64 -i … \| gh secret set` for the file; the password through the GitHub web form); the file was deleted afterwards. `.github/workflows/testflight.yml` imports it into a keychain made for the run; the archive is built unsigned and the export signs it with this certificate, so a build no longer creates an Apple Development certificate of its own (builds 3 to 20 did, and the team hit Apple's limit of 10 on 16 Oct; Yurii revoked 9 "Created via API" ones, #96). The private key exists only in Yurii's login keychain and in the secret. Before 2027-10-17: create a new certificate the same way and replace both secrets |
 
 ## Developer machines
 
