@@ -9,9 +9,10 @@ name: TestFlight
 #   ASC_KEY_P8_BASE64  the .p8 key file, base64-encoded
 #   DIST_CERT_P12_BASE64     the Apple Distribution certificate with its private key (.p12), base64-encoded
 #   DIST_CERT_P12_PASSWORD   the password that .p12 was exported with
-# The certificate is imported into a keychain made for the run and the archive is
-# signed with it, so a run never creates an Apple Development certificate of its
-# own (every run did, until the team hit Apple's limit: #96).
+# The certificate is imported into a keychain made for the run; the archive is
+# built unsigned and the export signs it with that certificate, so a run never
+# creates an Apple Development certificate of its own (every run did, until the
+# team hit Apple's limit: #96).
 # The app must already exist in App Store Connect with the bundle ID set in
 # app/ios/Runner.xcodeproj. Builds use the live API at api.officialnews.workers.dev.
 
@@ -98,24 +99,24 @@ jobs:
         # the Firebase values when there are any.
         run: flutter build ios --release --no-codesign --build-number=${{ github.run_number }} --dart-define=API_URL=https://api.officialnews.workers.dev --dart-define=APP_BUILD=testflight $FIREBASE_DEFINES
 
-      - name: Archive, signed with the Distribution certificate
-        # Automatic signing picks the App Store profile for the bundle ID (made or
-        # fetched with the API key), and the identity is pinned to the imported
-        # certificate, so no Apple Development certificate is created.
+      - name: Archive without signing
+        # Nothing is signed here, so this step never talks to the Apple account
+        # and never creates a certificate. Xcode refuses a Distribution identity
+        # on the Swift packages under automatic signing, so the signing happens
+        # once, at the export below (the first try of #96 failed on that).
         working-directory: app/ios
         run: |
           xcodebuild archive \
             -workspace Runner.xcworkspace -scheme Runner -configuration Release \
             -archivePath "$RUNNER_TEMP/Runner.xcarchive" \
             -destination "generic/platform=iOS" \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath "$RUNNER_TEMP/asc_key.p8" \
-            -authenticationKeyID "${{ secrets.ASC_KEY_ID }}" \
-            -authenticationKeyIssuerID "${{ secrets.ASC_ISSUER_ID }}" \
-            DEVELOPMENT_TEAM="${{ secrets.APPLE_TEAM_ID }}" CODE_SIGN_STYLE=Automatic \
-            CODE_SIGN_IDENTITY="Apple Distribution"
+            DEVELOPMENT_TEAM="${{ secrets.APPLE_TEAM_ID }}" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
 
-      - name: Upload to TestFlight
+      - name: Sign with the Distribution certificate and upload to TestFlight
+        # Automatic signing at export: the App Store profile for the bundle ID is
+        # made or fetched with the API key, and the only Distribution identity in
+        # the keychain is the imported one.
         working-directory: app/ios
         run: |
           cat > "$RUNNER_TEMP/ExportOptions.plist" <<EOF
