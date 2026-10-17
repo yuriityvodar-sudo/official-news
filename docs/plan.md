@@ -303,7 +303,8 @@ When the team grows, or we need a staging version and versioned store releases, 
 - One repo for the whole project: `/app` (Flutter) and `/server` (Cloudflare Worker)
 - `main` is protected: no direct pushes, every pull request approved by the other person, small fixes included. The one exception is the first commit (README, CLAUDE.md, .gitignore, empty Flutter and Worker projects), pushed during Kickoff; protection is switched on right after, with no bypass for anyone
 - One branch per issue: `feature/<issue#>-short-name` or `fix/<issue#>-short-name`
-- Small pull requests, reviewed within a day: the reviewer's Claude Code leaves review comments on GitHub, the author's Claude Code works through them and flags anything that needs a decision, and the reviewer approves
+- Small pull requests, reviewed within a day: the reviewer's Claude Code leaves review comments on GitHub, the author's Claude Code works through them and flags anything that needs a decision, and the reviewer approves. Small means under about 500 changed lines of code (tests and docs aside); bigger work is split by screen or by step, each with a visible result
+- Flow control (17 Oct): at most three open pull requests per person, so a review never waits behind six others; past that, the next piece waits as research, docs or a prototype until one merges. Merges go in batches when both are online, in an agreed order: merge one, update the next with `main`, re-approve, merge. The "branch must be up to date" rule stays; its cost only bites when many pull requests are open
 - GitHub Actions builds and tests every pull request; a green check is required to merge, and branches must be up to date with \`main\`, so CI tests each change against the latest code
 
 **Planning**

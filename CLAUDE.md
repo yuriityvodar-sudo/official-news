@@ -14,7 +14,9 @@ Two people build this app, Yurii and Roman, each with their own Claude Code. The
 
 - `main` always works. No direct pushes; every change goes through a pull request approved by the other person.
 - One branch per issue: `feature/<issue#>-short-name` or `fix/<issue#>-short-name`.
-- Small pull requests, each ending with a visible result. Reviewed within a day.
+- Small pull requests, each ending with a visible result: under about 500 changed lines of code (tests and docs aside); bigger work is split by screen or by step. Reviewed within a day; reviewing is planned work, not an interruption.
+- At most three open pull requests per person. Past that, the next piece waits (research, docs, a prototype) until one merges.
+- Merges happen in batches when both are online: agree the order, merge one, update the next, re-approve, merge. Re-approvals after a plain merge of `main` are quick when they happen together, and nobody re-reviews the same change three times.
 - The reviewer's Claude Code leaves review comments on GitHub; the author's Claude Code works through them and flags anything that needs a human decision; the reviewer approves.
 - CI checks run on every pull request. TestFlight builds are on demand only (manual GitHub Actions run).
 - One person per issue at a time: assign yourself before starting. Never push to someone else's branch; comment on their pull request instead.
