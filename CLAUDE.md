@@ -18,6 +18,7 @@ Two people build this app, Yurii and Roman, each with their own Claude Code. The
 - The reviewer's Claude Code leaves review comments on GitHub; the author's Claude Code works through them and flags anything that needs a human decision; the reviewer approves.
 - CI checks run on every pull request. TestFlight builds are on demand only (manual GitHub Actions run).
 - One person per issue at a time: assign yourself before starting. Never push to someone else's branch; comment on their pull request instead.
+- **Messages between us are issues labelled `message`, assigned to the person they are for.** A comment on a pull request can be missed; a message issue cannot. At the start of every session, before any other work, each Claude Code runs `gh issue list --label message --assignee <its human's GitHub login> --state open`, shows each open message to its human word for word (quotes included), and asks for an answer. The human, or their Claude on their word, comments "Acknowledged (name, date)" and closes the issue. A message counts as delivered only once it is acknowledged; the sender's Claude checks for that.
 
 ## Who builds what
 
@@ -52,7 +53,7 @@ After the MVP, towards the App Store release (call, 16 Oct; each is an issue ass
 
 - Official sources only: verified government and international-body websites, never media, aggregators or trending lists.
 - The shared definitions in `docs/plan.md` (repo layout, article format, API, database). From the Kickoff they live in `docs/contract.md`.
-- One AI call per article, run once on the server.
+- One AI call per article for its summary, run once on the server and stored (an unusable answer is asked again, at most 3 tries in all); translations add one call per language (#46).
 - The fetcher works in small runs (every minute, 1 source) to stay within Cloudflare's free limits.
 - Never bypass CAPTCHAs or bot checks on source websites; respect `robots.txt`.
 
