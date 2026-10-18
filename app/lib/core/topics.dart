@@ -20,6 +20,8 @@ const topics = <Topic>[
   Topic('elections', 'Elections'),
   Topic('human-rights', 'Human rights'),
   Topic('science', 'Science'),
+  Topic('education', 'Education'),
+  Topic('justice', 'Justice'),
 ];
 
 String topicLabel(String id) =>
