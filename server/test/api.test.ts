@@ -81,7 +81,7 @@ describe("GET /articles", () => {
     expect(page.top).toEqual([]);
     expect(Object.keys(page.items[0]).sort()).toEqual(
       [
-        "addedAt", "country", "dateOnly", "decisionType", "feedSeq", "headline", "id", "imageUrl", "importance",
+        "addedAt", "country", "dateOnly", "decisionType", "feedSeq", "headline", "id", "imageUrl", "impact", "importance",
         "originalLanguage", "originalTitle", "originalUrl", "publishedAt", "shortSummary",
         "source", "summary", "tags", "topics",
       ].sort(),
