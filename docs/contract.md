@@ -53,7 +53,7 @@ A fixed list. The AI gives each news article one of them; the app shows its labe
 
 A fixed list. The AI gives each article 1 to 3 of them; topic features (onboarding, a topic feed) come after the MVP.
 
-`foreign-affairs`, `economy`, `security-defence`, `health`, `climate`, `trade`, `technology`, `energy`, `migration`, `elections`, `human-rights`, `science`
+`foreign-affairs`, `economy`, `security-defence`, `health`, `climate`, `trade`, `technology`, `energy`, `migration`, `elections`, `human-rights`, `science`, `education`, `justice`
 
 ## Push notifications in the app
 

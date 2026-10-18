@@ -45,6 +45,7 @@ describe("checkSummary", () => {
     ok("1천제곱미터", "1,000 square metres");
     ok("ciclo escolar 2026-2027", "the 2026-27 school year");
     ok("5·18민주화운동 관련자 보상 등에 관한 법률", "the law on the victims of the 5.18 democratization movement");
+    ok("「5ㆍ18민주화운동 관련자 보상 등에 관한 법률」", "the 5.18 Democratization Movement");
   });
 
   it("still finds a number made from parts of another one", () => {
@@ -67,6 +68,32 @@ describe("checkSummary", () => {
       "O projeto obriga os municípios a comprar ao menos metade dos alimentos de produtores locais.";
     expect(checkSummary(summary(german), german, 2026).notEnglish).toBe(true);
     expect(checkSummary(summary(portuguese), portuguese, 2026).notEnglish).toBe(true);
+  });
+
+  it("accepts an English summary that is mostly a list of names", () => {
+    const names = (headline: string, shortSummary: string, text: string) =>
+      checkSummary({ ...summary(text), headline, shortSummary }, "", 2026).notEnglish;
+    expect(
+      names(
+        "Lee Jae-myung names eight vice ministers",
+        "Kim Min-seok, Park Ji-won, Choi Sung-hoon, Jung Eun-kyung, Kang Hye-jin, Cho Yong-ho, Han Seung-woo and Yoo Jae-hoon become vice ministers.",
+        "President Lee Jae-myung appointed eight vice ministers: Kim Min-seok (Economy and Finance), Park Ji-won (Foreign Affairs), Choi Sung-hoon (National Defense), Jung Eun-kyung (Health and Welfare), Kang Hye-jin (Employment and Labor), Cho Yong-ho (Land, Infrastructure and Transport), Han Seung-woo (Science and ICT) and Yoo Jae-hoon (Trade, Industry and Energy).",
+      ),
+    ).toBe(false);
+    expect(
+      names(
+        "Cabinet names nine ambassadors, Suzuki Kenji to Brazil",
+        "Suzuki Kenji (Brazil), Tanaka Ichiro (Peru), Sato Yuko (Kenya), Ito Shota (Chile), Kato Ren (Ghana), Yoshida Sakura (Laos), Yamada Taro (Nepal), Sasaki Mei (Oman), Inoue Kaito (Fiji) become ambassadors.",
+        "The cabinet appointed nine ambassadors extraordinary and plenipotentiary: Suzuki Kenji (Brazil), Tanaka Ichiro (Peru), Sato Yuko (Kenya), Ito Shota (Chile), Kato Ren (Ghana), Yoshida Sakura (Laos), Yamada Taro (Nepal), Sasaki Mei (Oman) and Inoue Kaito (Fiji).",
+      ),
+    ).toBe(false);
+  });
+
+  it("finds a summary written in Japanese or Chinese, which has too few spaces to count its words", () => {
+    const ja = "内閣は令和8年10月14日の閣議で、特定船舶の保険契約の履行を確保するための法律案を決定した。法律案は国会に提出され、成立後は公布の日から施行される。";
+    const zh = "国务院常务会议审议通过《关于进一步优化营商环境的若干措施》，明确减少行政审批事项，降低企业制度性交易成本。措施自发布之日起施行。";
+    expect(checkSummary(summary(ja), ja, 2026).notEnglish).toBe(true);
+    expect(checkSummary(summary(zh), zh, 2026).notEnglish).toBe(true);
   });
 
   it("accepts an English summary that names things in their own language, and a text too short to tell", () => {

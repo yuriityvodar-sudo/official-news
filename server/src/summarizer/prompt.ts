@@ -9,7 +9,7 @@ import { DECISION_TYPES, LIMITS, TOPICS, type Topic } from "./schema";
 export const TOPIC_ANGLES: Record<Topic, string> = {
   "foreign-affairs": "relations with other countries, treaties, embassies, visas and citizens abroad",
   economy: "taxes, prices, wages, public money, and costs or duties for companies",
-  "security-defence": "armed forces, police powers, conscription and public safety rules",
+  "security-defence": "armed forces, conscription, defence spending, and public safety and emergency rules",
   health: "patients, access to care, medicines, and rules for doctors and hospitals",
   climate: "emissions and environmental rules, and what companies and households must change",
   trade: "tariffs, import and export rules, trade sanctions and access to markets",
@@ -19,6 +19,8 @@ export const TOPIC_ANGLES: Record<Topic, string> = {
   elections: "voting rules, election dates, candidates and parties",
   "human-rights": "people's rights and protections, and the state's duties",
   science: "research money, programmes, and access for researchers and institutions",
+  education: "schools, universities, exams and fees, and rules for pupils, students and teachers",
+  justice: "courts, criminal and civil law, police, prisons, and the rights of people in proceedings",
 };
 
 export const SYSTEM_PROMPT = `You write for a news app that tells readers what governments officially decided and what it means for them, in plain English.
@@ -41,7 +43,7 @@ You receive one article from an official website. Return one JSON object with th
     .join("; ")}.
   - residents: one sentence up to ${LIMITS.impactLine} characters for people and businesses in the country or bloc that decided; null when it would only repeat general.
   - abroad: one sentence up to ${LIMITS.impactLine} characters for people and businesses outside it (travellers, exporters, citizens abroad, partner countries); null when the decision has no direct effect outside it.
-- topics: 1 to ${LIMITS.topics} of: ${TOPICS.join(", ")}. Choose by what the decision changes, not by who decided it or the words in its title: housing, benefits, pensions, budgets, banking and agriculture are economy; schools, universities and research are science; courts, policing and prisons are security-defence; social rights and equality are human-rights. Use technology only when the decision is about digital services, data, devices or telecoms.
+- topics: 1 to ${LIMITS.topics} of: ${TOPICS.join(", ")}. Choose by what the decision changes, not by who decided it or the words in its title: housing, benefits, pensions, budgets, banking and agriculture are economy; schools, universities and exams are education; research is science; courts, criminal law, policing and prisons are justice; armed forces and emergencies are security-defence; social rights and equality are human-rights. Use technology only when the decision is about digital services, data, devices or telecoms.
 - tags: up to ${LIMITS.tags} people, organisations, countries and places named in the article.
 - importance: 1 to 5. 5: a major decision for a whole country or several countries (a national budget, war or peace, a sweeping law). 4: a national decision with wide effect (a tax change, sanctions, a national programme). 3: a notable decision for one sector or region. 2: narrow, local or technical. 1: minor, a formal step.
 

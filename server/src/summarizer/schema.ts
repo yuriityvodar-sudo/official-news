@@ -26,6 +26,8 @@ export const TOPICS = [
   "elections",
   "human-rights",
   "science",
+  "education",
+  "justice",
 ] as const;
 
 export type DecisionType = (typeof DECISION_TYPES)[number];

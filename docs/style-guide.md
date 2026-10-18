@@ -2,7 +2,7 @@
 
 How the AI writes every article in the feed (item 7). The prompt in `server/src/summarizer/prompt.ts` follows this file; change both together, in the same pull request.
 
-One AI call per article, run once on the server. The call reads the official text and returns all the fields below in English.
+One AI call per article for its summary, run once on the server and stored (an unusable answer is asked again, at most 3 tries in all); translations add one call per language (#46). The call reads the official text and returns all the fields below in English.
 
 ## The rules
 
@@ -24,7 +24,7 @@ One AI call per article, run once on the server. The call reads the official tex
 | `impact` | What the decision means in practice (#63), shown as an AI analysis: `general` (any reader, up to 250 characters), `byTopic` (one line per topic of the article from that topic's angle, below), `residents` (people in the country or bloc that decided), `abroad` (people outside it). Only direct consequences of a stated term (an amount, a date, a group, a requirement); no predictions about prices, markets or politics. `null` where nothing follows directly, and all `null` when `isNews` is `false` | Each line up to 200 characters |
 | `isNews` | `true` only for an official decision (see below) | |
 | `decisionType` | One of the types below; `null` when `isNews` is `false` | |
-| `topics` | 1 to 3 from: `foreign-affairs`, `economy`, `security-defence`, `health`, `climate`, `trade`, `technology`, `energy`, `migration`, `elections`, `human-rights`, `science` | |
+| `topics` | 1 to 3 from: `foreign-affairs`, `economy`, `security-defence`, `health`, `climate`, `trade`, `technology`, `energy`, `migration`, `elections`, `human-rights`, `science`, `education`, `justice`. Chosen by what the decision changes, not by who decided it: housing, benefits, pensions, budgets, banking and agriculture are `economy`; schools, universities and exams are `education`; research is `science`; courts, criminal law, policing and prisons are `justice`; armed forces and emergencies are `security-defence`; social rights and equality are `human-rights`; `technology` only for digital services, data, devices or telecoms | |
 | `tags` | People, organisations, countries and places named in the article | Up to 8 |
 | `importance` | 1 to 5 (see below) | |
 
@@ -51,7 +51,7 @@ Official decisions only, as agreed in `docs/decisions.md`. `isNews` is `true` fo
 | --- | --- |
 | `foreign-affairs` | Relations with other countries, treaties, embassies, visas and citizens abroad |
 | `economy` | Taxes, prices, wages, public money, and costs or duties for companies |
-| `security-defence` | Armed forces, police powers, conscription and public safety rules |
+| `security-defence` | Armed forces, conscription, defence spending, and public safety and emergency rules |
 | `health` | Patients, access to care, medicines, and rules for doctors and hospitals |
 | `climate` | Emissions and environmental rules, and what companies and households must change |
 | `trade` | Tariffs, import and export rules, trade sanctions and access to markets |
@@ -61,6 +61,8 @@ Official decisions only, as agreed in `docs/decisions.md`. `isNews` is `true` fo
 | `elections` | Voting rules, election dates, candidates and parties |
 | `human-rights` | People's rights and protections, and the state's duties |
 | `science` | Research money, programmes, and access for researchers and institutions |
+| `education` | Schools, universities, exams and fees, and rules for pupils, students and teachers |
+| `justice` | Courts, criminal and civil law, police, prisons, and the rights of people in proceedings |
 
 ## Importance
 
