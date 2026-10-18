@@ -26,10 +26,27 @@ export const TOPICS = [
   "elections",
   "human-rights",
   "science",
+  "education",
+  "justice",
 ] as const;
 
 export type DecisionType = (typeof DECISION_TYPES)[number];
 export type Topic = (typeof TOPICS)[number];
+
+/**
+ * What a decision means in practice (#63): direct consequences of its stated
+ * terms, an AI analysis the app labels as such. Every part may be missing.
+ */
+export interface Impact {
+  /** For any reader: who must or may do what, pays or gets what, from when. */
+  general: string | null;
+  /** One line per topic of the article, from that topic's angle (docs/style-guide.md). */
+  byTopic: { topic: Topic; text: string }[];
+  /** For people and businesses in the country or bloc that decided. */
+  residents: string | null;
+  /** For people and businesses outside it. */
+  abroad: string | null;
+}
 
 export interface Summary {
   isNews: boolean;
@@ -40,6 +57,8 @@ export interface Summary {
   topics: Topic[];
   tags: string[];
   importance: number;
+  /** null when the article is not news, or nothing follows directly from it. */
+  impact: Impact | null;
 }
 
 export const LIMITS = {
@@ -49,13 +68,15 @@ export const LIMITS = {
   tags: 8,
   tagLength: 60,
   topics: 3,
+  impactGeneral: 250,
+  impactLine: 200,
 };
 
 /** JSON schema sent with the request, so the model answers in this shape. */
 export const SUMMARY_SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["isNews", "decisionType", "headline", "shortSummary", "summary", "topics", "tags", "importance"],
+  required: ["isNews", "decisionType", "headline", "shortSummary", "summary", "topics", "tags", "importance", "impact"],
   properties: {
     isNews: { type: "boolean" },
     decisionType: { type: ["string", "null"], enum: [...DECISION_TYPES, null] },
@@ -65,6 +86,26 @@ export const SUMMARY_SCHEMA = {
     topics: { type: "array", items: { type: "string", enum: [...TOPICS] }, maxItems: LIMITS.topics },
     tags: { type: "array", items: { type: "string" }, maxItems: LIMITS.tags },
     importance: { type: "integer", minimum: 1, maximum: 5 },
+    impact: {
+      type: ["object", "null"],
+      additionalProperties: false,
+      required: ["general", "byTopic", "residents", "abroad"],
+      properties: {
+        general: { type: ["string", "null"] },
+        byTopic: {
+          type: "array",
+          maxItems: LIMITS.topics,
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: ["topic", "text"],
+            properties: { topic: { type: "string", enum: [...TOPICS] }, text: { type: "string" } },
+          },
+        },
+        residents: { type: ["string", "null"] },
+        abroad: { type: ["string", "null"] },
+      },
+    },
   },
 } as const;
 
@@ -127,6 +168,37 @@ export function toSummary(value: unknown): { summary: Summary } | { problems: st
       topics,
       tags,
       importance,
+      impact: isNews ? toImpact(v.impact, topics) : null,
     },
   };
+}
+
+/**
+ * The impact part, cleaned: lines only for the article's own topics, and no
+ * line that repeats another (the model tends to copy `general` into every
+ * part). null when nothing is left.
+ */
+function toImpact(value: unknown, topics: Topic[]): Impact | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const v = value as Record<string, unknown>;
+  const seen = new Set<string>();
+  const line = (x: unknown, max: number): string | null => {
+    const text = clean(x);
+    const key = text.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
+    if (!text || seen.has(key)) return null;
+    seen.add(key);
+    return clip(text, max);
+  };
+  const general = line(v.general, LIMITS.impactGeneral);
+  const byTopic: Impact["byTopic"] = [];
+  for (const entry of Array.isArray(v.byTopic) ? v.byTopic : []) {
+    const e = entry as Record<string, unknown> | null;
+    const topic = e?.topic as Topic;
+    if (!topics.includes(topic) || byTopic.some((b) => b.topic === topic)) continue;
+    const text = line(e?.text, LIMITS.impactLine);
+    if (text) byTopic.push({ topic, text });
+  }
+  const residents = line(v.residents, LIMITS.impactLine);
+  const abroad = line(v.abroad, LIMITS.impactLine);
+  return general || byTopic.length || residents || abroad ? { general, byTopic, residents, abroad } : null;
 }
