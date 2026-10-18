@@ -92,14 +92,14 @@ const _topicNames = {
     'health': 'Health',
     'trade': 'Trade',
     'security-defence': 'Security and defence',
-    'education': 'Education',
+    'housing': 'Housing',
   },
   'uk': {
     'economy': 'Економіка',
     'health': 'Здоров’я',
     'trade': 'Торгівля',
     'security-defence': 'Безпека та оборона',
-    'education': 'Освіта',
+    'housing': 'Житло',
   },
 };
 
@@ -1077,12 +1077,12 @@ void main() {
   testWidgets("a topic the app does not know yet: the server's name", (
     tester,
   ) async {
-    final server = _Server(extraTopics: const ['education']);
+    final server = _Server(extraTopics: const ['housing']);
     await _pump(tester, server);
-    await _pick(tester, _topics, 'Education');
-    expect(server.feedRequests.last.queryParameters['topic'], 'education');
+    await _pick(tester, _topics, 'Housing');
+    expect(server.feedRequests.last.queryParameters['topic'], 'housing');
     expect(_icon(tester, _topics), otherTopicIcon);
-    expect(_spoken(tester, _topics), 'Topic: Education');
+    expect(_spoken(tester, _topics), 'Topic: Housing');
   });
 
   group('a server from before the groups', () {

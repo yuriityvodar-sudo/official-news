@@ -872,6 +872,20 @@ describe("GET /articles with lang", () => {
     expect((await get("/articles/english-only")).status).toBe(200);
   });
 
+  it("gives impact in English only: null in a language until the translator carries it (#63)", async () => {
+    const impact = { general: "Ministries plan their 2027 spending.", byTopic: [], residents: null, abroad: null };
+    await env.DB.prepare("UPDATE articles SET impact = ? WHERE id = 'translated'").bind(JSON.stringify(impact)).run();
+    /** The impact of the article "translated" at `path`, a feed or the article. */
+    const impactOf = async (path: string) => {
+      const body = (await get(path)).body as { id?: string; impact?: unknown; items?: { id: string; impact?: unknown }[] };
+      return (body.items?.find((a) => a.id === "translated") ?? body).impact;
+    };
+    expect(await impactOf("/articles/translated")).toEqual(impact);
+    expect(await impactOf("/articles")).toEqual(impact);
+    expect(await impactOf("/articles/translated?lang=uk")).toBeNull();
+    expect(await impactOf("/articles?lang=uk")).toBeNull();
+  });
+
   describe("source names (#76)", () => {
     const sourceOf = (article: unknown) => (article as { source: { id: string; name: string; url: string } }).source;
     /** The source of every article in a feed's items and top, and of one article. */
@@ -899,6 +913,13 @@ describe("GET /articles with lang", () => {
       expect(await sources("es")).toEqual([named("Gobierno Federal de Alemania"), named("Gobierno Federal de Alemania"), named("Gobierno Federal de Alemania")]);
       // No Russian name: the English one.
       expect(await sources("ru")).toEqual([named("Federal Government"), named("Federal Government"), named("Federal Government")]);
+    });
+
+    it("names the source in the reader's language with a country filter too (#68)", async () => {
+      const page = (await get("/articles?lang=uk&country=DE")).body as ArticlesPage;
+      expect(page.items.length).toBeGreaterThan(0);
+      expect(page.top.length).toBeGreaterThan(0);
+      expect(new Set([...page.items, ...page.top].map((a) => sourceOf(a).name))).toEqual(new Set(["Федеральний уряд Німеччини"]));
     });
 
     it("leaves English as it was, with or without lang=en", async () => {

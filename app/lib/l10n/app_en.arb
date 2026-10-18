@@ -219,6 +219,14 @@
   "@topicScience": {
     "description": "A topic from the fixed list (science), on the Topics chip and in its menu (#67)."
   },
+  "topicEducation": "Education",
+  "@topicEducation": {
+    "description": "A topic from the fixed list (education), on the Topics chip and in its menu (#67)."
+  },
+  "topicJustice": "Justice",
+  "@topicJustice": {
+    "description": "A topic from the fixed list (justice), on the Topics chip and in its menu (#67)."
+  },
 
   "countryAR": "Argentina",
   "@countryAR": {

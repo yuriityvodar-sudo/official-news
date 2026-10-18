@@ -20,6 +20,8 @@ const topicIds = [
   'elections',
   'human-rights',
   'science',
+  'education',
+  'justice',
 ];
 
 /// Topic [id]'s name in the app's language (lib/l10n/app_*.arb, the same names
@@ -37,6 +39,8 @@ String? topicLabel(String id, AppLocalizations l10n) => switch (id) {
   'elections' => l10n.topicElections,
   'human-rights' => l10n.topicHumanRights,
   'science' => l10n.topicScience,
+  'education' => l10n.topicEducation,
+  'justice' => l10n.topicJustice,
   _ => null,
 };
 
@@ -58,6 +62,8 @@ const topicIcons = <String, IconData>{
   'elections': CupertinoIcons.doc_checkmark_fill,
   'human-rights': CupertinoIcons.hand_raised_fill,
   'science': CupertinoIcons.lab_flask_solid,
+  'education': CupertinoIcons.book_fill,
+  'justice': CupertinoIcons.hammer_fill,
 };
 
 /// The chip's glyph for a topic the app has no icon for yet (one the server

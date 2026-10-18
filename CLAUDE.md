@@ -14,10 +14,13 @@ Two people build this app, Yurii and Roman, each with their own Claude Code. The
 
 - `main` always works. No direct pushes; every change goes through a pull request approved by the other person.
 - One branch per issue: `feature/<issue#>-short-name` or `fix/<issue#>-short-name`.
-- Small pull requests, each ending with a visible result. Reviewed within a day.
+- Small pull requests, each ending with a visible result: under about 500 changed lines of code (tests and docs aside); bigger work is split by screen or by step. Reviewed within a day; reviewing is planned work, not an interruption.
+- At most three open pull requests per person. Past that, the next piece waits (research, docs, a prototype) until one merges.
+- Merges happen in batches when both are online: agree the order, merge one, update the next, re-approve, merge. Re-approvals after a plain merge of `main` are quick when they happen together, and nobody re-reviews the same change three times.
 - The reviewer's Claude Code leaves review comments on GitHub; the author's Claude Code works through them and flags anything that needs a human decision; the reviewer approves.
 - CI checks run on every pull request. TestFlight builds are on demand only (manual GitHub Actions run).
 - One person per issue at a time: assign yourself before starting. Never push to someone else's branch; comment on their pull request instead.
+- **Messages between us are issues labelled `message`, assigned to the person they are for.** A comment on a pull request can be missed; a message issue cannot. At the start of every session, before any other work, each Claude Code runs `gh issue list --label message --assignee <its human's GitHub login> --state open`, shows each open message to its human word for word (quotes included), and asks for an answer. The human, or their Claude on their word, comments "Acknowledged (name, date)" and closes the issue. A message counts as delivered only once it is acknowledged; the sender's Claude checks for that.
 
 ## Who builds what
 
@@ -46,13 +49,13 @@ After the MVP, towards the App Store release (call, 16 Oct; each is an issue ass
 | #65 Domain and app name | Yurii |
 | #66 Feed redesign (cards, font, UI) | Yurii |
 | #60 Analytics, #62 Push notifications | Yurii |
-| #67 Categories, #68 Global / Local switch | To agree |
+| #67 Categories, #68 Where filter (all countries, groups, one country) | Yurii |
 
 ## Fixed principles (change only by agreement, in a pull request)
 
 - Official sources only: verified government and international-body websites, never media, aggregators or trending lists.
 - The shared definitions in `docs/plan.md` (repo layout, article format, API, database). From the Kickoff they live in `docs/contract.md`.
-- One AI call per article, run once on the server.
+- One AI call per article for its summary, run once on the server and stored (an unusable answer is asked again, at most 3 tries in all); translations add one call per language (#46).
 - The fetcher works in small runs (every minute, 1 source) to stay within Cloudflare's free limits.
 - Never bypass CAPTCHAs or bot checks on source websites; respect `robots.txt`.
 
