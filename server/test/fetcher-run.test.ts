@@ -159,6 +159,32 @@ describe("runFetcher", () => {
     expect(await articlesOf("xx-page")).toHaveLength(6);
   });
 
+  it("takes no picture from item pages when the source says so (pageImage: false), and opens no page only for one", async () => {
+    // The ILO's only picture is its emblem, which its terms forbid with adaptations.
+    await addSource("xx-emblem", "https://org.test/decisions", "page", { item: "li.d", summary: "p", date: { selector: "time", attr: "datetime" }, pageImage: false });
+    const items = [
+      `<li class="d"><a href="/d/teaser">Decision concerning A</a><p>Short intro.</p><time datetime="2026-10-14T09:00:00Z"></time></li>`,
+      `<li class="d"><a href="/d/full">Decision concerning B</a><p>${"The Governing Body decided to adopt the programme. ".repeat(25)}</p><time datetime="2026-10-14T08:00:00Z"></time></li>`,
+    ];
+    const page = `<html><head><meta property="og:image" content="/sites/default/files/emblem.png"><meta name="twitter:image" content="/sites/default/files/emblem.png"></head><body><main><p>${longText}</p></main></body></html>`;
+    const { fetch, requests } = fakeFetch({
+      "https://org.test/robots.txt": { status: 404, body: "" },
+      "https://org.test/decisions": { body: `<ul>${items.join("")}</ul>` },
+      "https://org.test/d/teaser": { body: page },
+      "https://org.test/d/full": { body: page },
+    });
+
+    const [check] = await runFetcher(env, { fetch, now: NOW });
+    expect(check).toMatchObject({ ok: true, found: 2, saved: 2, waiting: 0 });
+    const [teaser, full] = await articlesOf("xx-emblem");
+    // The teaser's page is read for its text, but its picture is left out.
+    expect(teaser).toMatchObject({ original_title: "Decision concerning A", image_url: null });
+    expect(teaser.text).toContain("cabinet meeting");
+    // A whole list text without a picture opens no page: there is nothing to take from it.
+    expect(full).toMatchObject({ original_title: "Decision concerning B", image_url: null });
+    expect(requests.some((r) => r.url.endsWith("/d/full"))).toBe(false);
+  });
+
   it("keeps each new stage of the same item when the source asks for it", async () => {
     await addSource("xx-bills", "https://parl.test/bills.xml", "rss", { newStageIsNewItem: true });
     const bill = (date: string) => rss([{ title: "C-37 Clean Water Act", link: "https://parl.test/bill/C-37", date }]);

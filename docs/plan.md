@@ -24,7 +24,7 @@ After Roman's review (issues #3 to #11), these replace anything older further do
 - **The MVP is the feed and the article detail screen,** the same for every user, with images on cards (the official page's preview image) and the ministry shown as publisher with an "Official source" mark. Screen: the feed and article in [docs/design/app.png](design/app.png).
 - **After the MVP (Phase 2 or later):** onboarding with topics and a topic-filtered "For you" feed; a full summary per topic, then topic analysis; choosing a country or a group of countries (the Where filter, #68); registration and Sign in with Apple; Saved (favourites); the Countries tab. Screens: [docs/design/onboarding.png](design/onboarding.png) and the rest of [docs/design/app.png](design/app.png).
 - **Sources publish official decisions only:** laws, amendments, proposals, government and ministry meeting agendas, minutes and meeting outcomes. Opinion pieces, interviews, commentary, statements and call readouts are hidden (the AI's `isNews` flag).
-- **The AI summary reads like news**, not two fixed blocks, facts from the article only. One AI call per article returns one news-style summary, the same for everyone, and tags the article with 1 to 3 topics from the fixed list, so the topic features have data when they come.
+- **The AI summary reads like news**, not two fixed blocks, facts from the article only. One AI call per article returns one news-style summary, the same for everyone, and tags the article with 1 to 3 topics from the fixed list, so the topic features have data when they come. Since #63 it also returns "what it means" (`impact`): for any reader, per topic of the article, for residents and for people abroad; the app personalizes by choosing the parts that fit the reader, never by writing a summary per reader (agreed, `docs/decisions.md`, 16 Oct).
 - **The app looks and feels like Apple News** on iOS and Android, light and dark: large bold titles, red accent, serif headlines, publisher line above each headline, big images, iOS navigation and gestures. Each headline has a red decision-type label (Law, Bill, Cabinet decision…). Screens: [docs/design/mvp.png](design/mvp.png).
 - **Countries:** G20 in the MVP, and from 16 Oct also Poland, Czechia, Spain and Ukraine, the countries of the translation languages (#72; brought forward from Phases 2 and 3). Labels for disputed territories wait until after the MVP.
 - **Secrets:** no shared password vault. A key never travels between us: whoever creates it puts it straight into its one home. Yurii creates the keys that live in GitHub Secrets, the App Store Connect API key included (replaces Bitwarden, 14 Oct).
@@ -52,7 +52,7 @@ The plan has three levels. Only the first is fixed; everything else is a startin
 
 | Level | What it covers | Can it change? |
 | --- | --- | --- |
-| Fixed | Official sources only, never media or trending lists; GitHub flow with every pull request approved by the other person; the shared definitions (article format, API, database); one AI call per article (for the summary; translations add one per language, agreed 15 Oct, #46); the fetcher's small-runs rule | Only if we both agree, in a pull request |
+| Fixed | Official sources only, never media or trending lists; GitHub flow with every pull request approved by the other person; the shared definitions (article format, API, database); one AI call per article for its summary, run once on the server and stored (an unusable answer is asked again, at most 3 tries in all); translations add one call per language (#46); the fetcher's small-runs rule | Only if we both agree, in a pull request |
 | Must for the MVP | The "Done when" check of each of the 8 items: news comes in, gets summarized, and shows in the feed and the detail screen | The goal stays; how we reach it is up to the owner |
 | Suggestion | Details such as Top today, the 7-day window, the "new updates" pill, dimmed read items, filters, layout and wording, cache times and other numbers | Yes. The owner decides; the app still works without them |
 
@@ -113,7 +113,7 @@ The MVP is a Kickoff plus 8 items, 4 each. This is our suggested split: Yurii ow
 
 | Issue | Item | Owner | Done when |
 | --- | --- | --- | --- |
-| #63 | Better AI headlines and summaries (the prompt), backward compatible | Roman | Headlines and summaries are specific and only from the source; same fields, translations keep working, Groq quota respected |
+| #63 | Better AI headlines and summaries (the prompt), backward compatible | Roman | Headlines and summaries are specific and only from the source; same fields plus a new `impact` field, "what it means" (English only for now), translations keep working, Groq quota respected |
 | #56 | Article text layout (justified text, smaller body font, paragraphs) | Roman | Before/after agreed in the issue, then built |
 | #64 | Settings screen from the top-right corner (language, notifications, privacy, terms, support, about, version); no login | Yurii (design and build) | Yurii approves it on the phone |
 | #65 | Domain (Cloudflare Registrar) and app name | Yurii | Name decided, domain bought |
@@ -238,7 +238,7 @@ Each item becomes one GitHub issue owned by one person. **Must** is what the ite
 
 ### 5. Source list (Yurii)
 
-- **Must:** `docs/sources.csv` with one source per G20 member (19 since 14 Oct: Saudi Arabia waits for consent), plus Poland, Czechia, Spain and Ukraine (5 sources since 16 Oct, #72), each with kind, URL, language, `verified_by` and licence, preferring pages that publish official decisions (laws, proposals, meeting agendas, minutes and outcomes), and each source's name in Ukrainian, Russian, Spanish and German in `docs/source-names.csv` (#76); loaded into `sources`.
+- **Must:** `docs/sources.csv` with one source per G20 member (19 since 14 Oct: Saudi Arabia waits for consent), plus Poland, Czechia, Spain and Ukraine (5 sources since 16 Oct, #72) and international organizations as sources of their own decisions (16 Oct: the European Central Bank, code `EU`; more international bodies follow: the ILO Governing Body once the app and website show a source's required notice on its articles, UN press and the African Union after the decision on #107), each with kind, URL, language, `verified_by` and licence, preferring pages that publish official decisions (laws, proposals, meeting agendas, minutes and outcomes), and each source's name in Ukrainian, Russian, Spanish and German in `docs/source-names.csv` (#76); loaded into `sources`.
 - **Suggested:** grow to about 85 Phase 1 sources once the fetcher is stable.
 - **Done when:** the verified sources are in D1 (19 since 14 Oct: Saudi Arabia waits for the gazette's written consent, see `docs/sources.md`).
 
@@ -303,7 +303,8 @@ When the team grows, or we need a staging version and versioned store releases, 
 - One repo for the whole project: `/app` (Flutter) and `/server` (Cloudflare Worker)
 - `main` is protected: no direct pushes, every pull request approved by the other person, small fixes included. The one exception is the first commit (README, CLAUDE.md, .gitignore, empty Flutter and Worker projects), pushed during Kickoff; protection is switched on right after, with no bypass for anyone
 - One branch per issue: `feature/<issue#>-short-name` or `fix/<issue#>-short-name`
-- Small pull requests, reviewed within a day: the reviewer's Claude Code leaves review comments on GitHub, the author's Claude Code works through them and flags anything that needs a decision, and the reviewer approves
+- Small pull requests, reviewed within a day: the reviewer's Claude Code leaves review comments on GitHub, the author's Claude Code works through them and flags anything that needs a decision, and the reviewer approves. Small means under about 500 changed lines of code (tests and docs aside); bigger work is split by screen or by step, each with a visible result
+- Flow control (17 Oct): at most three open pull requests per person, so a review never waits behind six others; past that, the next piece waits as research, docs or a prototype until one merges. Merges go in batches when both are online, in an agreed order: merge one, update the next with `main`, re-approve, merge. The "branch must be up to date" rule stays; its cost only bites when many pull requests are open
 - GitHub Actions builds and tests every pull request; a green check is required to merge, and branches must be up to date with \`main\`, so CI tests each change against the latest code
 
 **Planning**
@@ -448,7 +449,7 @@ The feed shows official news from the last 7 days, newest first, with a short "T
 
 ## AI summaries
 
-The summary is the product: one AI call per article, run once on the server and stored, never on the phone.
+The summary is the product: one AI call per article for its summary, run once on the server and stored (an unusable answer is asked again, at most 3 tries in all); translations add one call per language (#46). Never on the phone.
 
 **What each call returns**
 
@@ -620,7 +621,7 @@ We read the latest official news (4–11 Oct) from all Phase 2 sources and the P
 - [ ] Google Play: Yurii's account or Roman's (GitHub and Cloudflare by Yurii, App Store Connect and TestFlight by Roman: agreed on our call)
 - [ ] Confirm the split in the Work plan
 - [ ] Secrets: confirm the five rules. Nothing secret in the repo (secret scanning and push protection on); each secret has one home (CI keys in GitHub Secrets, runtime keys as Cloudflare Worker secrets, local keys in .dev.vars or .env); Cloudflare, GitHub and Apple are each person's own login, and Workers AI and D1 need no key; the two shared keys (Claude API if chosen, App Store Connect upload) go through a shared password-manager vault, never chat; every key has a spending limit and a leaked key is rotated at once
-- [x] AI model: Workers AI, `@cf/zai-org/glm-4.7-flash` (decided in item 7, 14 Oct; see `docs/decisions.md`)
+- [x] AI model: Workers AI, `@cf/google/gemma-4-26b-a4b-it` (item 7, 14 Oct; Gemma 4 since #63, 16 Oct; see `docs/decisions.md`)
 - [ ] Home countries in Phase 1: move Kenya, and Roman's country, up from Phase 2?
 - [ ] Labels for territories with disputed status (Taiwan, Palestine, Kosovo)
 - [ ] Later: app name

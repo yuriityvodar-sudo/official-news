@@ -264,3 +264,98 @@ describe("userMessage", () => {
     expect(message.trim().endsWith("</article>")).toBe(true);
   });
 });
+
+describe("what it means and the checks (#63)", () => {
+  const impact = {
+    general: "Ministries plan their spending for 2027 within the draft budget.",
+    byTopic: [
+      { topic: "economy", text: "Public spending for 2027 is set out in the draft." },
+      // Not one of the article's topics: dropped.
+      { topic: "health", text: "Hospitals learn their 2027 money." },
+    ],
+    // A copy of general: dropped.
+    residents: "Ministries plan their spending for 2027 within the draft budget.",
+    abroad: null,
+  };
+
+  it("stores what it means, only for the article's topics and without repeats, and the API returns it", async () => {
+    await insertUnsummarized("impact", now());
+    await runSummarizer(env, { maxArticles: 1 }, fakeModel(answer({ impact })).summarize);
+    await release();
+
+    expect(JSON.parse(String((await row("impact"))?.impact))).toEqual({
+      general: impact.general,
+      byTopic: [impact.byTopic[0]],
+      residents: null,
+      abroad: null,
+    });
+    const article = (await (await exports.default.fetch("https://api.test/articles/impact")).json()) as { impact: unknown };
+    expect(article.impact).toMatchObject({ general: impact.general });
+  });
+
+  it("stores no impact for an article that is not news", async () => {
+    await insertUnsummarized("statement", now());
+    await runSummarizer(env, { maxArticles: 1 }, fakeModel(answer({ isNews: false, decisionType: null, impact })).summarize);
+    expect((await row("statement"))?.impact).toBeNull();
+  });
+
+  it("never stores a number the article does not give", async () => {
+    await insertUnsummarized("invented", now(), "The government published a capacity determination.");
+    const { summarize } = fakeModel(answer({ headline: "South Africa adds 2,500MW of gas capacity" }));
+
+    const [result] = await runSummarizer(env, { maxArticles: 1 }, summarize);
+
+    expect(result).toMatchObject({ ok: false, error: "numbers not in the article: 2500" });
+    expect(await row("invented")).toMatchObject({ summarized_at: null, summary_attempts: 1 });
+  });
+
+  it("never stores a summary that is not in English", async () => {
+    await insertUnsummarized("german", now());
+    const german = answer({
+      headline: "Bundeskabinett beschließt den Haushaltsentwurf für 2027",
+      shortSummary: "Das Bundeskabinett hat den Entwurf des Bundeshaushalts für 2027 beschlossen.",
+      summary: "Das Bundeskabinett hat den Entwurf des Bundeshaushalts für 2027 beschlossen.\n\nDer Bundestag berät ihn nun.",
+    });
+
+    const [result] = await runSummarizer(env, { maxArticles: 1 }, fakeModel(german).summarize);
+
+    expect(result).toMatchObject({ ok: false, error: "the summary is not in English" });
+    expect(await row("german")).toMatchObject({ summarized_at: null, summary_attempts: 1 });
+  });
+
+  it("does not check an answer that is not news: readers never see it", async () => {
+    await insertUnsummarized("rates", now());
+    const { summarize, calls } = fakeModel(answer({ isNews: false, decisionType: null, shortSummary: "A routine notice of 99 exchange rates." }));
+
+    const [result] = await runSummarizer(env, { maxArticles: 1 }, summarize);
+
+    expect(result).toMatchObject({ ok: true, isNews: false });
+    expect(result).not.toHaveProperty("warning");
+    expect(calls).toHaveLength(1);
+  });
+
+  it("on the last try, drops what it means when only that part has a number the article does not give", async () => {
+    await insertUnsummarized("impact-number", now());
+    await env.DB.prepare("UPDATE articles SET summary_attempts = ? WHERE id = 'impact-number'").bind(MAX_ATTEMPTS - 1).run();
+    const withNumber = { ...impact, general: "Ministries get 2,000 more staff for 2027." };
+
+    const [result] = await runSummarizer(env, { maxArticles: 1 }, fakeModel(answer({ impact: withNumber })).summarize);
+
+    expect(result).toMatchObject({ ok: true, warning: "impact dropped: numbers not in the article: 2000" });
+    expect(await row("impact-number")).toMatchObject({ impact: null });
+    expect((await row("impact-number"))?.summarized_at).toBeTruthy();
+  });
+
+  it("tries again for a ruled-out word, and stores the last try with a warning", async () => {
+    await insertUnsummarized("aims", now());
+    await env.DB.prepare("UPDATE articles SET summary_attempts = ? WHERE id = 'aims'").bind(MAX_ATTEMPTS - 2).run();
+    const wordy = answer({ shortSummary: "The cabinet approved the draft, which aims to cut debt." });
+
+    const [first] = await runSummarizer(env, { maxArticles: 1 }, fakeModel(wordy).summarize);
+    expect(first).toMatchObject({ ok: false, error: "ruled-out words: aims to" });
+
+    const [last] = await runSummarizer(env, { maxArticles: 1 }, fakeModel(wordy).summarize);
+    expect(last).toMatchObject({ ok: true, warning: "stored on its last try with: aims to" });
+    expect((await row("aims"))?.summarized_at).toBeTruthy();
+  });
+});

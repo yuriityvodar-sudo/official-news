@@ -333,7 +333,7 @@ async function readItemPage(run: Run, item: FoundItem, config: SourceConfig): Pr
       config.textSelector,
       LIMITS.maxText,
     );
-    return withText(item, weigh(run, content.text), content.imageUrl);
+    return withText(item, weigh(run, content.text), config.pageImage === false ? null : content.imageUrl);
   } catch {
     return item;
   }
@@ -457,7 +457,7 @@ async function checkSource(run: Run, source: SourceRow): Promise<SourceCheck> {
       let read: FoundItem | null | undefined;
       if (config.fullText) {
         if (teaser) read = await readFullText(run, item, source.url, config);
-      } else if (config.itemPages !== false && (teaser || !item.imageUrl)) {
+      } else if (config.itemPages !== false && (teaser || (!item.imageUrl && config.pageImage !== false))) {
         read = await readItemPage(run, item, config);
       }
       if (read) item = read;
