@@ -183,7 +183,7 @@ The feed card reads `headline`, `shortSummary` and `imageUrl`; the detail screen
 - `GET /articles?limit=20&cursor=<c>` → `{ "items": [Article], "nextCursor": "…" | null, "top": [Article] }`: news from the last 7 days where `is_news = 1`, newest first; `cursor` is an opaque string; `top` only on the first page (last 24 hours, highest importance, at most 2 per country, up to 5) and may be an empty array, so the app must not depend on it
 - `GET /articles?since=<ISO time>` → only articles newer than that time, used for the "new updates" check
 - `GET /articles/:id` → `Article`
-- `GET /health` → sources per status, time of the last fetcher run
+- `GET /health` → sources per status, time of the last fetcher run, articles waiting for the AI and those it gave up on (#99)
 
 **Database (D1)**
 
