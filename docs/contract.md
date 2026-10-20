@@ -8,29 +8,32 @@ What the API returns and both screens read.
 
 ```json
 {
-  "id": "01JA2B3C4D5E6F7G8H9J",
+  "id": "01M5CNQBYGP8FJEA7V29R90PHQ",
   "country": "PL",
-  "source": { "id": "pl-mfa", "name": "Ministry of Foreign Affairs", "url": "https://www.gov.pl/web/dyplomacja" },
-  "publishedAt": "2026-10-11T14:05:00Z",
-  "dateOnly": false,
-  "headline": "Poland condemns attack on Riyadh airport",
-  "shortSummary": "Poland condemned the attack, which killed 12 people and injured more than 300.",
-  "summary": "Poland's foreign ministry condemned … (news-style, 2 to 4 short paragraphs)",
-  "decisionType": "decision",
-  "originalTitle": "Oświadczenie MSZ ws. ataku w Rijadzie",
+  "source": { "id": "pl-council-of-ministers", "name": "Council of Ministers, government decisions (gov.pl)", "url": "https://www.gov.pl/web/premier/decyzje-rzadu" },
+  "publishedAt": "2026-10-20T12:00:00Z",
+  "dateOnly": true,
+  "headline": "Council of Ministers adopts bill to delay KSeF penalties and extend reverse VAT charge",
+  "shortSummary": "The Council of Ministers adopted a bill to delay KSeF e-invoice penalties until the end of 2027 and extend the reverse VAT mechanism for gas, electricity, and emission allowances until June 30, 2030.",
+  "summary": "The Council of Ministers has adopted a bill to amend the VAT Act and other laws. … (news-style, short paragraphs)",
+  "decisionType": "bill",
+  "originalTitle": "Projekt ustawy o zmianie ustawy o podatku od towarów i usług oraz …",
   "originalLanguage": "pl",
-  "topics": ["foreign-affairs", "security-defence"],
-  "tags": ["Saudi Arabia", "Houthis", "aviation"],
-  "importance": 4,
-  "imageUrl": "https://www.gov.pl/photo/… or null",
-  "originalUrl": "https://www.gov.pl/web/dyplomacja/oswiadczenie-msz-ws-ataku-w-rijadzie",
-  "feedSeq": 1204,
-  "addedAt": "2026-10-11T15:20:00Z",
+  "topics": ["economy", "energy"],
+  "tags": ["Council of Ministers", "Poland", "KSeF", "VAT"],
+  "importance": 3,
+  "imageUrl": "https://… or null",
+  "originalUrl": "https://www.gov.pl/web/premier/projekt-ustawy-o-zmianie-ustawy-o-podatku-od-towarow-i-uslug-…",
+  "feedSeq": 307,
+  "addedAt": "2026-10-20T12:52:50Z",
   "impact": {
-    "general": "Airlines flying to Riyadh must follow the new security instructions from 12 October.",
-    "byTopic": [{ "topic": "security-defence", "text": "…" }],
-    "residents": null,
-    "abroad": "Polish citizens in Saudi Arabia are told to register with the embassy."
+    "general": "The bill delays fines for e-invoice errors until late 2027 and extends the reverse VAT mechanism for energy and emissions until mid-2030.",
+    "byTopic": [
+      { "topic": "economy", "text": "Businesses will not face monetary penalties for errors related to the National e-Invoice System (KSeF) until the end of 2027." },
+      { "topic": "energy", "text": "Buyers of gas, electricity, and greenhouse gas emission allowances must continue to settle VAT instead of sellers until June 30, 2030." }
+    ],
+    "residents": "Entrepreneurs get more time to adapt to the KSeF system without facing fines, while energy buyers continue to settle VAT directly.",
+    "abroad": null
   }
 }
 ```
@@ -82,7 +85,7 @@ Base URL: `https://api.officialnews.workers.dev` (deployed), `http://localhost:8
 - `lang` (#46) on both: `en`, `uk`, `ru`, `es` or `de` (the list is `LANGS` in `server/src/translator/languages.ts`, plus `en`). `en`, or no `lang`, is the English feed above, unchanged. With any other, consistency comes first: an article shows in that language only when its translation is finished, never as English mixed in.
   - `GET /articles?lang=uk&limit=20&cursor=<c>` → `{ "items": [Article], "nextCursor": "…" | null, "top": [Article], "translationsDelayed": false }`: the English feed above, the same articles in the same order (`feedSeq`), keeping those with a shown translation into that language. `cursor`, `nextCursor`, `after=<feedSeq>` and `since` work exactly as in English, and a cursor is valid in every language (the same positions). `top` (first page only) is the English top stories that are translated into that language, in the same order, so it may have fewer. `translationsDelayed` is `true` while the language is paused (automatically, its provider down for more than 2 hours, or by hand) or turned off: its newest articles may be missing for a while, and the app can say so. It is only in language feeds.
   - `GET /articles/:id?lang=uk` → the translated `Article`, or 404 when the article is not released or not translated into that language: not yet, never (after 3 unusable answers), or no longer (its English was summarized again and the new English got 3 unusable answers, so the old translation no longer matches it).
-- `GET /health` → `{ "sources": { "<status>": <count> }, "lastFetcherRun": "<ISO time>" | null }`.
+- `GET /health` → `{ "sources": { "<status>": <count> }, "lastFetcherRun": "<ISO time>" | null, "articles": { "fetchedLast24h": <n>, "waitingForSummary": <n>, "gaveUpOnSummary": <n>, "inFeed": <n> } }`: real sources only (seed rows skipped); `lastFetcherRun` is the latest `last_checked_at`; `gaveUpOnSummary` (#99) counts articles hidden for good after 3 unusable AI answers, which `waitingForSummary` leaves out; `inFeed` counts official decisions of the last 7 days. Open in a browser to see whether the fetcher and the AI step are running.
 - `GET /queue` (#46) → the translation queue per language, read-only, no secrets, `cache-control: no-store`:
   ```json
   { "languages": { "uk": { "enabled": true, "paused": false, "pausedReason": null, "downSince": null,
@@ -93,9 +96,6 @@ Base URL: `https://api.officialnews.workers.dev` (deployed), `http://localhost:8
   ```
   One entry per language of `LANGS`, with its switch (`pausedReason`: `"manual"`, or `"auto: provider down since <time>"` for an automatic pause; `downSince`: since when its providers have not answered, or `null`), the count of translations in each state (below), how many were published in the last 24 hours, the minutes since the oldest one still waiting (`queued`, `updating`, `translating` or `retrying`) was queued (`null` when none waits), and when the last one was published. `release`: how many summarized decisions wait for their release (their translations), and the minutes since the oldest of them was summarized. It reads about 20 D1 rows, however many translations exist: the counts come from `translation_counts`, the rest through partial indexes. Managing the queue is `server/scripts/queue.mjs` (`docs/queue.md`).
 - Errors are JSON `{ "error": "<message>" }`: 400 for a bad `limit`, `cursor`, `after`, `since` or `lang`, 404, 405 for any method other than GET, 500.
-- `GET /articles/:id` → `Article` shown in the feed, or 404 (hidden articles too).
-- `GET /health` → `{ "sources": { "<status>": <count> }, "lastFetcherRun": "<ISO time>" | null, "articles": { "fetchedLast24h": <n>, "waitingForSummary": <n>, "inFeed": <n> } }`: real sources only (seed rows skipped); `lastFetcherRun` is the latest `last_checked_at`; `inFeed` counts official decisions of the last 7 days. Open in a browser to see whether the fetcher and the AI step are running.
-- Errors are JSON `{ "error": "<message>" }`: 400 for a bad `limit`, `cursor`, `after` or `since`, 404, 405 for any method other than GET, 500.
 
 ## Push notifications
 
