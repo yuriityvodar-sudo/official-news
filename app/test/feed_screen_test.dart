@@ -12,7 +12,9 @@ import 'package:official_news/core/feed_language.dart';
 import 'package:official_news/core/news_widgets.dart';
 import 'package:official_news/core/router.dart';
 import 'package:official_news/features/feed/feed_controller.dart';
+import 'package:official_news/features/feed/feed_filters.dart';
 import 'package:official_news/features/feed/feed_screen.dart';
+import 'package:official_news/features/feed/feed_topic_tags.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'test_app.dart';
@@ -177,9 +179,8 @@ Future<void> _chooseLanguage(WidgetTester tester, String name) async {
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
-  testWidgets('shows top stories, then one Latest list without day headings', (
-    tester,
-  ) async {
+  testWidgets('shows one list with the top story in it once, and no section '
+      'titles or day headings', (tester) async {
     final top = _article(
       't1',
       _today.add(const Duration(minutes: 1)),
@@ -210,17 +211,19 @@ void main() {
       ),
     );
 
-    expect(find.text('Top stories'), findsOneWidget);
-    expect(
-      find.text('Cabinet approves budget'),
-      findsOneWidget,
-    ); // only once: top articles are not repeated below
-    expect(find.text('Latest'), findsOneWidget);
+    // One list (Yurii, 16 Oct): no "Top stories" or "Latest" titles.
+    expect(find.text('Top stories'), findsNothing);
+    expect(find.text('Latest'), findsNothing);
+    // Only once: a top story is in the items too.
+    expect(find.text('Cabinet approves budget'), findsOneWidget);
     expect(find.text('Law on water signed'), findsOneWidget);
     // No day heading: the older article shows its own time on the card.
     expect(find.text('Yesterday'), findsNothing);
     expect(find.text('Decree on visas'), findsOneWidget);
-    expect(find.text('CABINET DECISION'), findsNWidgets(3));
+    // The decision type is on the article screen, not on the cards (Yurii,
+    // 16 Oct): these articles have no topics, so no tags either.
+    expect(find.text('CABINET DECISION'), findsNothing);
+    expect(find.byType(TopicTags), findsNothing);
     expect(find.text('Federal Government · Germany'), findsNWidgets(3));
     await tester.dragUntilVisible(
       find.text("You're all caught up"),
@@ -584,7 +587,7 @@ void main() {
           }),
         ),
       );
-      expect(find.text('Latest'), findsOneWidget);
+      expect(find.text('Latest'), findsNothing);
       expect(find.text('Yesterday'), findsNothing);
       final late = tester.getTopLeft(find.text('Late but new')).dy;
       final older = tester.getTopLeft(find.text('Appeared yesterday')).dy;
@@ -603,7 +606,7 @@ void main() {
         api: _api({
           '': {
             'items': [
-              // Dated three days ago (no time), appeared just now: under "Latest".
+              // Dated three days ago (no time), appeared just now: at the top.
               _article(
                 'dated',
                 dated,
@@ -627,7 +630,6 @@ void main() {
         }),
       ),
     );
-    expect(find.text('Latest'), findsOneWidget);
     // Both appeared just now: the cards say so, not the older publication day.
     expect(find.text(dayLabel(dated, l10nFor())), findsNothing);
     expect(find.text('Today'), findsNothing);
@@ -657,7 +659,16 @@ void main() {
             }),
           ),
         );
+        // The language moved to Settings (#64): no globe in the feed, and
+        // the filters (#67, prototype) say "All countries" in words.
         expect(find.byIcon(CupertinoIcons.globe), findsNothing);
+        expect(
+          find.descendant(
+            of: find.byType(FeedFilterBar),
+            matching: find.text('All countries'),
+          ),
+          findsOneWidget,
+        );
         final button = find.ancestor(
           of: find.byIcon(CupertinoIcons.gear_alt),
           matching: find.byType(CupertinoButton),

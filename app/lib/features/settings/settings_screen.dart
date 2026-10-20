@@ -6,9 +6,12 @@ import 'package:flutter/material.dart';
 
 import '../../core/feed_language.dart';
 import '../../core/push.dart';
+import '../../core/read_mark.dart';
 import '../../core/theme.dart';
 import '../../l10n/app_localizations.dart';
 import '../detail/detail_screen.dart' show OpenLink, openOfficialPage;
+import '../feed/feed_look.dart';
+import '../splash/splash.dart';
 import 'info_pages.dart';
 
 /// The version shown at the foot of Settings: "0.1.0 (19)" for TestFlight build
@@ -67,6 +70,7 @@ class SettingsScreen extends StatelessWidget {
             ),
             SliverList.list(
               children: [
+                const _DesignSection(),
                 CupertinoListSection.insetGrouped(
                   header: _Header(l10n.settingsReading),
                   children: [
@@ -173,6 +177,135 @@ class SettingsScreen extends StatelessWidget {
       ),
     );
   }
+}
+
+/// PROTOTYPE (#66): switches the feed between today's look and the design
+/// options, plays the splash styles, switches how read articles look and how
+/// many topic tags a card shows, to compare them in one build. English only;
+/// not for release.
+class _DesignSection extends StatelessWidget {
+  const _DesignSection();
+
+  @override
+  Widget build(BuildContext context) => CupertinoListSection.insetGrouped(
+    header: const _Header('Prototype'),
+    children: [
+      ValueListenableBuilder(
+        valueListenable: feedDesign,
+        builder: (context, design, _) => CupertinoListTile(
+          leading: const _Icon(CupertinoIcons.paintbrush),
+          title: const Text('Design'),
+          trailing: CupertinoSlidingSegmentedControl<FeedDesign>(
+            groupValue: design,
+            onValueChanged: (d) {
+              if (d == null || d == design) return;
+              feedDesign.value = d;
+              // Back to the feed to show the new look, once the segment has slid over.
+              Future.delayed(const Duration(milliseconds: 250), () {
+                if (context.mounted) {
+                  Navigator.of(context).popUntil((route) => route.isFirst);
+                }
+              });
+            },
+            children: const {
+              FeedDesign.now: Text('Now'),
+              FeedDesign.a: Text('A'),
+              FeedDesign.b: Text('B'),
+              FeedDesign.c: Text('C'),
+            },
+          ),
+        ),
+      ),
+      // The splash at start (Yurii, 16 Oct): pick a style, Play shows it now.
+      ValueListenableBuilder(
+        valueListenable: splashStyle,
+        builder: (context, style, _) => CupertinoListTile(
+          leading: const _Icon(CupertinoIcons.sparkles),
+          title: const Text('Splash'),
+          subtitle: Text(switch (style) {
+            SplashStyle.rise => 'rise',
+            SplashStyle.riseUp => 'rise, news first',
+            SplashStyle.sweep => 'sweep',
+            SplashStyle.fill => 'fill',
+          }),
+          trailing: CupertinoSlidingSegmentedControl<SplashStyle>(
+            groupValue: style,
+            onValueChanged: (s) {
+              if (s != null) splashStyle.value = s;
+            },
+            children: const {
+              SplashStyle.rise: Text('1'),
+              SplashStyle.riseUp: Text('1b'),
+              SplashStyle.sweep: Text('2'),
+              SplashStyle.fill: Text('3'),
+            },
+          ),
+        ),
+      ),
+      CupertinoListTile(
+        leading: const _Icon(CupertinoIcons.play),
+        title: const Text('Play'),
+        onTap: () {
+          SplashHost.play(context);
+          // It ends on the feed, as at a cold start: Settings closes under
+          // the splash, out of sight (its page covers all from its first
+          // frame).
+          Navigator.of(context).popUntil((route) => route.isFirst);
+        },
+      ),
+      // How read articles look (Yurii, 16 Oct): faded as today, or a blue or
+      // red dot on the unread ones instead of the official-source tick.
+      ValueListenableBuilder(
+        valueListenable: readStyle,
+        builder: (context, style, _) => CupertinoListTile(
+          leading: const _Icon(CupertinoIcons.eye),
+          title: const Text('Read'),
+          trailing: CupertinoSlidingSegmentedControl<ReadStyle>(
+            groupValue: style,
+            onValueChanged: (r) {
+              if (r == null || r == style) return;
+              readStyle.value = r;
+              // Back to the feed to show it, once the segment has slid over.
+              Future.delayed(const Duration(milliseconds: 250), () {
+                if (context.mounted) {
+                  Navigator.of(context).popUntil((route) => route.isFirst);
+                }
+              });
+            },
+            children: const {
+              ReadStyle.dim: Text('Dim'),
+              ReadStyle.blue: Text('Blue'),
+              ReadStyle.red: Text('Red'),
+            },
+          ),
+        ),
+      ),
+      // How many topic tags a card shows at most (Yurii, 16 Oct: "we can try
+      // one, two, three"), in every design. Short segments and no subtitle,
+      // as the Splash row, so the row fits at 375 pt.
+      ValueListenableBuilder(
+        valueListenable: topicTagCount,
+        builder: (context, count, _) => CupertinoListTile(
+          leading: const _Icon(CupertinoIcons.tag),
+          title: const Text('Topics'),
+          trailing: CupertinoSlidingSegmentedControl<int>(
+            groupValue: count,
+            onValueChanged: (n) {
+              if (n == null || n == count) return;
+              topicTagCount.value = n;
+              // Back to the feed to show it, once the segment has slid over.
+              Future.delayed(const Duration(milliseconds: 250), () {
+                if (context.mounted) {
+                  Navigator.of(context).popUntil((route) => route.isFirst);
+                }
+              });
+            },
+            children: const {1: Text('1'), 2: Text('2'), 3: Text('3')},
+          ),
+        ),
+      ),
+    ],
+  );
 }
 
 /// A section header in the iOS grouped-list style: small, grey, upper case.

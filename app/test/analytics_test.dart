@@ -18,8 +18,10 @@ import 'test_app.dart';
 Map<String, dynamic> _article(
   String id, {
   List<String> topics = const ['economy'],
+  int? feedSeq,
 }) => {
   'id': id,
+  'feedSeq': feedSeq,
   'country': 'DE',
   'source': {
     'id': 'de-gov',
@@ -45,10 +47,16 @@ ApiClient _api() => ApiClient(
   baseUrl: 'https://api.test',
   client: MockClient(
     (request) async => http.Response(
+      // The top story is in the items too, as the server sends it: the feed
+      // shows it once, in its place (Yurii, 16 Oct: one list).
       jsonEncode({
-        'items': [_article('a1'), _article('a2', topics: const [])],
+        'items': [
+          _article('t1', feedSeq: 3),
+          _article('a1', feedSeq: 2),
+          _article('a2', topics: const [], feedSeq: 1),
+        ],
         'nextCursor': null,
-        'top': [_article('t1')],
+        'top': [_article('t1', feedSeq: 3)],
       }),
       200,
     ),
@@ -98,7 +106,7 @@ void main() {
   });
 
   testWidgets(
-    'sends the feed screen, an opened article with its section and place, and the article screen',
+    'sends the feed screen, an opened article with its place in the one list, and the article screen',
     (tester) async {
       await pumpFeed(tester);
       expect(events.first.$1, 'screen_view');
@@ -114,8 +122,8 @@ void main() {
         'decision_type': 'cabinet-decision',
         'topic': 'none',
         'feed_language': 'en',
-        'section': 'latest',
-        'position': 1,
+        'section': 'feed',
+        'position': 2,
       });
       expect(events.last.$1, 'screen_view');
       expect(events.last.$2, {
@@ -130,10 +138,11 @@ void main() {
 
       await tester.tap(find.text('Decision t1'));
       await tester.pumpAndSettle();
+      // A top story is a row like any other now: section "feed", its place.
       final top = events.lastWhere((e) => e.$1 == 'open_article').$2;
       expect(
         (top['section'], top['position'], top['topic']),
-        ('top', 0, 'economy'),
+        ('feed', 0, 'economy'),
       );
     },
   );

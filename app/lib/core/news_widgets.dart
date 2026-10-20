@@ -5,15 +5,17 @@ import '../l10n/app_localizations.dart';
 import 'article.dart';
 import 'countries.dart';
 import 'decision_types.dart';
+import 'read_mark.dart';
 import 'theme.dart';
 
-/// The red decision type above a headline ("CABINET DECISION", "РІШЕННЯ
-/// УРЯДУ"); nothing when the article has no known type yet.
+/// The red decision type above the article screen's headline ("CABINET
+/// DECISION", "РІШЕННЯ УРЯДУ"); nothing when the article has no known type
+/// yet. The feed's cards show the article's topics instead (Yurii, 16 Oct:
+/// the type stays inside the article).
 class KindLabel extends StatelessWidget {
-  const KindLabel(this.article, {super.key, this.dimmed = false});
+  const KindLabel(this.article, {super.key});
 
   final Article article;
-  final bool dimmed;
 
   @override
   Widget build(BuildContext context) {
@@ -24,10 +26,7 @@ class KindLabel extends StatelessWidget {
     if (label == null) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),
-      child: Text(
-        label.toUpperCase(),
-        style: dim(NewsText.from(context).kindLabel, dimmed),
-      ),
+      child: Text(label.toUpperCase(), style: NewsText.from(context).kindLabel),
     );
   }
 }
@@ -42,33 +41,54 @@ TextStyle dim(TextStyle style, bool dimmed) => dimmed && style.color != null
       )
     : style;
 
-/// "Federal Government · Germany" with the blue official-source mark.
+/// "Federal Government · Germany" with the blue official-source mark, or,
+/// in the prototype's dot styles ([mark]), the unread dot in its place.
 class PublisherLine extends StatelessWidget {
-  const PublisherLine(this.article, {super.key, this.dimmed = false});
+  const PublisherLine(
+    this.article, {
+    super.key,
+    this.dimmed = false,
+    this.mark,
+  });
 
   final Article article;
   final bool dimmed;
 
+  /// PROTOTYPE: how read articles look; null or Dim shows the mark as today.
+  final ReadMark? mark;
+
   @override
   Widget build(BuildContext context) {
     final country = countryName(article.country, AppLocalizations.of(context));
+    final style = dim(NewsText.from(context).publisher, dimmed);
+    final dots = mark?.dots ?? false;
     return Row(
       children: [
         Flexible(
           child: Text(
             '${article.source.name} · $country',
-            style: dim(NewsText.from(context).publisher, dimmed),
+            style: style,
             overflow: TextOverflow.ellipsis,
+            // A line cut with "…" is as wide as its last letter, not as the
+            // room it was given, so the dot stays 5 pt after the "…". Dim
+            // keeps today's tick where it was.
+            textWidthBasis: dots
+                ? TextWidthBasis.longestLine
+                : TextWidthBasis.parent,
           ),
         ),
-        const SizedBox(width: 4),
-        Icon(
-          CupertinoIcons.checkmark_seal,
-          size: 15,
-          color: dimmed
-              ? AppColors.verified.withValues(alpha: readOpacity)
-              : AppColors.verified,
-        ),
+        if (dots)
+          UnreadDot(mark!, fontSize: style.fontSize!)
+        else ...[
+          const SizedBox(width: 4),
+          Icon(
+            CupertinoIcons.checkmark_seal,
+            size: 15,
+            color: dimmed
+                ? AppColors.verified.withValues(alpha: readOpacity)
+                : AppColors.verified,
+          ),
+        ],
       ],
     );
   }
