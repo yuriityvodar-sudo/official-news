@@ -8,29 +8,32 @@ What the API returns and both screens read.
 
 ```json
 {
-  "id": "01JA2B3C4D5E6F7G8H9J",
+  "id": "01M5CNQBYGP8FJEA7V29R90PHQ",
   "country": "PL",
-  "source": { "id": "pl-mfa", "name": "Ministry of Foreign Affairs", "url": "https://www.gov.pl/web/dyplomacja" },
-  "publishedAt": "2026-10-11T14:05:00Z",
-  "dateOnly": false,
-  "headline": "Poland condemns attack on Riyadh airport",
-  "shortSummary": "Poland condemned the attack, which killed 12 people and injured more than 300.",
-  "summary": "Poland's foreign ministry condemned … (news-style, 2 to 4 short paragraphs)",
-  "decisionType": "decision",
-  "originalTitle": "Oświadczenie MSZ ws. ataku w Rijadzie",
+  "source": { "id": "pl-council-of-ministers", "name": "Council of Ministers, government decisions (gov.pl)", "url": "https://www.gov.pl/web/premier/decyzje-rzadu" },
+  "publishedAt": "2026-10-20T12:00:00Z",
+  "dateOnly": true,
+  "headline": "Council of Ministers adopts bill to delay KSeF penalties and extend reverse VAT charge",
+  "shortSummary": "The Council of Ministers adopted a bill to delay KSeF e-invoice penalties until the end of 2027 and extend the reverse VAT mechanism for gas, electricity, and emission allowances until June 30, 2030.",
+  "summary": "The Council of Ministers has adopted a bill to amend the VAT Act and other laws. … (news-style, short paragraphs)",
+  "decisionType": "bill",
+  "originalTitle": "Projekt ustawy o zmianie ustawy o podatku od towarów i usług oraz …",
   "originalLanguage": "pl",
-  "topics": ["foreign-affairs", "security-defence"],
-  "tags": ["Saudi Arabia", "Houthis", "aviation"],
-  "importance": 4,
-  "imageUrl": "https://www.gov.pl/photo/… or null",
-  "originalUrl": "https://www.gov.pl/web/dyplomacja/oswiadczenie-msz-ws-ataku-w-rijadzie",
-  "feedSeq": 1204,
-  "addedAt": "2026-10-11T15:20:00Z",
+  "topics": ["economy", "energy"],
+  "tags": ["Council of Ministers", "Poland", "KSeF", "VAT"],
+  "importance": 3,
+  "imageUrl": "https://… or null",
+  "originalUrl": "https://www.gov.pl/web/premier/projekt-ustawy-o-zmianie-ustawy-o-podatku-od-towarow-i-uslug-…",
+  "feedSeq": 307,
+  "addedAt": "2026-10-20T12:52:50Z",
   "impact": {
-    "general": "Airlines flying to Riyadh must follow the new security instructions from 12 October.",
-    "byTopic": [{ "topic": "security-defence", "text": "…" }],
-    "residents": null,
-    "abroad": "Polish citizens in Saudi Arabia are told to register with the embassy."
+    "general": "The bill delays fines for e-invoice errors until late 2027 and extends the reverse VAT mechanism for energy and emissions until mid-2030.",
+    "byTopic": [
+      { "topic": "economy", "text": "Businesses will not face monetary penalties for errors related to the National e-Invoice System (KSeF) until the end of 2027." },
+      { "topic": "energy", "text": "Buyers of gas, electricity, and greenhouse gas emission allowances must continue to settle VAT instead of sellers until June 30, 2030." }
+    ],
+    "residents": "Entrepreneurs get more time to adapt to the KSeF system without facing fines, while energy buyers continue to settle VAT directly.",
+    "abroad": null
   }
 }
 ```
@@ -116,7 +119,7 @@ Base URL: `https://api.officialnews.workers.dev` (deployed), `http://localhost:8
   - `groups`: every group of the table above, always, in that fixed order (European Union, G7, G20, NATO), also when its feed is empty (a fixed choice). `name` in `lang` (European Union: "European Union", "Європейський Союз", "Европейский союз", "Unión Europea", "Europäische Union"; "G7" and "G20" the same in every language; NATO: "NATO", "НАТО", "НАТО", "OTAN", "NATO"). `members`: the `country` values of the articles the group shows, its member countries and `EU` where it includes the EU institutions. Send `id` back as `group=`.
   - `countries`: the countries of sources whose `status` is `active` (Kickoff seed rows left out; a stale, broken, moved or blocked source does not count), without the EU institutions (`EU`, in the European Union group), named in `lang` (`en` by default) and sorted alphabetically by that name. The names are a constant in `server/src/api/filters.ts`, the same as the app's (`app/lib/l10n`), and a test checks that every country of `docs/sources.csv` has one; a code without a name is shown as it is. The list follows the sources' health, so a country can leave it and come back; `country=` accepts any code, listed or not.
   - `groups` is new beside `countries` (16 Oct), so a reader of `countries` alone keeps working. It reads the sources table once (44 rows on 16 Oct).
-- `GET /health` → `{ "sources": { "<status>": <count> }, "lastFetcherRun": "<ISO time>" | null, "articles": { "fetchedLast24h": <n>, "waitingForSummary": <n>, "inFeed": <n> } }`: real sources only (seed rows skipped); `lastFetcherRun` is the latest `last_checked_at`; `inFeed` counts official decisions of the last 7 days. Open in a browser to see whether the fetcher and the AI step are running.
+- `GET /health` → `{ "sources": { "<status>": <count> }, "lastFetcherRun": "<ISO time>" | null, "articles": { "fetchedLast24h": <n>, "waitingForSummary": <n>, "gaveUpOnSummary": <n>, "inFeed": <n> } }`: real sources only (seed rows skipped); `lastFetcherRun` is the latest `last_checked_at`; `gaveUpOnSummary` (#99) counts articles hidden for good after 3 unusable AI answers, which `waitingForSummary` leaves out; `inFeed` counts official decisions of the last 7 days. Open in a browser to see whether the fetcher and the AI step are running.
 - `GET /queue` (#46) → the translation queue per language, read-only, no secrets, `cache-control: no-store`:
   ```json
   { "languages": { "uk": { "enabled": true, "paused": false, "pausedReason": null, "downSince": null,

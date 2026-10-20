@@ -48,6 +48,21 @@ describe("checkSummary", () => {
     ok("「5ㆍ18민주화운동 관련자 보상 등에 관한 법률」", "the 5.18 Democratization Movement");
   });
 
+  it("reads era years, Arabic-Indic digits and amounts with zero cents (#99)", () => {
+    const ok = (source: string, text: string) => expect(checkSummary(summary(text), source, 2026).invented, source).toEqual([]);
+    ok("令和10年4月1日から施行", "It takes effect on 1 April 2028.");
+    ok("令和元年法律第16号", "the 2019 law");
+    ok("平成25年法律第27号", "the 2013 law");
+    ok("مبلغ ١٣٥٠٠ ريال", "an amount of 13,500 riyals");
+    ok("valor de R$ 1.500.000,00", "worth R$1,500,000");
+    ok("valor de R$ 1.500.000,00", "worth R$1.5 million");
+    ok("$2,000.00 per household", "$2,000 per household");
+    ok("103万円", "1.03 million yen");
+    expect(checkSummary(summary("worth R$1.6 million"), "valor de R$ 1.500.000,00", 2026).invented).toEqual(["16"]);
+    expect(checkSummary(summary("It takes effect in 2029."), "令和10年4月1日から施行", 2026).invented).toEqual(["2029"]);
+    expect(checkSummary(summary("worth R$1,500,050"), "valor de R$ 1.500.000,50", 2026).invented).toEqual(["1500050"]);
+  });
+
   it("still finds a number made from parts of another one", () => {
     expect(checkSummary(summary("500 MW"), "2.500 MW", 2026).invented).toEqual(["500"]);
     expect(checkSummary(summary("US$521 for each"), "US$ 13.521.937", 2026).invented).toEqual(["521"]);
@@ -57,6 +72,14 @@ describe("checkSummary", () => {
   it("finds ruled-out words, once each, and lets 'may' for a permission pass", () => {
     const s = summary("The law aims to help. It could change prices. It aims to be fair. Providers may now sell devices.");
     expect(checkSummary(s, "", 2026).banned).toEqual(["aims to", "could"]);
+  });
+
+  it("does not count a ruled-out word inside quotes or in a name the source gives (#99)", () => {
+    const banned = (text: string, source: string) => checkSummary(summary(text), source, 2026).banned;
+    expect(banned('Wawel joins the "Historic Monument" list.', "Wawel uznany za Pomnik Historii")).toEqual([]);
+    expect(banned("The Historic Buildings Act is amended.", "Amendments to the Historic Buildings Act 1990")).toEqual([]);
+    expect(banned("A historic decision on the Historic Buildings Act.", "Amendments to the Historic Buildings Act 1990")).toEqual(["historic"]);
+    expect(banned("Historic vote in the Sejm.", "Sejm przyjął ustawę")).toEqual(["historic"]);
   });
 
   it("finds a summary written in the article's language instead of English", () => {
@@ -94,6 +117,12 @@ describe("checkSummary", () => {
     const zh = "国务院常务会议审议通过《关于进一步优化营商环境的若干措施》，明确减少行政审批事项，降低企业制度性交易成本。措施自发布之日起施行。";
     expect(checkSummary(summary(ja), ja, 2026).notEnglish).toBe(true);
     expect(checkSummary(summary(zh), zh, 2026).notEnglish).toBe(true);
+  });
+
+  it("accepts a short English text that quotes a long name in its own script (#99)", () => {
+    const headline = 'Korea amends "5·18민주화운동 관련자 보상 등에 관한 법률 시행령 일부개정령안"';
+    expect(checkSummary(summary(headline), "", 2026).notEnglish).toBe(false);
+    expect(checkSummary(summary("Japan adopts 「特定船舶の保険契約の履行を確保するための法律の一部を改正する法律案」"), "", 2026).notEnglish).toBe(false);
   });
 
   it("accepts an English summary that names things in their own language, and a text too short to tell", () => {
