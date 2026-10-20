@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/article.dart';
+import '../../core/glass.dart';
 import '../../core/news_widgets.dart';
 import '../../core/pictures.dart';
 import '../../core/read_mark.dart';
@@ -296,36 +297,29 @@ class FeedPicture extends StatelessWidget {
   }
 }
 
-/// The settings button at the top right of the feed: a round, tinted symbol
-/// like the account button in Apple's apps, with a 44-pt target.
+/// The settings button at the top right of the feed: a round symbol like
+/// the account button in Apple's apps, with a 44-pt target, on Liquid Glass
+/// where the phone has it ([GlassCircle]; Yurii, 20 Oct).
 class NowSettingsButton extends StatelessWidget {
   const NowSettingsButton({super.key, required this.onPressed});
 
   final VoidCallback onPressed;
 
   @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return CupertinoButton(
-      padding: EdgeInsets.zero,
-      minimumSize: const Size(44, 44),
-      onPressed: onPressed,
-      child: Container(
-        width: 36,
-        height: 36,
-        decoration: BoxDecoration(
-          color: scheme.surfaceContainerHighest,
-          shape: BoxShape.circle,
-        ),
-        child: Icon(
-          CupertinoIcons.gear_alt,
-          size: 21,
-          color: CupertinoColors.label.resolveFrom(context),
-          semanticLabel: AppLocalizations.of(context).settings,
-        ),
+  Widget build(BuildContext context) => CupertinoButton(
+    padding: EdgeInsets.zero,
+    minimumSize: const Size(44, 44),
+    onPressed: onPressed,
+    child: GlassCircle(
+      size: 36,
+      child: Icon(
+        CupertinoIcons.gear_alt,
+        size: 21,
+        color: CupertinoColors.label.resolveFrom(context),
+        semanticLabel: AppLocalizations.of(context).settings,
       ),
-    );
-  }
+    ),
+  );
 }
 
 /// "3 new decisions": shown instead of moving the list while it is being read.
