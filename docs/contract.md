@@ -69,10 +69,37 @@ Base URL: `https://api.officialnews.workers.dev` (deployed), `http://localhost:8
     "release": { "waiting": 2, "oldestWaitingAgeMinutes": 3, "translatorRanAt": "2026-10-16T08:14:00Z" } }
   ```
   One entry per language of `LANGS`, with its switch (`pausedReason`: `"manual"`, or `"auto: provider down since <time>"` for an automatic pause; `downSince`: since when its providers have not answered, or `null`), the count of translations in each state (below), how many were published in the last 24 hours, the minutes since the oldest one still waiting (`queued`, `updating`, `translating` or `retrying`) was queued (`null` when none waits), and when the last one was published. `release`: how many summarized decisions wait for their release (their translations), and the minutes since the oldest of them was summarized. It reads about 20 D1 rows, however many translations exist: the counts come from `translation_counts`, the rest through partial indexes. Managing the queue is `server/scripts/queue.mjs` (`docs/queue.md`).
-- Errors are JSON `{ "error": "<message>" }`: 400 for a bad `limit`, `cursor`, `after`, `since` or `lang`, 404, 405 for any method other than GET, 500.
-- `GET /articles/:id` → `Article` shown in the feed, or 404 (hidden articles too).
-- `GET /health` → `{ "sources": { "<status>": <count> }, "lastFetcherRun": "<ISO time>" | null, "articles": { "fetchedLast24h": <n>, "waitingForSummary": <n>, "inFeed": <n> } }`: real sources only (seed rows skipped); `lastFetcherRun` is the latest `last_checked_at`; `inFeed` counts official decisions of the last 7 days. Open in a browser to see whether the fetcher and the AI step are running.
-- Errors are JSON `{ "error": "<message>" }`: 400 for a bad `limit`, `cursor`, `after` or `since`, 404, 405 for any method other than GET, 500.
+- Caching (#121): `GET /articles`, `/topics` and `/countries` answer with `Cache-Control: public, max-age=60`, and `GET /articles/:id` (any `lang`) with `public, max-age=300`. Cloudflare's cache in front of the Worker (Workers Caching, `cache` in `server/wrangler.jsonc`) keeps them, keyed by the path and the whole query string, so every reader of the same URL gets the same answer: a newly released article can take up to a minute to appear in the feed and in `after=`, and a changed one up to 5 minutes. Every other response is `Cache-Control: no-store`: `/health`, `/queue`, and every error, so a 404 for an article not released or not translated yet is never kept. The same parameters in another order are another URL, so a client keeps one order (the app builds them in a fixed order, `app/lib/core/api_client.dart`).
+- Errors are JSON `{ "error": "<message>" }`: 400 for a bad `limit`, `cursor`, `after`, `since`, `lang`, `country` (not 2 capital letters: `de`, `DEU`), `group` (not one of the groups: `G7`, `brics`), `country` and `group` together, or `topic` (not one of the list), the message saying what is expected, 404, 405 for any method other than GET, 500.
+
+## Push notifications
+
+Breaking decisions only (#62, after the MVP): a push exists to bring a reader back to the app with something useful. The server sends them through Firebase Cloud Messaging (FCM HTTP v1, project `official-news-48e16`), as the service account in the Worker secret `FCM_SERVICE_ACCOUNT` (`docs/setup.md`). Code: `server/src/push/`.
+
+- Topics: one per feed language, `breaking_en`, `breaking_uk`, `breaking_ru`, `breaking_es`, `breaking_de` (`breaking_<lang>`, with the API's `lang` values). The app subscribes to the topic of its feed language and moves to the new one when the language changes.
+- The message:
+  ```json
+  { "message": { "topic": "breaking_uk",
+                 "notification": { "title": "<headline in that language>", "body": "<short summary, cut to about 110 characters at a word, with …>" },
+                 "data": { "articleId": "01JA2B3C4D5E6F7G8H9J", "lang": "uk" },
+                 "apns": { "payload": { "aps": { "sound": "default" } } } } }
+  ```
+  On a tap the app opens `data.articleId` in `data.lang` (`GET /articles/:id?lang=uk`; no `lang` for `en`). Both data values are strings. The headline and short summary are the article's (`en`) or its published translation's.
+- What goes out, per language (English, and each language enabled in `translation_langs`; Yurii, 16 Oct):
+  - Breaking: a released decision (`feedSeq` set, published in the feed's 7 days) with `importance` 4 or 5, released (`addedAt`) in the last 24 hours, never pushed in that language. In a language other than English only when its translation of the current English is published (state `published`), and in that language.
+  - At most 2 a local day per language, and at least 1: from the daily slot, 18:00 local, a language that had no push that day gets its top story of the day, whatever its importance (highest `importance`, then newest `feedSeq`, among the decisions released in the last 24 hours and not pushed before; the last 24 hours, not the local day, so a decision from the evening before that got no push can be it). When several decisions qualify, the highest importance goes first, then the newest.
+  - Quiet hours: nothing from 21:00 to 08:00 local; a decision released at night goes out in the morning while it is less than 24 hours old.
+  - At least 3 hours between two pushes in the same language.
+  - Each language's main time zone (`TIME_ZONES` in `server/src/push/index.ts`): `en` Europe/London, `uk` and `ru` Europe/Kyiv, `es` Europe/Madrid, `de` Europe/Berlin. The local day of the cap runs from local midnight.
+- Each translator run ends with the push step (`runPush`): at most one push per language a run. While the translator is not running (no run in 10 minutes, as for the release: its new trigger can take an hour to start), each summarizer run ends with it instead; the summarizer reads one row (`step_runs`) to know. Each push is claimed in `push_log` before the request to FCM, in one statement that checks the article, the cap and the spacing again (so two overlapping runs cannot both send), and completed after it by FCM's answer:
+  - Sent: FCM's message name.
+  - Refused (FCM refused the message itself: HTTP 400, or another 4xx below): the error, `refused` 1; never tried again in that language. Counts for the 3-hour spacing but not for the daily cap: it surely did not go out.
+  - No answer (a network error, the 10-second timeout): the error. FCM may have sent it, so it counts for the spacing and the daily cap, and is never tried again.
+  - Not now (HTTP 401, 403, 408, 429 or 5xx: the token, the permission, the quota or FCM itself, nothing about the message): the run stops sending, deletes its claims that were not sent, so a later run sends those articles, forgets the token on a 401, and pauses the push step for 10 minutes, or FCM's `Retry-After` when longer.
+
+  A run cut off between the claim and its completion leaves a claim, which counts as sent: nothing is ever sent twice. Without `FCM_SERVICE_ACCOUNT` the step does nothing (no request, no database read) and logs `push skipped: FCM_SERVICE_ACCOUNT not set`; a push error never breaks the translator, the summarizer or the release. While every language is in its quiet hours the step reads nothing; a run with nothing to send reads about 60 D1 rows.
+- The access token: a JWT (RS256, signed with the service account's key through WebCrypto, scope `https://www.googleapis.com/auth/firebase.messaging`) exchanged at `https://oauth2.googleapis.com/token`, kept in D1 (`kv_cache`) until 5 minutes before it expires (about 55 minutes), so most runs neither sign nor ask Google. Asked for only when a run has something to send; FCM refusing it (HTTP 401) drops it, so the run after the pause gets a new one. Without a token nothing is claimed, and the step pauses for 10 minutes too, so a refused key is tried at most every 10 minutes, not every run. The pause is one `kv_cache` row, read with the token: while it lasts a run neither signs nor sends.
+- Logs one `push run` line a run: `pushes` (language, article, `breaking` or `daily`, FCM's message name, or the error with `outcome` `refused`, `unknown` or `retry`) and `skipped` (why each other language sent nothing: quiet hours, language off, daily cap, spacing, nothing breaking, no access token, paused until a time and why, claimed by another run).
 
 ## Database (D1)
 

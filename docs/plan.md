@@ -200,7 +200,7 @@ The feed card reads `headline`, `shortSummary`, `imageUrl` and `topics` (shown a
 
 - The phone keeps the last feed and opens from it instantly, then asks only `since` the newest article it has
 - The list already carries the full summaries, so opening an article needs no extra call
-- The API caches feed responses for 5 minutes
+- The API caches feed responses: Cloudflare's cache in front of the Worker (Workers Caching) keeps the lists for a minute and an article for 5 (#121)
 - The "new updates" check runs every 5 minutes while the app is open
 
 ## Item details
