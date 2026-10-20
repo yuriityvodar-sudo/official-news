@@ -14,7 +14,7 @@ A cross-platform app that shows what governments officially publish, summarized 
 - News collected automatically from verified official sites, summarized once by AI
 - A fast app: it opens instantly from the last feed saved on the phone
 
-**Not in the MVP:** onboarding, picking topics and a topic-filtered feed, topic summaries, favorites, choosing a country and the Local / Global switch, the Countries tab, login and Sign in with Apple, country filter, search, push notifications, sharing to social networks and reposting, personalized feed, store release and Play upload (Android runs in the emulator until then). The data model is built so each of these can be added later without rework.
+**Not in the MVP:** onboarding, picking topics and a topic-filtered feed, topic summaries, favorites, choosing a country and the Local / Global switch, the Countries tab, login and Sign in with Apple, country filter, search, push notifications, sharing to social networks and reposting, personalized feed, store release and Play upload (Android runs in the emulator until then). The data model is built so each of these can be added later without rework. After the MVP, a topic filter (one topic at a time) and a Where filter (all countries, a group of countries or one country) are being built (#67, #68; decision rows of 16 Oct).
 
 ## Agreed changes, 14 Oct 2026
 
@@ -22,7 +22,7 @@ After Roman's review (issues #3 to #11), these replace anything older further do
 
 - **Owners to start with, swaps as we go.** We start with the Work plan's owners (Yurii 2, 3, 5, 6; Roman 1, 4, 7, 8). Either of us can take over an item by agreeing in its issue first, then reassigning it. One person per issue at a time, so we never build the same thing. The Kickoff is done together.
 - **The MVP is the feed and the article detail screen,** the same for every user, with images on cards (the official page's preview image) and the ministry shown as publisher with an "Official source" mark. Screen: the feed and article in [docs/design/app.png](design/app.png).
-- **After the MVP (Phase 2 or later):** onboarding with topics and a topic-filtered "For you" feed; a full summary per topic, then topic analysis; choosing a country and the Local / Global switch; registration and Sign in with Apple; Saved (favourites); the Countries tab. Screens: [docs/design/onboarding.png](design/onboarding.png) and the rest of [docs/design/app.png](design/app.png).
+- **After the MVP (Phase 2 or later):** onboarding with topics and a topic-filtered "For you" feed; a full summary per topic, then topic analysis; choosing a country or a group of countries (the Where filter, #68); registration and Sign in with Apple; Saved (favourites); the Countries tab. Screens: [docs/design/onboarding.png](design/onboarding.png) and the rest of [docs/design/app.png](design/app.png).
 - **Sources publish official decisions only:** laws, amendments, proposals, government and ministry meeting agendas, minutes and meeting outcomes. Opinion pieces, interviews, commentary, statements and call readouts are hidden (the AI's `isNews` flag).
 - **The AI summary reads like news**, not two fixed blocks, facts from the article only. One AI call per article returns one news-style summary, the same for everyone, and tags the article with 1 to 3 topics from the fixed list, so the topic features have data when they come. Since #63 it also returns "what it means" (`impact`): for any reader, per topic of the article, for residents and for people abroad; the app personalizes by choosing the parts that fit the reader, never by writing a summary per reader (agreed, `docs/decisions.md`, 16 Oct).
 - **The app looks and feels like Apple News** on iOS and Android, light and dark: large bold titles, red accent, serif headlines, publisher line above each headline, big images, iOS navigation and gestures. Each headline has a red decision-type label (Law, Bill, Cabinet decision…). Screens: [docs/design/mvp.png](design/mvp.png).
@@ -118,8 +118,8 @@ The MVP is a Kickoff plus 8 items, 4 each. This is our suggested split: Yurii ow
 | #64 | Settings screen from the top-right corner (language, notifications, privacy, terms, support, about, version); no login | Yurii (design and build) | Yurii approves it on the phone |
 | #65 | Domain (Cloudflare Registrar) and app name | Yurii | Name decided, domain bought |
 | #66 | Feed redesign: article cards, font, UI fixes | Yurii (design and build) | Yurii approves it on the phone |
-| #67 | News categories | To agree | Categories agreed in the issue, then built |
-| #68 | Global / Local feed switch | To agree | Agreed in the issue, then built |
+| #67 | News categories: a Topics chip under the date, one topic at a time, busiest first, from the server, also for a country or a group | Yurii (design and build) | Server filters and `GET /topics` (Proposed, `docs/decisions.md`), then the app's chip; Yurii approves it on the phone |
+| #68 | Where filter: all countries (default), a group of countries (European Union, G7, G20, NATO: its members' decisions together) or one country (that country's only) | Yurii (design and build) | Server filters (`country=`, `group=`) and `GET /countries` with its groups (Proposed, `docs/decisions.md`), then the app's chip; Yurii approves it on the phone |
 | #60 | Analytics (Google Analytics through Firebase) | Yurii | Events arrive in GA from TestFlight; release checklist done |
 | #62 | Push notifications, breaking decisions (importance 4+, max 2 a day) | Yurii | A breaking decision reaches a phone in its language |
 
@@ -238,7 +238,7 @@ Each item becomes one GitHub issue owned by one person. **Must** is what the ite
 
 ### 5. Source list (Yurii)
 
-- **Must:** `docs/sources.csv` with one source per G20 member (19 since 14 Oct: Saudi Arabia waits for consent), plus Poland, Czechia, Spain and Ukraine (5 sources since 16 Oct, #72), each with kind, URL, language, `verified_by` and licence, preferring pages that publish official decisions (laws, proposals, meeting agendas, minutes and outcomes), and each source's name in Ukrainian, Russian, Spanish and German in `docs/source-names.csv` (#76); loaded into `sources`.
+- **Must:** `docs/sources.csv` with one source per G20 member (19 since 14 Oct: Saudi Arabia waits for consent), plus Poland, Czechia, Spain and Ukraine (5 sources since 16 Oct, #72) and international organizations as sources of their own decisions (16 Oct: the European Central Bank, code `EU`; more international bodies follow: the ILO Governing Body once the app and website show a source's required notice on its articles, UN press and the African Union after the decision on #107), each with kind, URL, language, `verified_by` and licence, preferring pages that publish official decisions (laws, proposals, meeting agendas, minutes and outcomes), and each source's name in Ukrainian, Russian, Spanish and German in `docs/source-names.csv` (#76); loaded into `sources`.
 - **Suggested:** grow to about 85 Phase 1 sources once the fetcher is stable.
 - **Done when:** the verified sources are in D1 (19 since 14 Oct: Saudi Arabia waits for the gazette's written consent, see `docs/sources.md`).
 
@@ -303,7 +303,8 @@ When the team grows, or we need a staging version and versioned store releases, 
 - One repo for the whole project: `/app` (Flutter) and `/server` (Cloudflare Worker)
 - `main` is protected: no direct pushes, every pull request approved by the other person, small fixes included. The one exception is the first commit (README, CLAUDE.md, .gitignore, empty Flutter and Worker projects), pushed during Kickoff; protection is switched on right after, with no bypass for anyone
 - One branch per issue: `feature/<issue#>-short-name` or `fix/<issue#>-short-name`
-- Small pull requests, reviewed within a day: the reviewer's Claude Code leaves review comments on GitHub, the author's Claude Code works through them and flags anything that needs a decision, and the reviewer approves
+- Small pull requests, reviewed within a day: the reviewer's Claude Code leaves review comments on GitHub, the author's Claude Code works through them and flags anything that needs a decision, and the reviewer approves. Small means under about 500 changed lines of code (tests and docs aside); bigger work is split by screen or by step, each with a visible result
+- Flow control (17 Oct): at most three open pull requests per person, so a review never waits behind six others; past that, the next piece waits as research, docs or a prototype until one merges. Merges go in batches when both are online, in an agreed order: merge one, update the next with `main`, re-approve, merge. The "branch must be up to date" rule stays; its cost only bites when many pull requests are open
 - GitHub Actions builds and tests every pull request; a green check is required to merge, and branches must be up to date with \`main\`, so CI tests each change against the latest code
 
 **Planning**

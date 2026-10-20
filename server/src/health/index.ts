@@ -2,7 +2,7 @@ import type { Env } from "../env";
 import { MAX_ATTEMPTS } from "../summarizer";
 
 /** Non-seed sources: the Kickoff seed rows are never fetched (docs/contract.md). */
-const REAL_SOURCE = "(config IS NULL OR json_extract(config, '$.seed') IS NOT 1)";
+export const REAL_SOURCE = "(config IS NULL OR json_extract(config, '$.seed') IS NOT 1)";
 
 export interface Health {
   /** Real sources per status (active, stale, moved, broken, blocked). */

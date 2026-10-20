@@ -11,6 +11,13 @@ import '../../l10n/app_localizations.dart';
 import '../detail/detail_screen.dart' show OpenLink, openOfficialPage;
 import 'info_pages.dart';
 
+/// The version shown at the foot of Settings: "0.1.0 (19)" for TestFlight build
+/// 19 (`--dart-define=BUILD_NUMBER=` from the TestFlight workflow), "0.1.0" in
+/// local runs, so the reader and we know exactly which build is on the phone.
+const appVersion = String.fromEnvironment('BUILD_NUMBER') == ''
+    ? '0.1.0'
+    : '0.1.0 (${String.fromEnvironment('BUILD_NUMBER')})';
+
 /// Settings (#64): a plain iOS list opened from the button at the top right of
 /// the feed, as in Apple's own apps, with black-and-white symbols (Yurii). No
 /// login. The language lives here, for the news and the app's words alike
@@ -148,7 +155,7 @@ class SettingsScreen extends StatelessWidget {
                 Padding(
                   padding: const EdgeInsets.fromLTRB(32, 8, 32, 40),
                   child: Text(
-                    '${l10n.settingsFooter}\n\n${l10n.version('0.1.0')}',
+                    '${l10n.settingsFooter}\n\n${l10n.version(appVersion)}',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 13,

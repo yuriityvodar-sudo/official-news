@@ -86,6 +86,58 @@
     }
   },
 
+  "filterAllCountries": "All countries",
+  "@filterAllCountries": {
+    "description": "The Where chip under the date while the feed shows every country, and the first item of its menu (#68)."
+  },
+  "filterAllTopics": "All topics",
+  "@filterAllTopics": {
+    "description": "The Topics chip under the date while no topic is chosen, and the first item of its menu."
+  },
+  "filterCountryChip": "Country: {name}",
+  "@filterCountryChip": {
+    "description": "What VoiceOver says for the Where chip while one country is chosen: the chip itself shows only the country's code (GB). {name} is the country's name.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "filterGroupChip": "Countries: {name}",
+  "@filterGroupChip": {
+    "description": "What VoiceOver says for the Where chip while a group of countries is chosen: the chip shows its short name in this language (EU, G7, G20, NATO; ЄС, НАТО). {name} is the group's name (European Union, G7, G20, NATO).",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "filterGroupEUShort": "EU",
+  "@filterGroupEUShort": {
+    "description": "The Where chip while the European Union group is chosen: the EU's usual abbreviation in this language (EU, ЄС, ЕС, UE), as in the chips prototype after review. NATO's chip is groupNato; G7 and G20 stay as they are."
+  },
+  "filterTopicChip": "Topic: {name}",
+  "@filterTopicChip": {
+    "description": "What VoiceOver says for the Topics chip while a topic is chosen: the chip itself shows only the topic's icon. {name} is the topic's name.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "filterEmpty": "No decisions here in the last 7 days.",
+  "@filterEmpty": {
+    "description": "The feed is empty under the chosen Where or topic (the feed shows the last 7 days)."
+  },
+  "filterShowAllCountries": "Show all countries",
+  "@filterShowAllCountries": {
+    "description": "A button under filterEmpty: shows the feed for every country again."
+  },
+  "filterShowAllTopics": "Show all topics",
+  "@filterShowAllTopics": {
+    "description": "A button under filterEmpty: shows every topic again."
+  },
+
   "decisionTypeLaw": "Law",
   "@decisionTypeLaw": {
     "description": "Decision type, shown in red capitals above a headline."
@@ -119,6 +171,63 @@
     "description": "Decision type: what an official meeting decided."
   },
 
+  "topicForeignAffairs": "Foreign affairs",
+  "@topicForeignAffairs": {
+    "description": "A topic from the fixed list (foreign-affairs), on the Topics chip and in its menu (#67)."
+  },
+  "topicEconomy": "Economy",
+  "@topicEconomy": {
+    "description": "A topic from the fixed list (economy), on the Topics chip and in its menu (#67)."
+  },
+  "topicSecurityDefence": "Security and defence",
+  "@topicSecurityDefence": {
+    "description": "A topic from the fixed list (security-defence), on the Topics chip and in its menu (#67)."
+  },
+  "topicHealth": "Health",
+  "@topicHealth": {
+    "description": "A topic from the fixed list (health), on the Topics chip and in its menu (#67)."
+  },
+  "topicClimate": "Climate",
+  "@topicClimate": {
+    "description": "A topic from the fixed list (climate), on the Topics chip and in its menu (#67)."
+  },
+  "topicTrade": "Trade",
+  "@topicTrade": {
+    "description": "A topic from the fixed list (trade), on the Topics chip and in its menu (#67)."
+  },
+  "topicTechnology": "Technology",
+  "@topicTechnology": {
+    "description": "A topic from the fixed list (technology), on the Topics chip and in its menu (#67)."
+  },
+  "topicEnergy": "Energy",
+  "@topicEnergy": {
+    "description": "A topic from the fixed list (energy), on the Topics chip and in its menu (#67)."
+  },
+  "topicMigration": "Migration",
+  "@topicMigration": {
+    "description": "A topic from the fixed list (migration), on the Topics chip and in its menu (#67)."
+  },
+  "topicElections": "Elections",
+  "@topicElections": {
+    "description": "A topic from the fixed list (elections), on the Topics chip and in its menu (#67)."
+  },
+  "topicHumanRights": "Human rights",
+  "@topicHumanRights": {
+    "description": "A topic from the fixed list (human-rights), on the Topics chip and in its menu (#67)."
+  },
+  "topicScience": "Science",
+  "@topicScience": {
+    "description": "A topic from the fixed list (science), on the Topics chip and in its menu (#67)."
+  },
+  "topicEducation": "Education",
+  "@topicEducation": {
+    "description": "A topic from the fixed list (education), on the Topics chip and in its menu (#67)."
+  },
+  "topicJustice": "Justice",
+  "@topicJustice": {
+    "description": "A topic from the fixed list (justice), on the Topics chip and in its menu (#67)."
+  },
+
   "countryAR": "Argentina",
   "@countryAR": {
     "description": "Country name after the publisher: \"Federal Government · Germany\"."
@@ -139,13 +248,25 @@
   "@countryCN": {
     "description": "Country name."
   },
+  "countryCZ": "Czechia",
+  "@countryCZ": {
+    "description": "Country name."
+  },
   "countryDE": "Germany",
   "@countryDE": {
     "description": "Country name."
   },
+  "countryES": "Spain",
+  "@countryES": {
+    "description": "Country name."
+  },
   "countryEU": "European Union",
   "@countryEU": {
-    "description": "Shown like a country name, for the EU's institutions."
+    "description": "Shown like a country name, for the EU's institutions; also the European Union in the Where menu (#68), its institutions and member states together."
+  },
+  "groupNato": "NATO",
+  "@groupNato": {
+    "description": "A group of countries in the Where menu (#68): the North Atlantic Treaty Organization, as the language writes its short name; also its chip once chosen. The European Union is countryEU (its chip filterGroupEUShort); G7 and G20 are written so in every language."
   },
   "countryFR": "France",
   "@countryFR": {
@@ -179,6 +300,10 @@
   "@countryMX": {
     "description": "Country name."
   },
+  "countryPL": "Poland",
+  "@countryPL": {
+    "description": "Country name."
+  },
   "countryRU": "Russia",
   "@countryRU": {
     "description": "Country name."
@@ -189,6 +314,10 @@
   },
   "countryTR": "Türkiye",
   "@countryTR": {
+    "description": "Country name."
+  },
+  "countryUA": "Ukraine",
+  "@countryUA": {
     "description": "Country name."
   },
   "countryUS": "United States",
@@ -494,7 +623,7 @@
   "@privacyPhoneHeading": {
     "description": "Privacy policy, heading."
   },
-  "privacyPhone": "Your language, the articles you have read, the last feed you saw and the pictures you have viewed are kept on your phone, so the app opens quickly and works offline. Deleting the app deletes them.",
+  "privacyPhone": "Your language and feed filters, the articles you have read, the last feed you saw and the pictures you have viewed are kept on your phone, so the app opens quickly and works offline. Deleting the app deletes them.",
   "@privacyPhone": {
     "description": "Privacy policy, under privacyPhoneHeading."
   },
@@ -518,7 +647,7 @@
   "@privacyAnalyticsHeading": {
     "description": "Privacy policy, heading."
   },
-  "privacyAnalytics": "To understand how the app is used, for example how many people read which kind of decision, the app sends usage events to Google Analytics for Firebase: screens opened, articles opened and read, links tapped, the chosen language, and technical details such as the app version, device model, country and an app instance ID. It does not use the advertising identifier and does not track you across other apps.",
+  "privacyAnalytics": "To understand how the app is used, for example how many people read which kind of decision, the app sends usage events to Google Analytics for Firebase: screens opened, articles opened and read, links tapped, the chosen language and feed filters, and technical details such as the app version, device model, country and an app instance ID. It does not use the advertising identifier and does not track you across other apps.",
   "@privacyAnalytics": {
     "description": "Privacy policy, under privacyAnalyticsHeading. Google Analytics for Firebase is a product's name: never translated."
   },
@@ -627,14 +756,6 @@
     "description": "Contact & Support page: the button that opens an e-mail to us."
   },
 
-  "countryCZ": "Czechia",
-  "@countryCZ": { "description": "Country name." },
-  "countryES": "Spain",
-  "@countryES": { "description": "Country name." },
-  "countryPL": "Poland",
-  "@countryPL": { "description": "Country name." },
-  "countryUA": "Ukraine",
-  "@countryUA": { "description": "Country name." },
   "languageCs": "Czech",
   "@languageCs": { "description": "As languageAr." }
 }

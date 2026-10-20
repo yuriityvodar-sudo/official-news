@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../../core/analytics.dart';
 import '../../core/article.dart';
 import '../../core/feed_language.dart';
+import '../../core/filters.dart';
 import '../../core/news_widgets.dart';
 import '../../core/pictures.dart';
 import '../../core/router.dart';
@@ -13,6 +14,7 @@ import '../../core/theme.dart';
 import '../../l10n/app_localizations.dart';
 import '../settings/settings_screen.dart';
 import 'feed_controller.dart';
+import 'feed_filters.dart';
 
 /// Item 3: the feed (docs/design/mvp.png). Top stories, then the latest
 /// decisions grouped by day; opens instantly from the feed saved on the phone.
@@ -140,6 +142,23 @@ class _FeedScreenState extends State<FeedScreen> {
     await _feed.setLanguage(chosen);
   }
 
+  /// Every country, a group or one country from the chip (#68): another
+  /// feed, from the top.
+  Future<void> _chooseWhere(FeedWhere where) async {
+    if (where != _feed.where) _toTop();
+    await _feed.setWhere(where);
+  }
+
+  /// One topic, or all, from the chip (#67): another feed, from the top.
+  Future<void> _chooseTopic(String? topic) async {
+    if (topic != _feed.topic) _toTop();
+    await _feed.setTopic(topic);
+  }
+
+  void _toTop() {
+    if (_scroll.hasClients) _scroll.jumpTo(0);
+  }
+
   @override
   Widget build(BuildContext context) {
     final text = NewsText.from(context);
@@ -181,6 +200,14 @@ class _FeedScreenState extends State<FeedScreen> {
                           longDay(DateTime.now(), l10n),
                           style: text.dateLine,
                         ),
+                        FeedFilterBar(
+                          where: _feed.where,
+                          whereMenu: _feed.whereMenu,
+                          topic: _feed.topic,
+                          topics: _feed.topics,
+                          onWhere: _chooseWhere,
+                          onTopic: _chooseTopic,
+                        ),
                       ],
                     ),
                   ),
@@ -221,6 +248,13 @@ class _FeedScreenState extends State<FeedScreen> {
             padding: const EdgeInsets.all(20),
             child: _feed.error != null
                 ? Text(l10n.feedLoadFailed, style: text.meta)
+                : _feed.filtered
+                ? _FilteredEmpty(
+                    where: !_feed.where.isAll,
+                    topic: _feed.topic != null,
+                    onAllCountries: () => _chooseWhere(FeedWhere.all),
+                    onAllTopics: () => _chooseTopic(null),
+                  )
                 : _feed.language == FeedLanguage.en
                 ? Text(l10n.feedEmpty, style: text.meta)
                 // The server lists only finished translations; they come in over the day.
@@ -347,6 +381,51 @@ class _FeedScreenState extends State<FeedScreen> {
       },
     ),
   );
+}
+
+/// A filtered feed with nothing in it (#67, #68): says so, with a way back to
+/// all countries and to all topics, whichever narrows it. A group is a fixed
+/// choice, so it can be empty too.
+class _FilteredEmpty extends StatelessWidget {
+  const _FilteredEmpty({
+    required this.where,
+    required this.topic,
+    required this.onAllCountries,
+    required this.onAllTopics,
+  });
+
+  final bool where;
+  final bool topic;
+  final VoidCallback onAllCountries;
+  final VoidCallback onAllTopics;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = NewsText.from(context);
+    final l10n = AppLocalizations.of(context);
+    Widget button(String label, VoidCallback onPressed) => CupertinoButton(
+      padding: EdgeInsets.zero,
+      minimumSize: const Size(44, 44),
+      onPressed: onPressed,
+      child: Text(
+        label,
+        // The filters' red: these buttons undo a filter.
+        style: text.meta.copyWith(
+          color: filterRed.resolveFrom(context),
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(l10n.filterEmpty, style: text.meta),
+        const SizedBox(height: 4),
+        if (where) button(l10n.filterShowAllCountries, onAllCountries),
+        if (topic) button(l10n.filterShowAllTopics, onAllTopics),
+      ],
+    );
+  }
 }
 
 /// One decision: label, publisher, serif headline, time, thumbnail on the right.

@@ -10,8 +10,10 @@ import 'package:official_news/core/api_client.dart';
 import 'package:official_news/core/countries.dart';
 import 'package:official_news/core/decision_types.dart';
 import 'package:official_news/core/feed_language.dart';
+import 'package:official_news/core/filters.dart';
 import 'package:official_news/core/languages.dart';
 import 'package:official_news/core/news_widgets.dart';
+import 'package:official_news/core/topics.dart';
 import 'package:official_news/features/feed/feed_controller.dart';
 import 'package:official_news/main.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -56,13 +58,43 @@ Map<String, dynamic> _article(
   'lang': ?lang,
 };
 
+/// The longest topic name in each language, for the Topics chip (#67).
+const _longTopic = {
+  'en': 'Security and defence',
+  'uk': 'Безпека та оборона',
+  'ru': 'Безопасность и оборона',
+  'es': 'Seguridad y defensa',
+  'de': 'Sicherheit und Verteidigung',
+};
+
 /// One top story and one more decision in each language: `lang=uk` answers in
-/// Ukrainian, no `lang` in English.
+/// Ukrainian, no `lang` in English. The menus for the filters (#67, #68) are
+/// named in the language too.
 ApiClient _api({List<Uri>? log}) => ApiClient(
   baseUrl: 'https://api.test',
   client: MockClient((request) async {
     log?.add(request.url);
     final query = request.url.queryParameters;
+    final l10n = l10nFor(FeedLanguage.fromCode(query['lang']));
+    if (request.url.path == '/countries') {
+      return _ok({
+        'groups': [
+          for (final id in groupIds)
+            {'id': id, 'name': groupName(id, null, l10n), 'members': []},
+        ],
+        'countries': [
+          for (final code in ['DE', 'GB', 'US', 'ZA'])
+            {'code': code, 'name': countryName(code, l10n)},
+        ],
+      });
+    }
+    if (request.url.path == '/topics') {
+      return _ok({
+        'topics': [
+          {'id': 'security-defence', 'name': _longTopic[query['lang'] ?? 'en']},
+        ],
+      });
+    }
     if (query.containsKey('after') || query.containsKey('since')) {
       return _ok({'items': [], 'nextCursor': null, 'top': []});
     }
@@ -200,6 +232,14 @@ void main() {
         for (final type in decisionTypes) {
           expect(decisionTypeLabel(type, l10n), isNotNull, reason: type);
         }
+        for (final id in topicIds) {
+          expect(topicLabel(id, l10n), isNotNull, reason: id);
+        }
+        // The groups of the Where menu (#68), named by the app.
+        expect(groupName('eu', null, l10n), l10n.countryEU);
+        expect(groupName('g7', null, l10n), 'G7');
+        expect(groupName('g20', null, l10n), 'G20');
+        expect(groupName('nato', null, l10n), isNotEmpty);
         expect(countryName('DE', l10n), isNot('DE'));
         expect(languageName('de', l10n), isNot('DE'));
         // Unknown codes are shown as they are.
@@ -474,6 +514,28 @@ void main() {
       expect(find.text(l10n.officialSource), findsOneWidget);
       await tester.pageBack();
       await tester.pumpAndSettle();
+
+      // The filters (#67, #68): both menus with their longest names, then
+      // the short chips.
+      await tester.tap(find.text(l10n.filterAllCountries));
+      await tester.pumpAndSettle();
+      expect(find.text(l10n.countryEU), findsOneWidget);
+      expect(find.text(countryName('GB', l10n)), findsOneWidget);
+      await tester.tap(find.text(countryName('US', l10n)));
+      await tester.pumpAndSettle();
+      expect(find.text('US'), findsOneWidget);
+      await tester.tap(find.text('US'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(l10n.countryEU));
+      await tester.pumpAndSettle();
+      // The EU's chip in the language: EU, ЄС, ЕС, UE.
+      expect(find.text(l10n.filterGroupEUShort), findsOneWidget);
+      await tester.tap(find.text(l10n.filterAllTopics));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(_longTopic[lang.code]!));
+      await tester.pumpAndSettle();
+      expect(find.text(_longTopic[lang.code]!), findsNothing);
+      expect(find.byIcon(topicIcon('security-defence')), findsOneWidget);
 
       await tester.tap(find.byIcon(CupertinoIcons.gear_alt));
       await tester.pumpAndSettle();
