@@ -7,6 +7,12 @@ name: TestFlight
 #   ASC_KEY_ID         App Store Connect API key ID
 #   ASC_ISSUER_ID      App Store Connect API issuer ID
 #   ASC_KEY_P8_BASE64  the .p8 key file, base64-encoded
+#   DIST_CERT_P12_BASE64     the Apple Distribution certificate with its private key (.p12), base64-encoded
+#   DIST_CERT_P12_PASSWORD   the password that .p12 was exported with
+# The certificate is imported into a keychain made for the run; the archive is
+# built unsigned and the export signs it with that certificate, so a run never
+# creates an Apple Development certificate of its own (every run did, until the
+# team hit Apple's limit: #96).
 # The app must already exist in App Store Connect with the bundle ID set in
 # app/ios/Runner.xcodeproj. Builds use the live API at api.officialnews.workers.dev.
 
@@ -58,25 +64,59 @@ jobs:
           echo "FIREBASE_DEFINES=--dart-define=FIREBASE_API_KEY=$(read_key API_KEY) --dart-define=FIREBASE_APP_ID=$(read_key GOOGLE_APP_ID) --dart-define=FIREBASE_SENDER_ID=$(read_key GCM_SENDER_ID) --dart-define=FIREBASE_PROJECT_ID=$(read_key PROJECT_ID)" >> "$GITHUB_ENV"
           rm "$plist"
 
+      - name: Import the Distribution certificate into a keychain for this run
+        env:
+          DIST_CERT_P12_BASE64: ${{ secrets.DIST_CERT_P12_BASE64 }}
+          DIST_CERT_P12_PASSWORD: ${{ secrets.DIST_CERT_P12_PASSWORD }}
+        run: |
+          if [ -z "$DIST_CERT_P12_BASE64" ] || [ -z "$DIST_CERT_P12_PASSWORD" ]; then
+            echo "::error::DIST_CERT_P12_BASE64 and DIST_CERT_P12_PASSWORD must be set (docs/setup.md, #96)."
+            exit 1
+          fi
+          keychain="$RUNNER_TEMP/build.keychain-db"
+          keychain_password=$(uuidgen)
+          security create-keychain -p "$keychain_password" "$keychain"
+          security set-keychain-settings -lut 3600 "$keychain"
+          security unlock-keychain -p "$keychain_password" "$keychain"
+          echo "$DIST_CERT_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/dist.p12"
+          security import "$RUNNER_TEMP/dist.p12" -k "$keychain" -P "$DIST_CERT_P12_PASSWORD" \
+            -T /usr/bin/codesign -T /usr/bin/security -T /usr/bin/productbuild
+          rm -f "$RUNNER_TEMP/dist.p12"
+          # Let codesign use the key without a prompt, and put the keychain first in the search list.
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$keychain_password" "$keychain" > /dev/null
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '" ')
+          security default-keychain -d user -s "$keychain"
+          identities=$(security find-identity -v -p codesigning "$keychain")
+          echo "$identities"
+          if ! echo "$identities" | grep -q "Apple Distribution"; then
+            echo "::error::No valid Apple Distribution identity after the import: check the .p12, its password, and that it is a Distribution certificate."
+            exit 1
+          fi
+          echo "KEYCHAIN_PATH=$keychain" >> "$GITHUB_ENV"
+
       - name: Build the iOS app without signing
         # The live API, not the laptop default (app/lib/core/config.dart), and
         # the Firebase values when there are any.
-        run: flutter build ios --release --no-codesign --build-number=${{ github.run_number }} --dart-define=API_URL=https://api.officialnews.workers.dev --dart-define=APP_BUILD=testflight $FIREBASE_DEFINES
+        run: flutter build ios --release --no-codesign --build-number=${{ github.run_number }} --dart-define=API_URL=https://api.officialnews.workers.dev --dart-define=APP_BUILD=testflight --dart-define=BUILD_NUMBER=${{ github.run_number }} $FIREBASE_DEFINES
 
-      - name: Archive with automatic signing
+      - name: Archive without signing
+        # Nothing is signed here, so this step never talks to the Apple account
+        # and never creates a certificate. Xcode refuses a Distribution identity
+        # on the Swift packages under automatic signing, so the signing happens
+        # once, at the export below (the first try of #96 failed on that).
         working-directory: app/ios
         run: |
           xcodebuild archive \
             -workspace Runner.xcworkspace -scheme Runner -configuration Release \
             -archivePath "$RUNNER_TEMP/Runner.xcarchive" \
             -destination "generic/platform=iOS" \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath "$RUNNER_TEMP/asc_key.p8" \
-            -authenticationKeyID "${{ secrets.ASC_KEY_ID }}" \
-            -authenticationKeyIssuerID "${{ secrets.ASC_ISSUER_ID }}" \
-            DEVELOPMENT_TEAM="${{ secrets.APPLE_TEAM_ID }}" CODE_SIGN_STYLE=Automatic
+            DEVELOPMENT_TEAM="${{ secrets.APPLE_TEAM_ID }}" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
 
-      - name: Upload to TestFlight
+      - name: Sign with the Distribution certificate and upload to TestFlight
+        # Automatic signing at export: the App Store profile for the bundle ID is
+        # made or fetched with the API key, and the only Distribution identity in
+        # the keychain is the imported one.
         working-directory: app/ios
         run: |
           cat > "$RUNNER_TEMP/ExportOptions.plist" <<EOF
@@ -98,6 +138,8 @@ jobs:
             -authenticationKeyID "${{ secrets.ASC_KEY_ID }}" \
             -authenticationKeyIssuerID "${{ secrets.ASC_ISSUER_ID }}"
 
-      - name: Remove the key
+      - name: Remove the key and the keychain
         if: always()
-        run: rm -f "$RUNNER_TEMP/asc_key.p8"
+        run: |
+          rm -f "$RUNNER_TEMP/asc_key.p8" "$RUNNER_TEMP/dist.p12"
+          if [ -n "$KEYCHAIN_PATH" ]; then security delete-keychain "$KEYCHAIN_PATH"; fi
