@@ -1,7 +1,7 @@
 // The feed's filters (#67, #68): GET /articles with country, group and topic, GET /topics and GET /countries.
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
-import { FROM_TRANSLATED, PAGE_CONDITIONS, TRANSLATED_CONDITIONS, feedFilters, feedTopics, topStories } from "../src/api";
+import { FROM_TRANSLATED, PAGE_CONDITIONS, RECENT_TRANSLATION, TRANSLATED_CONDITIONS, feedFilters, feedTopics, topStories } from "../src/api";
 import { GROUPS, type GroupId, TOPIC_NAMES, type Where, countryName, groupCountries, hasCountryName } from "../src/api/filters";
 import { TOPICS, type Topic } from "../src/summarizer/schema";
 import { LANGS, type Lang } from "../src/translator";
@@ -353,7 +353,7 @@ describe("GET /articles with filters: paging, after= and top", () => {
       return {
         sql: lang
           ? `SELECT a.id ${FROM_TRANSLATED}
-             WHERE ${[...PAGE_CONDITIONS, ...TRANSLATED_CONDITIONS, ...filters.where].join(" AND ")} ORDER BY a.feed_seq DESC LIMIT 21`
+             WHERE ${[...PAGE_CONDITIONS, RECENT_TRANSLATION, ...TRANSLATED_CONDITIONS, ...filters.where].join(" AND ")} ORDER BY a.feed_seq DESC LIMIT 21`
           : `SELECT a.id FROM articles a JOIN sources s ON s.id = a.source_id
              WHERE ${[...PAGE_CONDITIONS, ...filters.where].join(" AND ")} ORDER BY a.feed_seq DESC LIMIT 21`,
         // The language is bound first.
@@ -384,7 +384,10 @@ describe("GET /articles with filters: paging, after= and top", () => {
           .bind(...query.binds)
           .all<{ detail: string }>();
         const plan = results.map((r) => r.detail).join("; ");
-        expect(plan, `${analyzed ? "analyzed" : "fresh"} ${i}: ${plan}`).toMatch(/^SEARCH a USING INDEX articles_feed_seq \(feed_seq>\?\)/);
+        // A language first reads its one translation_langs row and its newest translation (#121).
+        const langRow = /^SEARCH l USING COVERING INDEX sqlite_autoindex_translation_langs_1 \(lang=\?\); CORRELATED SCALAR SUBQUERY \d+; SEARCH h USING INDEX article_translations_lang_seq \(lang=\? AND lang_seq>\?\); /;
+        if (query.lang) expect(plan, `${i}: ${plan}`).toMatch(langRow);
+        expect(plan.replace(langRow, ""), `${analyzed ? "analyzed" : "fresh"} ${i}: ${plan}`).toMatch(/^SEARCH a USING INDEX articles_feed_seq \(feed_seq>\?\)/);
         expect(plan, `${i}: ${plan}`).not.toMatch(/SCAN (a|s|t)\b|AUTOMATIC|TEMP B-TREE/);
         // The country or group: the matching sources read once, in one pass (no automatic index), not a join that drives the walk.
         if (query.where) expect(plan, `${i}: ${plan}`).toMatch(/LIST SUBQUERY \d+; SCAN sources\b/);
@@ -458,6 +461,37 @@ describe("GET /articles with filters: paging, after= and top", () => {
     // And still the right ones.
     expect(await topIds("/articles")).toEqual(["top-8", "top-7", "top-5", "top-4", "top-2"]);
     expect(await topIds("/articles?lang=uk")).toEqual(["top-2"]);
+  });
+});
+
+describe("a language with no translation in the feed's 7 days (#121)", () => {
+  it("answers its empty feed, top stories and topics in a few rows, not the whole window", async () => {
+    // German while it is off: the feed has articles, none of them in German.
+    await add(...Array.from({ length: 60 }, (_, i) => ({ id: `n-${i}`, importance: 3 + (i % 3) })));
+    await translated("n-0", "n-1");
+    // An old German translation, of an article that has left the 7 days.
+    await add({ id: "old", publishedAt: hoursAgo(9 * 24) });
+    await translatedInto("de", "old");
+    await env.DB.prepare("UPDATE article_translations SET translated_at = ? WHERE article_id = 'old'").bind(hoursAgo(9 * 24)).run();
+
+    for (const path of ["/articles?lang=de", "/articles?lang=de&group=g20&topic=economy", "/articles?lang=de&after=3", "/topics?lang=de"]) {
+      const { status, body } = await get(path);
+      expect(status, path).toBe(200);
+      expect(body, path).toMatchObject(path.startsWith("/topics") ? { topics: [] } : { items: [], top: [] });
+      expect(await rowsRead(() => get(path)), path).toBeLessThan(10);
+    }
+    // A language with translations still walks its feed, as before.
+    expect(await ids("/articles?lang=uk")).toEqual(["n-1", "n-0"]);
+    expect(await rowsRead(() => get("/articles?lang=uk"))).toBeGreaterThan(60);
+  });
+
+  it("shows its first translation as soon as there is one", async () => {
+    await add({ id: "first", importance: 5 });
+    expect(await ids("/articles?lang=de")).toEqual([]);
+    await translatedInto("de", "first");
+    expect(await ids("/articles?lang=de")).toEqual(["first"]);
+    expect(await topIds("/articles?lang=de")).toEqual(["first"]);
+    expect(await topicIds("/topics?lang=de")).toEqual(["economy"]);
   });
 });
 
