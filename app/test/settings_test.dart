@@ -137,7 +137,7 @@ void main() {
     ) async {
       await pumpWithPush(tester, null);
       expect(row(en.notificationsUnavailable), findsOneWidget);
-      expect(find.byType(CupertinoListTileChevron), findsNWidgets(5));
+      expect(find.byType(CupertinoListTileChevron), findsNWidgets(7));
       await tester.tap(find.text(en.notifications));
       await tester.pumpAndSettle();
       expect(settingsAppOpened, 0);
@@ -217,7 +217,7 @@ void main() {
       final messaging = FakeMessaging(status: PushPermission.denied);
       await pumpWithPush(tester, messaging);
       expect(row(en.notificationsOff), findsOneWidget);
-      expect(find.byType(CupertinoListTileChevron), findsNWidgets(6));
+      expect(find.byType(CupertinoListTileChevron), findsNWidgets(8));
 
       await tester.tap(find.text(en.notifications));
       await tester.pumpAndSettle();

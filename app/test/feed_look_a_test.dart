@@ -56,6 +56,8 @@ void main() {
       api: ApiClient(
         baseUrl: 'https://api.test',
         client: MockClient((request) async {
+    final menu = fakeMenus(request);
+    if (menu != null) return menu;
           final newer = request.url.queryParameters.containsKey('after');
           return http.Response(
             jsonEncode({

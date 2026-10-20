@@ -757,5 +757,49 @@
   },
 
   "languageCs": "Czech",
-  "@languageCs": { "description": "As languageAr." }
+  "@languageCs": { "description": "As languageAr." },
+  "settingsDesign": "Design",
+  "@settingsDesign": {
+    "description": "The Design section of Settings and its first row: the look of the feed (#66)."
+  },
+  "settingsDesignNow": "Now",
+  "@settingsDesignNow": {
+    "description": "The segment of the Design row for today's look, beside A, B and C (#66)."
+  },
+  "settingsHeadlineWeight": "Headline weight",
+  "@settingsHeadlineWeight": {
+    "description": "The Settings row and the sheet title for how heavy the feed headlines are (#66)."
+  },
+  "headlineWeightLight": "Light",
+  "@headlineWeightLight": {
+    "description": "A headline weight, as fonts name it (#66)."
+  },
+  "headlineWeightRegular": "Regular",
+  "@headlineWeightRegular": {
+    "description": "A headline weight, as fonts name it (#66)."
+  },
+  "headlineWeightSemibold": "Semibold",
+  "@headlineWeightSemibold": {
+    "description": "A headline weight, as fonts name it (#66)."
+  },
+  "headlineWeightBold": "Bold",
+  "@headlineWeightBold": {
+    "description": "A headline weight, as fonts name it (#66)."
+  },
+  "feedUnread": "Unread",
+  "@feedUnread": {
+    "description": "What VoiceOver says for an article in the feed that has not been opened yet, in the dot styles of read marking (a build option; off by default)."
+  },
+  "feedCardTopics": "{count, plural, =1{Topic: {names}} other{Topics: {names}}}",
+  "@feedCardTopics": {
+    "description": "What VoiceOver says for the topic tags on a feed card (1 to 3). {names} is the topics' names, as in the Topics menu, joined by commas: \"Topics: Economy, Trade\".",
+    "placeholders": {
+      "count": { "type": "int" },
+      "names": { "type": "String" }
+    }
+  },
+  "cancel": "Cancel",
+  "@cancel": {
+    "description": "The cancel button of an action sheet (Settings, headline weight)."
+  }
 }

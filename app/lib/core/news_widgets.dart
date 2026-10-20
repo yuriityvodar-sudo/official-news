@@ -54,7 +54,7 @@ class PublisherLine extends StatelessWidget {
   final Article article;
   final bool dimmed;
 
-  /// PROTOTYPE: how read articles look; null or Dim shows the mark as today.
+  /// How read articles look (#66); null, None or Dim shows the mark as today.
   final ReadMark? mark;
 
   @override

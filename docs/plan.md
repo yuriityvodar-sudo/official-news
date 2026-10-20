@@ -117,7 +117,7 @@ The MVP is a Kickoff plus 8 items, 4 each. This is our suggested split: Yurii ow
 | #56 | Article text layout (justified text, smaller body font, paragraphs) | Roman | Before/after agreed in the issue, then built |
 | #64 | Settings screen from the top-right corner (language, notifications, privacy, terms, support, about, version); no login | Yurii (design and build) | Yurii approves it on the phone |
 | #65 | Domain (Cloudflare Registrar) and app name | Yurii | Name decided, domain bought |
-| #66 | Feed redesign: article cards, font, UI fixes | Yurii (design and build) | Yurii approves it on the phone |
+| #66 | Feed redesign: one list, topics on the cards, no read marking, the splash, and a Design section in Settings (look, headline weight); the prototype's looks A, B and C kept to switch between | Yurii (design and build) | Yurii approves it on the phone (20 Oct: builds 19, 20, 23) |
 | #67 | News categories: a Topics chip under the date, one topic at a time, busiest first, from the server, also for a country or a group | Yurii (design and build) | Server filters and `GET /topics` (Proposed, `docs/decisions.md`), then the app's chip; Yurii approves it on the phone |
 | #68 | Where filter: all countries (default), a group of countries (European Union, G7, G20, NATO: its members' decisions together) or one country (that country's only) | Yurii (design and build) | Server filters (`country=`, `group=`) and `GET /countries` with its groups (Proposed, `docs/decisions.md`), then the app's chip; Yurii approves it on the phone |
 | #60 | Analytics (Google Analytics through Firebase) | Yurii | Events arrive in GA from TestFlight; release checklist done |

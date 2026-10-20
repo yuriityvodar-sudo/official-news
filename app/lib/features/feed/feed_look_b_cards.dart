@@ -13,7 +13,7 @@ import '../../l10n/app_localizations.dart';
 import 'feed_look_b_words.dart';
 import 'feed_topic_tags.dart';
 
-/// Design option B (#66), prototype: the cards and the styles they use.
+/// Design option B (#66): the cards and the styles they use.
 
 /// The brand's serif, Georgia on iOS: it has Cyrillic, so Ukrainian and
 /// Russian headlines are in the same face as English ones.
@@ -296,7 +296,7 @@ class BCard extends StatefulWidget {
 
   final Article article;
 
-  /// Opened before or not, and how that shows (prototype): in Dim the card
+  /// Opened before or not, and how that shows ([ReadStyle]): in Dim the card
   /// stays, its headline and picture faded; in the dot styles a card not yet
   /// opened has the unread dot in place of the official-source seal.
   final ReadMark mark;
@@ -333,7 +333,7 @@ class _BCardState extends State<BCard> {
     final hasSummary = summary != null && summary.isNotEmpty;
 
     // Who decided: the country, the official-source seal and the ministry,
-    // in up to two lines, so a long ministry's name is not cut. PROTOTYPE:
+    // in up to two lines, so a long ministry's name is not cut. Note:
     // in the dot styles the unread dot stands between the country and the
     // ministry instead of the seal and the " · ", and a read card keeps the
     // " · " in the dot's room, so the ministry never moves.

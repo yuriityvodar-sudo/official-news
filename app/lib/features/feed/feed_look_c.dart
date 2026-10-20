@@ -12,7 +12,7 @@ import '../../l10n/app_localizations.dart';
 import 'feed_look.dart';
 import 'feed_topic_tags.dart';
 
-/// Design option C (#66), prototype: "Briefing".
+/// Design option C (#66, from the prototype, kept in Settings → Design): "Briefing".
 ///
 /// Text first, like a morning briefing: a compact masthead whose filter bar
 /// stays pinned at the top, and one list with every decision on the same
@@ -448,7 +448,7 @@ List<String> _stamp(Article article, AppLocalizations l10n) {
 String _capitalized(String text) =>
     text.isEmpty ? text : text[0].toUpperCase() + text.substring(1);
 
-/// PROTOTYPE: the two words VoiceOver adds in C. If C is chosen, they move
+/// The two words VoiceOver adds in C. If C is chosen, they move
 /// to lib/l10n/app_*.arb (feedImportant, feedOpened) with the other words.
 ({String important, String opened}) _words(AppLocalizations l10n) =>
     switch (l10n.localeName) {
@@ -471,7 +471,7 @@ class _Item extends StatelessWidget {
 
   final Article article;
 
-  /// Opened or not, and how that shows (prototype): greyed in Dim, or the
+  /// Opened or not, and how that shows ([ReadStyle]): greyed in Dim, or the
   /// unread dot after the country in the dot styles.
   final ReadMark mark;
 
@@ -528,7 +528,7 @@ class _Item extends StatelessWidget {
 
     // Who decided, in full: the country first, then the institution, on up
     // to two lines. With large text the institution gets a line of its own
-    // with the time, to leave the headline the whole width. PROTOTYPE: in
+    // with the time, to leave the headline the whole width. Note: in
     // the dot styles the unread dot follows the country, its room kept once
     // read.
     final countryText = TextSpan(
@@ -586,7 +586,7 @@ class _Item extends StatelessWidget {
     // Importance: a red rule beside the headline, in the gap of
     // the left column (in the page margin with large text). Not a dot: a dot
     // before a row reads as "unread" on iOS. Grey once read, in Dim and in
-    // the Red prototype style, where red on a row means not opened yet.
+    // the Red style, where red on a row means not opened yet.
     Widget headline = Text(article.headline, style: inked(t.headline));
     if (important) {
       headline = Stack(

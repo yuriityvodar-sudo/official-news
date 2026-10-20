@@ -171,5 +171,15 @@
   "supportAppStore": "Зв’язатися з нами можна через сторінку застосунку в App Store.",
   "supportWrite": "Написати нам",
 
-  "languageCs": "чеської"
+  "languageCs": "чеської",
+  "settingsDesign": "Дизайн",
+  "settingsDesignNow": "Поточний",
+  "settingsHeadlineWeight": "Товщина заголовків",
+  "headlineWeightLight": "Тонкий",
+  "headlineWeightRegular": "Звичайний",
+  "headlineWeightSemibold": "Напівжирний",
+  "headlineWeightBold": "Жирний",
+  "feedUnread": "Непрочитане",
+  "feedCardTopics": "{count, plural, =1{Тема: {names}} other{Теми: {names}}}",
+  "cancel": "Скасувати"
 }

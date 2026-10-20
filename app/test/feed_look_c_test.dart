@@ -57,6 +57,8 @@ ApiClient _api(
 }) => ApiClient(
   baseUrl: 'https://api.test',
   client: MockClient((request) async {
+    final menu = fakeMenus(request);
+    if (menu != null) return menu;
     final query = request.url.queryParameters;
     final isCheck = query.containsKey('after') || query.containsKey('since');
     return http.Response(

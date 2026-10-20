@@ -14,7 +14,6 @@ import 'package:official_news/core/theme.dart';
 import 'package:official_news/features/feed/feed_controller.dart';
 import 'package:official_news/features/feed/feed_look.dart';
 import 'package:official_news/features/feed/feed_screen.dart';
-import 'package:official_news/features/settings/settings_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'test_app.dart';
@@ -78,10 +77,12 @@ const _unread = ['t2', 't3', 'a2'];
 ApiClient _api() => ApiClient(
   baseUrl: 'https://api.test',
   client: MockClient((request) async {
+    final menu = fakeMenus(request);
+    if (menu != null) return menu;
     final query = request.url.queryParameters;
     final page = query.containsKey('since') || query.containsKey('after')
         ? {'items': <Object>[], 'nextCursor': null, 'top': <Object>[]}
-        : {'items': _items, 'nextCursor': null, 'top': _top};
+        : fakePage({'items': _items, 'nextCursor': null, 'top': _top}, query);
     return http.Response.bytes(
       utf8.encode(jsonEncode(page)),
       200,
@@ -215,8 +216,9 @@ void main() {
     expect(readStyleNamed('dim'), ReadStyle.dim);
     expect(readStyleNamed(' Red '), ReadStyle.red);
     expect(readStyleNamed('blue'), ReadStyle.blue);
-    expect(readStyleNamed(''), ReadStyle.blue);
-    expect(readStyleNamed('grey'), ReadStyle.blue);
+    expect(readStyleNamed(''), ReadStyle.none);
+    expect(readStyleNamed('grey'), ReadStyle.none);
+    expect(readStyleNamed('none'), ReadStyle.none);
   });
 
   for (final design in FeedDesign.values) {
@@ -421,35 +423,4 @@ void main() {
     }
   });
 
-  testWidgets('the Read row in Settings switches the style and goes back to '
-      'the feed to show it', (tester) async {
-    await _pumpFeed(tester);
-    expect(_dots(find.byType(FeedScreen), AppColors.accent), findsNothing);
-    await tester.tap(find.byIcon(CupertinoIcons.gear_alt));
-    await tester.pumpAndSettle();
-    expect(find.text('Read'), findsOneWidget);
-    final control = tester.widget<CupertinoSlidingSegmentedControl<ReadStyle>>(
-      find.byType(CupertinoSlidingSegmentedControl<ReadStyle>),
-    );
-    expect(control.groupValue, ReadStyle.dim);
-
-    await tester.tap(find.text('Red'));
-    await tester.pumpAndSettle();
-    // Settings closes once the segment has slid over.
-    await tester.pump(const Duration(milliseconds: 300));
-    await tester.pumpAndSettle();
-    expect(readStyle.value, ReadStyle.red);
-    expect(find.byType(SettingsScreen), findsNothing);
-    expect(_dots(_row('a2'), AppColors.accent), findsOneWidget);
-
-    await tester.tap(find.byIcon(CupertinoIcons.gear_alt));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Dim'));
-    await tester.pumpAndSettle();
-    await tester.pump(const Duration(milliseconds: 300));
-    await tester.pumpAndSettle();
-    expect(readStyle.value, ReadStyle.dim);
-    expect(find.byType(SettingsScreen), findsNothing);
-    expect(_dots(find.byType(FeedScreen), AppColors.accent), findsNothing);
-  });
 }

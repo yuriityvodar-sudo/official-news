@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../../core/article.dart';
 import '../../core/read_mark.dart';
-import 'feed_filters.dart';
 import 'feed_look_a.dart';
 import 'feed_look_b.dart';
 import 'feed_look_c.dart';
@@ -157,7 +156,7 @@ class FeedList {
   /// ([cardTopics]).
   final String? topic;
 
-  /// How many topic tags a card shows at most (prototype: 1, 2 or 3,
+  /// How many topic tags a card shows at most (3; a build may set 1 or 2,
   /// [topicTagCount]). Give each card `cardTopics(article, first: topic,
   /// max: maxTopics)`, or [topicsOf].
   final int maxTopics;
@@ -166,7 +165,7 @@ class FeedList {
   /// unread dot ([readStyle]).
   final Set<String> readIds;
 
-  /// How read articles look (prototype): give each row [markOf] its article.
+  /// How read articles look ([ReadStyle]): give each row [markOf] its article.
   final ReadStyle readStyle;
 
   /// Opens `articles[index]`: `onTap: () => list.open(i)`. Analytics

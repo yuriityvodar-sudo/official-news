@@ -11,7 +11,7 @@ import 'feed_look.dart';
 import 'feed_look_now.dart';
 import 'feed_topic_tags.dart';
 
-/// Design option A (#66), prototype: "Refined editorial".
+/// Design option A (#66, from the prototype, kept in Settings → Design): "Refined editorial".
 ///
 /// Today's Apple News structure, done carefully: one list of rows with a small
 /// picture on the right (no section titles and no lead story since Yurii's
@@ -209,7 +209,7 @@ class _AType {
       read ? style.copyWith(color: muted) : style;
 }
 
-/// PROTOTYPE: a site's default sharing picture (the GOV.UK crown tile,
+/// A site's default sharing picture (the GOV.UK crown tile,
 /// Kantei's logo) says nothing about the decision and reads like an ad, so
 /// the feed leaves it out. The real fix belongs in the fetcher: not saving
 /// such a picture as the article's.
@@ -237,7 +237,7 @@ String? _pictureOf(Article a) {
 /// Where a decision comes from: "BRAZIL  Chamber of Deputies". The
 /// country comes first so it is never cut; a long institution name is.
 /// It is grey already, so it looks the same once the article is read.
-/// PROTOTYPE: in the dot styles the unread dot stands between the two,
+/// In the dot styles the unread dot stands between the two,
 /// "BRAZIL ● Chamber of Deputies"; once read its room shows a small grey
 /// " · ", as B does, so the institution does not move.
 class _Kicker extends StatelessWidget {
@@ -306,7 +306,7 @@ String _spoken(BuildContext context, Article a, List<String> topics) {
   ].map(sentence).join(' ');
 }
 
-/// PROTOTYPE: "Read", for VoiceOver on an opened article. It belongs in the
+/// "Read", for VoiceOver on an opened article. It belongs in the
 /// app's translations (`feedRead` in the .arb files) once a design is chosen;
 /// a design option may change only its own file.
 String _readWord(BuildContext context) =>

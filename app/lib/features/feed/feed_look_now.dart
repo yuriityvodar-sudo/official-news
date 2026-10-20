@@ -135,7 +135,8 @@ class NowArticleRow extends StatelessWidget {
   /// The topic tags to show, in order ([FeedList.topicsOf]); none, no row.
   final List<String> topics;
 
-  /// Read or not, and how that shows (prototype): dimmed, or the unread dot.
+  /// Read or not, and how that shows ([ReadStyle]): nothing, dimmed, or the
+  /// unread dot.
   final ReadMark mark;
   final VoidCallback onTap;
   final bool showDay;
@@ -144,7 +145,7 @@ class NowArticleRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final text = NewsText.from(context);
     final read = mark.dimmed;
-    // PROTOTYPE: in the dot styles VoiceOver says "Unread" after the row, as
+    // In the dot styles VoiceOver says "Unread" after the row, as
     // in the other designs, not in the middle where the dot is.
     return Semantics(
       value: mark.unread ? AppLocalizations.of(context).feedUnread : null,

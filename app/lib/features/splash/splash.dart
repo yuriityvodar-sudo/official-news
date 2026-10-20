@@ -5,9 +5,10 @@ import 'package:flutter/services.dart';
 
 import '../../core/theme.dart';
 
-/// PROTOTYPE (Yurii, 16 Oct): the splash at app start, three words stacked on
+/// The splash at app start (#66, Yurii, 16 Oct): three words stacked on
 /// a white page (black in dark mode), with a wave that moves from the bottom
-/// up. Three styles to compare, chosen in Settings (Prototype → Splash).
+/// up. Four styles were compared in the prototype; 1b is the one shown
+/// (Yurii, 20 Oct), the others stay for a build's `--dart-define=SPLASH`.
 ///
 /// Apple wants the native launch screen static, so iOS shows a plain
 /// background (LaunchScreen.storyboard, systemBackground: white, or black in

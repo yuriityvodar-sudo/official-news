@@ -7,7 +7,7 @@ import '../../l10n/app_localizations.dart';
 import 'feed_look.dart';
 import 'feed_look_b_cards.dart';
 
-/// Design option B (#66), prototype: cards.
+/// Design option B (#66, from the prototype, kept in Settings → Design): cards.
 ///
 /// iOS's grouped grey page with each decision in its own white card (dark
 /// grey in dark mode), one list of cards of one size (no section titles and
@@ -211,9 +211,10 @@ class _Toolbar extends StatelessWidget {
   Widget build(BuildContext context) {
     // The filter bar brings 10 pt of its own above its chips; a chip is its
     // 15-pt label (about 1.2 lines' height in SF) plus 14 pt, in a target at
-    // least 36 pt high. The gear's target is 44 pt: centred on the chips'.
+    // least 44 pt high (the real bar's, #87). The gear's target is 44 pt:
+    // centred on the chips'.
     final chip = math.max(
-      36.0,
+      44.0,
       14 + MediaQuery.textScalerOf(context).scale(15) * 1.2,
     );
     final gearTop = math.max(0.0, 10 + chip / 2 - 22);

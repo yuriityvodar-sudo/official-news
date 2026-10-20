@@ -67,6 +67,8 @@ ApiClient _api(
 }) => ApiClient(
   baseUrl: 'https://api.test',
   client: MockClient((request) async {
+    final menu = fakeMenus(request);
+    if (menu != null) return menu;
     final query = request.url.queryParameters;
     final page = query.containsKey('since') || query.containsKey('after')
         ? {'items': newer, 'nextCursor': null, 'top': <Object>[]}

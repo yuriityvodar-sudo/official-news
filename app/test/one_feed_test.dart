@@ -7,6 +7,7 @@ import 'package:official_news/core/api_client.dart';
 import 'package:official_news/core/article.dart';
 import 'package:official_news/features/feed/feed_controller.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'test_app.dart';
 
 /// Yurii, 16 Oct: the feed is one list. The server still sends its top
 /// stories; the app puts them among the rest, each article once, in the order
@@ -149,6 +150,8 @@ void main() {
       api: ApiClient(
         baseUrl: 'https://api.test',
         client: MockClient((request) async {
+    final menu = fakeMenus(request);
+    if (menu != null) return menu;
           final query = request.url.queryParameters;
           Map<String, dynamic> page(int from, int to, String? next) => {
             'items': [

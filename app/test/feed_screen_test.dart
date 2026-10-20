@@ -12,7 +12,6 @@ import 'package:official_news/core/feed_language.dart';
 import 'package:official_news/core/news_widgets.dart';
 import 'package:official_news/core/router.dart';
 import 'package:official_news/features/feed/feed_controller.dart';
-import 'package:official_news/features/feed/feed_filters.dart';
 import 'package:official_news/features/feed/feed_screen.dart';
 import 'package:official_news/features/feed/feed_topic_tags.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -659,16 +658,10 @@ void main() {
             }),
           ),
         );
-        // The language moved to Settings (#64): no globe in the feed, and
-        // the filters (#67, prototype) say "All countries" in words.
+        // The language moved to Settings (#64): no globe in the feed. This
+        // server has no menus, so the filter bar shows no chips (#67, #68).
         expect(find.byIcon(CupertinoIcons.globe), findsNothing);
-        expect(
-          find.descendant(
-            of: find.byType(FeedFilterBar),
-            matching: find.text('All countries'),
-          ),
-          findsOneWidget,
-        );
+        expect(find.text('All countries'), findsNothing);
         final button = find.ancestor(
           of: find.byIcon(CupertinoIcons.gear_alt),
           matching: find.byType(CupertinoButton),

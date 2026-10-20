@@ -171,5 +171,15 @@
   "supportAppStore": "Sie erreichen uns über die Seite der App im App Store.",
   "supportWrite": "E-Mail schreiben",
 
-  "languageCs": "Tschechischen"
+  "languageCs": "Tschechischen",
+  "settingsDesign": "Design",
+  "settingsDesignNow": "Aktuell",
+  "settingsHeadlineWeight": "Schriftstärke der Überschriften",
+  "headlineWeightLight": "Leicht",
+  "headlineWeightRegular": "Normal",
+  "headlineWeightSemibold": "Halbfett",
+  "headlineWeightBold": "Fett",
+  "feedUnread": "Ungelesen",
+  "feedCardTopics": "{count, plural, =1{Thema: {names}} other{Themen: {names}}}",
+  "cancel": "Abbrechen"
 }

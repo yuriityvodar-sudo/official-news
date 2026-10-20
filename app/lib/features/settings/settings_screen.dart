@@ -6,12 +6,10 @@ import 'package:flutter/material.dart';
 
 import '../../core/feed_language.dart';
 import '../../core/push.dart';
-import '../../core/read_mark.dart';
 import '../../core/theme.dart';
 import '../../l10n/app_localizations.dart';
 import '../detail/detail_screen.dart' show OpenLink, openOfficialPage;
 import '../feed/feed_look.dart';
-import '../splash/splash.dart';
 import 'info_pages.dart';
 
 /// The version shown at the foot of Settings: "0.1.0 (19)" for TestFlight build
@@ -33,7 +31,14 @@ class SettingsScreen extends StatelessWidget {
     this.openLink = openOfficialPage,
     this.notifications,
     this.openSettingsApp = openAppSettings,
+    this.saveDesign,
+    this.saveHeadlineWeight,
   });
+
+  /// Settings → Design (#66): saves the look and the headline weight on the
+  /// phone (the notifiers change at once either way).
+  final ValueChanged<FeedDesign>? saveDesign;
+  final ValueChanged<HeadlineWeight>? saveHeadlineWeight;
 
   /// The feed's language now, and how to change it (the feed reloads in it).
   final ValueListenable<FeedLanguage> language;
@@ -70,7 +75,10 @@ class SettingsScreen extends StatelessWidget {
             ),
             SliverList.list(
               children: [
-                const _DesignSection(),
+                _DesignSection(
+                  saveDesign: saveDesign,
+                  saveHeadlineWeight: saveHeadlineWeight,
+                ),
                 CupertinoListSection.insetGrouped(
                   header: _Header(l10n.settingsReading),
                   children: [
@@ -179,134 +187,123 @@ class SettingsScreen extends StatelessWidget {
   }
 }
 
-/// PROTOTYPE (#66): switches the feed between today's look and the design
-/// options, plays the splash styles, switches how read articles look and how
-/// many topic tags a card shows, to compare them in one build. English only;
-/// not for release.
+/// Design (#66): the feed's look (today's, or the options A, B and C Yurii
+/// compared in the prototype, kept to switch between) and how heavy the
+/// headlines are. Both are saved on the phone.
 class _DesignSection extends StatelessWidget {
-  const _DesignSection();
+  const _DesignSection({this.saveDesign, this.saveHeadlineWeight});
+
+  final ValueChanged<FeedDesign>? saveDesign;
+  final ValueChanged<HeadlineWeight>? saveHeadlineWeight;
 
   @override
-  Widget build(BuildContext context) => CupertinoListSection.insetGrouped(
-    header: const _Header('Prototype'),
-    children: [
-      ValueListenableBuilder(
-        valueListenable: feedDesign,
-        builder: (context, design, _) => CupertinoListTile(
-          leading: const _Icon(CupertinoIcons.paintbrush),
-          title: const Text('Design'),
-          trailing: CupertinoSlidingSegmentedControl<FeedDesign>(
-            groupValue: design,
-            onValueChanged: (d) {
-              if (d == null || d == design) return;
-              feedDesign.value = d;
-              // Back to the feed to show the new look, once the segment has slid over.
-              Future.delayed(const Duration(milliseconds: 250), () {
-                if (context.mounted) {
-                  Navigator.of(context).popUntil((route) => route.isFirst);
-                }
-              });
-            },
-            children: const {
-              FeedDesign.now: Text('Now'),
-              FeedDesign.a: Text('A'),
-              FeedDesign.b: Text('B'),
-              FeedDesign.c: Text('C'),
-            },
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return CupertinoListSection.insetGrouped(
+      header: _Header(l10n.settingsDesign),
+      children: [
+        ValueListenableBuilder(
+          valueListenable: feedDesign,
+          builder: (context, design, _) => CupertinoListTile(
+            leading: const _Icon(CupertinoIcons.paintbrush),
+            title: Text(l10n.settingsDesign),
+            additionalInfo: Text(designName(design, l10n)),
+            trailing: const CupertinoListTileChevron(),
+            onTap: () => _pickDesign(context, design),
           ),
         ),
-      ),
-      // The splash at start (Yurii, 16 Oct): pick a style, Play shows it now.
-      ValueListenableBuilder(
-        valueListenable: splashStyle,
-        builder: (context, style, _) => CupertinoListTile(
-          leading: const _Icon(CupertinoIcons.sparkles),
-          title: const Text('Splash'),
-          subtitle: Text(switch (style) {
-            SplashStyle.rise => 'rise',
-            SplashStyle.riseUp => 'rise, news first',
-            SplashStyle.sweep => 'sweep',
-            SplashStyle.fill => 'fill',
-          }),
-          trailing: CupertinoSlidingSegmentedControl<SplashStyle>(
-            groupValue: style,
-            onValueChanged: (s) {
-              if (s != null) splashStyle.value = s;
-            },
-            children: const {
-              SplashStyle.rise: Text('1'),
-              SplashStyle.riseUp: Text('1b'),
-              SplashStyle.sweep: Text('2'),
-              SplashStyle.fill: Text('3'),
-            },
+        ValueListenableBuilder(
+          valueListenable: headlineWeight,
+          builder: (context, weight, _) => CupertinoListTile(
+            leading: const _Icon(CupertinoIcons.textformat),
+            title: Text(l10n.settingsHeadlineWeight),
+            additionalInfo: Text(headlineWeightName(weight, l10n)),
+            trailing: const CupertinoListTileChevron(),
+            onTap: () => _pickWeight(context, weight),
           ),
         ),
-      ),
-      CupertinoListTile(
-        leading: const _Icon(CupertinoIcons.play),
-        title: const Text('Play'),
-        onTap: () {
-          SplashHost.play(context);
-          // It ends on the feed, as at a cold start: Settings closes under
-          // the splash, out of sight (its page covers all from its first
-          // frame).
-          Navigator.of(context).popUntil((route) => route.isFirst);
-        },
-      ),
-      // How read articles look (Yurii, 16 Oct): faded as today, or a blue or
-      // red dot on the unread ones instead of the official-source tick.
-      ValueListenableBuilder(
-        valueListenable: readStyle,
-        builder: (context, style, _) => CupertinoListTile(
-          leading: const _Icon(CupertinoIcons.eye),
-          title: const Text('Read'),
-          trailing: CupertinoSlidingSegmentedControl<ReadStyle>(
-            groupValue: style,
-            onValueChanged: (r) {
-              if (r == null || r == style) return;
-              readStyle.value = r;
-              // Back to the feed to show it, once the segment has slid over.
-              Future.delayed(const Duration(milliseconds: 250), () {
-                if (context.mounted) {
-                  Navigator.of(context).popUntil((route) => route.isFirst);
-                }
-              });
-            },
-            children: const {
-              ReadStyle.dim: Text('Dim'),
-              ReadStyle.blue: Text('Blue'),
-              ReadStyle.red: Text('Red'),
-            },
-          ),
+      ],
+    );
+  }
+
+  /// The looks as an action sheet, the current one marked. Back to the feed
+  /// to show the new look.
+  Future<void> _pickDesign(BuildContext context, FeedDesign current) {
+    final l10n = AppLocalizations.of(context);
+    return showCupertinoModalPopup<void>(
+      context: context,
+      builder: (sheet) => CupertinoActionSheet(
+        title: Text(l10n.settingsDesign),
+        actions: [
+          for (final d in FeedDesign.values)
+            CupertinoActionSheetAction(
+              isDefaultAction: d == current,
+              onPressed: () {
+                Navigator.of(sheet).pop();
+                if (d == current) return;
+                feedDesign.value = d;
+                saveDesign?.call(d);
+                Navigator.of(context).popUntil((route) => route.isFirst);
+              },
+              child: Text(designName(d, l10n)),
+            ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          onPressed: () => Navigator.of(sheet).pop(),
+          child: Text(l10n.cancel),
         ),
       ),
-      // How many topic tags a card shows at most (Yurii, 16 Oct: "we can try
-      // one, two, three"), in every design. Short segments and no subtitle,
-      // as the Splash row, so the row fits at 375 pt.
-      ValueListenableBuilder(
-        valueListenable: topicTagCount,
-        builder: (context, count, _) => CupertinoListTile(
-          leading: const _Icon(CupertinoIcons.tag),
-          title: const Text('Topics'),
-          trailing: CupertinoSlidingSegmentedControl<int>(
-            groupValue: count,
-            onValueChanged: (n) {
-              if (n == null || n == count) return;
-              topicTagCount.value = n;
-              // Back to the feed to show it, once the segment has slid over.
-              Future.delayed(const Duration(milliseconds: 250), () {
-                if (context.mounted) {
-                  Navigator.of(context).popUntil((route) => route.isFirst);
-                }
-              });
-            },
-            children: const {1: Text('1'), 2: Text('2'), 3: Text('3')},
-          ),
+    );
+  }
+
+  /// The four weights as an action sheet, the current one marked.
+  Future<void> _pickWeight(BuildContext context, HeadlineWeight current) {
+    final l10n = AppLocalizations.of(context);
+    return showCupertinoModalPopup<void>(
+      context: context,
+      builder: (sheet) => CupertinoActionSheet(
+        title: Text(l10n.settingsHeadlineWeight),
+        actions: [
+          for (final w in HeadlineWeight.values)
+            CupertinoActionSheetAction(
+              isDefaultAction: w == current,
+              onPressed: () {
+                Navigator.of(sheet).pop();
+                if (w == current) return;
+                headlineWeight.value = w;
+                saveHeadlineWeight?.call(w);
+              },
+              child: Text(
+                headlineWeightName(w, l10n),
+                style: TextStyle(fontWeight: w.weight),
+              ),
+            ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          onPressed: () => Navigator.of(sheet).pop(),
+          child: Text(l10n.cancel),
         ),
       ),
-    ],
-  );
+    );
+  }
 }
+
+/// A look's name in the app's language: today's, or the option's letter.
+String designName(FeedDesign d, AppLocalizations l10n) => switch (d) {
+  FeedDesign.now => l10n.settingsDesignNow,
+  FeedDesign.a => 'A',
+  FeedDesign.b => 'B',
+  FeedDesign.c => 'C',
+};
+
+/// A weight's name in the app's language.
+String headlineWeightName(HeadlineWeight w, AppLocalizations l10n) =>
+    switch (w) {
+      HeadlineWeight.light => l10n.headlineWeightLight,
+      HeadlineWeight.regular => l10n.headlineWeightRegular,
+      HeadlineWeight.semibold => l10n.headlineWeightSemibold,
+      HeadlineWeight.bold => l10n.headlineWeightBold,
+    };
 
 /// A section header in the iOS grouped-list style: small, grey, upper case.
 class _Header extends StatelessWidget {

@@ -69,10 +69,12 @@ ApiClient _pagedApi(
 }) => ApiClient(
   baseUrl: 'https://api.test',
   client: MockClient((request) async {
+    final menu = fakeMenus(request);
+    if (menu != null) return menu;
     final query = request.url.queryParameters;
     final page = query.containsKey('after') || query.containsKey('since')
         ? {'items': newer?.call() ?? [], 'nextCursor': null, 'top': []}
-        : pages[query['cursor'] ?? ''];
+        : fakePage(pages[query['cursor'] ?? ''], query);
     return page == null
         ? http.Response('{"error":"Internal error"}', 500)
         : http.Response.bytes(
@@ -308,6 +310,8 @@ void main() {
         final api = ApiClient(
           baseUrl: 'https://api.test',
           client: MockClient((request) async {
+    final menu = fakeMenus(request);
+    if (menu != null) return menu;
             final query = request.url.queryParameters;
             final after = int.tryParse(query['after'] ?? '');
             final page = after == null
@@ -417,20 +421,27 @@ void main() {
   testWidgets('the Design row in Settings switches the feed\'s look', (
     tester,
   ) async {
+    FeedDesign? saved;
     await tester.pumpWidget(
       testApp(
         home: SettingsScreen(
           language: ValueNotifier(FeedLanguage.en),
           onLanguage: (_) {},
+          saveDesign: (d) => saved = d,
         ),
       ),
     );
+    // The row says which look is on; the sheet offers the four.
     expect(find.text('Design'), findsOneWidget);
+    expect(find.text('Now'), findsOneWidget);
+    await tester.tap(find.text('Design'));
+    await tester.pumpAndSettle();
+    expect(find.byType(CupertinoActionSheet), findsOneWidget);
     await tester.tap(find.text('B'));
     await tester.pumpAndSettle();
     expect(feedDesign.value, FeedDesign.b);
-    await tester.tap(find.text('Now'));
-    await tester.pumpAndSettle();
-    expect(feedDesign.value, FeedDesign.now);
+    expect(saved, FeedDesign.b);
+    expect(find.text('B'), findsOneWidget);
+    feedDesign.value = FeedDesign.now;
   });
 }

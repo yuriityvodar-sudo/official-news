@@ -1,19 +1,17 @@
 import 'dart:convert';
 
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:official_news/core/api_client.dart';
-import 'package:official_news/core/feed_language.dart';
 import 'package:official_news/core/theme.dart';
 import 'package:official_news/features/feed/feed_controller.dart';
-import 'package:official_news/features/settings/settings_screen.dart';
 import 'package:official_news/features/splash/splash.dart';
 import 'package:official_news/l10n/app_localizations.dart';
 import 'package:official_news/main.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'test_app.dart';
 
 /// PROTOTYPE (Yurii, 16 Oct): the splash at start, its three styles and
 /// Settings → Play.
@@ -77,9 +75,9 @@ Map<String, dynamic> _article(String id, String headline) => {
 
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
-  tearDown(() => splashStyle.value = SplashStyle.rise);
+  tearDown(() => splashStyle.value = SplashStyle.riseUp);
 
-  test('a build picks the style by name or number; rise otherwise', () {
+  test('a build picks the style by name or number; riseUp otherwise', () {
     expect(splashNamed('sweep'), SplashStyle.sweep);
     expect(splashNamed(' FILL '), SplashStyle.fill);
     expect(splashNamed('1'), SplashStyle.rise);
@@ -88,8 +86,8 @@ void main() {
     expect(splashNamed('RiseUp'), SplashStyle.riseUp);
     expect(splashNamed('2'), SplashStyle.sweep);
     expect(splashNamed('3'), SplashStyle.fill);
-    expect(splashNamed(''), SplashStyle.rise);
-    expect(splashNamed('wave'), SplashStyle.rise);
+    expect(splashNamed(''), SplashStyle.riseUp);
+    expect(splashNamed('wave'), SplashStyle.riseUp);
   });
 
   test('the three words, in one place, lower case as written', () {
@@ -109,6 +107,8 @@ void main() {
         api: ApiClient(
           baseUrl: 'https://api.test',
           client: MockClient((request) async {
+    final menu = fakeMenus(request);
+    if (menu != null) return menu;
             asked.add(request.url);
             final q = request.url.queryParameters;
             final body = q.containsKey('after') || q.containsKey('since')
@@ -192,6 +192,7 @@ void main() {
   testWidgets('1 rise brings "only" up first; 1b, "news" first', (
     tester,
   ) async {
+    splashStyle.value = SplashStyle.rise;
     await tester.pumpWidget(_host());
     await _play(tester, seconds(0.4));
     expect(drop(tester, 'only'), lessThan(drop(tester, 'official')));
@@ -456,109 +457,6 @@ void main() {
     expect(find.byType(Splash), findsNothing);
   });
 
-  group('Settings → Prototype → Splash', () {
-    // A segment of the Splash row: the Topics row has "1", "2" and "3" too.
-    Finder splashSegment(String text) => find.descendant(
-      of: find.byType(CupertinoSlidingSegmentedControl<SplashStyle>),
-      matching: find.text(text),
-    );
-
-    Future<void> openSettings(WidgetTester tester) async {
-      tester.view.physicalSize = const Size(390, 844) * 3;
-      tester.view.devicePixelRatio = 3;
-      addTearDown(tester.view.reset);
-      await tester.pumpWidget(
-        _host(
-          onStart: false,
-          app: SettingsScreen(
-            language: ValueNotifier(FeedLanguage.en),
-            onLanguage: (_) {},
-            openLink: (_) async {},
-          ),
-        ),
-      );
-      await tester.pump();
-    }
-
-    testWidgets('lists the styles, rise chosen', (tester) async {
-      await openSettings(tester);
-      expect(find.text('Splash'), findsOneWidget);
-      expect(find.text('rise'), findsOneWidget);
-      for (final segment in ['1', '1b', '2', '3']) {
-        expect(splashSegment(segment), findsOneWidget, reason: segment);
-      }
-      final control = tester
-          .widget<CupertinoSlidingSegmentedControl<SplashStyle>>(
-            find.byType(CupertinoSlidingSegmentedControl<SplashStyle>),
-          );
-      expect(control.groupValue, SplashStyle.rise);
-      expect(find.byType(Splash), findsNothing);
-    });
-
-    for (final (segment, style, name) in [
-      ('1', SplashStyle.rise, 'rise'),
-      ('1b', SplashStyle.riseUp, 'rise, news first'),
-      ('2', SplashStyle.sweep, 'sweep'),
-      ('3', SplashStyle.fill, 'fill'),
-    ]) {
-      testWidgets('$segment, then Play, shows ${style.name} and ends on the '
-          'feed, as at a cold start', (tester) async {
-        tester.view.physicalSize = const Size(390, 844) * 3;
-        tester.view.devicePixelRatio = 3;
-        addTearDown(tester.view.reset);
-        // The feed, with Settings opened over it, as in the app.
-        await tester.pumpWidget(
-          _host(
-            onStart: false,
-            app: Builder(
-              builder: (context) => Center(
-                child: TextButton(
-                  onPressed: () => Navigator.of(context).push(
-                    CupertinoPageRoute<void>(
-                      builder: (_) => SettingsScreen(
-                        language: ValueNotifier(FeedLanguage.en),
-                        onLanguage: (_) {},
-                        openLink: (_) async {},
-                      ),
-                    ),
-                  ),
-                  child: const Text('the feed'),
-                ),
-              ),
-            ),
-          ),
-        );
-        await tester.tap(find.text('the feed'));
-        await tester.pumpAndSettle();
-        await tester.tap(splashSegment(segment));
-        await tester.pumpAndSettle();
-        expect(splashStyle.value, style);
-        expect(find.text(name), findsOneWidget);
-
-        await tester.tap(find.text('Play'));
-        await tester.pump();
-        expect(tester.widget<Splash>(find.byType(Splash)).style, style);
-        expect(find.text('Splash').hitTestable(), findsNothing);
-
-        await _play(tester, _total(style));
-        expect(find.byType(Splash), findsNothing);
-        // On the feed: Settings closed under the splash.
-        expect(find.byType(SettingsScreen), findsNothing);
-        expect(find.text('the feed').hitTestable(), findsOneWidget);
-      });
-    }
-
-    testWidgets('Play again after it ends shows it again', (tester) async {
-      await openSettings(tester);
-      for (var i = 0; i < 2; i++) {
-        await tester.tap(find.text('Play'));
-        await tester.pump();
-        expect(find.byType(Splash), findsOneWidget);
-        await _play(tester, _total(SplashStyle.rise));
-        expect(find.byType(Splash), findsNothing);
-      }
-    });
-  });
 }
 
 Duration seconds(double s) => Duration(milliseconds: (s * 1000).round());

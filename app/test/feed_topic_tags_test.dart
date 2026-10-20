@@ -16,12 +16,11 @@ import 'package:official_news/core/feed_language.dart';
 import 'package:official_news/core/news_widgets.dart';
 import 'package:official_news/core/router.dart';
 import 'package:official_news/core/theme.dart';
+import 'package:official_news/core/topics.dart';
 import 'package:official_news/features/feed/feed_controller.dart';
-import 'package:official_news/features/feed/feed_filters.dart';
 import 'package:official_news/features/feed/feed_look.dart';
 import 'package:official_news/features/feed/feed_screen.dart';
 import 'package:official_news/features/feed/feed_topic_tags.dart';
-import 'package:official_news/features/settings/settings_screen.dart';
 import 'package:official_news/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -76,12 +75,14 @@ Map<String, dynamic> _article(
 ApiClient _api(List<Map<String, dynamic>> items) => ApiClient(
   baseUrl: 'https://api.test',
   client: MockClient((request) async {
+    final menu = fakeMenus(request);
+    if (menu != null) return menu;
     final query = request.url.queryParameters;
     final newer = query.containsKey('after') || query.containsKey('since');
     return http.Response.bytes(
       utf8.encode(
         jsonEncode({
-          'items': newer ? <Object>[] : items,
+          'items': newer ? <Object>[] : fakeFiltered(items, query),
           'nextCursor': null,
           'top': <Object>[],
         }),
@@ -638,33 +639,6 @@ void main() {
     }
   }
 
-  testWidgets('the Topics row in Settings switches 1, 2 or 3 tags and goes '
-      'back to the feed to show it', (tester) async {
-    feedDesign.value = FeedDesign.b;
-    await _pump(tester, [
-      _article('a1', topics: ['economy', 'trade', 'health']),
-    ]);
-    expect(_tags(tester, 'a1'), hasLength(3));
-    await tester.tap(find.byIcon(CupertinoIcons.gear_alt).hitTestable());
-    await tester.pumpAndSettle();
-    expect(find.text('Topics'), findsOneWidget);
-    await tester.tap(
-      find.descendant(
-        of: find.ancestor(
-          of: find.text('Topics'),
-          matching: find.byType(CupertinoListTile),
-        ),
-        matching: find.text('1'),
-      ),
-    );
-    await tester.pumpAndSettle();
-    // Settings closes once the segment has slid over.
-    await tester.pump(const Duration(milliseconds: 300));
-    await tester.pumpAndSettle();
-    expect(topicTagCount.value, 1);
-    expect(find.byType(SettingsScreen), findsNothing);
-    expect([for (final t in _tags(tester, 'a1')) t.name], ['Economy']);
-  });
 
   // How many lines the tags take, in a real font: Yurii's brief is one line,
   // or neatly two. Roboto Medium (in the Flutter SDK, also on CI) draws the

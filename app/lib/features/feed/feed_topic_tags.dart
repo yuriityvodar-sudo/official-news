@@ -1,10 +1,10 @@
 import 'package:flutter/cupertino.dart';
 
 import '../../core/article.dart';
+import '../../core/topics.dart';
 import '../../l10n/app_localizations.dart';
-import 'feed_filters.dart';
 
-/// PROTOTYPE (Yurii, 16 Oct): the feed's cards show their topics instead of
+/// The feed's cards show their topics (Yurii, 16 Oct) instead of
 /// their decision type ("Bill", "ЗАКОНОПРОЄКТ"), which stays on the article
 /// screen. Each topic is a small grey tag with the icon and the name the
 /// Topics filter shows ([topicIcon], [topicName]): one source for both, so a
@@ -12,7 +12,7 @@ import 'feed_filters.dart';
 /// tags, each in the place its decision type had.
 
 /// The most topic tags a card shows: the AI gives an article 1 to 3 topics
-/// (docs/contract.md). The prototype can show fewer ([FeedList.maxTopics]).
+/// (docs/contract.md). A build can show fewer ([FeedList.maxTopics]).
 const maxCardTopics = 3;
 
 /// The topics [article]'s card shows, in order: [first] (the topic the feed
@@ -27,6 +27,10 @@ List<String> cardTopics(
   for (final id in article.topics)
     if (id.trim().isNotEmpty) id,
 }.take(max).toList();
+
+/// Topic [id]'s name in the app's language, as the Topics menu shows it
+/// (`topicLabel`, core/topics.dart); an id the app does not know shows as it is.
+String topicName(String id, AppLocalizations l10n) => topicLabel(id, l10n) ?? id;
 
 /// What VoiceOver says for the tags of [ids]: "Topics: Economy, Trade",
 /// "Тема: Економіка"; null for none.

@@ -9,6 +9,7 @@ import 'package:flutter/rendering.dart';
 import '../../core/analytics.dart';
 import '../../core/article.dart';
 import '../../core/feed_language.dart';
+import '../../core/filters.dart';
 import '../../core/news_widgets.dart';
 import '../../core/router.dart';
 import '../../core/theme.dart';
@@ -21,8 +22,9 @@ import 'feed_look.dart';
 /// Item 3: the feed (docs/design/mvp.png). One list of decisions in the order
 /// they arrived, with no sections (Yurii, 16 Oct: the server's top stories are
 /// in it with the rest); opens instantly from the feed saved on the phone.
-/// What it does lives here; how it looks is a [FeedLook] (#66, prototype):
-/// `feed_look_now.dart` is today's.
+/// What it does lives here; how it looks is a [FeedLook] (#66):
+/// `feed_look_now.dart` is today's, and Settings → Design switches to the
+/// options Yurii compared.
 class FeedScreen extends StatefulWidget {
   const FeedScreen({
     super.key,
@@ -39,16 +41,6 @@ class FeedScreen extends StatefulWidget {
 }
 
 class _FeedScreenState extends State<FeedScreen> {
-  // PROTOTYPE filters (#67, #68). A build with
-  // `--dart-define=FILTER_DEMO=GB:economy` starts with them chosen, for
-  // screenshots ([demoFilters]).
-  static final _demo = demoFilters(const String.fromEnvironment('FILTER_DEMO'));
-  FeedPlace _place = _demo.place;
-  String? _topic = _demo.topic;
-
-  bool _shown(Article a) =>
-      _place.includes(a) && (_topic == null || a.topics.contains(_topic));
-
   /// The masthead's sliver, wherever it is on screen: all of it at the top
   /// of the feed, a pinned bar once folded, nothing once a masthead that
   /// scrolls has gone. The "N new" pill floats just under it, so it never
@@ -93,8 +85,9 @@ class _FeedScreenState extends State<FeedScreen> {
     super.dispose();
   }
 
-  /// Another look, another way to show read articles or another number of
-  /// topic tags, chosen in Settings (#66, prototype): the feed redraws in it.
+  /// Another look, chosen in Settings → Design (#66), or another way to show
+  /// read articles or number of topic tags (a build's `--dart-define`): the
+  /// feed redraws in it.
   void _designChanged() => setState(() {});
 
   void _changed() {
@@ -113,7 +106,7 @@ class _FeedScreenState extends State<FeedScreen> {
     });
   }
 
-  /// PROTOTYPE (#66): a script cannot scroll the simulator, so a build with
+  /// For screenshots (#66): a script cannot scroll the simulator, so a build with
   /// `--dart-define=FEED_SCROLL=1400` opens the feed that many points down once
   /// it has articles, for screenshots further down the list. 0 (the default)
   /// does nothing.
@@ -127,7 +120,7 @@ class _FeedScreenState extends State<FeedScreen> {
     );
   }
 
-  /// PROTOTYPE, for screenshots only: a script cannot tap the simulator, so a
+  /// For screenshots only: a script cannot tap the simulator, so a
   /// debug build with `--dart-define=READ_DEMO=2` shows the first 2 articles
   /// of the feed as read, once the feed has articles.
   /// Kept in memory only, never saved; ignored by release builds.
@@ -177,6 +170,8 @@ class _FeedScreenState extends State<FeedScreen> {
         builder: (_) => SettingsScreen(
           language: _feed.languageChanges,
           onLanguage: _chooseLanguage,
+          saveDesign: _feed.saveDesign,
+          saveHeadlineWeight: _feed.saveHeadlineWeight,
         ),
       ),
     );
@@ -203,6 +198,23 @@ class _FeedScreenState extends State<FeedScreen> {
       if (_scroll.hasClients) _scroll.jumpTo(0);
     }
     await _feed.setLanguage(chosen);
+  }
+
+  /// Every country, a group or one country from the chip (#68): another
+  /// feed, from the top.
+  Future<void> _chooseWhere(FeedWhere where) async {
+    if (where != _feed.where) _toTop();
+    await _feed.setWhere(where);
+  }
+
+  /// One topic, or all, from the chip (#67): another feed, from the top.
+  Future<void> _chooseTopic(String? topic) async {
+    if (topic != _feed.topic) _toTop();
+    await _feed.setTopic(topic);
+  }
+
+  void _toTop() {
+    if (_scroll.hasClients) _scroll.jumpTo(0);
   }
 
   @override
@@ -242,13 +254,13 @@ class _FeedScreenState extends State<FeedScreen> {
                       title: 'Official News',
                       date: longDay(DateTime.now(), l10n),
                       openSettings: _openSettings,
-                      filters: FeedFilters(
-                        place: _place,
-                        countries: _countries(),
-                        topic: _topic,
-                        topicCounts: _topicCounts(),
-                        onPlace: (p) => _filter(() => _place = p),
-                        onTopic: (t) => _filter(() => _topic = t),
+                      filterBar: FeedFilterBar(
+                        where: _feed.where,
+                        whereMenu: _feed.whereMenu,
+                        topic: _feed.topic,
+                        topics: _feed.topics,
+                        onWhere: _chooseWhere,
+                        onTopic: _chooseTopic,
                       ),
                     ),
                   ),
@@ -282,41 +294,6 @@ class _FeedScreenState extends State<FeedScreen> {
   static const _pillTop = 12.0;
   static const _pillGap = 8.0;
 
-  /// Another Where or Topics choice. Fewer rows may now fill the screen, or
-  /// none (a country only a top story on a later page has): once drawn, the
-  /// list loads more as at its end, and [_changed] keeps loading pages while
-  /// the filtered list is still short.
-  void _filter(VoidCallback change) {
-    setState(change);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && _scroll.hasClients) _nearEnd();
-    });
-  }
-
-  /// What the menus offer: the loaded feed and the server's top stories,
-  /// each once. A top story on a later page waits for it in the list
-  /// ([oneFeed]), but its country and topics are offered at once, as they
-  /// were with the Top stories section; choosing one loads pages until it
-  /// shows ([_filter]).
-  Iterable<Article> _offered() => {
-    for (final a in [..._feed.feed, ..._feed.top]) a.id: a,
-  }.values;
-
-  /// The countries with articles in the loaded feed or its top stories.
-  Set<String> _countries() => {for (final a in _offered()) a.country};
-
-  /// Topics in the feed under the current Where choice, busiest first.
-  List<MapEntry<String, int>> _topicCounts() {
-    final counts = <String, int>{};
-    for (final a in _offered()) {
-      if (!_place.includes(a)) continue;
-      for (final t in a.topics) {
-        counts[t] = (counts[t] ?? 0) + 1;
-      }
-    }
-    return counts.entries.toList()..sort((x, y) => y.value.compareTo(x.value));
-  }
-
   List<Widget> _content(BuildContext context, FeedLook look) {
     final text = NewsText.from(context);
     final l10n = AppLocalizations.of(context);
@@ -335,6 +312,8 @@ class _FeedScreenState extends State<FeedScreen> {
             padding: const EdgeInsets.all(20),
             child: _feed.error != null
                 ? Text(l10n.feedLoadFailed, style: text.meta)
+                : _feed.filtered
+                ? _filteredEmpty(context)
                 : _feed.language == FeedLanguage.en
                 ? Text(l10n.feedEmpty, style: text.meta)
                 // The server lists only finished translations; they come in over the day.
@@ -355,52 +334,13 @@ class _FeedScreenState extends State<FeedScreen> {
     }
 
     // One list, no sections (Yurii, 16 Oct): the controller has merged the
-    // top stories into it, in the order the articles arrived.
-    final shown = _feed.feed.where(_shown).toList();
+    // top stories into it, in the order the articles arrived; the server has
+    // applied the filters (#67, #68).
+    final shown = _feed.feed;
     final slivers = <Widget>[];
 
     if (_feed.error != null) {
       slivers.add(_padded(Text(l10n.feedRefreshFailed, style: text.meta)));
-    }
-
-    // Nothing under the filters yet, but more pages to come: the end of the
-    // list's spinner (or retry) only, until a page has some or the 7 days
-    // are all loaded ([_filter] keeps loading).
-    if (shown.isEmpty && !_feed.hasMore) {
-      Widget undo(String label, VoidCallback onPressed) => CupertinoButton(
-        padding: EdgeInsets.zero,
-        onPressed: onPressed,
-        child: Text(
-          label,
-          style: text.meta.copyWith(
-            color: filterRed.resolveFrom(context),
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      );
-      slivers.add(
-        _padded(
-          Padding(
-            padding: const EdgeInsets.only(top: 24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(l10n.filterEmpty, style: text.meta),
-                if (!_place.isAll)
-                  undo(
-                    l10n.filterShowGlobal,
-                    () => _filter(() => _place = FeedPlace.all),
-                  ),
-                if (_topic != null)
-                  undo(
-                    l10n.filterShowAllTopics,
-                    () => _filter(() => _topic = null),
-                  ),
-              ],
-            ),
-          ),
-        ),
-      );
     }
     // Analytics (#60) record each opened article's place in the list (the
     // section is always "feed" now), and how deep the list was drawn.
@@ -414,7 +354,7 @@ class _FeedScreenState extends State<FeedScreen> {
             readStyle: readStyle.value,
             open: (i) => _open(shown[i], section: 'feed', position: i),
             shown: (i) => _shownRow(i + 1),
-            topic: _topic,
+            topic: _feed.topic,
             maxTopics: topicTagCount.value,
           ),
         ),
@@ -441,6 +381,38 @@ class _FeedScreenState extends State<FeedScreen> {
     padding: const EdgeInsets.symmetric(horizontal: 20),
     sliver: SliverToBoxAdapter(child: child),
   );
+
+  /// A filtered feed with nothing in it (#67, #68): says so, with a way back
+  /// to all countries and to all topics, whichever narrows it. A group is a
+  /// fixed choice, so it can be empty too.
+  Widget _filteredEmpty(BuildContext context) {
+    final text = NewsText.from(context);
+    final l10n = AppLocalizations.of(context);
+    Widget undo(String label, VoidCallback onPressed) => CupertinoButton(
+      padding: EdgeInsets.zero,
+      minimumSize: const Size(44, 44),
+      onPressed: onPressed,
+      child: Text(
+        label,
+        // The filters' red: these buttons undo a filter.
+        style: text.meta.copyWith(
+          color: filterRed.resolveFrom(context),
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(l10n.filterEmpty, style: text.meta),
+        const SizedBox(height: 4),
+        if (!_feed.where.isAll)
+          undo(l10n.filterShowAllCountries, () => _chooseWhere(FeedWhere.all)),
+        if (_feed.topic != null)
+          undo(l10n.filterShowAllTopics, () => _chooseTopic(null)),
+      ],
+    );
+  }
 }
 
 /// Where the masthead's sliver is, for the "N new" pill: [_MastheadEdge]

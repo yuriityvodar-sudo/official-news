@@ -18,7 +18,36 @@ abstract final class AppColors {
 const _serif = 'Georgia';
 const _serifFallback = ['serif'];
 
-ThemeData buildTheme(Brightness brightness) {
+/// How heavy the feed's headlines are (Settings → Design, #66): today's bold
+/// looked too thick to Yurii (20 Oct), so he can choose a lighter one.
+enum HeadlineWeight {
+  light(FontWeight.w300),
+  regular(FontWeight.w400),
+  semibold(FontWeight.w600),
+  bold(FontWeight.w700);
+
+  const HeadlineWeight(this.weight);
+
+  final FontWeight weight;
+}
+
+/// The weight shown now; the app's theme rebuilds when it changes. Saved on
+/// the phone (FeedStore); a build can start with another:
+/// `--dart-define=HEADLINE_WEIGHT=regular`.
+final headlineWeight = ValueNotifier<HeadlineWeight>(
+  headlineWeightNamed(const String.fromEnvironment('HEADLINE_WEIGHT')),
+);
+
+/// `light`, `regular`, `semibold` or `bold`, in any case; anything else is
+/// [HeadlineWeight.bold].
+HeadlineWeight headlineWeightNamed(String name) =>
+    HeadlineWeight.values.asNameMap()[name.trim().toLowerCase()] ??
+    HeadlineWeight.bold;
+
+ThemeData buildTheme(
+  Brightness brightness, {
+  HeadlineWeight headline = HeadlineWeight.bold,
+}) {
   final dark = brightness == Brightness.dark;
   final scheme =
       ColorScheme.fromSeed(
@@ -60,7 +89,7 @@ ThemeData buildTheme(Brightness brightness) {
       thickness: 0.5,
       space: 1,
     ),
-    extensions: [NewsText.of(scheme)],
+    extensions: [NewsText.of(scheme, headline: headline)],
   );
 }
 
@@ -77,7 +106,10 @@ class NewsText extends ThemeExtension<NewsText> {
     required this.body,
   });
 
-  factory NewsText.of(ColorScheme scheme) {
+  factory NewsText.of(
+    ColorScheme scheme, {
+    HeadlineWeight headline = HeadlineWeight.bold,
+  }) {
     final secondary = scheme.onSurfaceVariant;
     return NewsText(
       masthead: TextStyle(
@@ -108,7 +140,7 @@ class NewsText extends ThemeExtension<NewsText> {
         fontFamily: _serif,
         fontFamilyFallback: _serifFallback,
         fontSize: 21,
-        fontWeight: FontWeight.w700,
+        fontWeight: headline.weight,
         height: 1.2,
         color: scheme.onSurface,
       ),

@@ -33,6 +33,8 @@ final _page2 = _fixture('live_2026-10-16_page2.json');
 ApiClient _liveApi(List<String> asked) => ApiClient(
   baseUrl: 'https://api.test',
   client: MockClient((request) async {
+    final menu = fakeMenus(request);
+    if (menu != null) return menu;
     final cursor = request.url.queryParameters['cursor'] ?? '';
     asked.add(cursor);
     final page = switch (cursor) {
