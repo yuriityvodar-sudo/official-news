@@ -14,6 +14,8 @@ export interface Health {
     fetchedLast24h: number;
     /** Fetched but not yet read by the AI (articles it gave up on after MAX_ATTEMPTS tries not counted). */
     waitingForSummary: number;
+    /** Hidden for good: MAX_ATTEMPTS unusable answers (#99). */
+    gaveUpOnSummary: number;
     /** Shown in the feed now (official decisions of the last 7 days). */
     inFeed: number;
   };
@@ -28,6 +30,7 @@ export async function health(env: Env): Promise<Health> {
       `SELECT
          SUM(fetched_at >= strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-24 hours')) AS fetched,
          SUM(summarized_at IS NULL AND summary_attempts < ?1) AS waiting,
+         SUM(summarized_at IS NULL AND summary_attempts >= ?1) AS gave_up,
          SUM(is_news = 1 AND feed_seq IS NOT NULL AND published_at >= strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-7 days')) AS in_feed
        FROM articles`,
     ).bind(MAX_ATTEMPTS),
@@ -39,6 +42,7 @@ export async function health(env: Env): Promise<Health> {
     articles: {
       fetchedLast24h: Number(totals.fetched ?? 0),
       waitingForSummary: Number(totals.waiting ?? 0),
+      gaveUpOnSummary: Number(totals.gave_up ?? 0),
       inFeed: Number(totals.in_feed ?? 0),
     },
   };

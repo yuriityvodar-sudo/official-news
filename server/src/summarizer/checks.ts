@@ -35,6 +35,15 @@ const SCALES: [RegExp, number][] = [
   [new RegExp(N + "(?:mld|mrd|billion|milyar|miliard)", "gi"), 1e9],
 ];
 
+/** Japan's era years: 令和8年 is 2026, 令和元年 2019, 平成31年 2019. */
+const ERAS: [RegExp, number][] = [
+  [/令和(\d{1,2}|元)年/g, 2018],
+  [/平成(\d{1,2}|元)年/g, 1988],
+];
+
+/** An amount with zero cents ("R$ 1.500.000,00", "$2,000.00"): its whole part counts as written without them. */
+const ZERO_CENTS = /(?<![\d.,])(\d{1,3}(?:[.,   ]\d{3})+|\d+)[.,]00?(?!\d)/g;
+
 /** The numbers a summary may use: the source's, also as dates, scaled amounts and year ranges ("2026-2027" as "2026-27"). */
 function knownNumbers(source: string, year: number): Set<string> {
   const known = new Set(numbers(source));
@@ -46,6 +55,10 @@ function knownNumbers(source: string, year: number): Set<string> {
   for (const [re, scale] of SCALES) {
     for (const m of source.matchAll(re)) known.add(String(Math.round(parseFloat(m[1].replace(",", ".")) * scale)));
   }
+  for (const [re, start] of ERAS) {
+    for (const m of source.matchAll(re)) known.add(String(start + (m[1] === "元" ? 1 : Number(m[1]))));
+  }
+  for (const m of source.matchAll(ZERO_CENTS)) known.add(m[1].replace(/\D/g, ""));
   for (const m of source.matchAll(/(?<!\d)(\d{2})(\d{2})\s?[-–]\s?\1(\d{2})(?!\d)/g)) known.add(m[3]);
   // Names like Korea's "5·18" (18 May), which a summary may write "5.18". Korean texts also
   // write the dot as ㆍ (U+318D, which NFKC turns into U+119E), Japanese ones as ・.
@@ -93,22 +106,27 @@ const OTHER = new Set(
     .split(" "),
 );
 
-/** An own name kept in its language, in double or angle quotes (prompt rule 5). */
-const QUOTED = /["“”„«»][^"“”„«»\n]{1,160}["“”„«»]/g;
+/**
+ * An own name kept in its language, in double, angle or CJK quotes (prompt rule 5).
+ * Not ‘’: ’ is also the apostrophe.
+ */
+const QUOTED = /["“”„«»「」『』《》][^"“”„«»「」『』《》\n]{1,160}["“”„«»「」『』《》]/g;
 
 /** Letters of a script other than Latin: Japanese and Chinese have too few spaces to count words. */
 const NON_LATIN = /[^\P{L}\p{Script=Latin}]/gu;
 
 function notEnglish(text: string): boolean {
-  const letters = text.match(/\p{L}/gu)?.length ?? 0;
-  if (letters >= 40 && (text.match(NON_LATIN)?.length ?? 0) / letters > 0.3) return true;
+  // A short English headline may quote a long Korean or Japanese law name: only the rest counts (#99).
+  const unquoted = text.replace(QUOTED, " ");
+  const letters = unquoted.match(/\p{L}/gu)?.length ?? 0;
+  if (letters >= 40 && (unquoted.match(NON_LATIN)?.length ?? 0) / letters > 0.3) return true;
   const words = text.toLowerCase().match(/\p{L}+/gu) ?? [];
   if (words.length < MIN_WORDS) return false;
   const english = words.filter((w) => ENGLISH.has(w)).length;
   if (english / words.length >= MIN_ENGLISH_SHARE) return false;
   // Few English words: another language only when its own common words show,
   // or when the lower-case words (names and quoted own names left out) are not English either.
-  const rest = text.replace(QUOTED, " ").match(/\p{L}+/gu) ?? [];
+  const rest = unquoted.match(/\p{L}+/gu) ?? [];
   if (rest.filter((w) => OTHER.has(w.toLowerCase())).length > english) return true;
   const lower = rest.filter((w) => /^\p{Ll}/u.test(w));
   return lower.length >= 10 && lower.filter((w) => ENGLISH.has(w)).length / lower.length < MIN_ENGLISH_SHARE;
@@ -132,15 +150,45 @@ export interface CheckResult {
 }
 
 /**
- * `source` is what the model read: the original title and text. `year` is the
- * year the article was fetched: a date in a calendar of its own (令和8年 is 2026)
- * comes out as that year, or the one before or after. Full-width digits
- * (外１４６名, 第１２条) are read as plain ones (NFKC).
+ * Ruled-out words outside quotes. A capitalised one the source writes the same
+ * way is part of a name, such as the "Historic Buildings Act" (#99).
+ */
+function bannedWords(text: string, source: string): string[] {
+  const found = new Set<string>();
+  for (const [word] of text.replace(QUOTED, " ").matchAll(BANNED)) {
+    if (!(/^\p{Lu}/u.test(word) && source.includes(word))) found.add(word.toLowerCase());
+  }
+  return [...found];
+}
+
+/** Arabic-Indic (١٣٥٠٠), Persian and Devanagari digits as plain ones: NFKC keeps them. */
+const DIGIT_ZEROS = [0x0660, 0x06f0, 0x0966];
+
+function plainDigits(text: string): string {
+  return text.replace(/[\u0660-\u0669\u06f0-\u06f9\u0966-\u096f]/g, (d) => {
+    const code = d.charCodeAt(0);
+    return String(code - DIGIT_ZEROS.find((zero) => code <= zero + 9)!);
+  });
+}
+
+/** "1.5 million" in a summary: its digits count when the source gives the whole amount ("R$ 1.500.000,00"). */
+const SUMMARY_SCALES = /(\d+(?:\.\d+)?)\s?(thousand|million|billion|trillion)\b/gi;
+const SCALE_VALUES: Record<string, number> = { thousand: 1e3, million: 1e6, billion: 1e9, trillion: 1e12 };
+
+/**
+ * `source` is what the model read: the publication date, the original title and
+ * the text. `year` is the year the article was fetched: a date in a calendar of
+ * its own comes out as that year, or the one before or after (令和 and 平成 years
+ * are read from the source). Full-width digits (外１４６名, 第１２条) are read as
+ * plain ones (NFKC), and so are Arabic-Indic ones.
  */
 export function checkSummary(s: Summary, source: string, year: number): CheckResult {
-  const known = knownNumbers(source.normalize("NFKC"), year);
-  const text = shown(s).normalize("NFKC");
+  const original = plainDigits(source.normalize("NFKC"));
+  const known = knownNumbers(original, year);
+  const text = plainDigits(shown(s).normalize("NFKC"));
+  for (const m of text.matchAll(SUMMARY_SCALES)) {
+    if (known.has(String(Math.round(parseFloat(m[1]) * SCALE_VALUES[m[2].toLowerCase()])))) known.add(m[1].replace(".", ""));
+  }
   const invented = [...new Set(numbers(text).filter((n) => n.length >= 2 && !known.has(n)))];
-  const banned = [...new Set((text.match(BANNED) ?? []).map((w) => w.toLowerCase()))];
-  return { invented, banned, notEnglish: notEnglish(text) };
+  return { invented, banned: bannedWords(text, original), notEnglish: notEnglish(text) };
 }
