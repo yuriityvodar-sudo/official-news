@@ -63,6 +63,8 @@ export const TOPIC_NAMES: Record<NameLang, Record<Topic, string>> = {
     elections: "Elections",
     "human-rights": "Human rights",
     science: "Science",
+    education: "Education",
+    justice: "Justice",
   },
   uk: {
     "foreign-affairs": "Зовнішня політика",
@@ -77,6 +79,8 @@ export const TOPIC_NAMES: Record<NameLang, Record<Topic, string>> = {
     elections: "Вибори",
     "human-rights": "Права людини",
     science: "Наука",
+    education: "Освіта",
+    justice: "Правосуддя",
   },
   ru: {
     "foreign-affairs": "Внешняя политика",
@@ -91,6 +95,8 @@ export const TOPIC_NAMES: Record<NameLang, Record<Topic, string>> = {
     elections: "Выборы",
     "human-rights": "Права человека",
     science: "Наука",
+    education: "Образование",
+    justice: "Правосудие",
   },
   es: {
     "foreign-affairs": "Asuntos exteriores",
@@ -105,6 +111,8 @@ export const TOPIC_NAMES: Record<NameLang, Record<Topic, string>> = {
     elections: "Elecciones",
     "human-rights": "Derechos humanos",
     science: "Ciencia",
+    education: "Educación",
+    justice: "Justicia",
   },
   de: {
     "foreign-affairs": "Außenpolitik",
@@ -119,6 +127,8 @@ export const TOPIC_NAMES: Record<NameLang, Record<Topic, string>> = {
     elections: "Wahlen",
     "human-rights": "Menschenrechte",
     science: "Wissenschaft",
+    education: "Bildung",
+    justice: "Justiz",
   },
 };
 
