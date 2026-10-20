@@ -21,7 +21,9 @@ export type AppKey =
   | "countryBR"
   | "countryCA"
   | "countryCN"
+  | "countryCZ"
   | "countryDE"
+  | "countryES"
   | "countryEU"
   | "countryFR"
   | "countryGB"
@@ -31,9 +33,11 @@ export type AppKey =
   | "countryJP"
   | "countryKR"
   | "countryMX"
+  | "countryPL"
   | "countryRU"
   | "countrySA"
   | "countryTR"
+  | "countryUA"
   | "countryUS"
   | "countryZA"
   | "languageAr"
@@ -102,10 +106,6 @@ export type AppKey =
   | "supportMessages"
   | "supportMistakes"
   | "supportAppStore"
-  | "countryCZ"
-  | "countryES"
-  | "countryPL"
-  | "countryUA"
   | "languageCs";
 
 export type SiteLang = "en" | "uk" | "ru" | "es" | "de";
@@ -133,7 +133,9 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "countryBR": "Brazil",
     "countryCA": "Canada",
     "countryCN": "China",
+    "countryCZ": "Czechia",
     "countryDE": "Germany",
+    "countryES": "Spain",
     "countryEU": "European Union",
     "countryFR": "France",
     "countryGB": "United Kingdom",
@@ -143,9 +145,11 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "countryJP": "Japan",
     "countryKR": "South Korea",
     "countryMX": "Mexico",
+    "countryPL": "Poland",
     "countryRU": "Russia",
     "countrySA": "Saudi Arabia",
     "countryTR": "Türkiye",
+    "countryUA": "Ukraine",
     "countryUS": "United States",
     "countryZA": "South Africa",
     "languageAr": "Arabic",
@@ -187,13 +191,13 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "aboutPublishedBy": "Published by {publisher}.",
     "privacyIntro": "Official News has no accounts: we do not ask for your name, e-mail address or phone number, and we do not sell or share personal data for advertising.",
     "privacyPhoneHeading": "On your phone",
-    "privacyPhone": "Your language, the articles you have read, the last feed you saw and the pictures you have viewed are kept on your phone, so the app opens quickly and works offline. Deleting the app deletes them.",
+    "privacyPhone": "Your language and feed filters, the articles you have read, the last feed you saw and the pictures you have viewed are kept on your phone, so the app opens quickly and works offline. Deleting the app deletes them.",
     "privacyLoadingHeading": "When the app loads news",
     "privacyLoadingServer": "The app loads the news from our server, hosted by Cloudflare. Like any website, it receives your IP address and basic technical details to answer the request; we do not use them to identify you.",
     "privacyLoadingPictures": "Article pictures are loaded directly from the official website that published them, so that website receives your IP address when a picture loads. Pictures are saved on your phone after the first view.",
     "privacyLoadingPages": "When you open an official page, it opens in an in-app browser and that website's own privacy policy applies.",
     "privacyAnalyticsHeading": "Analytics",
-    "privacyAnalytics": "To understand how the app is used, for example how many people read which kind of decision, the app sends usage events to Google Analytics for Firebase: screens opened, articles opened and read, links tapped, the chosen language, and technical details such as the app version, device model, country and an app instance ID. It does not use the advertising identifier and does not track you across other apps.",
+    "privacyAnalytics": "To understand how the app is used, for example how many people read which kind of decision, the app sends usage events to Google Analytics for Firebase: screens opened, articles opened and read, links tapped, the chosen language and feed filters, and technical details such as the app version, device model, country and an app instance ID. It does not use the advertising identifier and does not track you across other apps.",
     "privacyNotificationsHeading": "Notifications",
     "privacyNotifications": "If you turn on notifications, your phone gets a notification token from Apple and Google Firebase so we can send news alerts. You can turn notifications off at any time in your phone settings.",
     "privacyAiHeading": "AI",
@@ -214,10 +218,6 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "supportMessages": "Found a mistake in a summary, a broken source, or have an idea? We read every message.",
     "supportMistakes": "When you report a mistake, the name of the article and the language you read it in help us find it.",
     "supportAppStore": "You can reach us through the app's page in the App Store.",
-    "countryCZ": "Czechia",
-    "countryES": "Spain",
-    "countryPL": "Poland",
-    "countryUA": "Ukraine",
     "languageCs": "Czech"
   },
   "uk": {
@@ -239,7 +239,9 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "countryBR": "Бразилія",
     "countryCA": "Канада",
     "countryCN": "Китай",
+    "countryCZ": "Чехія",
     "countryDE": "Німеччина",
+    "countryES": "Іспанія",
     "countryEU": "Європейський Союз",
     "countryFR": "Франція",
     "countryGB": "Велика Британія",
@@ -249,9 +251,11 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "countryJP": "Японія",
     "countryKR": "Південна Корея",
     "countryMX": "Мексика",
+    "countryPL": "Польща",
     "countryRU": "Росія",
     "countrySA": "Саудівська Аравія",
     "countryTR": "Туреччина",
+    "countryUA": "Україна",
     "countryUS": "США",
     "countryZA": "ПАР",
     "languageAr": "арабської",
@@ -293,13 +297,13 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "aboutPublishedBy": "Видавець: {publisher}.",
     "privacyIntro": "В Official News немає облікових записів: ми не запитуємо ваше ім’я, адресу електронної пошти чи номер телефону, а також не продаємо й не передаємо персональні дані для реклами.",
     "privacyPhoneHeading": "На вашому телефоні",
-    "privacyPhone": "Вибрана мова, прочитані статті, остання стрічка, яку ви бачили, і переглянуті зображення зберігаються на вашому телефоні, щоб застосунок швидко відкривався й працював офлайн. Якщо видалити застосунок, вони теж видаляться.",
+    "privacyPhone": "Вибрана мова й фільтри стрічки, прочитані статті, остання стрічка, яку ви бачили, і переглянуті зображення зберігаються на вашому телефоні, щоб застосунок швидко відкривався й працював офлайн. Якщо видалити застосунок, вони теж видаляться.",
     "privacyLoadingHeading": "Коли застосунок завантажує новини",
     "privacyLoadingServer": "Застосунок завантажує новини з нашого сервера, розміщеного в Cloudflare. Як і будь-який вебсайт, наш сервер отримує вашу IP-адресу й базові технічні дані, щоб відповісти на запит; ми не використовуємо їх, щоб вас ідентифікувати.",
     "privacyLoadingPictures": "Зображення до статей завантажуються безпосередньо з офіційного сайту, який їх опублікував, тож цей сайт отримує вашу IP-адресу під час завантаження зображення. Після першого перегляду зображення зберігаються на вашому телефоні.",
     "privacyLoadingPages": "Офіційна сторінка відкривається у вбудованому браузері, і на ній діє власна політика конфіденційності цього сайту.",
     "privacyAnalyticsHeading": "Аналітика",
-    "privacyAnalytics": "Щоб розуміти, як користуються застосунком (наприклад, скільки людей читають рішення того чи іншого типу), застосунок надсилає події використання до Google Analytics for Firebase: відкриті екрани, відкриті й прочитані статті, натиснуті посилання, вибрану мову, а також технічні дані, як-от версію застосунку, модель пристрою, країну та ідентифікатор екземпляра застосунку. Застосунок не використовує рекламний ідентифікатор і не відстежує вас в інших застосунках.",
+    "privacyAnalytics": "Щоб розуміти, як користуються застосунком (наприклад, скільки людей читають рішення того чи іншого типу), застосунок надсилає події використання до Google Analytics for Firebase: відкриті екрани, відкриті й прочитані статті, натиснуті посилання, вибрану мову й фільтри стрічки, а також технічні дані, як-от версію застосунку, модель пристрою, країну та ідентифікатор екземпляра застосунку. Застосунок не використовує рекламний ідентифікатор і не відстежує вас в інших застосунках.",
     "privacyNotificationsHeading": "Сповіщення",
     "privacyNotifications": "Якщо ви ввімкнете сповіщення, ваш телефон отримає токен сповіщень від Apple і Google Firebase, щоб ми могли надсилати сповіщення про новини. Сповіщення можна будь-коли вимкнути в параметрах телефону.",
     "privacyAiHeading": "ШІ",
@@ -320,10 +324,6 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "supportMessages": "Помітили помилку у викладі, джерело, що не працює, або маєте ідею? Ми читаємо кожне повідомлення.",
     "supportMistakes": "Коли повідомляєте про помилку, назва статті й мова, якою ви її читали, допоможуть нам її знайти.",
     "supportAppStore": "Зв’язатися з нами можна через сторінку застосунку в App Store.",
-    "countryCZ": "Чехія",
-    "countryES": "Іспанія",
-    "countryPL": "Польща",
-    "countryUA": "Україна",
     "languageCs": "чеської"
   },
   "ru": {
@@ -345,7 +345,9 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "countryBR": "Бразилия",
     "countryCA": "Канада",
     "countryCN": "Китай",
+    "countryCZ": "Чехия",
     "countryDE": "Германия",
+    "countryES": "Испания",
     "countryEU": "Европейский союз",
     "countryFR": "Франция",
     "countryGB": "Великобритания",
@@ -355,9 +357,11 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "countryJP": "Япония",
     "countryKR": "Южная Корея",
     "countryMX": "Мексика",
+    "countryPL": "Польша",
     "countryRU": "Россия",
     "countrySA": "Саудовская Аравия",
     "countryTR": "Турция",
+    "countryUA": "Украина",
     "countryUS": "США",
     "countryZA": "ЮАР",
     "languageAr": "арабского",
@@ -399,13 +403,13 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "aboutPublishedBy": "Издатель: {publisher}.",
     "privacyIntro": "В Official News нет учётных записей: мы не запрашиваем ваше имя, адрес электронной почты или номер телефона, а также не продаём и не передаём персональные данные для рекламы.",
     "privacyPhoneHeading": "На вашем телефоне",
-    "privacyPhone": "Выбранный язык, прочитанные статьи, последняя лента, которую вы видели, и просмотренные изображения хранятся на вашем телефоне, чтобы приложение быстро открывалось и работало офлайн. При удалении приложения эти данные удаляются.",
+    "privacyPhone": "Выбранный язык и фильтры ленты, прочитанные статьи, последняя лента, которую вы видели, и просмотренные изображения хранятся на вашем телефоне, чтобы приложение быстро открывалось и работало офлайн. При удалении приложения эти данные удаляются.",
     "privacyLoadingHeading": "Когда приложение загружает новости",
     "privacyLoadingServer": "Приложение загружает новости с нашего сервера на платформе Cloudflare. Как и любой сайт, сервер получает ваш IP-адрес и базовые технические данные, чтобы ответить на запрос; мы не используем их для вашей идентификации.",
     "privacyLoadingPictures": "Изображения к статьям загружаются напрямую с официального сайта, который их опубликовал, поэтому этот сайт получает ваш IP-адрес, когда загружается изображение. После первого просмотра изображения сохраняются на вашем телефоне.",
     "privacyLoadingPages": "Официальные страницы открываются во встроенном браузере, и на них действует собственная политика конфиденциальности соответствующего сайта.",
     "privacyAnalyticsHeading": "Аналитика",
-    "privacyAnalytics": "Чтобы понимать, как используется приложение (например, сколько людей читают решения того или иного типа), приложение отправляет в Google Analytics for Firebase данные об использовании: открытые экраны, открытые и прочитанные статьи, нажатые ссылки, выбранный язык, а также технические данные, такие как версия приложения, модель устройства, страна и идентификатор экземпляра приложения. Приложение не использует рекламный идентификатор и не отслеживает ваши действия в других приложениях.",
+    "privacyAnalytics": "Чтобы понимать, как используется приложение (например, сколько людей читают решения того или иного типа), приложение отправляет в Google Analytics for Firebase данные об использовании: открытые экраны, открытые и прочитанные статьи, нажатые ссылки, выбранный язык и фильтры ленты, а также технические данные, такие как версия приложения, модель устройства, страна и идентификатор экземпляра приложения. Приложение не использует рекламный идентификатор и не отслеживает ваши действия в других приложениях.",
     "privacyNotificationsHeading": "Уведомления",
     "privacyNotifications": "Если вы включите уведомления, ваш телефон получит токен уведомлений от Apple и Google Firebase, чтобы мы могли присылать уведомления о новостях. Уведомления можно в любой момент отключить в настройках телефона.",
     "privacyAiHeading": "ИИ",
@@ -426,10 +430,6 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "supportMessages": "Нашли ошибку в кратком изложении или неработающий источник? Есть идея? Мы читаем каждое сообщение.",
     "supportMistakes": "Сообщая об ошибке, укажите заголовок статьи и язык, на котором вы её читали: так нам будет проще найти ошибку.",
     "supportAppStore": "Связаться с нами можно через страницу приложения в App Store.",
-    "countryCZ": "Чехия",
-    "countryES": "Испания",
-    "countryPL": "Польша",
-    "countryUA": "Украина",
     "languageCs": "чешского"
   },
   "es": {
@@ -451,7 +451,9 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "countryBR": "Brasil",
     "countryCA": "Canadá",
     "countryCN": "China",
+    "countryCZ": "Chequia",
     "countryDE": "Alemania",
+    "countryES": "España",
     "countryEU": "Unión Europea",
     "countryFR": "Francia",
     "countryGB": "Reino Unido",
@@ -461,9 +463,11 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "countryJP": "Japón",
     "countryKR": "Corea del Sur",
     "countryMX": "México",
+    "countryPL": "Polonia",
     "countryRU": "Rusia",
     "countrySA": "Arabia Saudita",
     "countryTR": "Turquía",
+    "countryUA": "Ucrania",
     "countryUS": "Estados Unidos",
     "countryZA": "Sudáfrica",
     "languageAr": "árabe",
@@ -505,13 +509,13 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "aboutPublishedBy": "Publicada por {publisher}.",
     "privacyIntro": "Official News no usa cuentas de usuario: no te pedimos tu nombre, tu correo electrónico ni tu número de teléfono, y no vendemos ni compartimos datos personales con fines publicitarios.",
     "privacyPhoneHeading": "En tu teléfono",
-    "privacyPhone": "El idioma elegido, los artículos que leíste, la última lista de noticias que viste y las imágenes ya vistas se guardan en tu teléfono para que la app se abra rápido y funcione sin conexión. Si eliminas la app, se eliminan con ella.",
+    "privacyPhone": "El idioma y los filtros elegidos, los artículos que leíste, la última lista de noticias que viste y las imágenes ya vistas se guardan en tu teléfono para que la app se abra rápido y funcione sin conexión. Si eliminas la app, se eliminan con ella.",
     "privacyLoadingHeading": "Cuando la app carga noticias",
     "privacyLoadingServer": "La app carga las noticias desde nuestro servidor, alojado en Cloudflare. Como cualquier sitio web, nuestro servidor recibe tu dirección IP y datos técnicos básicos para responder a la solicitud; no los usamos para identificarte.",
     "privacyLoadingPictures": "Las imágenes de los artículos se cargan directamente desde el sitio web oficial que las publicó, así que ese sitio recibe tu dirección IP cuando se carga una imagen. Después de verlas por primera vez, las imágenes se guardan en tu teléfono.",
     "privacyLoadingPages": "Cuando abres una página oficial, se abre en un navegador dentro de la app y se aplica la política de privacidad de ese sitio web.",
     "privacyAnalyticsHeading": "Analítica",
-    "privacyAnalytics": "Para entender cómo se usa (por ejemplo, cuántas personas leen cada tipo de decisión), la app envía eventos de uso a Google Analytics for Firebase: pantallas abiertas, artículos abiertos y leídos, enlaces tocados, el idioma elegido y datos técnicos como la versión de la app, el modelo del dispositivo, el país y un ID de instancia de la app. No usa el identificador de publicidad ni te rastrea en otras apps.",
+    "privacyAnalytics": "Para entender cómo se usa (por ejemplo, cuántas personas leen cada tipo de decisión), la app envía eventos de uso a Google Analytics for Firebase: pantallas abiertas, artículos abiertos y leídos, enlaces tocados, el idioma y los filtros elegidos, y datos técnicos como la versión de la app, el modelo del dispositivo, el país y un ID de instancia de la app. No usa el identificador de publicidad ni te rastrea en otras apps.",
     "privacyNotificationsHeading": "Notificaciones",
     "privacyNotifications": "Si activas las notificaciones, tu teléfono recibe un token de notificaciones de Apple y Google Firebase para que podamos enviarte alertas de noticias. Puedes desactivar las notificaciones en cualquier momento en los ajustes de tu teléfono.",
     "privacyAiHeading": "IA",
@@ -532,10 +536,6 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "supportMessages": "¿Encontraste un error en un resumen, una fuente que no funciona o tienes una idea? Leemos todos los mensajes.",
     "supportMistakes": "Si nos informas de un error, el título del artículo y el idioma en que lo leíste nos ayudan a encontrarlo.",
     "supportAppStore": "Puedes contactarnos a través de la página de la app en el App Store.",
-    "countryCZ": "Chequia",
-    "countryES": "España",
-    "countryPL": "Polonia",
-    "countryUA": "Ucrania",
     "languageCs": "checo"
   },
   "de": {
@@ -557,7 +557,9 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "countryBR": "Brasilien",
     "countryCA": "Kanada",
     "countryCN": "China",
+    "countryCZ": "Tschechien",
     "countryDE": "Deutschland",
+    "countryES": "Spanien",
     "countryEU": "Europäische Union",
     "countryFR": "Frankreich",
     "countryGB": "Vereinigtes Königreich",
@@ -567,9 +569,11 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "countryJP": "Japan",
     "countryKR": "Südkorea",
     "countryMX": "Mexiko",
+    "countryPL": "Polen",
     "countryRU": "Russland",
     "countrySA": "Saudi-Arabien",
     "countryTR": "Türkei",
+    "countryUA": "Ukraine",
     "countryUS": "Vereinigte Staaten",
     "countryZA": "Südafrika",
     "languageAr": "Arabischen",
@@ -611,13 +615,13 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "aboutPublishedBy": "Herausgeber: {publisher}.",
     "privacyIntro": "Official News verwendet keine Benutzerkonten: Wir fragen nicht nach Ihrem Namen, Ihrer E-Mail-Adresse oder Telefonnummer, und wir verkaufen oder teilen keine personenbezogenen Daten zu Werbezwecken.",
     "privacyPhoneHeading": "Auf Ihrem Gerät",
-    "privacyPhone": "Die gewählte Sprache, die gelesenen Artikel, der zuletzt angezeigte Feed und die angesehenen Bilder werden auf Ihrem Gerät gespeichert, damit die App schnell startet und offline funktioniert. Wenn Sie die App löschen, werden sie mitgelöscht.",
+    "privacyPhone": "Die gewählte Sprache und die Feed-Filter, die gelesenen Artikel, der zuletzt angezeigte Feed und die angesehenen Bilder werden auf Ihrem Gerät gespeichert, damit die App schnell startet und offline funktioniert. Wenn Sie die App löschen, werden sie mitgelöscht.",
     "privacyLoadingHeading": "Wenn die App Nachrichten lädt",
     "privacyLoadingServer": "Die App lädt die Nachrichten von unserem Server, der bei Cloudflare gehostet wird. Wie bei jeder Website erhält er Ihre IP-Adresse und grundlegende technische Angaben, um die Anfrage zu beantworten; wir nutzen sie nicht, um Sie zu identifizieren.",
     "privacyLoadingPictures": "Bilder zu Artikeln werden direkt von der offiziellen Website geladen, die sie veröffentlicht hat; diese Website erhält daher Ihre IP-Adresse, wenn ein Bild geladen wird. Nach dem ersten Ansehen werden Bilder auf Ihrem Gerät gespeichert.",
     "privacyLoadingPages": "Wenn Sie eine offizielle Seite öffnen, wird sie in einem In-App-Browser geöffnet, und es gilt die Datenschutzerklärung dieser Website.",
     "privacyAnalyticsHeading": "Analyse",
-    "privacyAnalytics": "Um zu verstehen, wie die App genutzt wird, etwa wie viele Menschen welche Art von Entscheidung lesen, sendet die App Nutzungsereignisse an Google Analytics for Firebase: aufgerufene Bildschirme, geöffnete und gelesene Artikel, angetippte Links, die gewählte Sprache sowie technische Angaben wie App-Version, Gerätemodell, Land und eine App-Instanz-ID. Die App verwendet die Werbe-ID nicht und verfolgt Sie nicht über andere Apps hinweg.",
+    "privacyAnalytics": "Um zu verstehen, wie die App genutzt wird, etwa wie viele Menschen welche Art von Entscheidung lesen, sendet die App Nutzungsereignisse an Google Analytics for Firebase: aufgerufene Bildschirme, geöffnete und gelesene Artikel, angetippte Links, die gewählte Sprache und die Feed-Filter sowie technische Angaben wie App-Version, Gerätemodell, Land und eine App-Instanz-ID. Die App verwendet die Werbe-ID nicht und verfolgt Sie nicht über andere Apps hinweg.",
     "privacyNotificationsHeading": "Mitteilungen",
     "privacyNotifications": "Wenn Sie Mitteilungen aktivieren, erhält Ihr Gerät ein Mitteilungs-Token von Apple und Google Firebase, damit wir Ihnen Hinweise auf Nachrichten senden können. Sie können Mitteilungen jederzeit in den Einstellungen Ihres Geräts deaktivieren.",
     "privacyAiHeading": "KI",
@@ -638,10 +642,6 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "supportMessages": "Sie haben einen Fehler in einer Zusammenfassung oder eine Quelle gefunden, die nicht funktioniert, oder Sie haben eine Idee? Wir lesen jede Nachricht.",
     "supportMistakes": "Wenn Sie einen Fehler melden, helfen uns der Titel des Artikels und die Sprache, in der Sie ihn gelesen haben, bei der Suche.",
     "supportAppStore": "Sie erreichen uns über die Seite der App im App Store.",
-    "countryCZ": "Tschechien",
-    "countryES": "Spanien",
-    "countryPL": "Polen",
-    "countryUA": "Ukraine",
     "languageCs": "Tschechischen"
   }
 };

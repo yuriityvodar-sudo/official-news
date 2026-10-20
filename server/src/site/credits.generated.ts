@@ -42,10 +42,6 @@ export const CREDITS: Record<string, Credit> = {
     "wording": "© European Union, 1995-2026",
     "wordingLang": "en"
   },
-  "ru-kremlin-acts": {
-    "licence": "CC BY 4.0",
-    "licenceUrl": "https://creativecommons.org/licenses/by/4.0/"
-  },
   "tr-parliament-plenary": {},
   "za-government-notices": {},
   "au-treasurer-media-releases": {
@@ -75,5 +71,11 @@ export const CREDITS: Record<string, Credit> = {
   "ua-cabinet-of-ministers": {
     "licence": "CC BY 4.0",
     "licenceUrl": "https://creativecommons.org/licenses/by/4.0/"
+  },
+  "eu-ecb-decisions": {
+    "licence": "Reproduction permitted with the source acknowledged",
+    "licenceUrl": "https://www.ecb.europa.eu/services/using-our-site/disclaimer-and-copyright/html/index.en.html",
+    "wording": "Source: European Central Bank",
+    "wordingLang": "en"
   }
 };

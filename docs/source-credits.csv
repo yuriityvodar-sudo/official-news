@@ -9,7 +9,6 @@ de-government-articles,,,,,Not stated (bundesregierung.de/breg-de/impressum): ge
 fr-council-of-ministers,Licence Ouverte,https://www.elysee.fr/informations-legales-editoriales,,,"Text under the Licence ouverte, photos excluded: check its version and the citation it asks for in the legal review"
 it-council-of-ministers,CC BY 3.0 IT,https://creativecommons.org/licenses/by/3.0/it/,,,governo.it/it/note-legali
 eu-commission-press-releases,CC BY 4.0,https://creativecommons.org/licenses/by/4.0/,"© European Union, 1995-2026",en,"The copyright notice of commission.europa.eu/legal-notice_en (read 16 Oct 2026), kept as CC BY 4.0 §3(a)(1)(A) asks; its year range changes each year, so check it then. Changes indicated by the AI notice on every page"
-ru-kremlin-acts,CC BY 4.0,https://creativecommons.org/licenses/by/4.0/,,,kremlin.ru/about/copyrights
 tr-parliament-plenary,,,,,Not stated: generic line
 za-government-notices,,,,,"Non-commercial informational use (gov.za terms); our own words, nothing reproduced: generic line"
 au-treasurer-media-releases,CC BY 4.0,https://creativecommons.org/licenses/by/4.0/,© Commonwealth of Australia,en,"The attribution treasury.gov.au/copyright-disclaimer asks for (read 16 Oct 2026). Changes indicated by the AI notice on every page"
@@ -23,3 +22,4 @@ pl-journal-of-laws,,,,,"Not stated by the Sejm's ELI API; normative acts and off
 cz-government-meetings,,,,,"Not stated on the pages read; resolutions and other official works are not protected (Czech Copyright Act 121/2000 Sb., s. 3, docs/sources.csv): generic line"
 es-council-of-ministers,,,Origen de los datos: sitio web de lamoncloa.gob.es. Ministerio de la Presidencia.,es,"The citation lamoncloa.gob.es/Paginas/es_AvisoLegal.aspx asks for (docs/sources.csv); it also asks for the date of the last update of the information used, which the article page's published date gives. Legal review: whether that is enough"
 ua-cabinet-of-ministers,CC BY 4.0,https://creativecommons.org/licenses/by/4.0/,,,"CC BY 4.0 unless stated otherwise (footer of every kmu.gov.ua page, docs/sources.csv). Changes indicated by the AI notice on every page"
+eu-ecb-decisions,Reproduction permitted with the source acknowledged,https://www.ecb.europa.eu/services/using-our-site/disclaimer-and-copyright/html/index.en.html,Source: European Central Bank,en,"The statement on each ECB press release page (#109, read 16 Oct 2026): reproduction permitted provided the source is acknowledged. Russia's row removed with the source (#81)"

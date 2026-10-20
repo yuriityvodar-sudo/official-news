@@ -39,7 +39,7 @@ const line = (d: string) => `<path d="${d}" fill="none" stroke="currentColor" st
  * ticked box reads as chosen), climate a leaf (no weather). A topic added to
  * TOPICS (Roman's #91: education, justice) fails the typecheck until it has
  * one here, as its name in TOPIC_NAMES (api/filters.ts) and the app's ARB
- * files and topicIcons: whichever of #91 and #87/#89 merges second adds them.
+ * files and topicIcons.
  */
 export const TOPIC_ICONS: Record<Topic, string> = {
   "foreign-affairs": line("M3 12h18") + line("M12 3a14 14 0 0 1 0 18a14 14 0 0 1 0-18") + `<circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/>`,
@@ -54,6 +54,9 @@ export const TOPIC_ICONS: Record<Topic, string> = {
   elections: line("M7 2.5h6.6L19 7.9V20a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 20V4.5a2 2 0 0 1 2-2zM13.5 2.5V8H19M8.5 14.6l2.4 2.4 4.6-5.1"),
   "human-rights": line("M8 12.5V6.2a1.5 1.5 0 0 1 3 0V11M11 11V4.5a1.5 1.5 0 0 1 3 0V11M14 11V5.7a1.5 1.5 0 0 1 3 0v6.8M17 12.5V9.2a1.5 1.5 0 0 1 3 0V14a7 7 0 0 1-7 7h-1.2a6 6 0 0 1-4.6-2.2l-3.4-4.1a1.6 1.6 0 0 1 2.4-2.1L8 14.4"),
   science: line("M9 3h6M10.2 3v6.2L4.8 18.6A1.6 1.6 0 0 0 6.2 21h11.6a1.6 1.6 0 0 0 1.4-2.4L13.8 9.2V3") + `<path d="M6.9 15h10.2l1.9 3.6a1.1 1.1 0 0 1-1 1.6H6a1.1 1.1 0 0 1-1-1.6z"/>`,
+  // An open book (the app: book_fill) and a gavel (hammer_fill), added with #91's two topics (20 Oct).
+  education: `<path d="M3 4.5A1.5 1.5 0 0 1 4.5 3h5A2.5 2.5 0 0 1 12 5.5v15a2.5 2.5 0 0 0-2.5-2.5h-5A1.5 1.5 0 0 1 3 16.5z"/><path d="M21 4.5A1.5 1.5 0 0 0 19.5 3h-5A2.5 2.5 0 0 0 12 5.5v15a2.5 2.5 0 0 1 2.5-2.5h5a1.5 1.5 0 0 0 1.5-1.5z"/>`,
+  justice: `<rect x="2" y="5.5" width="9" height="5" rx="1.2" transform="rotate(-45 6.5 8)"/>` + line("M9.5 10.5 19.5 20.5") + `<rect x="3" y="19.5" width="10" height="2.5" rx="1"/>`,
 };
 
 const topicIcon = (topic: Topic) => raw(`<svg class="glyph" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">${TOPIC_ICONS[topic]}</svg>`);
