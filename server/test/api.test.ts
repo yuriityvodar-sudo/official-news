@@ -318,6 +318,27 @@ describe("other requests", () => {
     });
   });
 
+  it("tells Cloudflare's cache what to keep: the lists for a minute, an article for 5, nothing else (#121)", async () => {
+    const cacheControl = async (path: string, init?: RequestInit) =>
+      (await exports.default.fetch(`https://api.test${path}`, init)).headers.get("cache-control");
+    for (const path of ["/articles", "/articles?lang=uk&country=DE", "/articles?after=1", "/topics?lang=uk", "/countries"]) {
+      expect(await cacheControl(path), path).toBe("public, max-age=60");
+    }
+    expect(await cacheControl(`/articles/${SEED_DECISIONS[0]}`)).toBe("public, max-age=300");
+    // Not released (or not translated) yet: it may be shown in a minute, so the 404 is not kept.
+    for (const path of [
+      "/articles/01JASEED000000000000000001",
+      `/articles/${SEED_DECISIONS[0]}?lang=uk`,
+      "/articles?limit=0",
+      "/nope",
+      "/health",
+      "/queue",
+    ]) {
+      expect(await cacheControl(path), path).toBe("no-store");
+    }
+    expect(await cacheControl("/articles", { method: "POST" })).toBe("no-store");
+  });
+
   it("returns JSON errors for unknown paths and other methods", async () => {
     const notFound = await get("/nope");
     expect(notFound.status).toBe(404);

@@ -22,5 +22,8 @@
   // at 03:17 UTC (CRONS in src/index.ts; a test checks they match). A new schedule
   // can take about an hour to start firing (#50).
   "triggers": { "crons": ["* * * * *", "1-59/2 * * * *", "0-58/2 * * * *", "17 3 * * *"] },
-  "observability": { "enabled": true }
+  "observability": { "enabled": true },
+  // Workers Caching (#121): Cloudflare's cache in front of the Worker keeps what the API
+  // marks with Cache-Control (LIST_CACHE and ARTICLE_CACHE in src/api/index.ts).
+  "cache": { "enabled": true }
 }

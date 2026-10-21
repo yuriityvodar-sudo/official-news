@@ -212,10 +212,22 @@ export function toArticle(row: ArticleRow) {
   };
 }
 
+/**
+ * Cloudflare keeps a response with one of these in its cache in front of the
+ * Worker (Workers Caching, `cache` in wrangler.jsonc, #121), keyed by the path
+ * and the whole query string. A feed page is the same for every reader of a
+ * language, and a hit does not run the Worker: no D1 rows, no CPU. The lists
+ * for a minute, an article for 5 (it changes only when summarized or translated
+ * again). Any other response, errors included, is `no-store` (json below): a
+ * 404 for an article not released yet must not outlive its release.
+ */
+const LIST_CACHE = { "cache-control": "public, max-age=60" };
+const ARTICLE_CACHE = { "cache-control": "public, max-age=300" };
+
 const json = (body: unknown, status = 200, headers: Record<string, string> = {}) =>
   new Response(JSON.stringify(body), {
     status,
-    headers: { "content-type": "application/json; charset=utf-8", ...headers },
+    headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", ...headers },
   });
 
 const badRequest = (message: string) => json({ error: message }, 400);
@@ -298,7 +310,7 @@ async function listArticles(url: URL, env: Env): Promise<Response> {
   if (topic === undefined) return badRequest(TOPIC_ERROR);
   const filters = feedFilters(place.where, topic);
 
-  const where = [...PAGE_CONDITIONS, ...(lang ? TRANSLATED_CONDITIONS : []), ...filters.where];
+  const where = [...PAGE_CONDITIONS, ...(lang ? [RECENT_TRANSLATION, ...TRANSLATED_CONDITIONS] : []), ...filters.where];
   // The language is bound in the join (FROM_TRANSLATED), before the conditions.
   const binds: (string | number)[] = [...(lang ? [lang] : []), ...filters.binds];
 
@@ -372,12 +384,16 @@ async function listArticles(url: URL, env: Env): Promise<Response> {
   const nextCursor = page.results.length > limit && last?.feed_seq != null ? encodeCursor(last.feed_seq) : null;
   const shape = (row: TranslatedRow) => (lang ? toTranslatedArticle(row, lang) : toArticle(row));
 
-  return json({
-    items: rows.map(shape),
-    nextCursor,
-    top: top ? top.results.map(shape) : [],
-    ...(lang ? { translationsDelayed: delayed?.results[0]?.delayed !== 0 } : {}),
-  });
+  return json(
+    {
+      items: rows.map(shape),
+      nextCursor,
+      top: top ? top.results.map(shape) : [],
+      ...(lang ? { translationsDelayed: delayed?.results[0]?.delayed !== 0 } : {}),
+    },
+    200,
+    LIST_CACHE,
+  );
 }
 
 /** `GET /articles/:id`: one article shown in the feed (released), or 404. */
@@ -385,7 +401,7 @@ async function getArticle(id: string, env: Env): Promise<Response> {
   const row = await env.DB.prepare(`SELECT ${ARTICLE_COLUMNS} ${FROM_ARTICLES} WHERE a.id = ? AND a.is_news = 1 AND a.feed_seq IS NOT NULL`)
     .bind(id)
     .first<ArticleRow>();
-  return row ? json(toArticle(row)) : json({ error: "Not found" }, 404);
+  return row ? json(toArticle(row), 200, ARTICLE_CACHE) : json({ error: "Not found" }, 404);
 }
 
 // Translated feeds (#46). With `?lang=uk` (any of LANGS) the API shows the
@@ -405,11 +421,15 @@ const translatedColumns = (lang: Lang) => `${articleColumns(lang)},
   t.headline AS t_headline, t.short_summary AS t_short_summary, t.summary AS t_summary`;
 
 /**
- * The feed's articles with their translation into the language bound here. CROSS
- * JOIN keeps articles the outer loop, so a page walks articles_feed_seq newest
- * first as the English feed does and finds each translation by its primary key.
+ * The feed's articles with their translation into the language bound here. The
+ * language's `translation_langs` row `l` comes first, one row (RECENT_TRANSLATION);
+ * then CROSS JOIN keeps articles the outer loop, so a page walks
+ * articles_feed_seq newest first as the English feed does and finds each
+ * translation by its primary key.
  */
-export const FROM_TRANSLATED = `${FROM_ARTICLES} CROSS JOIN article_translations t ON t.article_id = a.id AND t.lang = ?`;
+export const FROM_TRANSLATED = `FROM translation_langs l CROSS JOIN articles a ON l.lang = ?
+  JOIN sources s ON s.id = a.source_id
+  CROSS JOIN article_translations t ON t.article_id = a.id AND t.lang = l.lang`;
 
 /**
  * A translation that is shown: it has a text (the CHECK constraint of
@@ -420,17 +440,37 @@ export const FROM_TRANSLATED = `${FROM_ARTICLES} CROSS JOIN article_translations
 export const TRANSLATED_CONDITIONS = ["t.headline IS NOT NULL", SHOWN];
 
 /**
+ * The language's newest translation (its highest lang_seq; translated_at rises
+ * with it) is from the feed's 7 days (#121, Yurii's condition on #89). A
+ * translation is written after its article was fetched, and the feed's
+ * articles were published in the 7 days, so when the newest is older, none of
+ * them has one. One row, through article_translations_lang_seq. It reads only
+ * the language's `translation_langs` row `l`, and every language query starts
+ * from `l` (CROSS JOIN keeps it the outer loop), so it runs once, before the
+ * walk: a language with none (German while it is off) answers its empty feed
+ * in a few rows instead of the whole window.
+ */
+export const RECENT_TRANSLATION = `(SELECT h.translated_at FROM article_translations h
+   WHERE h.lang = l.lang AND h.lang_seq IS NOT NULL ORDER BY h.lang_seq DESC LIMIT 1)
+   >= strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-7 days')`;
+
+/** The feed's articles after `lang`'s `translation_langs` row `l`, for the top stories (`lang` is one of LANGS). */
+const fromLangArticles = (lang: Lang) =>
+  `FROM translation_langs l CROSS JOIN articles a ON l.lang = '${lang}' JOIN sources s ON s.id = a.source_id`;
+
+/**
  * A language's top stories: the English top stories (same selection, same
  * order, same filters) that have a shown translation into it, so the language
  * never gets a top story the English feed does not have. Their sources are
- * named in `lang` (#76). Binds the filters' values, then the language.
+ * named in `lang` (#76). Picked only while the language has a translation in
+ * the 7 days (RECENT_TRANSLATION). Binds the filters' values, then the language.
  * CROSS JOIN keeps the 5 top stories the outer loop, each translation found
  * by its primary key: with table statistics SQLite would otherwise read every
  * translation into the language first.
  */
 const translatedTop = (filters: Filters, lang: Lang) => `
   SELECT top.*, t.headline AS t_headline, t.short_summary AS t_short_summary, t.summary AS t_summary
-  FROM (${topQuery(articleColumns(lang), FROM_ARTICLES, topWhere(filters))}) top
+  FROM (${topQuery(articleColumns(lang), fromLangArticles(lang), `${RECENT_TRANSLATION} AND ${topWhere(filters)}`)}) top
   CROSS JOIN article_translations t ON t.article_id = top.id AND t.lang = ?
   WHERE ${TRANSLATED_CONDITIONS.join(" AND ")}
   ORDER BY top.feed_seq DESC`;
@@ -472,7 +512,7 @@ async function getTranslated(id: string, lang: Lang, env: Env): Promise<Response
   )
     .bind(lang, id)
     .first<TranslatedRow>();
-  return row ? json(toTranslatedArticle(row, lang)) : json({ error: "Not found" }, 404);
+  return row ? json(toTranslatedArticle(row, lang), 200, ARTICLE_CACHE) : json({ error: "Not found" }, 404);
 }
 
 /**
@@ -485,8 +525,9 @@ async function getTranslated(id: string, lang: Lang, env: Env): Promise<Response
  */
 export const feedTopics = (filters: Filters, lang: Lang | null = null) =>
   lang
-    ? `SELECT a.topics FROM articles a CROSS JOIN article_translations t ON t.article_id = a.id AND t.lang = ?
-       WHERE ${[...PAGE_CONDITIONS, ...TRANSLATED_CONDITIONS, ...filters.where].join(" AND ")}`
+    ? `SELECT a.topics FROM translation_langs l CROSS JOIN articles a ON l.lang = ?
+       CROSS JOIN article_translations t ON t.article_id = a.id AND t.lang = l.lang
+       WHERE ${[...PAGE_CONDITIONS, RECENT_TRANSLATION, ...TRANSLATED_CONDITIONS, ...filters.where].join(" AND ")}`
     : `SELECT a.topics FROM articles a
        WHERE ${[...PAGE_CONDITIONS, ...filters.where].join(" AND ")}`;
 
@@ -513,7 +554,7 @@ async function listTopics(url: URL, env: Env): Promise<Response> {
     .bind(...(lang ? [lang] : []), ...filters.binds)
     .all<{ topics: string | null }>();
 
-  return json({ topics: rankTopics(results.map((row) => parseStringArray(row.topics)), lang ?? "en") });
+  return json({ topics: rankTopics(results.map((row) => parseStringArray(row.topics)), lang ?? "en") }, 200, LIST_CACHE);
 }
 
 /**
@@ -538,7 +579,7 @@ async function listCountries(url: URL, env: Env): Promise<Response> {
     .map((r) => r.country)
     .filter((code) => /^[A-Z]{2}$/.test(code) && code !== EU)
     .map((code) => ({ code, name: countryName(code, nameLang) }));
-  return json({ groups, countries: byName(countries, nameLang) });
+  return json({ groups, countries: byName(countries, nameLang) }, 200, LIST_CACHE);
 }
 
 async function route(request: Request, env: Env): Promise<Response> {
@@ -562,6 +603,7 @@ async function route(request: Request, env: Env): Promise<Response> {
     return lang === null ? getArticle(id, env) : getTranslated(id, lang, env);
   }
 
+  // Never cached (no-store, json): both show whether the steps are running now.
   if (url.pathname === "/health") {
     return json(await health(env));
   }
@@ -569,7 +611,7 @@ async function route(request: Request, env: Env): Promise<Response> {
   // The translation queue per language and the articles waiting for release (#46): read-only counts and times, no secrets.
   if (url.pathname === "/queue") {
     const [languages, release] = await Promise.all([queueStatus(env), releaseStatus(env)]);
-    return json({ languages, release }, 200, { "cache-control": "no-store" });
+    return json({ languages, release });
   }
 
   return json({ error: "Not found" }, 404);
