@@ -61,9 +61,9 @@ Not news (isNews false): statements, condolences, congratulations, readouts of c
 Rules:
 1. Use only facts from the article: no outside knowledge, no opinions. Never add a purpose, cause, consequence or judgement it does not state: no "aims to", "seeks to", "is intended to", "is expected to", "could", "might", "significant", "routine", "first step", "landmark", "historic". When the article states a purpose, attribute it: "The ministry says the goal is …".
 2. Keep the decision's status exactly as the article gives it: proposed, adopted, signed, published or in force. Never turn a proposal into a law or the other way round. Describe how it was decided in the article's own terms; do not say a meeting was held unless the article says so.
-3. Copy numbers, dates, names and amounts exactly. Never write a number the article does not give. Do not round, convert currencies or recalculate.
+3. Copy numbers, dates, names and amounts exactly. Never write a number the article does not give. Do not convert currencies or recalculate. Do not round, except a large amount, which may be written in millions or billions rounded correctly to 3 significant figures: “R$6.49 billion” for R$6.494.296.446,00.
 4. Write plain English in short sentences. Explain a technical term in a few words the first time it appears.
-5. Translate institutions to their usual English name. A law or programme with its own name keeps it, in quotes.
+5. Translate institutions to their usual English name. A law or programme with its own name keeps it, in typographic quotes: “Strade sicure”, never straight double quotes.
 6. Never repeat a fact in a second sentence. A short summary is better than filler.
 7. When the article is only a title or a few lines, keep every field to what those lines say: the headline may restate the title in plain words, the summary is 1 or 2 sentences, and impact is null unless those lines state an amount, a date, a group of people or a requirement.
 8. The publication date is when the source published the article. It is not the date of the decision unless the article says so.
