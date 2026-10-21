@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { FROM_TRANSLATED, PAGE_CONDITIONS, TRANSLATED_CONDITIONS } from "../src/api";
+import { FROM_TRANSLATED, PAGE_CONDITIONS, RECENT_TRANSLATION, TRANSLATED_CONDITIONS } from "../src/api";
 import {
   CLAIM,
   CLAIM_MINUTES,
@@ -1031,12 +1031,15 @@ describe("GET /articles with lang", () => {
     await env.DB.batch([env.DB.prepare("DELETE FROM article_translations"), env.DB.prepare("ANALYZE")]);
     const { results } = await env.DB.prepare(
       `EXPLAIN QUERY PLAN SELECT a.id ${FROM_TRANSLATED}
-       WHERE ${[...PAGE_CONDITIONS, ...TRANSLATED_CONDITIONS].join(" AND ")} ORDER BY a.feed_seq DESC LIMIT 21`,
+       WHERE ${[...PAGE_CONDITIONS, RECENT_TRANSLATION, ...TRANSLATED_CONDITIONS].join(" AND ")} ORDER BY a.feed_seq DESC LIMIT 21`,
     )
       .bind("uk")
       .all<{ detail: string }>();
     const plan = results.map((r) => r.detail).join("; ");
-    expect(plan).toMatch(/^SEARCH a USING INDEX articles_feed_seq \(feed_seq>\?\)/);
+    // First the language's one translation_langs row and its newest translation (#121), then the walk.
+    expect(plan).toMatch(
+      /^SEARCH l USING COVERING INDEX sqlite_autoindex_translation_langs_1 \(lang=\?\); CORRELATED SCALAR SUBQUERY \d+; SEARCH h USING INDEX article_translations_lang_seq \(lang=\? AND lang_seq>\?\); SEARCH a USING INDEX articles_feed_seq \(feed_seq>\?\)/,
+    );
     expect(plan).toContain("SEARCH t USING INDEX sqlite_autoindex_article_translations_1 (article_id=? AND lang=?)");
     expect(plan).not.toContain("TEMP B-TREE");
   });
