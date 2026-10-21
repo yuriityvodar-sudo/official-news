@@ -63,6 +63,29 @@ describe("checkSummary", () => {
     expect(checkSummary(summary("worth R$1,500,050"), "valor de R$ 1.500.000,50", 2026).invented).toEqual(["1500050"]);
   });
 
+  it("reads Roman numerals, Spanish numbers written out and a thousands dot before millones (#99: three articles hidden on 20 Oct)", () => {
+    const ok = (source: string, text: string) => expect(checkSummary(summary(text), source, 2026).invented, text).toEqual([]);
+    const jamboree =
+      "2026-10-16\nUstawa z dnia 18 września 2026 r. o szczególnych rozwiązaniach związanych z organizacją XXVI Światowego Jamboree " +
+      "Skautowego w Rzeczypospolitej Polskiej w 2027 r.. Hasła: harcerstwo,imprezy masowe. Data wejścia w życie: 2026-10-31.";
+    ok(jamboree, "Poland sets special rules for the 26th World Scout Jamboree in 2027, in force from 31 October 2026.");
+    const ruling =
+      "2026-10-20\nCircular ... el cumplimiento dado a la sentencia definitiva de veintiséis de enero de dos mil veintiséis ... " +
+      "la nulidad de la resolución de veinte de agosto de dos mil veinticuatro";
+    ok(ruling, "The ruling of 26 January 2026 annulled a resolution of 20 August 2024.");
+    const rigi = "2026-10-19\nLa iniciativa contempla una inversión total proyectada de US$ 12.240 millones, distribuida en dos etapas.";
+    ok(rigi, "The project plans a total investment of US$12.24 billion in two stages.");
+    ok(rigi, "The project plans US$12,240 million.");
+    ok("una inversión de 1,5 mil millones", "an investment of 1.5 billion");
+
+    // Still caught: another number than the one written out.
+    expect(checkSummary(summary("the 27th World Scout Jamboree"), jamboree, 2026).invented).toEqual(["27"]);
+    expect(checkSummary(summary("The ruling of 27 January 2026."), ruling, 2026).invented).toEqual(["27"]);
+    expect(checkSummary(summary("US$12.5 billion"), rigi, 2026).invented).toEqual(["125"]);
+    // A single capital letter is not a numeral: "C.V." gives no 100.
+    expect(checkSummary(summary("a fine of 100 pesos"), "Geosa, S. de R.L. de C.V.", 2026).invented).toEqual(["100"]);
+  });
+
   it("still finds a number made from parts of another one", () => {
     expect(checkSummary(summary("500 MW"), "2.500 MW", 2026).invented).toEqual(["500"]);
     expect(checkSummary(summary("US$521 for each"), "US$ 13.521.937", 2026).invented).toEqual(["521"]);
