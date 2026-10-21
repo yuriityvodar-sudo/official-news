@@ -218,9 +218,25 @@ function plainDigits(text: string): string {
   });
 }
 
-/** "1.5 million" in a summary: its digits count when the source gives the whole amount ("R$ 1.500.000,00"). */
+/**
+ * "1.5 million" in a summary: its digits count when the source gives the whole
+ * amount ("R$ 1.500.000,00"), or an amount that rounds to it at the precision
+ * written ("R$6.49 billion" for R$6.494.296.446,00, #99). A wrong rounding
+ * ("R$6.4 billion") still counts as invented.
+ */
 const SUMMARY_SCALES = /(\d+(?:\.\d+)?)\s?(thousand|million|billion|trillion)\b/gi;
 const SCALE_VALUES: Record<string, number> = { thousand: 1e3, million: 1e6, billion: 1e9, trillion: 1e12 };
+
+function scaledAmountKnown(written: string, scale: number, known: Set<string>): boolean {
+  const value = parseFloat(written);
+  if (known.has(String(Math.round(value * scale)))) return true;
+  const decimals = written.split(".")[1]?.length ?? 0;
+  for (const n of known) {
+    const amount = Number(n);
+    if (amount >= scale && Number((amount / scale).toFixed(decimals)) === value) return true;
+  }
+  return false;
+}
 
 /**
  * `source` is what the model read: the publication date, the original title and
@@ -234,7 +250,7 @@ export function checkSummary(s: Summary, source: string, year: number): CheckRes
   const known = knownNumbers(original, year);
   const text = plainDigits(shown(s).normalize("NFKC"));
   for (const m of text.matchAll(SUMMARY_SCALES)) {
-    if (known.has(String(Math.round(parseFloat(m[1]) * SCALE_VALUES[m[2].toLowerCase()])))) known.add(m[1].replace(".", ""));
+    if (scaledAmountKnown(m[1], SCALE_VALUES[m[2].toLowerCase()], known)) known.add(m[1].replace(".", ""));
   }
   const invented = [...new Set(numbers(text).filter((n) => n.length >= 2 && !known.has(n)))];
   return { invented, banned: bannedWords(text, original), notEnglish: notEnglish(text) };
