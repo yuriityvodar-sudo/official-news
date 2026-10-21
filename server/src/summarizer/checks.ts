@@ -30,10 +30,54 @@ const N = String.raw`(\d+(?:[.,]\d+)?)\s?`;
 const SCALES: [RegExp, number][] = [
   [new RegExp(N + "(?:tys\\.|tysięcy|thousand|bin\\b|천|千)", "gi"), 1e3],
   [new RegExp(N + "(?:万|만)", "g"), 1e4],
-  [new RegExp(N + "(?:mln|million|milyon|millones|millón|milhões)", "gi"), 1e6],
+  [new RegExp(N + "(?:mil millones|bilhões|bilhão|mld|mrd|billion|milyar|miliard)", "gi"), 1e9],
+  [new RegExp(N + "(?:mln|million|milyon|millones|millón|milhões|milhão)", "gi"), 1e6],
   [new RegExp(N + "(?:億|억)", "g"), 1e8],
-  [new RegExp(N + "(?:mld|mrd|billion|milyar|miliard)", "gi"), 1e9],
 ];
+
+/**
+ * The values a scaled number may have. "1,5 mln" is 1.5 million; "US$ 12.240
+ * millones" is 12,240 million (Argentina writes thousands with a dot), so
+ * three digits after the mark count both ways (#99: "US$12.24 billion").
+ */
+function scaledValues(written: string, scale: number): string[] {
+  const values = [parseFloat(written.replace(",", "."))];
+  if (/[.,]\d{3}$/.test(written)) values.push(Number(written.replace(/[.,]/g, "")));
+  return values.map((v) => String(Math.round(v * scale)));
+}
+
+/** Roman numerals of two letters or more: "XXVI Światowego Jamboree" is the 26th (#99). */
+const ROMAN = /\b(?=[MDCLXVI]{2,}\b)M{0,3}(?:CM|CD|D?C{0,3})(?:XC|XL|L?X{0,3})(?:IX|IV|V?I{0,3})\b/g;
+const ROMAN_DIGITS: Record<string, number> = { M: 1000, D: 500, C: 100, L: 50, X: 10, V: 5, I: 1 };
+
+function romanValue(numeral: string): number {
+  let value = 0;
+  for (let i = 0; i < numeral.length; i++) {
+    const digit = ROMAN_DIGITS[numeral[i]];
+    value += digit < (ROMAN_DIGITS[numeral[i + 1]] ?? 0) ? -digit : digit;
+  }
+  return value;
+}
+
+/**
+ * Spanish numbers up to 31 written out, as Mexico's official gazette writes its
+ * dates: "veintiséis de enero de dos mil veintiséis" is 26 January 2026 (#99).
+ * Read without accents.
+ */
+const SPANISH_NUMBERS: Record<string, number> = Object.fromEntries(
+  (
+    "uno dos tres cuatro cinco seis siete ocho nueve diez once doce trece catorce quince dieciseis diecisiete " +
+    "dieciocho diecinueve veinte veintiuno veintidos veintitres veinticuatro veinticinco veintiseis veintisiete " +
+    "veintiocho veintinueve treinta"
+  )
+    .split(" ")
+    .map((word, i) => [word, i + 1])
+    .concat([["primero", 1], ["treinta y uno", 31]]),
+);
+const SPANISH = new RegExp(
+  String.raw`\b(dos mil )?(${Object.keys(SPANISH_NUMBERS).sort((a, b) => b.length - a.length).join("|")})\b`,
+  "g",
+);
 
 /** Japan's era years: 令和8年 is 2026, 令和元年 2019, 平成31年 2019. */
 const ERAS: [RegExp, number][] = [
@@ -53,8 +97,11 @@ function knownNumbers(source: string, year: number): Set<string> {
     }
   }
   for (const [re, scale] of SCALES) {
-    for (const m of source.matchAll(re)) known.add(String(Math.round(parseFloat(m[1].replace(",", ".")) * scale)));
+    for (const m of source.matchAll(re)) for (const value of scaledValues(m[1], scale)) known.add(value);
   }
+  for (const [numeral] of source.matchAll(ROMAN)) if (numeral.length >= 2) known.add(String(romanValue(numeral)));
+  const unaccented = source.toLowerCase().normalize("NFD").replace(/\p{M}/gu, "");
+  for (const m of unaccented.matchAll(SPANISH)) known.add(String((m[1] ? 2000 : 0) + SPANISH_NUMBERS[m[2]]));
   for (const [re, start] of ERAS) {
     for (const m of source.matchAll(re)) known.add(String(start + (m[1] === "元" ? 1 : Number(m[1]))));
   }
