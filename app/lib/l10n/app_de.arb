@@ -3,8 +3,6 @@
 
   "today": "Heute",
   "yesterday": "Gestern",
-  "topStories": "Topmeldungen",
-  "latest": "Aktuell",
   "settings": "Einstellungen",
   "feedLoadFailed": "Nachrichten konnten nicht geladen werden. Zum Wiederholen nach unten ziehen.",
   "feedRefreshFailed": "Aktualisierung fehlgeschlagen. Zum Wiederholen nach unten ziehen.",
@@ -171,5 +169,18 @@
   "supportAppStore": "Sie erreichen uns über die Seite der App im App Store.",
   "supportWrite": "E-Mail schreiben",
 
-  "languageCs": "Tschechischen"
+  "languageCs": "Tschechischen",
+  "settingsDesign": "Design",
+  "settingsDesignNow": "Aktuell",
+  "settingsHeadlineWeight": "Schriftstärke der Überschriften",
+  "headlineWeightLight": "Leicht",
+  "headlineWeightRegular": "Normal",
+  "headlineWeightSemibold": "Halbfett",
+  "headlineWeightBold": "Fett",
+  "feedUnread": "Ungelesen",
+  "feedCardTopics": "{count, plural, =1{Thema: {names}} other{Themen: {names}}}",
+  "cancel": "Abbrechen",
+  "splashOnly": "nur",
+  "splashOfficial": "offizielle",
+  "splashNews": "Nachrichten"
 }

@@ -1,23 +1,30 @@
 import 'dart:async';
+import 'dart:math' show max, min;
 
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 
 import '../../core/analytics.dart';
 import '../../core/article.dart';
 import '../../core/feed_language.dart';
 import '../../core/filters.dart';
 import '../../core/news_widgets.dart';
-import '../../core/pictures.dart';
 import '../../core/router.dart';
 import '../../core/theme.dart';
 import '../../l10n/app_localizations.dart';
 import '../settings/settings_screen.dart';
 import 'feed_controller.dart';
 import 'feed_filters.dart';
+import 'feed_look.dart';
 
-/// Item 3: the feed (docs/design/mvp.png). Top stories, then the latest
-/// decisions grouped by day; opens instantly from the feed saved on the phone.
+/// Item 3: the feed (docs/design/mvp.png). One list of decisions in the order
+/// they arrived, with no sections (Yurii, 16 Oct: the server's top stories are
+/// in it with the rest); opens instantly from the feed saved on the phone.
+/// What it does lives here; how it looks is a [FeedLook] (#66):
+/// `feed_look_now.dart` is today's, and Settings → Design switches to the
+/// options Yurii compared.
 class FeedScreen extends StatefulWidget {
   const FeedScreen({
     super.key,
@@ -34,11 +41,17 @@ class FeedScreen extends StatefulWidget {
 }
 
 class _FeedScreenState extends State<FeedScreen> {
+  /// The masthead's sliver, wherever it is on screen: all of it at the top
+  /// of the feed, a pinned bar once folded, nothing once a masthead that
+  /// scrolls has gone. The "N new" pill floats just under it, so it never
+  /// covers the name or the filters, in any look.
+  final _masthead = _MastheadLink();
+
   late final FeedController _feed = widget.controller ?? FeedController();
   final _scroll = ScrollController();
   Timer? _newCheck;
 
-  /// Analytics (#60): the deepest Latest row shown this visit, and whether the
+  /// Analytics (#60): the deepest row shown this visit, and whether the
   /// feed's first page failed last time it changed.
   int _deepest = 0;
   bool _failed = false;
@@ -47,6 +60,9 @@ class _FeedScreenState extends State<FeedScreen> {
   void initState() {
     super.initState();
     _feed.addListener(_changed);
+    feedDesign.addListener(_designChanged);
+    readStyle.addListener(_designChanged);
+    topicTagCount.addListener(_designChanged);
     _scroll.addListener(_nearEnd);
     unawaited(_feed.start());
     _newCheck = Timer.periodic(widget.newCheckEvery, (_) {
@@ -60,21 +76,61 @@ class _FeedScreenState extends State<FeedScreen> {
   void dispose() {
     _newCheck?.cancel();
     _feed.removeListener(_changed);
+    feedDesign.removeListener(_designChanged);
+    readStyle.removeListener(_designChanged);
+    topicTagCount.removeListener(_designChanged);
     if (widget.controller == null) _feed.dispose();
     _scroll.dispose();
+    _masthead.dispose();
     super.dispose();
   }
+
+  /// Another look, chosen in Settings → Design (#66), or another way to show
+  /// read articles or number of topic tags (a build's `--dart-define`): the
+  /// feed redraws in it.
+  void _designChanged() => setState(() {});
 
   void _changed() {
     final failed = _feed.error != null;
     if (failed && !_failed) unawaited(analytics.feedFailed());
     _failed = failed;
+    _readAtStart();
     setState(() {});
     // A page dropped because a refresh replaced the feed leaves the list at its end:
     // look again once the new feed is drawn.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && _scroll.hasClients) _nearEnd();
+      if (mounted && _scroll.hasClients) {
+        _nearEnd();
+        _scrollAtStart();
+      }
     });
+  }
+
+  /// For screenshots (#66): a script cannot scroll the simulator, so a build with
+  /// `--dart-define=FEED_SCROLL=1400` opens the feed that many points down once
+  /// it has articles, for screenshots further down the list. 0 (the default)
+  /// does nothing.
+  static const _startScroll = int.fromEnvironment('FEED_SCROLL');
+  bool _scrolledAtStart = false;
+  void _scrollAtStart() {
+    if (_startScroll <= 0 || _scrolledAtStart || _feed.feed.isEmpty) return;
+    _scrolledAtStart = true;
+    _scroll.jumpTo(
+      min(_startScroll.toDouble(), _scroll.position.maxScrollExtent),
+    );
+  }
+
+  /// For screenshots only: a script cannot tap the simulator, so a
+  /// debug build with `--dart-define=READ_DEMO=2` shows the first 2 articles
+  /// of the feed as read, once the feed has articles.
+  /// Kept in memory only, never saved; ignored by release builds.
+  static const _readDemo = int.fromEnvironment('READ_DEMO');
+  bool _readDemoDone = false;
+  void _readAtStart() {
+    if (!kDebugMode || _readDemo <= 0 || _readDemoDone) return;
+    if (_feed.feed.isEmpty) return;
+    _readDemoDone = true;
+    _feed.readIds.addAll(_feed.feed.take(_readDemo).map((a) => a.id));
   }
 
   void _nearEnd() {
@@ -114,12 +170,14 @@ class _FeedScreenState extends State<FeedScreen> {
         builder: (_) => SettingsScreen(
           language: _feed.languageChanges,
           onLanguage: _chooseLanguage,
+          saveDesign: _feed.saveDesign,
+          saveHeadlineWeight: _feed.saveHeadlineWeight,
         ),
       ),
     );
   }
 
-  /// The first time this visit a Latest row at a depth of [feedDepths] is drawn.
+  /// The first time this visit a row at a depth of [feedDepths] is drawn.
   void _shownRow(int row) {
     if (row <= _deepest) return;
     for (final depth in feedDepths) {
@@ -161,9 +219,20 @@ class _FeedScreenState extends State<FeedScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final text = NewsText.from(context);
+    final look = lookFor(feedDesign.value);
+    final base = Theme.of(context);
+    final themed = look.theme(context, base);
+    if (identical(themed, base)) return _page(context, look);
+    return Theme(
+      data: themed,
+      child: Builder(builder: (context) => _page(context, look)),
+    );
+  }
+
+  Widget _page(BuildContext context, FeedLook look) {
     final l10n = AppLocalizations.of(context);
     return Scaffold(
+      backgroundColor: look.background(context),
       body: SafeArea(
         bottom: false,
         child: Stack(
@@ -176,52 +245,41 @@ class _FeedScreenState extends State<FeedScreen> {
               slivers: [
                 // Pull to refresh works in every state, including error and empty.
                 CupertinoSliverRefreshControl(onRefresh: _feed.refresh),
-                SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
-                  sliver: SliverToBoxAdapter(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Settings at the top right (#64); the language is chosen there.
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            Expanded(
-                              // The app's name, the same in every language.
-                              child: Text(
-                                'Official News',
-                                style: text.masthead,
-                              ),
-                            ),
-                            _SettingsButton(onPressed: _openSettings),
-                          ],
-                        ),
-                        Text(
-                          longDay(DateTime.now(), l10n),
-                          style: text.dateLine,
-                        ),
-                        FeedFilterBar(
-                          where: _feed.where,
-                          whereMenu: _feed.whereMenu,
-                          topic: _feed.topic,
-                          topics: _feed.topics,
-                          onWhere: _chooseWhere,
-                          onTopic: _chooseTopic,
-                        ),
-                      ],
+                _MastheadEdge(
+                  link: _masthead,
+                  sliver: look.masthead(
+                    context,
+                    FeedMasthead(
+                      // The app's name, the same in every language.
+                      title: 'Official News',
+                      date: longDay(DateTime.now(), l10n),
+                      openSettings: _openSettings,
+                      filterBar: FeedFilterBar(
+                        where: _feed.where,
+                        whereMenu: _feed.whereMenu,
+                        topic: _feed.topic,
+                        topics: _feed.topics,
+                        onWhere: _chooseWhere,
+                        onTopic: _chooseTopic,
+                      ),
                     ),
                   ),
                 ),
-                ..._content(context),
+                ..._content(context, look),
               ],
             ),
             if (_feed.newCount > 0)
-              Positioned(
-                top: 12,
-                left: 0,
-                right: 0,
-                child: Center(
-                  child: _NewPill(count: _feed.newCount, onTap: _showNew),
+              Positioned.fill(
+                child: _UnderMasthead(
+                  masthead: _masthead,
+                  scroll: _scroll,
+                  top: _pillTop,
+                  gap: _pillGap,
+                  child: look.newPill(
+                    context,
+                    count: _feed.newCount,
+                    onTap: _showNew,
+                  ),
                 ),
               ),
           ],
@@ -230,10 +288,16 @@ class _FeedScreenState extends State<FeedScreen> {
     );
   }
 
-  List<Widget> _content(BuildContext context) {
+  /// The "N new" pill's place: [_pillGap] under the masthead, and never
+  /// higher than [_pillTop] from the top of the safe area (where it floated
+  /// before, once the masthead has scrolled away).
+  static const _pillTop = 12.0;
+  static const _pillGap = 8.0;
+
+  List<Widget> _content(BuildContext context, FeedLook look) {
     final text = NewsText.from(context);
     final l10n = AppLocalizations.of(context);
-    if (_feed.items.isEmpty && _feed.top.isEmpty) {
+    if (_feed.feed.isEmpty) {
       if (_feed.loading) {
         return const [
           SliverFillRemaining(
@@ -249,12 +313,7 @@ class _FeedScreenState extends State<FeedScreen> {
             child: _feed.error != null
                 ? Text(l10n.feedLoadFailed, style: text.meta)
                 : _feed.filtered
-                ? _FilteredEmpty(
-                    where: !_feed.where.isAll,
-                    topic: _feed.topic != null,
-                    onAllCountries: () => _chooseWhere(FeedWhere.all),
-                    onAllTopics: () => _chooseTopic(null),
-                  )
+                ? _filteredEmpty(context)
                 : _feed.language == FeedLanguage.en
                 ? Text(l10n.feedEmpty, style: text.meta)
                 // The server lists only finished translations; they come in over the day.
@@ -274,79 +333,44 @@ class _FeedScreenState extends State<FeedScreen> {
       ];
     }
 
-    final topIds = _feed.top.map((a) => a.id).toSet();
-    final latest = _feed.items.where((a) => !topIds.contains(a.id)).toList();
+    // One list, no sections (Yurii, 16 Oct): the controller has merged the
+    // top stories into it, in the order the articles arrived; the server has
+    // applied the filters (#67, #68).
+    final shown = _feed.feed;
     final slivers = <Widget>[];
 
     if (_feed.error != null) {
       slivers.add(_padded(Text(l10n.feedRefreshFailed, style: text.meta)));
     }
-
-    if (_feed.top.isNotEmpty) {
+    // Analytics (#60) record each opened article's place in the list (the
+    // section is always "feed" now), and how deep the list was drawn.
+    if (shown.isNotEmpty) {
       slivers.add(
-        _padded(
-          Padding(
-            padding: const EdgeInsets.only(top: 16, bottom: 4),
-            child: Text(l10n.topStories, style: text.section),
+        look.articles(
+          context,
+          FeedList(
+            articles: shown,
+            readIds: _feed.readIds,
+            readStyle: readStyle.value,
+            open: (i) => _open(shown[i], section: 'feed', position: i),
+            shown: (i) => _shownRow(i + 1),
+            topic: _feed.topic,
+            maxTopics: topicTagCount.value,
           ),
         ),
       );
-      final first = _feed.top.first;
-      final rest = first.imageUrl != null ? _feed.top.skip(1) : _feed.top;
-      if (first.imageUrl != null) {
-        slivers.add(
-          _padded(
-            _TopCard(
-              article: first,
-              read: _feed.readIds.contains(first.id),
-              onTap: () => _open(first, section: 'top', position: 0),
-            ),
-          ),
-        );
-      }
-      slivers.add(
-        _rows(
-          rest.toList(),
-          section: 'top',
-          first: first.imageUrl != null ? 1 : 0,
-        ),
-      );
-    }
-
-    // One "Latest" list in the order articles appeared, with no day headings: an
-    // article dated yesterday can appear today, so headings by day would contradict
-    // the cards' own dates. Each card shows its date instead.
-    if (latest.isNotEmpty) {
-      slivers.add(
-        _padded(
-          Padding(
-            padding: const EdgeInsets.only(top: 20, bottom: 4),
-            child: Text(l10n.latest, style: text.section),
-          ),
-        ),
-      );
-      slivers.add(_rows(latest, section: 'latest'));
     }
 
     slivers.add(
-      SliverPadding(
-        padding: const EdgeInsets.fromLTRB(20, 24, 20, 48),
-        sliver: SliverToBoxAdapter(
-          child: Center(
-            child: _feed.loadMoreFailed
-                ? CupertinoButton(
-                    // A 44-pt target and a button role for VoiceOver.
-                    onPressed: () => unawaited(_feed.loadMore(retry: true)),
-                    child: Text(
-                      l10n.feedLoadMoreFailed,
-                      textAlign: TextAlign.center,
-                      style: text.meta.copyWith(color: AppColors.accent),
-                    ),
-                  )
-                : _feed.loadingMore || _feed.hasMore
-                ? const CupertinoActivityIndicator()
-                : Text(l10n.feedEnd, style: text.meta),
-          ),
+      look.feedEnd(
+        context,
+        FeedEnd(
+          state: _feed.loadMoreFailed
+              ? FeedEndState.failed
+              : _feed.loadingMore || _feed.hasMore
+              ? FeedEndState.loading
+              : FeedEndState.end,
+          retry: () => unawaited(_feed.loadMore(retry: true)),
         ),
       ),
     );
@@ -358,52 +382,13 @@ class _FeedScreenState extends State<FeedScreen> {
     sliver: SliverToBoxAdapter(child: child),
   );
 
-  /// Every card shows its own date ("2h ago", or the day for date-only articles).
-  /// [section] and [first] (the position of the first row) are for analytics.
-  Widget _rows(
-    List<Article> articles, {
-    required String section,
-    int first = 0,
-  }) => SliverPadding(
-    padding: const EdgeInsets.symmetric(horizontal: 20),
-    sliver: SliverList.separated(
-      itemCount: articles.length,
-      separatorBuilder: (_, _) => const Divider(),
-      itemBuilder: (context, index) {
-        final a = articles[index];
-        if (section == 'latest') _shownRow(index + 1);
-        return _ArticleRow(
-          article: a,
-          read: _feed.readIds.contains(a.id),
-          showDay: true,
-          onTap: () => _open(a, section: section, position: first + index),
-        );
-      },
-    ),
-  );
-}
-
-/// A filtered feed with nothing in it (#67, #68): says so, with a way back to
-/// all countries and to all topics, whichever narrows it. A group is a fixed
-/// choice, so it can be empty too.
-class _FilteredEmpty extends StatelessWidget {
-  const _FilteredEmpty({
-    required this.where,
-    required this.topic,
-    required this.onAllCountries,
-    required this.onAllTopics,
-  });
-
-  final bool where;
-  final bool topic;
-  final VoidCallback onAllCountries;
-  final VoidCallback onAllTopics;
-
-  @override
-  Widget build(BuildContext context) {
+  /// A filtered feed with nothing in it (#67, #68): says so, with a way back
+  /// to all countries and to all topics, whichever narrows it. A group is a
+  /// fixed choice, so it can be empty too.
+  Widget _filteredEmpty(BuildContext context) {
     final text = NewsText.from(context);
     final l10n = AppLocalizations.of(context);
-    Widget button(String label, VoidCallback onPressed) => CupertinoButton(
+    Widget undo(String label, VoidCallback onPressed) => CupertinoButton(
       padding: EdgeInsets.zero,
       minimumSize: const Size(44, 44),
       onPressed: onPressed,
@@ -421,245 +406,202 @@ class _FilteredEmpty extends StatelessWidget {
       children: [
         Text(l10n.filterEmpty, style: text.meta),
         const SizedBox(height: 4),
-        if (where) button(l10n.filterShowAllCountries, onAllCountries),
-        if (topic) button(l10n.filterShowAllTopics, onAllTopics),
+        if (!_feed.where.isAll)
+          undo(l10n.filterShowAllCountries, () => _chooseWhere(FeedWhere.all)),
+        if (_feed.topic != null)
+          undo(l10n.filterShowAllTopics, () => _chooseTopic(null)),
       ],
     );
   }
 }
 
-/// One decision: label, publisher, serif headline, time, thumbnail on the right.
-class _ArticleRow extends StatelessWidget {
-  const _ArticleRow({
-    required this.article,
-    required this.read,
-    required this.onTap,
-    this.showDay = true,
+/// Where the masthead's sliver is, for the "N new" pill: [_MastheadEdge]
+/// registers its render object here and tells each time it is laid out
+/// (scrolling, folding, pull to refresh, a new size), so the pill moves in
+/// the same frame as the masthead, never a frame behind it.
+class _MastheadLink extends ChangeNotifier {
+  _RenderMastheadEdge? _edge;
+
+  /// Where the masthead ends on screen, in [box]'s coordinates: 0 once it
+  /// has scrolled away, or before it is laid out. Read while painting, when
+  /// this frame's layout is done.
+  double bottomIn(RenderBox box) {
+    final edge = _edge;
+    if (edge == null || !edge.attached || !box.attached) return 0;
+    final shown = edge.geometry?.paintExtent ?? 0;
+    if (shown <= 0) return 0;
+    return MatrixUtils.transformPoint(
+      edge.getTransformTo(box),
+      Offset(0, shown),
+    ).dy;
+  }
+
+  void _laidOut() => notifyListeners();
+}
+
+/// The masthead's sliver, any look's, registered with a [_MastheadLink].
+class _MastheadEdge extends SingleChildRenderObjectWidget {
+  const _MastheadEdge({required this.link, required Widget sliver})
+    : super(child: sliver);
+
+  final _MastheadLink link;
+
+  @override
+  RenderObject createRenderObject(BuildContext context) =>
+      _RenderMastheadEdge(link);
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    _RenderMastheadEdge renderObject,
+  ) => renderObject.link = link;
+}
+
+class _RenderMastheadEdge extends RenderProxySliver {
+  _RenderMastheadEdge(this._link);
+
+  _MastheadLink _link;
+  set link(_MastheadLink value) {
+    if (identical(value, _link)) return;
+    if (identical(_link._edge, this)) _link._edge = null;
+    _link = value;
+    if (attached) _link._edge = this;
+  }
+
+  @override
+  void attach(PipelineOwner owner) {
+    super.attach(owner);
+    _link._edge = this;
+  }
+
+  @override
+  void detach() {
+    if (identical(_link._edge, this)) _link._edge = null;
+    super.detach();
+  }
+
+  @override
+  void performLayout() {
+    super.performLayout();
+    // Only marks the pill to be painted again: allowed during layout.
+    _link._laidOut();
+  }
+}
+
+/// Places [child] (the "N new" pill) across the middle, [gap] under where
+/// the masthead ends on screen and never higher than [top]. The place is
+/// worked out while painting, after this frame's layout, so the pill moves
+/// with the masthead in the same frame; taps beside the pill reach the feed.
+class _UnderMasthead extends SingleChildRenderObjectWidget {
+  const _UnderMasthead({
+    required this.masthead,
+    required this.scroll,
+    required this.top,
+    required this.gap,
+    required Widget super.child,
   });
 
-  final Article article;
-  final bool read;
-  final VoidCallback onTap;
-  final bool showDay;
+  final _MastheadLink masthead;
+  final Listenable scroll;
+  final double top;
+  final double gap;
 
   @override
-  Widget build(BuildContext context) {
-    final text = NewsText.from(context);
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      // Opened articles stay in the feed, dimmed.
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  KindLabel(article, dimmed: read),
-                  PublisherLine(article, dimmed: read),
-                  const SizedBox(height: 4),
-                  Text(
-                    article.headline,
-                    style: dim(text.headline, read),
-                    maxLines: 4,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  if (showDay ||
-                      !article.dateOnly ||
-                      article.addedAt != null) ...[
-                    const SizedBox(height: 6),
-                    Text(
-                      feedTime(article, AppLocalizations.of(context)),
-                      style: dim(text.meta, read),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            if (article.imageUrl != null) ...[
-              const SizedBox(width: 14),
-              _Picture(
-                url: article.imageUrl!,
-                width: 84,
-                height: 84,
-                dimmed: read,
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
+  RenderObject createRenderObject(BuildContext context) =>
+      _RenderUnderMasthead(masthead, scroll, top, gap);
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    _RenderUnderMasthead renderObject,
+  ) => renderObject
+    ..masthead = masthead
+    ..scroll = scroll
+    ..top = top
+    ..gap = gap;
 }
 
-/// The first top story: a big picture with the text below.
-class _TopCard extends StatelessWidget {
-  const _TopCard({
-    required this.article,
-    required this.read,
-    required this.onTap,
-  });
+class _RenderUnderMasthead extends RenderShiftedBox {
+  _RenderUnderMasthead(this._masthead, this._scroll, this._top, this._gap)
+    : super(null);
 
-  final Article article;
-  final bool read;
-  final VoidCallback onTap;
+  _MastheadLink _masthead;
+  set masthead(_MastheadLink value) {
+    if (identical(value, _masthead)) return;
+    if (attached) _masthead.removeListener(markNeedsPaint);
+    _masthead = value;
+    if (attached) _masthead.addListener(markNeedsPaint);
+    markNeedsPaint();
+  }
+
+  /// The list's scrolling: the pill is painted again as it scrolls, as well
+  /// as each time the masthead is laid out.
+  Listenable _scroll;
+  set scroll(Listenable value) {
+    if (identical(value, _scroll)) return;
+    if (attached) _scroll.removeListener(markNeedsPaint);
+    _scroll = value;
+    if (attached) _scroll.addListener(markNeedsPaint);
+    markNeedsPaint();
+  }
+
+  double _top;
+  set top(double value) {
+    if (value == _top) return;
+    _top = value;
+    markNeedsPaint();
+  }
+
+  double _gap;
+  set gap(double value) {
+    if (value == _gap) return;
+    _gap = value;
+    markNeedsPaint();
+  }
 
   @override
-  Widget build(BuildContext context) {
-    final text = NewsText.from(context);
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.only(top: 8, bottom: 16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            AspectRatio(
-              aspectRatio: 16 / 9,
-              child: _Picture(url: article.imageUrl!, dimmed: read),
-            ),
-            const SizedBox(height: 12),
-            KindLabel(article, dimmed: read),
-            PublisherLine(article, dimmed: read),
-            const SizedBox(height: 4),
-            Text(
-              article.headline,
-              style: dim(text.headline.copyWith(fontSize: 25), read),
-              maxLines: 4,
-              overflow: TextOverflow.ellipsis,
-            ),
-            const SizedBox(height: 6),
-            Text(
-              feedTime(article, AppLocalizations.of(context)),
-              style: dim(text.meta, read),
-            ),
-          ],
-        ),
-      ),
-    );
+  void attach(PipelineOwner owner) {
+    super.attach(owner);
+    _masthead.addListener(markNeedsPaint);
+    _scroll.addListener(markNeedsPaint);
   }
-}
-
-/// A picture from the official page; it simply disappears if it cannot be loaded.
-class _Picture extends StatelessWidget {
-  const _Picture({
-    required this.url,
-    this.width,
-    this.height,
-    this.dimmed = false,
-  });
-
-  final String url;
-  final double? width;
-  final double? height;
-  final bool dimmed;
 
   @override
-  Widget build(BuildContext context) {
-    final ratio = MediaQuery.devicePixelRatioOf(context);
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(10),
-      child: Container(
-        width: width,
-        height: height,
-        // A read picture fades together with its placeholder, so it looks faded, not grey.
-        color: dim(
-          TextStyle(
-            color: Theme.of(context).colorScheme.surfaceContainerHighest,
-          ),
-          dimmed,
-        ).color,
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            // Official pages often serve 2,000+ px images; decode near the size shown,
-            // so a long feed does not hold hundreds of MB of pictures. A square
-            // thumbnail with BoxFit.cover crops a landscape picture to its height,
-            // so it is decoded twice as wide as the box to stay sharp.
-            final square = width != null && height != null && width == height;
-            final shown = (width ?? constraints.maxWidth) * (square ? 2 : 1);
-            return Image(
-              image: picture(
-                url,
-                width: shown.isFinite ? (shown * ratio).round() : null,
-              ),
-              fit: BoxFit.cover,
-              width: width,
-              height: height,
-              opacity: dimmed
-                  ? const AlwaysStoppedAnimation(readOpacity)
-                  : null,
-              errorBuilder: (_, _, _) => const SizedBox.shrink(),
-            );
-          },
-        ),
-      ),
-    );
+  void detach() {
+    _masthead.removeListener(markNeedsPaint);
+    _scroll.removeListener(markNeedsPaint);
+    super.detach();
   }
-}
 
-/// The settings button at the top right of the feed: a round, tinted symbol
-/// like the account button in Apple's apps, with a 44-pt target.
-class _SettingsButton extends StatelessWidget {
-  const _SettingsButton({required this.onPressed});
-
-  final VoidCallback onPressed;
+  // Its own layer: moving the pill repaints only the pill.
+  @override
+  bool get isRepaintBoundary => true;
 
   @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return CupertinoButton(
-      padding: EdgeInsets.zero,
-      minimumSize: const Size(44, 44),
-      onPressed: onPressed,
-      child: Container(
-        width: 36,
-        height: 36,
-        decoration: BoxDecoration(
-          color: scheme.surfaceContainerHighest,
-          shape: BoxShape.circle,
-        ),
-        child: Icon(
-          CupertinoIcons.gear_alt,
-          size: 21,
-          color: CupertinoColors.label.resolveFrom(context),
-          semanticLabel: AppLocalizations.of(context).settings,
-        ),
-      ),
-    );
-  }
-}
-
-/// "3 new decisions": shown instead of moving the list while it is being read.
-/// Plural forms per language: "1 нове рішення", "3 нові рішення", "5 нових рішень".
-class _NewPill extends StatelessWidget {
-  const _NewPill({required this.count, required this.onTap});
-
-  final int count;
-  final VoidCallback onTap;
+  Size computeDryLayout(BoxConstraints constraints) => constraints.biggest;
 
   @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          color: AppColors.accent,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Text(
-          AppLocalizations.of(context).newDecisions(count),
-          style: const TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.w600,
-            fontSize: 15,
-          ),
-        ),
-      ),
+  void performLayout() {
+    size = constraints.biggest;
+    // As small as the pill looks, as high as it likes (as under a Positioned
+    // with only a top): taps beside it reach the feed.
+    child?.layout(
+      BoxConstraints(maxWidth: constraints.maxWidth),
+      parentUsesSize: true,
     );
   }
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    final child = this.child;
+    if (child == null) return;
+    (child.parentData! as BoxParentData).offset = Offset(
+      (size.width - child.size.width) / 2,
+      max(_top, _masthead.bottomIn(this) + _gap),
+    );
+    super.paint(context, offset);
+  }
+
+  @override
+  bool hitTestSelf(Offset position) => false;
 }

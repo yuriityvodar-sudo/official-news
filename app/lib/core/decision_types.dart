@@ -1,8 +1,9 @@
 import '../l10n/app_localizations.dart';
 
 /// The fixed list of decision types from docs/contract.md. The AI gives each
-/// article one of them; the app shows its label above the headline, in the
-/// app's language (#52: the labels are in lib/l10n/app_*.arb).
+/// article one of them; the article screen shows its label above the
+/// headline, in the app's language (#52: the labels are in
+/// lib/l10n/app_*.arb). The feed's cards show topics instead (16 Oct).
 const decisionTypes = [
   'law',
   'bill',

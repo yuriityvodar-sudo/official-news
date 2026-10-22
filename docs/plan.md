@@ -117,7 +117,7 @@ The MVP is a Kickoff plus 8 items, 4 each. This is our suggested split: Yurii ow
 | #56 | Article text layout (justified text, smaller body font, paragraphs) | Roman | Before/after agreed in the issue, then built |
 | #64 | Settings screen from the top-right corner (language, notifications, privacy, terms, support, about, version); no login | Yurii (design and build) | Yurii approves it on the phone |
 | #65 | Domain (Cloudflare Registrar) and app name | Yurii | Name decided, domain bought |
-| #66 | Feed redesign: article cards, font, UI fixes | Yurii (design and build) | Yurii approves it on the phone |
+| #66 | Feed redesign: one list, topics on the cards, no read marking, the splash, and a Design section in Settings (look, headline weight); the prototype's looks A, B and C kept to switch between | Yurii (design and build) | Yurii approves it on the phone (20 Oct: builds 19, 20, 23) |
 | #67 | News categories: a Topics chip under the date, one topic at a time, busiest first, from the server, also for a country or a group | Yurii (design and build) | Server filters and `GET /topics` (Proposed, `docs/decisions.md`), then the app's chip; Yurii approves it on the phone |
 | #68 | Where filter: all countries (default), a group of countries (European Union, G7, G20, NATO: its members' decisions together) or one country (that country's only) | Yurii (design and build) | Server filters (`country=`, `group=`) and `GET /countries` with its groups (Proposed, `docs/decisions.md`), then the app's chip; Yurii approves it on the phone |
 | #60 | Analytics (Google Analytics through Firebase) | Yurii | Events arrive in GA from TestFlight; release checklist done |
@@ -176,7 +176,7 @@ official-news/
 }
 ```
 
-The feed card reads `headline`, `shortSummary` and `imageUrl`; the detail screen reads `summary`. `topics` holds 1 to 3 values from the fixed topic list; the MVP app does not use it yet. Before item 7 is live, `headline` falls back to `originalTitle` and the summary fields are empty.
+The feed card reads `headline`, `shortSummary`, `imageUrl` and `topics` (shown as up to three tags, decision 2026-10-16); the detail screen reads `summary` and shows `decisionType`. `topics` holds 1 to 3 values from the fixed topic list. Before item 7 is live, `headline` falls back to `originalTitle` and the summary fields are empty.
 
 **API**
 
@@ -414,7 +414,7 @@ Every minute the fetcher reads the next source on the list, so all sources are c
 
 ## Feed and reading experience
 
-The feed shows official news from the last 7 days, newest first, with a short "Top today" section on top. Nothing is ever pulled from trending or media sites.
+The feed shows official news from the last 7 days as one list, newest first, with no sections; the day's top stories are in it at their own place (Yurii, 16 Oct). Nothing is ever pulled from trending or media sites.
 
 **What counts as a new item**
 
@@ -428,8 +428,8 @@ The feed shows official news from the last 7 days, newest first, with a short "T
 
 **Order**
 
-- **Top today:** 3–5 items from the last 24 hours with the highest AI importance score, at most 2 per country
-- **Latest:** everything else, in the order it appeared in the feed, newest first (each card shows its official publication date), grouped under Today, Yesterday and so on by the day it appeared (decision 2026-10-15)
+- **One list (Yurii, 16 Oct):** every decision once, in the order it appeared in the feed (`feedSeq`), newest first (each card shows its official publication date), with no section titles ("Top stories", "Latest") and no day headings (decision 2026-10-15 for the order)
+- **Top today:** the server still picks 3–5 items from the last 24 hours with the highest AI importance score, at most 2 per country, and sends them as `top`; the app shows each in the list at its own place, not as a section of its own
 - Country chips filter the feed (after the MVP)
 - At the end of the 7 days: "You're all caught up" (a "Show older" button can be added later)
 
