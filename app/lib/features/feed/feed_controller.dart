@@ -10,6 +10,8 @@ import '../../core/feed_language.dart';
 import '../../core/feed_store.dart';
 import '../../core/filters.dart';
 import '../../core/push.dart';
+import '../../core/theme.dart';
+import 'feed_look.dart';
 
 /// The feed's state: its language and filters, articles, paging, errors, read
 /// articles and the check for new ones. The screen only draws it.
@@ -86,9 +88,25 @@ class FeedController extends ChangeNotifier {
   /// "Top stories": the API's `top`, only on the first page.
   List<Article> top = const [];
 
-  /// Every article loaded so far, newest first (top articles are in here too).
-  List<Article> items = const [];
+  /// Every article loaded so far, as the server pages them, newest first
+  /// (top articles are in here too, on whichever page they fall).
+  List<Article> get items => _items;
+  set items(List<Article> value) {
+    _items = value;
+    _merge();
+  }
+
+  List<Article> _items = const [];
   String? _cursor;
+
+  /// What the feed shows: one list, no sections (Yurii, 16 Oct). [items] and
+  /// [top] together, each article once, in the order they arrived in the
+  /// feed ([oneFeed]). Worked out once each time they change.
+  List<Article> get feed => _feed;
+  List<Article> _feed = const [];
+
+  void _merge() =>
+      _feed = oneFeed(top: top, items: _items, complete: _cursor == null);
   Set<String> readIds = {};
 
   /// True while there is nothing to show yet.
@@ -150,6 +168,11 @@ class FeedController extends ChangeNotifier {
     _noCountries = store.noCountries();
     _whereMenu = _noCountries ? null : store.whereMenu(language);
     _topics = store.topics(language);
+    // Settings → Design (#66): what was chosen, if anything; else the default.
+    final design = store.design();
+    if (design != null) feedDesign.value = design;
+    final weight = store.headlineWeight();
+    if (weight != null) headlineWeight.value = weight;
     languageKnown = true;
     notifyListeners();
   }
@@ -404,8 +427,8 @@ class FeedController extends ChangeNotifier {
         return; // a refresh, another language or filter replaced the feed meanwhile
       }
       final known = items.map((a) => a.id).toSet();
-      items = [...items, ...page.items.where((a) => !known.contains(a.id))];
       _cursor = page.nextCursor;
+      items = [...items, ...page.items.where((a) => !known.contains(a.id))];
     } catch (_) {
       if (generation == _generation) loadMoreFailed = true;
     } finally {
@@ -479,7 +502,71 @@ class FeedController extends ChangeNotifier {
     loadMoreFailed = false;
     loadingMore = false;
     top = page?.top ?? const [];
-    items = page?.items ?? const [];
     _cursor = page?.nextCursor;
+    items = page?.items ?? const [];
   }
+
+  /// Saves the look chosen in Settings → Design (#66) on the phone; Settings
+  /// has already switched [feedDesign] to it.
+  Future<void> saveDesign(FeedDesign design) async {
+    await _store?.saveDesign(design);
+  }
+
+  /// Saves the headline weight chosen in Settings → Design (#66) on the
+  /// phone; Settings has already switched [headlineWeight] to it.
+  Future<void> saveHeadlineWeight(HeadlineWeight weight) async {
+    await _store?.saveHeadlineWeight(weight);
+  }
+}
+
+/// The feed as one list (Yurii, 16 Oct: no "Top stories" and "Latest"
+/// sections): [items] and [top] together, each article once, in the order
+/// they arrived in the feed. The highest `feedSeq` first, as Latest was;
+/// then any without one (a feed saved before the server numbered articles)
+/// by `addedAt`, newest first; otherwise as the server listed them.
+///
+/// The server lists the top stories in `items` too, on whichever page they
+/// fall. While more pages are to come (not [complete]), a top story that
+/// would come after the last article loaded waits for its own page, so
+/// loading more only ever adds to the end of the list.
+List<Article> oneFeed({
+  required List<Article> top,
+  required List<Article> items,
+  required bool complete,
+}) {
+  final seen = <String>{};
+  final all = [
+    for (final a in [...items, ...top])
+      if (seen.add(a.id)) a,
+  ];
+  // The place in the server's lists breaks ties, so the order is the same
+  // every time (Dart's sort is not stable).
+  final place = {for (var i = 0; i < all.length; i++) all[i].id: i};
+  int order(Article a, Article b) {
+    final c = _arrival(a, b);
+    return c != 0 ? c : place[a.id]!.compareTo(place[b.id]!);
+  }
+
+  all.sort(order);
+  if (complete || items.isEmpty) return all;
+  final loaded = items.map((a) => a.id).toSet();
+  final last = all.lastWhere((a) => loaded.contains(a.id));
+  return [
+    for (final a in all)
+      if (loaded.contains(a.id) || order(a, last) < 0) a,
+  ];
+}
+
+/// Which of two articles arrived in the feed later, for [oneFeed]: negative
+/// when [a] did, 0 when nothing tells them apart.
+int _arrival(Article a, Article b) {
+  final (x, y) = (a.feedSeq, b.feedSeq);
+  if (x != null && y != null) return y.compareTo(x);
+  if (x != null) return -1;
+  if (y != null) return 1;
+  final (p, q) = (a.addedAt, b.addedAt);
+  if (p != null && q != null) return q.compareTo(p);
+  if (p != null) return -1;
+  if (q != null) return 1;
+  return 0;
 }

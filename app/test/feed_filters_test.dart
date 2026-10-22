@@ -709,7 +709,12 @@ void main() {
       expect(_checkmark(tester), _lightRed);
 
       // Once chosen, the chip shows the same icon as the menu item.
-      await tester.tap(find.text('Health'));
+      await tester.tap(
+        find.descendant(
+          of: find.byType(CupertinoMenuItem),
+          matching: find.text('Health'),
+        ),
+      );
       await tester.pumpAndSettle();
       expect(_icon(tester, _topics), CupertinoIcons.staroflife_fill);
       await tester.tap(find.byKey(_topics));

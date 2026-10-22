@@ -91,7 +91,9 @@ class Analytics {
         'topic': topic ?? 'all',
       });
 
-  /// An article opened from the feed: from `top` (Top stories) or `latest`.
+  /// An article opened from the feed: [section] is `feed`, the one list
+  /// (Yurii, 16 Oct; builds before it sent `top` or `latest`), and
+  /// [position] its place in the list as shown, filters applied, from 0.
   Future<void> articleOpened(
     Article article, {
     required String section,
@@ -151,7 +153,7 @@ class Analytics {
   };
 }
 
-/// The feed depths [Analytics.feedDepth] reports, in rows of the Latest list.
+/// The feed depths [Analytics.feedDepth] reports, in rows of the feed.
 const feedDepths = [10, 25, 50, 100];
 
 /// The app's analytics; off until [startAnalytics] turns it on.
