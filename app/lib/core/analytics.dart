@@ -121,6 +121,11 @@ class Analytics {
     ..._about(article),
   });
 
+  /// "Discuss with AI (beta)" tapped under a summary (#141, #133): the button
+  /// only says the chat is coming, so the taps measure whether it is wanted.
+  Future<void> discussAiTapped(Article article) =>
+      _event('discuss_ai_tap', _about(article));
+
   /// How far down the feed the reader came this visit: the first time a row
   /// of [feedDepths] is shown, `feed_scroll_10`, `feed_scroll_25` and so on.
   Future<void> feedDepth(int rows) => _event('feed_scroll_$rows', const {});

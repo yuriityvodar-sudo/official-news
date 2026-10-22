@@ -809,5 +809,25 @@
   "splashNews": "news",
   "@splashNews": {
     "description": "The splash's third line (see splashOnly)."
+  },
+  "discussWithAi": "Discuss with AI",
+  "@discussWithAi": {
+    "description": "The button under a summary that will open a chat about the decision (#133, #141); for now it says the chat is coming."
+  },
+  "beta": "Beta",
+  "@beta": {
+    "description": "The small label next to Discuss with AI: the feature is new."
+  },
+  "comingSoon": "Coming soon",
+  "@comingSoon": {
+    "description": "The title of the note shown by Discuss with AI."
+  },
+  "discussWithAiSoon": "We're building a chat about each decision, to ask what it means for you. Your tap tells us it's worth building.",
+  "@discussWithAiSoon": {
+    "description": "The note shown by Discuss with AI: the chat is not there yet, and the tap counts."
+  },
+  "ok": "OK",
+  "@ok": {
+    "description": "The button that closes a note."
   }
 }

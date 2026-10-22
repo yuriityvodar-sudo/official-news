@@ -491,14 +491,15 @@ void main() {
       expect(find.text('5 хв тому'), findsNWidgets(2));
       expect(find.bySemanticsLabel('Параметри'), findsOneWidget);
 
-      // An article opened now has "< Сьогодні" as its back button.
+      // An article opened now has its back button named in Ukrainian for
+      // VoiceOver (a Liquid Glass circle with no title since #141).
       await tester.tap(find.text('Закон uk'));
       await tester.pumpAndSettle();
-      expect(find.text('Сьогодні'), findsOneWidget);
+      expect(find.byTooltip('Назад'), findsOneWidget);
       expect(find.text('Офіційне джерело'), findsOneWidget);
       // The decision type, in Ukrainian, inside the article.
       expect(find.text('РІШЕННЯ УРЯДУ'), findsOneWidget);
-      await tester.pageBack();
+      await tester.tap(find.byTooltip('Назад'));
       await tester.pumpAndSettle();
 
       final prefs = await SharedPreferences.getInstance();
@@ -535,9 +536,10 @@ void main() {
         find.textContaining(lang == FeedLanguage.en ? 'Law' : 'Закон'),
       );
       await tester.pumpAndSettle();
-      expect(find.text(l10n.today), findsOneWidget); // the back button
+      expect(find.text(l10n.discussWithAi), findsOneWidget);
       expect(find.text(l10n.officialSource), findsOneWidget);
-      await tester.pageBack();
+      // The back button has no title since #141, only its name for VoiceOver.
+      await tester.tap(find.byIcon(CupertinoIcons.chevron_left));
       await tester.pumpAndSettle();
 
       // The filters (#67, #68): both menus with their longest names, then

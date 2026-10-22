@@ -183,5 +183,10 @@
   "cancel": "Cancelar",
   "splashOnly": "solo",
   "splashOfficial": "noticias",
-  "splashNews": "oficiales"
+  "splashNews": "oficiales",
+  "discussWithAi": "Hablar con la IA",
+  "beta": "Beta",
+  "comingSoon": "Muy pronto",
+  "discussWithAiSoon": "Estamos creando un chat sobre cada decisión para que pueda preguntar qué significa para usted. Su toque nos dice que vale la pena.",
+  "ok": "Aceptar"
 }
