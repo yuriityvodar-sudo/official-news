@@ -17,6 +17,7 @@ import '../../core/pictures.dart';
 import '../../core/push.dart';
 import '../../core/theme.dart';
 import '../../l10n/app_localizations.dart';
+import 'picture_viewer.dart';
 
 /// Opens the official page; tests pass their own.
 typedef OpenLink = Future<void> Function(Uri uri);
@@ -152,7 +153,8 @@ class _DetailScreenState extends State<DetailScreen> {
                 Text(article.headline, style: text.articleHeadline),
                 const SizedBox(height: 10),
                 Text(_published(article, l10n), style: text.meta),
-                if (article.imageUrl != null) _Picture(article.imageUrl!),
+                if (article.imageUrl != null)
+                  _Picture(article.imageUrl!, articleId: article.id),
                 const SizedBox(height: 22),
                 if (hasSummary) ...[
                   _AiLabel(article),
@@ -471,35 +473,51 @@ class _Publisher extends StatelessWidget {
   }
 }
 
-/// The preview image of the official page, with where it comes from.
+/// The preview image of the official page, with where it comes from. It
+/// flew in from the feed's card (#141); a tap shows it full screen.
 class _Picture extends StatelessWidget {
-  const _Picture(this.url);
+  const _Picture(this.url, {required this.articleId});
 
   final String url;
+  final String articleId;
 
   @override
   Widget build(BuildContext context) {
     final text = NewsText.from(context);
-    final media = MediaQuery.of(context);
     return Padding(
       padding: const EdgeInsets.only(top: 18),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: AspectRatio(
-              aspectRatio: 16 / 9,
-              child: Image(
-                // The picture the feed card saved, decoded at screen size:
-                // official preview images can be several MB.
-                image: picture(
-                  url,
-                  width: (media.size.width * media.devicePixelRatio).round(),
+          Semantics(
+            container: true,
+            button: true,
+            label: AppLocalizations.of(context).pictureFullScreen,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () {
+                Haptics.light();
+                Navigator.of(
+                  context,
+                ).push(PictureViewer.route(url: url, articleId: articleId));
+              },
+              child: PictureHero(
+                articleId: articleId,
+                url: url,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: AspectRatio(
+                    aspectRatio: 16 / 9,
+                    child: Image(
+                      // The picture the feed card saved, decoded at screen
+                      // size: official preview images can be several MB.
+                      image: screenPicture(context, url),
+                      fit: BoxFit.cover,
+                      frameBuilder: fadeInPicture,
+                      errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                    ),
+                  ),
                 ),
-                fit: BoxFit.cover,
-                frameBuilder: fadeInPicture,
-                errorBuilder: (_, _, _) => const SizedBox.shrink(),
               ),
             ),
           ),

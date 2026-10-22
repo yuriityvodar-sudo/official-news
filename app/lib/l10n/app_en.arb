@@ -829,5 +829,9 @@
   "ok": "OK",
   "@ok": {
     "description": "The button that closes a note."
+  },
+  "pictureFullScreen": "Show the picture full screen",
+  "@pictureFullScreen": {
+    "description": "What VoiceOver says for the article's picture: a tap shows it full screen (#141)."
   }
 }
