@@ -30,7 +30,7 @@ After Roman's review (issues #3 to #11), these replace anything older further do
 - **Secrets:** no shared password vault. A key never travels between us: whoever creates it puts it straight into its one home. Yurii creates the keys that live in GitHub Secrets, the App Store Connect API key included (replaces Bitwarden, 14 Oct).
 - **Google Play:** Yurii's account, Roman as Admin.
 
-**Topic list (fixed, in the contract; the AI picks from it):** foreign-affairs, economy, security-defence, health, climate, trade, technology, energy, migration, elections, human-rights, science.
+**Topic list (fixed, in the contract; the AI picks from it):** foreign-affairs, economy, security-defence, health, climate, trade, technology, energy, migration, elections, human-rights, science. Proposed on 21 Oct (#127): the top level of IPTC Media Topics instead, 12 broad categories, one main and 0 to 2 secondary per article (`docs/research/2026-10-21 Categories test.md`).
 
 ## Reviewing this plan (for Roman and his Claude)
 
@@ -241,6 +241,7 @@ Each item becomes one GitHub issue owned by one person. **Must** is what the ite
 - **Must:** `docs/sources.csv` with one source per G20 member (19 since 14 Oct: Saudi Arabia waits for consent), plus Poland, Czechia, Spain and Ukraine (5 sources since 16 Oct, #72) and international organizations as sources of their own decisions (16 Oct: the European Central Bank, code `EU`; more international bodies follow: the ILO Governing Body once the app and website show a source's required notice on its articles, UN press and the African Union after the decision on #107), each with kind, URL, language, `verified_by` and licence, preferring pages that publish official decisions (laws, proposals, meeting agendas, minutes and outcomes), and each source's name in Ukrainian, Russian, Spanish and German in `docs/source-names.csv` (#76); loaded into `sources`.
 - **Suggested:** grow to about 85 Phase 1 sources once the fetcher is stable.
 - **Done when:** the verified sources are in D1 (19 since 14 Oct: Saudi Arabia waits for the gazette's written consent, see `docs/sources.md`).
+- **Changed 21 Oct (#115, #101):** source review from Cloudflare's network: decisions-only sources for the US, Brazil, Ukraine and South Africa, full text for Mexico, fewer routine entries for Brazil, Mexico and Poland (`docs/research/2026-10-21 Sources review.md`). Next: re-reading updated pages (Spain), and splitting meeting results into one article per decision.
 
 ### 6. Fetcher (Yurii)
 
