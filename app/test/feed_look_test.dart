@@ -433,17 +433,35 @@ void main() {
         ),
       ),
     );
-    // The row says which look is on; the sheet offers the four.
+    // The row shows the icon of the look that is on; the sheet offers the
+    // four icons, no letters.
+    final semantics = tester.ensureSemantics();
     expect(find.text('Design'), findsOneWidget);
-    expect(find.text('Now'), findsOneWidget);
+    expect(find.byIcon(CupertinoIcons.square_list), findsOneWidget);
+    // VoiceOver hears the look's name with the row's title.
+    expect(find.bySemanticsLabel(RegExp(r'\bNow\b')), findsOneWidget);
     await tester.tap(find.text('Design'));
     await tester.pumpAndSettle();
     expect(find.byType(CupertinoActionSheet), findsOneWidget);
-    await tester.tap(find.text('B'));
+    for (final icon in [
+      CupertinoIcons.news,
+      CupertinoIcons.rectangle_grid_1x2,
+      CupertinoIcons.text_alignleft,
+    ]) {
+      expect(find.byIcon(icon), findsOneWidget);
+    }
+    for (final letter in ['A', 'B', 'C']) {
+      expect(find.text(letter), findsNothing);
+    }
+    // The look that is on has the check mark.
+    expect(find.byIcon(CupertinoIcons.checkmark_alt), findsOneWidget);
+    await tester.tap(find.byIcon(CupertinoIcons.rectangle_grid_1x2));
     await tester.pumpAndSettle();
     expect(feedDesign.value, FeedDesign.b);
     expect(saved, FeedDesign.b);
-    expect(find.text('B'), findsOneWidget);
+    expect(find.byIcon(CupertinoIcons.rectangle_grid_1x2), findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp(r'\bDesign B\b')), findsOneWidget);
+    semantics.dispose();
     feedDesign.value = FeedDesign.now;
   });
 

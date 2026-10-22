@@ -207,7 +207,12 @@ class _DesignSection extends StatelessWidget {
           builder: (context, design, _) => CupertinoListTile(
             leading: const _Icon(CupertinoIcons.paintbrush),
             title: Text(l10n.settingsDesign),
-            additionalInfo: Text(designName(design, l10n)),
+            additionalInfo: Icon(
+              designIcon(design),
+              size: 22,
+              color: CupertinoColors.secondaryLabel.resolveFrom(context),
+              semanticLabel: designName(design, l10n),
+            ),
             trailing: const CupertinoListTileChevron(),
             onTap: () => _pickDesign(context, design),
           ),
@@ -226,33 +231,59 @@ class _DesignSection extends StatelessWidget {
     );
   }
 
-  /// The looks as an action sheet, the current one marked. Back to the feed
-  /// to show the new look.
+  /// The looks as an action sheet of their icons, the current one with a
+  /// check mark. Back to the feed to show the new look.
   Future<void> _pickDesign(BuildContext context, FeedDesign current) {
     final l10n = AppLocalizations.of(context);
     return showCupertinoModalPopup<void>(
       context: context,
-      builder: (sheet) => CupertinoActionSheet(
-        title: Text(l10n.settingsDesign),
-        actions: [
-          for (final d in FeedDesign.values)
-            CupertinoActionSheetAction(
-              isDefaultAction: d == current,
-              onPressed: () {
-                Navigator.of(sheet).pop();
-                if (d == current) return;
-                feedDesign.value = d;
-                saveDesign?.call(d);
-                Navigator.of(context).popUntil((route) => route.isFirst);
-              },
-              child: Text(designName(d, l10n)),
-            ),
-        ],
-        cancelButton: CupertinoActionSheetAction(
-          onPressed: () => Navigator.of(sheet).pop(),
-          child: Text(l10n.cancel),
-        ),
-      ),
+      builder: (sheet) {
+        // The sheet's blue, as its words are drawn.
+        final blue = CupertinoColors.systemBlue.resolveFrom(sheet);
+        return CupertinoActionSheet(
+          title: Text(l10n.settingsDesign),
+          actions: [
+            for (final d in FeedDesign.values)
+              CupertinoActionSheetAction(
+                onPressed: () {
+                  Navigator.of(sheet).pop();
+                  if (d == current) return;
+                  feedDesign.value = d;
+                  saveDesign?.call(d);
+                  Navigator.of(context).popUntil((route) => route.isFirst);
+                },
+                child: Semantics(
+                  selected: d == current,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // As wide as the check mark, so the icon stays centred.
+                      if (d == current) const SizedBox(width: 28),
+                      Icon(
+                        designIcon(d),
+                        size: 28,
+                        color: blue,
+                        semanticLabel: designName(d, l10n),
+                      ),
+                      if (d == current) ...[
+                        const SizedBox(width: 8),
+                        Icon(
+                          CupertinoIcons.checkmark_alt,
+                          size: 20,
+                          color: blue,
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+          ],
+          cancelButton: CupertinoActionSheetAction(
+            onPressed: () => Navigator.of(sheet).pop(),
+            child: Text(l10n.cancel),
+          ),
+        );
+      },
     );
   }
 
@@ -288,12 +319,22 @@ class _DesignSection extends StatelessWidget {
   }
 }
 
-/// A look's name in the app's language: today's, or the option's letter.
+/// A look's icon in Settings → Design, a picture of its layout (Roman,
+/// 22 Oct: icons, not the letters A, B and C): today's list, A's newspaper
+/// page, B's cards, C's lines of text with no pictures.
+IconData designIcon(FeedDesign d) => switch (d) {
+  FeedDesign.now => CupertinoIcons.square_list,
+  FeedDesign.a => CupertinoIcons.news,
+  FeedDesign.b => CupertinoIcons.rectangle_grid_1x2,
+  FeedDesign.c => CupertinoIcons.text_alignleft,
+};
+
+/// What VoiceOver says for a look's icon: "Now", or "Design B".
 String designName(FeedDesign d, AppLocalizations l10n) => switch (d) {
   FeedDesign.now => l10n.settingsDesignNow,
-  FeedDesign.a => 'A',
-  FeedDesign.b => 'B',
-  FeedDesign.c => 'C',
+  FeedDesign.a => '${l10n.settingsDesign} A',
+  FeedDesign.b => '${l10n.settingsDesign} B',
+  FeedDesign.c => '${l10n.settingsDesign} C',
 };
 
 /// A weight's name in the app's language.
