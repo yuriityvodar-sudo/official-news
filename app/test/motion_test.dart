@@ -207,6 +207,14 @@ void main() {
             .every((o) => o.opacity == 1),
         isTrue,
       );
+
+      // Once they have arrived, rows built again (scrolled away and back)
+      // come in still (Yurii's review of #142).
+      await tester.pump(const Duration(milliseconds: 700));
+      expect(
+        tester.widgetList<Arrive>(find.byType(Arrive)).every((a) => !a.animate),
+        isTrue,
+      );
     });
   });
 
