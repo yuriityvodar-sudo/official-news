@@ -1,17 +1,17 @@
 import type { Env } from "../env";
 import { REAL_SOURCE, health } from "../health";
-import { TOPICS, type Topic } from "../summarizer/schema";
+import type { Topic } from "../summarizer/schema";
 import { LANGS, type Lang, SHOWN, isLang, queueStatus, releaseStatus } from "../translator";
 import {
   EU,
   GROUPS,
   TOPIC_ERROR,
-  TOPIC_NAMES,
   type Where,
   byName,
   countryName,
   groupCountries,
   groupName,
+  rankTopics,
   readTopic,
   readWhere,
   whereCountries,
@@ -244,7 +244,7 @@ function toStoredTime(date: Date): string {
  */
 type Cursor = { feedSeq: number } | { articleId: string; publishedAt: string };
 
-function encodeCursor(feedSeq: number): string {
+export function encodeCursor(feedSeq: number): string {
   return btoa(JSON.stringify([feedSeq])).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
 }
 
@@ -554,16 +554,7 @@ async function listTopics(url: URL, env: Env): Promise<Response> {
     .bind(...(lang ? [lang] : []), ...filters.binds)
     .all<{ topics: string | null }>();
 
-  const counts = new Map<string, number>();
-  for (const row of results) {
-    for (const topic of new Set(parseStringArray(row.topics))) counts.set(topic, (counts.get(topic) ?? 0) + 1);
-  }
-  const names = TOPIC_NAMES[lang ?? "en"];
-  const topics = TOPICS.filter((topic) => counts.has(topic))
-    // Stable: equal counts keep the order of TOPICS.
-    .sort((a, b) => (counts.get(b) ?? 0) - (counts.get(a) ?? 0))
-    .map((id) => ({ id, name: names[id] }));
-  return json({ topics }, 200, LIST_CACHE);
+  return json({ topics: rankTopics(results.map((row) => parseStringArray(row.topics)), lang ?? "en") }, 200, LIST_CACHE);
 }
 
 /**
