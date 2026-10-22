@@ -109,6 +109,25 @@ void main() {
     ]);
   });
 
+  testWidgets('"Don\'t Allow" to iOS\'s question: no Settings app, the note '
+      'says how, and the wish is kept', (tester) async {
+    final messaging = FakeMessaging(answer: PushPermission.denied);
+    final push = await showNote(tester, messaging);
+
+    await tester.tap(find.byType(CupertinoSwitch));
+    await tester.pumpAndSettle();
+
+    expect(messaging.asked, 1);
+    expect(settingsOpened, 0);
+    expect(messaging.calls, isEmpty);
+    expect(switchedOn(tester), isFalse);
+    expect(find.textContaining('Settings app'), findsOneWidget);
+    expect(push.aiChat.value, isTrue);
+    expect(sent('push_permission'), [
+      {'result': 'denied', 'trigger': 'ai_chat'},
+    ]);
+  });
+
   testWidgets('not allowed: the switch opens the Settings app and the wish is '
       'kept for when they are back on', (tester) async {
     final messaging = FakeMessaging(status: PushPermission.denied);
