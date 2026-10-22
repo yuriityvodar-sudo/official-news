@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
 import '../../core/analytics.dart';
+import '../../core/glass.dart';
 import '../../core/article.dart';
 import '../../core/feed_language.dart';
 import '../../core/filters.dart';
@@ -298,6 +299,13 @@ class _FeedScreenState extends State<FeedScreen> {
                 ..._content(context, look),
               ],
             ),
+            // Rows fade softly at the top edge once the feed is scrolled (#141).
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: _TopFade(scroll: _scroll, color: look.background(context)),
+            ),
             if (_feed.newCount > 0)
               Positioned.fill(
                 child: _UnderMasthead(
@@ -453,6 +461,26 @@ class _FeedScreenState extends State<FeedScreen> {
       ],
     );
   }
+}
+
+/// The top edge of the feed (#141): the feed's colour fading out downwards,
+/// shown as soon as the list is scrolled, so rows soften under the status
+/// bar instead of being cut, as iOS 26's scroll edges do.
+class _TopFade extends StatelessWidget {
+  const _TopFade({required this.scroll, required this.color});
+
+  final ScrollController scroll;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: scroll,
+    builder: (context, child) {
+      final offset = scroll.hasClients ? scroll.offset : 0.0;
+      return Opacity(opacity: (offset / 24).clamp(0.0, 1.0), child: child);
+    },
+    child: ScrollEdgeFade(height: 20, color: color),
+  );
 }
 
 /// The "N new" pill arriving (#141): it slides down a little and settles
