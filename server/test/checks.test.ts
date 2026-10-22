@@ -86,6 +86,17 @@ describe("checkSummary", () => {
     expect(checkSummary(summary("a fine of 100 pesos"), "Geosa, S. de R.L. de C.V.", 2026).invented).toEqual(["100"]);
   });
 
+  it("accepts a large amount rounded correctly in millions or billions, not a wrong rounding (#99)", () => {
+    const credit = "MPV 1397/2026: Abre crédito extraordinário, em favor de Encargos Financeiros da União, no valor de R$6.494.296.446,00";
+    const invented = (text: string) => checkSummary(summary(text), credit, 2026).invented;
+    expect(invented("an extraordinary credit of R$6.49 billion")).toEqual([]);
+    expect(invented("an extraordinary credit of R$6.5 billion")).toEqual([]);
+    expect(invented("an extraordinary credit of R$6,494,296,446")).toEqual([]);
+    expect(invented("an extraordinary credit of R$6.4 billion")).toEqual(["64"]);
+    expect(invented("an extraordinary credit of R$6.59 billion")).toEqual(["659"]);
+    expect(invented("an extraordinary credit of R$6.49 million")).toEqual(["649"]);
+  });
+
   it("still finds a number made from parts of another one", () => {
     expect(checkSummary(summary("500 MW"), "2.500 MW", 2026).invented).toEqual(["500"]);
     expect(checkSummary(summary("US$521 for each"), "US$ 13.521.937", 2026).invented).toEqual(["521"]);
