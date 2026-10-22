@@ -216,6 +216,7 @@ class NowArticleRow extends StatelessWidget {
               if (!read && isFresh(article))
                 FreshTime(
                   feedTime(article, AppLocalizations.of(context)),
+                  articleId: article.id,
                   style: text.meta,
                 )
               else

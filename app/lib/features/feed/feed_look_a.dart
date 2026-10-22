@@ -296,7 +296,7 @@ class _Footer extends StatelessWidget {
     final style = _AType.of(context).footer;
     // A decision of the last hour stands out (#141).
     return isFresh(article)
-        ? FreshTime(time, style: style)
+        ? FreshTime(time, articleId: article.id, style: style)
         : Text(time, style: style);
   }
 }
