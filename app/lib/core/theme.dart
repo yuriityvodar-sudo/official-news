@@ -8,13 +8,46 @@ import 'package:flutter/material.dart';
 abstract final class AppColors {
   static const accent = Color(0xFFFA2D48);
   static const verified = Color(0xFF1A8CFF);
+
+  /// The brand red made deeper, for small text on light grounds and white
+  /// text on red (design B): 4.7:1 on B's grey page, 5.3:1 with white.
+  static const deepRed = Color(0xFFD1203A);
 }
 
 /// The system serif: Georgia on iOS, Noto Serif on Android.
 const _serif = 'Georgia';
 const _serifFallback = ['serif'];
 
-ThemeData buildTheme(Brightness brightness) {
+/// How heavy the feed's headlines are (Settings → Design, #66): today's bold
+/// looked too thick to Yurii (20 Oct), so he can choose a lighter one.
+enum HeadlineWeight {
+  light(FontWeight.w300),
+  regular(FontWeight.w400),
+  semibold(FontWeight.w600),
+  bold(FontWeight.w700);
+
+  const HeadlineWeight(this.weight);
+
+  final FontWeight weight;
+}
+
+/// The weight shown now; the app's theme rebuilds when it changes. Saved on
+/// the phone (FeedStore); a build can start with another:
+/// `--dart-define=HEADLINE_WEIGHT=regular`.
+final headlineWeight = ValueNotifier<HeadlineWeight>(
+  headlineWeightNamed(const String.fromEnvironment('HEADLINE_WEIGHT')),
+);
+
+/// `light`, `regular`, `semibold` or `bold`, in any case; anything else is
+/// [HeadlineWeight.bold].
+HeadlineWeight headlineWeightNamed(String name) =>
+    HeadlineWeight.values.asNameMap()[name.trim().toLowerCase()] ??
+    HeadlineWeight.bold;
+
+ThemeData buildTheme(
+  Brightness brightness, {
+  HeadlineWeight headline = HeadlineWeight.bold,
+}) {
   final dark = brightness == Brightness.dark;
   final scheme =
       ColorScheme.fromSeed(
@@ -56,7 +89,7 @@ ThemeData buildTheme(Brightness brightness) {
       thickness: 0.5,
       space: 1,
     ),
-    extensions: [NewsText.of(scheme)],
+    extensions: [NewsText.of(scheme, headline: headline)],
   );
 }
 
@@ -65,7 +98,6 @@ class NewsText extends ThemeExtension<NewsText> {
   const NewsText({
     required this.masthead,
     required this.dateLine,
-    required this.section,
     required this.kindLabel,
     required this.publisher,
     required this.headline,
@@ -74,7 +106,10 @@ class NewsText extends ThemeExtension<NewsText> {
     required this.body,
   });
 
-  factory NewsText.of(ColorScheme scheme) {
+  factory NewsText.of(
+    ColorScheme scheme, {
+    HeadlineWeight headline = HeadlineWeight.bold,
+  }) {
     final secondary = scheme.onSurfaceVariant;
     return NewsText(
       masthead: TextStyle(
@@ -89,11 +124,6 @@ class NewsText extends ThemeExtension<NewsText> {
         fontSize: 17,
         fontWeight: FontWeight.w600,
         color: secondary,
-      ),
-      section: const TextStyle(
-        fontSize: 24,
-        fontWeight: FontWeight.w800,
-        color: AppColors.accent,
       ),
       kindLabel: const TextStyle(
         fontSize: 13,
@@ -110,7 +140,7 @@ class NewsText extends ThemeExtension<NewsText> {
         fontFamily: _serif,
         fontFamilyFallback: _serifFallback,
         fontSize: 21,
-        fontWeight: FontWeight.w700,
+        fontWeight: headline.weight,
         height: 1.2,
         color: scheme.onSurface,
       ),
@@ -139,9 +169,6 @@ class NewsText extends ThemeExtension<NewsText> {
   /// "Official News" at the top of the feed.
   final TextStyle masthead;
   final TextStyle dateLine;
-
-  /// Red section titles: "Top stories", "Latest".
-  final TextStyle section;
 
   /// The decision type above a headline, upper case: "CABINET DECISION".
   final TextStyle kindLabel;

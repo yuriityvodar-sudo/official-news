@@ -17,6 +17,11 @@ Future<ValueNotifier<FeedLanguage>> _pump(
   List<FeedLanguage>? chosen,
   FeedLanguage words = FeedLanguage.en,
 }) async {
+  // The test's screen, 100 pt taller: the prototype's rows (Design, Splash,
+  // Play, Read, Topics) take the top of the list, the pages' rows under them.
+  tester.view.physicalSize = const Size(800, 700);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.reset);
   final language = ValueNotifier(FeedLanguage.en);
   await tester.pumpWidget(
     testApp(
@@ -50,6 +55,12 @@ void main() {
       expect(find.text(row), findsOneWidget, reason: row);
     }
     expect(find.text('English'), findsOneWidget);
+    // Below the prototype's rows, which push it off the test's screen.
+    await tester.scrollUntilVisible(
+      find.textContaining('not affiliated with any government'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(
       find.textContaining('not affiliated with any government'),
       findsOneWidget,
@@ -126,7 +137,7 @@ void main() {
     ) async {
       await pumpWithPush(tester, null);
       expect(row(en.notificationsUnavailable), findsOneWidget);
-      expect(find.byType(CupertinoListTileChevron), findsNWidgets(5));
+      expect(find.byType(CupertinoListTileChevron), findsNWidgets(7));
       await tester.tap(find.text(en.notifications));
       await tester.pumpAndSettle();
       expect(settingsAppOpened, 0);
@@ -206,7 +217,7 @@ void main() {
       final messaging = FakeMessaging(status: PushPermission.denied);
       await pumpWithPush(tester, messaging);
       expect(row(en.notificationsOff), findsOneWidget);
-      expect(find.byType(CupertinoListTileChevron), findsNWidgets(6));
+      expect(find.byType(CupertinoListTileChevron), findsNWidgets(8));
 
       await tester.tap(find.text(en.notifications));
       await tester.pumpAndSettle();

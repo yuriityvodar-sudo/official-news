@@ -238,6 +238,11 @@ class Push with WidgetsBindingObserver {
   /// What the phone allows; [PushPermission.unavailable] while push is off.
   ValueListenable<PushPermission> get permission => _permission;
 
+  /// Notifies each time a tapped notification has been opened ([open]): the
+  /// splash at start gives way to it at once (#66, `SplashHost.endOn`).
+  Listenable get opened => _opened;
+  final _opened = ValueNotifier(0);
+
   /// Asks iOS for notifications, then subscribes to the feed language's topic.
   /// After a "Don't Allow", iOS does not ask again and this returns
   /// [PushPermission.denied] at once, so the Settings row opens the iOS
@@ -392,6 +397,7 @@ class Push with WidgetsBindingObserver {
     if (article != null) {
       unawaited(navigator.pushNamed(Routes.detail, arguments: article));
     }
+    _opened.value++;
   }
 
   /// Back in the app: notifications may have been turned on or off in the iOS
