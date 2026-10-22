@@ -188,6 +188,8 @@ Future<void> openAppSettings() async {
 ///   after "Turn On". Whatever the answer, it never asks by itself again.
 /// - Allowed: subscribed to `breaking_<feed language>`, moved with the
 ///   language; the topic is saved, so a start corrects it.
+/// - "Tell me when it's ready" under the AI chat's note ([notifyAiChat],
+///   #141): `ai_chat_<feed language>` too, moved and saved the same way.
 /// - A tap opens the article in the notification's language, or the feed.
 ///
 /// The Settings row (`SettingsScreen`) shows [permission], live, and asks with
@@ -204,6 +206,8 @@ class Push with WidgetsBindingObserver {
   static const _readsKey = 'push.readIds';
   static const _offeredKey = 'push.offered';
   static const _topicKey = 'push.topic';
+  static const _aiChatKey = 'push.aiChat';
+  static const _aiChatTopicKey = 'push.aiChatTopic';
 
   /// How long the app waits for a topic change; then it is tried again at the
   /// next trigger. Firebase may still carry it out later: on iOS a change that
@@ -225,15 +229,25 @@ class Push with WidgetsBindingObserver {
   SharedPreferences? _prefs;
   FeedLanguage _language = FeedLanguage.en;
 
-  /// The topic Firebase confirmed during this run, so a start (or a new FCM
-  /// token) subscribes again once: that repairs a subscription Firebase lost.
-  /// Null from the moment a change is sent until Firebase answers it, so a
-  /// change without an answer is sent again at the next trigger.
-  String? _confirmed;
+  /// The topics Firebase confirmed during this run, by their saved key, so a
+  /// start (or a new FCM token) subscribes again once: that repairs a
+  /// subscription Firebase lost. Gone from the moment a change is sent until
+  /// Firebase answers it, so a change without an answer is sent again at the
+  /// next trigger.
+  final _confirmed = <String, String>{};
   Future<void> _syncing = Future.value();
 
   /// The topic of a feed language: `breaking_uk`.
   static String topicFor(FeedLanguage language) => 'breaking_${language.code}';
+
+  /// The topic for the news that the AI chat is ready, in a feed language:
+  /// `ai_chat_uk` (#141).
+  static String aiChatTopicFor(FeedLanguage language) =>
+      'ai_chat_${language.code}';
+
+  /// Whether the reader asked to hear when the AI chat is ready.
+  ValueListenable<bool> get aiChat => _aiChat;
+  final _aiChat = ValueNotifier(false);
 
   /// What the phone allows; [PushPermission.unavailable] while push is off.
   ValueListenable<PushPermission> get permission => _permission;
@@ -297,12 +311,13 @@ class Push with WidgetsBindingObserver {
     _messaging = messaging;
     _prefs = prefs;
     _language = language;
+    _aiChat.value = prefs.getBool(_aiChatKey) ?? false;
     WidgetsBinding.instance.addObserver(this);
     _subscriptions
       ..add(messaging.taps.listen((tap) => unawaited(open(tap))))
       ..add(
         messaging.tokenChanges.listen((_) {
-          _confirmed = null;
+          _confirmed.clear();
           unawaited(_sync());
         }),
       );
@@ -324,8 +339,9 @@ class Push with WidgetsBindingObserver {
     _subscriptions.clear();
     _messaging = null;
     _prefs = null;
-    _confirmed = null;
+    _confirmed.clear();
     _enabling = null;
+    _aiChat.value = false;
     // A new chain: the old one may belong to an earlier test's fake clock.
     _syncing = Future.value();
     _permission.value = PushPermission.unavailable;
@@ -367,7 +383,25 @@ class Push with WidgetsBindingObserver {
     }
   }
 
-  /// The feed's language changed: the topic moves with it.
+  /// "Tell me when it's ready" under the AI chat's note (#141): [on] subscribes
+  /// to [aiChatTopicFor] the feed's language while notifications are allowed.
+  /// While iOS has not asked, it asks first ([enable], `trigger` `ai_chat`);
+  /// allowed notifications bring the breaking decisions too, as the note says.
+  /// The wish is kept when they are not allowed, so turning them on in the
+  /// iOS Settings app subscribes. Returns the permission after it.
+  Future<PushPermission> notifyAiChat(bool on) async {
+    final prefs = _prefs;
+    if (prefs == null) return _permission.value;
+    await prefs.setBool(_aiChatKey, on);
+    _aiChat.value = on;
+    if (on && _permission.value == PushPermission.notAsked) {
+      return enable(trigger: 'ai_chat');
+    }
+    await _sync();
+    return _permission.value;
+  }
+
+  /// The feed's language changed: the topics move with it.
   Future<void> setLanguage(FeedLanguage language) async {
     if (language == _language) return;
     _language = language;
@@ -449,25 +483,46 @@ class Push with WidgetsBindingObserver {
     if (messaging == null || prefs == null) return;
     final state = _permission.value;
     if (state == PushPermission.unavailable) return;
-    final want = state == PushPermission.granted ? topicFor(_language) : null;
-    final have = prefs.getString(_topicKey);
-    if (want == have && (want == null || want == _confirmed)) return;
+    final allowed = state == PushPermission.granted;
+    await _syncTopic(
+      messaging,
+      prefs,
+      _topicKey,
+      allowed ? topicFor(_language) : null,
+    );
+    await _syncTopic(
+      messaging,
+      prefs,
+      _aiChatTopicKey,
+      allowed && _aiChat.value ? aiChatTopicFor(_language) : null,
+    );
+  }
+
+  /// Makes the topic saved under [key] the one wanted, or none.
+  Future<void> _syncTopic(
+    Messaging messaging,
+    SharedPreferences prefs,
+    String key,
+    String? want,
+  ) async {
+    final have = prefs.getString(key);
+    if (want == have && (want == null || want == _confirmed[key])) return;
     if (!await messaging.ready()) return;
     // Unknown until Firebase answers: a change without an answer may still be
     // carried out, so the next trigger sends the wanted topic again.
-    _confirmed = null;
+    _confirmed.remove(key);
     // The old topic first: never two languages at once. It stays saved until
     // Firebase confirms it is gone.
     if (have != null && have != want) {
       await messaging.unsubscribe(have).timeout(_timeout);
-      if (want == null) await prefs.remove(_topicKey);
+      if (want == null) await prefs.remove(key);
     }
     if (want != null) {
       // Saved before it is sent, so a later change unsubscribes it even when
       // this subscribe gets no answer and Firebase carries it out later.
-      await prefs.setString(_topicKey, want);
+      await prefs.setString(key, want);
       await messaging.subscribe(want).timeout(_timeout);
-      _confirmed = want;
+      _confirmed[key] = want;
     }
   }
 

@@ -1,6 +1,5 @@
 {
   "@@locale": "de",
-
   "today": "Heute",
   "yesterday": "Gestern",
   "settings": "Einstellungen",
@@ -16,7 +15,6 @@
   "minutesAgo": "vor {minutes} Min.",
   "hoursAgo": "vor {hours} Std.",
   "daysAgo": "{days, plural, one{vor {days} Tag} other{vor {days} Tagen}}",
-
   "filterAllCountries": "Alle Länder",
   "filterAllTopics": "Alle Themen",
   "filterCountryChip": "Land: {name}",
@@ -26,7 +24,6 @@
   "filterEmpty": "In den letzten 7 Tagen gab es hier keine Entscheidungen.",
   "filterShowAllCountries": "Alle Länder anzeigen",
   "filterShowAllTopics": "Alle Themen anzeigen",
-
   "decisionTypeLaw": "Gesetz",
   "decisionTypeBill": "Gesetzentwurf",
   "decisionTypeAmendment": "Änderung",
@@ -35,7 +32,6 @@
   "decisionTypeDecision": "Beschluss",
   "decisionTypeMeetingAgenda": "Tagesordnung",
   "decisionTypeMeetingOutcome": "Sitzungsergebnis",
-
   "topicForeignAffairs": "Außenpolitik",
   "topicEconomy": "Wirtschaft",
   "topicSecurityDefence": "Sicherheit und Verteidigung",
@@ -50,7 +46,6 @@
   "topicScience": "Wissenschaft",
   "topicEducation": "Bildung",
   "topicJustice": "Justiz",
-
   "countryAR": "Argentinien",
   "countryAU": "Australien",
   "countryBR": "Brasilien",
@@ -76,7 +71,6 @@
   "countryUA": "Ukraine",
   "countryUS": "Vereinigte Staaten",
   "countryZA": "Südafrika",
-
   "languageAr": "Arabischen",
   "languageDe": "Deutschen",
   "languageEn": "Englischen",
@@ -93,7 +87,6 @@
   "languageTr": "Türkischen",
   "languageUk": "Ukrainischen",
   "languageZh": "Chinesischen",
-
   "summaryByAi": "KI-Zusammenfassung",
   "summaryByAiTranslated": "KI-Zusammenfassung · aus dem {language} übersetzt",
   "summaryComing": "Die KI-Zusammenfassung folgt in Kürze. Bis dahin ist die Überschrift der Originaltitel; den vollständigen Text finden Sie auf der offiziellen Seite.",
@@ -104,7 +97,6 @@
   "share": "Teilen",
   "shareOfficialSource": "Offizielle Quelle: {url}",
   "dateAndTime": "{date} um {time}",
-
   "settingsReading": "Lesen",
   "language": "Sprache",
   "notifications": "Mitteilungen",
@@ -126,7 +118,6 @@
   "settingsFooter": "Unabhängige App ohne Verbindung zu einer Regierung. Die Zusammenfassungen schreibt eine KI auf Grundlage offizieller Quellen; jeder Artikel verlinkt auf das Original.",
   "version": "Version {version}",
   "languageFooter": "Nachrichten und App werden in dieser Sprache angezeigt.",
-
   "publisher": "{name}, Slowakei",
   "lastUpdated": "Stand: {date}",
   "aboutIntro": "Official News zeigt, was Regierungen und internationale Organisationen beschlossen haben – in wenigen sachlichen Sätzen und mit einem Link zur offiziellen Seite.",
@@ -136,7 +127,6 @@
   "aboutIndependentHeading": "Unabhängig",
   "aboutIndependent": "Official News ist eine unabhängige App. Sie ist mit keiner Regierung und keiner öffentlichen Stelle verbunden, wird von keiner unterstützt und spricht nicht in deren Namen.",
   "aboutPublishedBy": "Herausgeber: {publisher}.",
-
   "privacyIntro": "Official News verwendet keine Benutzerkonten: Wir fragen nicht nach Ihrem Namen, Ihrer E-Mail-Adresse oder Telefonnummer, und wir verkaufen oder teilen keine personenbezogenen Daten zu Werbezwecken.",
   "privacyPhoneHeading": "Auf Ihrem Gerät",
   "privacyPhone": "Die gewählte Sprache und die Feed-Filter, die gelesenen Artikel, der zuletzt angezeigte Feed und die angesehenen Bilder werden auf Ihrem Gerät gespeichert, damit die App schnell startet und offline funktioniert. Wenn Sie die App löschen, werden sie mitgelöscht.",
@@ -155,7 +145,6 @@
   "privacyController": "Verantwortlicher: {publisher}.",
   "privacyChangesHeading": "Änderungen",
   "privacyChanges": "Wenn sich diese Erklärung ändert, steht die neue Fassung mit neuem Datum in der App.",
-
   "termsIntro1": "Official News fasst offizielle Entscheidungen zur allgemeinen Information zusammen. Es handelt sich nicht um eine rechtliche, finanzielle oder sonstige fachliche Beratung.",
   "termsIntro2": "Zusammenfassungen und Übersetzungen werden von einer KI erstellt und können unvollständig oder falsch sein. Bevor Sie sich auf eine Entscheidung verlassen, lesen Sie die in jedem Artikel verlinkte offizielle Seite: Maßgeblich ist deren Text.",
   "termsContentHeading": "Inhalte",
@@ -164,12 +153,10 @@
   "termsNoGuarantee": "Die App ist mit keiner Regierung verbunden. Sie wird in der vorliegenden Form bereitgestellt, ohne Gewähr für Vollständigkeit, Richtigkeit oder ständige Verfügbarkeit.",
   "termsPublisherHeading": "Herausgeber",
   "termsPublisher": "Herausgeber: {publisher}. Wenn sich diese Bedingungen ändern, steht die neue Fassung mit neuem Datum in der App.",
-
   "supportMessages": "Sie haben einen Fehler in einer Zusammenfassung oder eine Quelle gefunden, die nicht funktioniert, oder Sie haben eine Idee? Wir lesen jede Nachricht.",
   "supportMistakes": "Wenn Sie einen Fehler melden, helfen uns der Titel des Artikels und die Sprache, in der Sie ihn gelesen haben, bei der Suche.",
   "supportAppStore": "Sie erreichen uns über die Seite der App im App Store.",
   "supportWrite": "E-Mail schreiben",
-
   "languageCs": "Tschechischen",
   "settingsDesign": "Design",
   "settingsDesignNow": "Aktuell",
@@ -185,10 +172,12 @@
   "splashOfficial": "offizielle",
   "splashNews": "Nachrichten",
   "discussWithAi": "Mit KI besprechen",
-  "beta": "Beta",
-  "comingSoon": "Demnächst",
-  "discussWithAiSoon": "Wir bauen einen Chat zu jeder Entscheidung, damit Sie fragen können, was sie für Sie bedeutet. Ihr Tippen zeigt uns, dass es sich lohnt.",
-  "ok": "OK",
+  "aiChatTitle": "Ein Chat zu jeder Entscheidung",
+  "aiChatBody": "Wir bauen einen Chat, in dem Sie fragen können, was eine Entscheidung für Sie bedeutet, mit Antworten aus ihrem offiziellen Text. In der App gibt es ihn noch nicht.",
+  "aiChatNotify": "Beim Start benachrichtigen",
+  "aiChatNotifyOnce": "Eine Mitteilung, sobald der Chat bereit ist.",
+  "aiChatNotifyAsk": "Damit schalten Sie Mitteilungen ein: Sie erhalten auch die wichtigsten Entscheidungen, höchstens 2 pro Tag.",
+  "aiChatNotifyOff": "Mitteilungen sind für diese App aus. Schalten Sie sie in der App „Einstellungen“ ein und kommen Sie dann zurück.",
   "pictureFullScreen": "Bild im Vollbild zeigen",
   "tryAgain": "Erneut versuchen",
   "copyLink": "Link kopieren"
