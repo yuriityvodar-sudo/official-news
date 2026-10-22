@@ -30,7 +30,7 @@ After Roman's review (issues #3 to #11), these replace anything older further do
 - **Secrets:** no shared password vault. A key never travels between us: whoever creates it puts it straight into its one home. Yurii creates the keys that live in GitHub Secrets, the App Store Connect API key included (replaces Bitwarden, 14 Oct).
 - **Google Play:** Yurii's account, Roman as Admin.
 
-**Topic list (fixed, in the contract; the AI picks from it):** foreign-affairs, economy, security-defence, health, climate, trade, technology, energy, migration, elections, human-rights, science.
+**Topic list (fixed, in the contract; the AI picks from it):** foreign-affairs, economy, security-defence, health, climate, trade, technology, energy, migration, elections, human-rights, science. Proposed on 21 Oct (#127): the top level of IPTC Media Topics instead, 12 broad categories, one main and 0 to 2 secondary per article (`docs/research/2026-10-21 Categories test.md`).
 
 ## Reviewing this plan (for Roman and his Claude)
 
