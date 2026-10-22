@@ -117,11 +117,14 @@ class CLook extends FeedLook {
     itemBuilder: (context, i) {
       final a = list.articles[i];
       list.shown(i);
-      return _Item(
-        article: a,
-        mark: list.markOf(a),
-        topics: list.topicsOf(a),
-        onTap: () => list.open(i),
+      return list.tile(
+        i,
+        _Item(
+          article: a,
+          mark: list.markOf(a),
+          topics: list.topicsOf(a),
+          onTap: () => list.open(i),
+        ),
       );
     },
   );

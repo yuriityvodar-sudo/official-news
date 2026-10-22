@@ -6,6 +6,7 @@ import '../../core/countries.dart';
 import '../../core/news_widgets.dart';
 import '../../core/pictures.dart';
 import '../../core/read_mark.dart';
+import '../../core/motion.dart';
 import '../../l10n/app_localizations.dart';
 import 'feed_look.dart';
 import 'feed_look_now.dart';
@@ -95,11 +96,14 @@ class ALook extends NowLook {
       itemBuilder: (context, i) {
         final a = list.articles[i];
         list.shown(i);
-        final row = _Row(
-          article: a,
-          mark: list.markOf(a),
-          topics: list.topicsOf(a),
-          onTap: () => list.open(i),
+        final row = list.tile(
+          i,
+          _Row(
+            article: a,
+            mark: list.markOf(a),
+            topics: list.topicsOf(a),
+            onTap: () => list.open(i),
+          ),
         );
         if (i == 0) return row;
         return Column(
@@ -589,7 +593,7 @@ class _Thumb extends StatelessWidget {
       fit: BoxFit.cover,
       opacity: opacity == null ? null : AlwaysStoppedAnimation(opacity),
       excludeFromSemantics: true,
-      frameBuilder: (context, child, frame, _) => Padding(
+      frameBuilder: (context, child, frame, sync) => Padding(
         // Lined up with the headline's first line, not the top of its box.
         padding: EdgeInsets.only(left: gap, top: 3),
         child: ClipRRect(
@@ -598,7 +602,7 @@ class _Thumb extends StatelessWidget {
             color: frame == null
                 ? _pictureFill(context, dimmed)
                 : Colors.transparent,
-            child: child,
+            child: fadeInPicture(context, child, frame, sync),
           ),
         ),
       ),

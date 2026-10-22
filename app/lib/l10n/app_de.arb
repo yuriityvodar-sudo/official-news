@@ -5,6 +5,7 @@
   "yesterday": "Gestern",
   "settings": "Einstellungen",
   "feedLoadFailed": "Nachrichten konnten nicht geladen werden. Zum Wiederholen nach unten ziehen.",
+  "feedLoading": "Nachrichten werden geladen",
   "feedRefreshFailed": "Aktualisierung fehlgeschlagen. Zum Wiederholen nach unten ziehen.",
   "feedLoadMoreFailed": "Laden fehlgeschlagen. Zum Wiederholen tippen.",
   "feedEnd": "Sie sind auf dem neuesten Stand",

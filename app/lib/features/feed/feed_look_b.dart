@@ -52,11 +52,14 @@ class BLook extends FeedLook {
         list.shown(i);
         return Padding(
           padding: const EdgeInsets.only(bottom: 12),
-          child: BCard(
-            article: a,
-            mark: list.markOf(a),
-            topics: list.topicsOf(a),
-            onTap: () => list.open(i),
+          child: list.tile(
+            i,
+            BCard(
+              article: a,
+              mark: list.markOf(a),
+              topics: list.topicsOf(a),
+              onTap: () => list.open(i),
+            ),
           ),
         );
       },
