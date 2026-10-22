@@ -17,6 +17,7 @@ import '../../core/pictures.dart';
 import '../../core/push.dart';
 import '../../core/theme.dart';
 import '../../l10n/app_localizations.dart';
+import 'ai_chat_note.dart';
 import 'picture_viewer.dart';
 
 /// Opens the official page; tests pass their own.
@@ -272,9 +273,9 @@ class _BarButton extends StatelessWidget {
   );
 }
 
-/// "Discuss with AI · Beta" under the summary (#133, #141): for now it says
-/// the chat is coming, and each tap is counted, to learn whether readers
-/// want it before it is built.
+/// "Discuss with AI" under the summary (#133, #141): until the chat is built
+/// it opens a note about it ([AiChatNote]), with "Tell me when it's ready";
+/// each tap is counted, to learn whether readers want the chat.
 class _DiscussWithAi extends StatelessWidget {
   const _DiscussWithAi(this.article);
 
@@ -290,21 +291,7 @@ class _DiscussWithAi extends StatelessWidget {
       onPressed: () {
         Haptics.light();
         unawaited(analytics.discussAiTapped(article));
-        showCupertinoDialog<void>(
-          context: context,
-          barrierDismissible: true,
-          builder: (dialog) => CupertinoAlertDialog(
-            title: Text(l10n.comingSoon),
-            content: Text(l10n.discussWithAiSoon),
-            actions: [
-              CupertinoDialogAction(
-                isDefaultAction: true,
-                onPressed: () => Navigator.of(dialog).pop(),
-                child: Text(l10n.ok),
-              ),
-            ],
-          ),
-        );
+        unawaited(AiChatNote.show(context));
       },
       child: SizedBox(
         width: double.infinity,
@@ -319,20 +306,6 @@ class _DiscussWithAi extends StatelessWidget {
                   l10n.discussWithAi,
                   style: text.publisher.copyWith(color: label),
                   overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                decoration: ShapeDecoration(
-                  color: CupertinoColors.tertiarySystemFill.resolveFrom(
-                    context,
-                  ),
-                  shape: const StadiumBorder(),
-                ),
-                child: Text(
-                  l10n.beta,
-                  style: text.meta.copyWith(fontSize: 12, color: label),
                 ),
               ),
             ],
