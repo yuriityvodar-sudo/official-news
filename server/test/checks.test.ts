@@ -1,17 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { checkSummary } from "../src/summarizer/checks";
+import { COPIED_WORDS, checkSummary } from "../src/summarizer/checks";
 import type { Summary } from "../src/summarizer/schema";
 
-const summary = (text: string, impact: Summary["impact"] = null): Summary => ({
+const summary = (text: string, shortSummary = "Short."): Summary => ({
   isNews: true,
   decisionType: "decision",
   headline: "Headline",
-  shortSummary: "Short.",
+  headlineType: "consequence",
+  shortSummary,
   summary: text,
   topics: ["economy"],
-  tags: [],
   importance: 3,
-  impact,
 });
 
 describe("checkSummary", () => {
@@ -20,9 +19,8 @@ describe("checkSummary", () => {
     expect(checkSummary(summary("2,500MW from 1 July 2028; 86% agree; 2000 plants."), source, 2026).invented).toEqual([]);
   });
 
-  it("finds a number the article does not give, also in the impact lines", () => {
-    const s = summary("Nothing new.", { general: "Costs rise by 15%.", byTopic: [], residents: null, abroad: null });
-    expect(checkSummary(s, "The ministry published a notice.", 2026).invented).toEqual(["15"]);
+  it("finds a number the article does not give, also in the short summary", () => {
+    expect(checkSummary(summary("Nothing new.", "Costs rise by 15%."), "The ministry published a notice.", 2026).invented).toEqual(["15"]);
   });
 
   it("accepts the year the article was fetched and the years next to it (令和8年 is 2026)", () => {
@@ -188,5 +186,26 @@ describe("checkSummary", () => {
       "Savers with low incomes get a yearly allowance, paid by the Deutsche Rentenversicherung from 2027.";
     expect(checkSummary(summary(english), english, 2026).notEnglish).toBe(false);
     expect(checkSummary(summary("Kabinett beschließt Haushalt."), "", 2026).notEnglish).toBe(false);
+  });
+});
+
+describe("copied text (#133)", () => {
+  const source =
+    "The Commission has opened formal proceedings to assess whether Booking.com breached the Digital Services Act in the areas linked to fraud.";
+
+  it(`finds a run of ${COPIED_WORDS} or more words taken from the article, in the summary or the short summary`, () => {
+    const copied = summary("If you book a room, the Commission has opened formal proceedings to assess whether Booking.com breached the rules.");
+    expect(checkSummary(copied, source, 2026).copied).toEqual([
+      "the commission has opened formal proceedings to assess whether booking com breached the",
+    ]);
+    const short = summary("Nothing new.", "The Commission has opened formal proceedings to assess whether Booking.com breached the act.");
+    expect(checkSummary(short, source, 2026).copied).toHaveLength(1);
+  });
+
+  it(`accepts fewer than ${COPIED_WORDS} words in a row, a copied headline, and a source in another language`, () => {
+    const own = { ...summary("If you book a room, it opened formal proceedings to assess whether Booking.com breached the rules."), headline: source };
+    expect(checkSummary(own, source, 2026).copied).toEqual([]);
+    const german = "Die Kommission hat ein förmliches Verfahren eingeleitet, um zu prüfen, ob Booking.com gegen das Gesetz verstoßen hat.";
+    expect(checkSummary(summary("The Commission has opened formal proceedings to check Booking.com."), german, 2026).copied).toEqual([]);
   });
 });
