@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/feed_language.dart';
+import '../../core/motion.dart';
 import '../../core/push.dart';
 import '../../core/theme.dart';
 import '../../l10n/app_localizations.dart';
@@ -248,6 +249,7 @@ class _DesignSection extends StatelessWidget {
                 onPressed: () {
                   Navigator.of(sheet).pop();
                   if (d == current) return;
+                  Haptics.selection();
                   feedDesign.value = d;
                   saveDesign?.call(d);
                   Navigator.of(context).popUntil((route) => route.isFirst);
@@ -301,6 +303,7 @@ class _DesignSection extends StatelessWidget {
               onPressed: () {
                 Navigator.of(sheet).pop();
                 if (w == current) return;
+                Haptics.selection();
                 headlineWeight.value = w;
                 saveHeadlineWeight?.call(w);
               },

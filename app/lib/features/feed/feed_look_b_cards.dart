@@ -9,6 +9,7 @@ import '../../core/news_widgets.dart';
 import '../../core/pictures.dart';
 import '../../core/read_mark.dart';
 import '../../core/theme.dart';
+import '../../core/motion.dart';
 import '../../l10n/app_localizations.dart';
 import 'feed_look_b_words.dart';
 import 'feed_topic_tags.dart';
@@ -593,7 +594,8 @@ class BCardPicture extends StatelessWidget {
           ),
           fit: BoxFit.cover,
           opacity: keep < 1 ? AlwaysStoppedAnimation(keep) : null,
-          frameBuilder: (context, child, frame, _) => box(child),
+          frameBuilder: (context, child, frame, sync) =>
+              box(fadeInPicture(context, child, frame, sync)),
           // Flutter skips frameBuilder on an error, so the box is drawn here too.
           errorBuilder: (_, _, _) => box(),
         ),

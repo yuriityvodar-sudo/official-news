@@ -17,6 +17,10 @@
   "@feedLoadFailed": {
     "description": "The feed could not load and has nothing saved to show."
   },
+  "feedLoading": "Loading the news",
+  "@feedLoading": {
+    "description": "What VoiceOver says for the grey rows shown while the feed loads (#141)."
+  },
   "feedRefreshFailed": "Couldn't refresh. Pull down to retry.",
   "@feedRefreshFailed": {
     "description": "Above the feed saved on the phone, when the fresh one could not load."

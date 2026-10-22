@@ -10,6 +10,7 @@ import '../../core/analytics.dart';
 import '../../core/article.dart';
 import '../../core/feed_language.dart';
 import '../../core/filters.dart';
+import '../../core/motion.dart';
 import '../../core/news_widgets.dart';
 import '../../core/router.dart';
 import '../../core/theme.dart';
@@ -18,6 +19,7 @@ import '../settings/settings_screen.dart';
 import 'feed_controller.dart';
 import 'feed_filters.dart';
 import 'feed_look.dart';
+import 'feed_skeleton.dart';
 
 /// Item 3: the feed (docs/design/mvp.png). One list of decisions in the order
 /// they arrived, with no sections (Yurii, 16 Oct: the server's top stories are
@@ -55,6 +57,12 @@ class _FeedScreenState extends State<FeedScreen> {
   /// feed's first page failed last time it changed.
   int _deepest = 0;
   bool _failed = false;
+
+  /// When the feed last went from nothing to articles: its first rows
+  /// arrive one after another for a moment then (#141).
+  DateTime? _arrivedAt;
+  bool _wasEmpty = true;
+  static const _arriving = Duration(milliseconds: 700);
 
   @override
   void initState() {
@@ -94,6 +102,9 @@ class _FeedScreenState extends State<FeedScreen> {
     final failed = _feed.error != null;
     if (failed && !_failed) unawaited(analytics.feedFailed());
     _failed = failed;
+    final empty = _feed.feed.isEmpty;
+    if (_wasEmpty && !empty) _arrivedAt = DateTime.now();
+    _wasEmpty = empty;
     _readAtStart();
     setState(() {});
     // A page dropped because a refresh replaced the feed leaves the list at its end:
@@ -140,6 +151,7 @@ class _FeedScreenState extends State<FeedScreen> {
   }
 
   Future<void> _showNew() async {
+    Haptics.light();
     await _feed.refresh();
     if (_scroll.hasClients) {
       await _scroll.animateTo(
@@ -159,6 +171,7 @@ class _FeedScreenState extends State<FeedScreen> {
       analytics.articleOpened(article, section: section, position: position),
     );
     unawaited(_feed.markRead(article));
+    Haptics.light();
     // The article as the feed has it, so a translated one opens translated.
     Navigator.of(context).pushNamed(Routes.detail, arguments: article);
   }
@@ -203,13 +216,19 @@ class _FeedScreenState extends State<FeedScreen> {
   /// Every country, a group or one country from the chip (#68): another
   /// feed, from the top.
   Future<void> _chooseWhere(FeedWhere where) async {
-    if (where != _feed.where) _toTop();
+    if (where != _feed.where) {
+      Haptics.selection();
+      _toTop();
+    }
     await _feed.setWhere(where);
   }
 
   /// One topic, or all, from the chip (#67): another feed, from the top.
   Future<void> _chooseTopic(String? topic) async {
-    if (topic != _feed.topic) _toTop();
+    if (topic != _feed.topic) {
+      Haptics.selection();
+      _toTop();
+    }
     await _feed.setTopic(topic);
   }
 
@@ -244,6 +263,7 @@ class _FeedScreenState extends State<FeedScreen> {
               ),
               slivers: [
                 // Pull to refresh works in every state, including error and empty.
+                // It taps back itself as the pull passes the refresh point.
                 CupertinoSliverRefreshControl(onRefresh: _feed.refresh),
                 _MastheadEdge(
                   link: _masthead,
@@ -275,10 +295,12 @@ class _FeedScreenState extends State<FeedScreen> {
                   scroll: _scroll,
                   top: _pillTop,
                   gap: _pillGap,
-                  child: look.newPill(
-                    context,
-                    count: _feed.newCount,
-                    onTap: _showNew,
+                  child: _SlideIn(
+                    child: look.newPill(
+                      context,
+                      count: _feed.newCount,
+                      onTap: _showNew,
+                    ),
                   ),
                 ),
               ),
@@ -298,13 +320,8 @@ class _FeedScreenState extends State<FeedScreen> {
     final text = NewsText.from(context);
     final l10n = AppLocalizations.of(context);
     if (_feed.feed.isEmpty) {
-      if (_feed.loading) {
-        return const [
-          SliverFillRemaining(
-            child: Center(child: CupertinoActivityIndicator()),
-          ),
-        ];
-      }
+      // Grey rows in the shape of the feed's while it loads (#141).
+      if (_feed.loading) return const [FeedSkeleton()];
       return [
         SliverFillRemaining(
           hasScrollBody: false,
@@ -356,6 +373,9 @@ class _FeedScreenState extends State<FeedScreen> {
             shown: (i) => _shownRow(i + 1),
             topic: _feed.topic,
             maxTopics: topicTagCount.value,
+            arriving:
+                _arrivedAt != null &&
+                DateTime.now().difference(_arrivedAt!) < _arriving,
           ),
         ),
       );
@@ -411,6 +431,32 @@ class _FeedScreenState extends State<FeedScreen> {
         if (_feed.topic != null)
           undo(l10n.filterShowAllTopics, () => _chooseTopic(null)),
       ],
+    );
+  }
+}
+
+/// The "N new" pill arriving (#141): it slides down a little and settles
+/// with a spring; with Reduce Motion on, it only fades in.
+class _SlideIn extends StatelessWidget {
+  const _SlideIn({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final reduced = Motion.reduced(context);
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: Motion.slow,
+      curve: reduced ? Motion.ease : Motion.spring,
+      child: child,
+      builder: (context, t, child) => Opacity(
+        opacity: t.clamp(0, 1),
+        child: Transform.translate(
+          offset: Offset(0, reduced ? 0 : (1 - t) * -16),
+          child: child,
+        ),
+      ),
     );
   }
 }

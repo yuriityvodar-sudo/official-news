@@ -13,6 +13,7 @@ import '../../core/news_widgets.dart';
 import '../../core/pictures.dart';
 import '../../core/push.dart';
 import '../../core/theme.dart';
+import '../../core/motion.dart';
 import '../../l10n/app_localizations.dart';
 
 /// Opens the official page; tests pass their own.
@@ -51,15 +52,17 @@ String shareText(Article article, AppLocalizations l10n) {
   ].join('\n\n');
 }
 
-/// Shares [text] with the headline as its subject.
+/// Shares [text] with the headline as its subject; a tap back once it has
+/// gone (#141).
 Future<void> shareArticle(Article article, String text, Rect? origin) async {
-  await SharePlus.instance.share(
+  final result = await SharePlus.instance.share(
     ShareParams(
       subject: article.headline,
       text: text,
       sharePositionOrigin: origin,
     ),
   );
+  if (result.status == ShareResultStatus.success) Haptics.success();
 }
 
 /// Item 4: one official decision (docs/design/mvp.png). The ministry as
@@ -304,6 +307,7 @@ class _Picture extends StatelessWidget {
                   width: (media.size.width * media.devicePixelRatio).round(),
                 ),
                 fit: BoxFit.cover,
+                frameBuilder: fadeInPicture,
                 errorBuilder: (_, _, _) => const SizedBox.shrink(),
               ),
             ),

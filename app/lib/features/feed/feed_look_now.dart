@@ -7,6 +7,7 @@ import '../../core/news_widgets.dart';
 import '../../core/pictures.dart';
 import '../../core/read_mark.dart';
 import '../../core/theme.dart';
+import '../../core/motion.dart';
 import '../../l10n/app_localizations.dart';
 import 'feed_look.dart';
 import 'feed_topic_tags.dart';
@@ -106,12 +107,15 @@ class NowLook extends FeedLook {
       itemBuilder: (context, i) {
         final a = list.articles[i];
         list.shown(i);
-        return NowArticleRow(
-          article: a,
-          mark: list.markOf(a),
-          topics: list.topicsOf(a),
-          showDay: true,
-          onTap: () => list.open(i),
+        return list.tile(
+          i,
+          NowArticleRow(
+            article: a,
+            mark: list.markOf(a),
+            topics: list.topicsOf(a),
+            showDay: true,
+            onTap: () => list.open(i),
+          ),
         );
       },
     ),
@@ -288,6 +292,7 @@ class FeedPicture extends StatelessWidget {
               opacity: dimmed
                   ? const AlwaysStoppedAnimation(readOpacity)
                   : null,
+              frameBuilder: fadeInPicture,
               errorBuilder: (_, _, _) => const SizedBox.shrink(),
             );
           },
