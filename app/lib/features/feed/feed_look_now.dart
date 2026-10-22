@@ -228,6 +228,7 @@ class NowArticleRow extends StatelessWidget {
         const SizedBox(width: 14),
         FeedPicture(
           url: article.imageUrl!,
+          heroId: article.id,
           width: 84,
           height: 84,
           dimmed: read,
@@ -244,6 +245,7 @@ class FeedPicture extends StatelessWidget {
   const FeedPicture({
     super.key,
     required this.url,
+    this.heroId,
     this.width,
     this.height,
     this.dimmed = false,
@@ -251,6 +253,9 @@ class FeedPicture extends StatelessWidget {
   });
 
   final String url;
+
+  /// The article's id: the picture then flies into the article (#141).
+  final String? heroId;
   final double? width;
   final double? height;
   final bool dimmed;
@@ -261,7 +266,7 @@ class FeedPicture extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ratio = MediaQuery.devicePixelRatioOf(context);
-    return ClipRRect(
+    final clipped = ClipRRect(
       borderRadius: BorderRadius.circular(radius),
       child: Container(
         width: width,
@@ -299,6 +304,9 @@ class FeedPicture extends StatelessWidget {
         ),
       ),
     );
+    return heroId == null
+        ? clipped
+        : PictureHero(articleId: heroId!, url: url, child: clipped);
   }
 }
 

@@ -3,7 +3,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:official_news/core/analytics.dart';
 import 'package:official_news/core/article.dart';
 import 'package:official_news/core/glass.dart';
+import 'package:official_news/core/pictures.dart';
 import 'package:official_news/features/detail/detail_screen.dart';
+import 'package:official_news/features/detail/picture_viewer.dart';
+import 'package:official_news/core/read_mark.dart';
+import 'package:official_news/features/feed/feed_look_now.dart';
 
 import 'test_app.dart';
 
@@ -140,5 +144,67 @@ void main() {
   ) async {
     await _open(tester, _article(summary: null));
     expect(find.text('Discuss with AI'), findsNothing);
+  });
+
+  testWidgets('the picture opens full screen and a swipe down puts it back', (
+    tester,
+  ) async {
+    await _open(tester, _article());
+    await tester.tap(find.bySemanticsLabel('Show the picture full screen'));
+    await tester.pumpAndSettle();
+    expect(find.byType(PictureViewer), findsOneWidget);
+
+    // A short swipe springs back.
+    await tester.drag(find.byType(InteractiveViewer), const Offset(0, 60));
+    await tester.pumpAndSettle();
+    expect(find.byType(PictureViewer), findsOneWidget);
+
+    await tester.drag(find.byType(InteractiveViewer), const Offset(0, 300));
+    await tester.pumpAndSettle();
+    expect(find.byType(PictureViewer), findsNothing);
+
+    await tester.tap(find.bySemanticsLabel('Show the picture full screen'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.bySemanticsLabel('Close'));
+    await tester.pumpAndSettle();
+    expect(find.byType(PictureViewer), findsNothing);
+  });
+
+  testWidgets('a card\'s picture and the article\'s fly as one', (
+    tester,
+  ) async {
+    final article = _article();
+    Hero heroIn(Finder area) => tester.widget<Hero>(
+      find.descendant(of: area, matching: find.byType(Hero)),
+    );
+
+    await tester.pumpWidget(
+      testApp(
+        home: NowArticleRow(
+          article: article,
+          mark: const ReadMark(ReadStyle.none, read: false),
+          onTap: () {},
+        ),
+      ),
+    );
+    expect(heroIn(find.byType(NowArticleRow)).tag, PictureHero.tag('a1'));
+
+    await tester.pumpWidget(testApp(home: DetailScreen(article: article)));
+    expect(heroIn(find.byType(DetailScreen)).tag, PictureHero.tag('a1'));
+  });
+
+  testWidgets('nothing flies with Reduce Motion on', (tester) async {
+    await tester.pumpWidget(
+      testApp(
+        home: MediaQuery(
+          data: const MediaQueryData(disableAnimations: true),
+          child: DetailScreen(article: _article()),
+        ),
+      ),
+    );
+    final mode = tester.widget<HeroMode>(
+      find.ancestor(of: find.byType(Hero), matching: find.byType(HeroMode)),
+    );
+    expect(mode.enabled, isFalse);
   });
 }
