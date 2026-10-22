@@ -1,5 +1,6 @@
 {
   "@@locale": "en",
+
   "today": "Today",
   "@today": {
     "description": "The feed's name: the back button from an article to the feed (\"< Today\"), and a card's date for an article from today."
@@ -80,6 +81,7 @@
       }
     }
   },
+
   "filterAllCountries": "All countries",
   "@filterAllCountries": {
     "description": "The Where chip under the date while the feed shows every country, and the first item of its menu (#68)."
@@ -131,6 +133,7 @@
   "@filterShowAllTopics": {
     "description": "A button under filterEmpty: shows every topic again."
   },
+
   "decisionTypeLaw": "Law",
   "@decisionTypeLaw": {
     "description": "Decision type, shown in red capitals above a headline."
@@ -163,6 +166,7 @@
   "@decisionTypeMeetingOutcome": {
     "description": "Decision type: what an official meeting decided."
   },
+
   "topicForeignAffairs": "Foreign affairs",
   "@topicForeignAffairs": {
     "description": "A topic from the fixed list (foreign-affairs), on the Topics chip and in its menu (#67)."
@@ -219,6 +223,7 @@
   "@topicJustice": {
     "description": "A topic from the fixed list (justice), on the Topics chip and in its menu (#67)."
   },
+
   "countryAR": "Argentina",
   "@countryAR": {
     "description": "Country name after the publisher: \"Federal Government · Germany\"."
@@ -319,6 +324,7 @@
   "@countryZA": {
     "description": "Country name."
   },
+
   "languageAr": "Arabic",
   "@languageAr": {
     "description": "A source's language, in the form that fills {language} in summaryByAiTranslated (Ukrainian: арабської, Russian: арабского, Spanish: árabe, German: Arabischen)."
@@ -383,6 +389,7 @@
   "@languageZh": {
     "description": "As languageAr."
   },
+
   "summaryByAi": "Summary by AI",
   "@summaryByAi": {
     "description": "Above an article's summary, for a source in the language the article is read in."
@@ -457,6 +464,7 @@
       }
     }
   },
+
   "settingsReading": "Reading",
   "@settingsReading": {
     "description": "Settings section header (shown in capitals) over Language and Notifications."
@@ -547,6 +555,7 @@
   "@languageFooter": {
     "description": "Under the list of languages."
   },
+
   "publisher": "{name}, Slovakia",
   "@publisher": {
     "description": "Who publishes the app: the company's name, never translated, and its country.",
@@ -601,6 +610,7 @@
       }
     }
   },
+
   "privacyIntro": "Official News has no accounts: we do not ask for your name, e-mail address or phone number, and we do not sell or share personal data for advertising.",
   "@privacyIntro": {
     "description": "Privacy policy, first paragraph. A legal text: translate faithfully, keep the meaning exact."
@@ -685,6 +695,7 @@
   "@privacyChanges": {
     "description": "Privacy policy, under privacyChangesHeading."
   },
+
   "termsIntro1": "Official News summarizes official decisions for general information. It is not legal, financial or professional advice.",
   "@termsIntro1": {
     "description": "Terms of use, first paragraph. A legal text: translate faithfully, keep the meaning exact."
@@ -723,6 +734,7 @@
       }
     }
   },
+
   "supportMessages": "Found a mistake in a summary, a broken source, or have an idea? We read every message.",
   "@supportMessages": {
     "description": "Contact & Support page, first paragraph."
@@ -739,6 +751,7 @@
   "@supportWrite": {
     "description": "Contact & Support page: the button that opens an e-mail to us."
   },
+
   "languageCs": "Czech",
   "@languageCs": { "description": "As languageAr." },
   "settingsDesign": "Design",
