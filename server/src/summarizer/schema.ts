@@ -34,78 +34,58 @@ export type DecisionType = (typeof DECISION_TYPES)[number];
 export type Topic = (typeof TOPICS)[number];
 
 /**
- * What a decision means in practice (#63): direct consequences of its stated
- * terms, an AI analysis the app labels as such. Every part may be missing.
+ * The kinds of hook headline (#133). The code picks one per article
+ * (`headlineKind` in prompt.ts); the model may write a plain one instead, for
+ * war, disasters and deaths and for decisions that change nothing practical.
  */
-export interface Impact {
-  /** For any reader: who must or may do what, pays or gets what, from when. */
-  general: string | null;
-  /** One line per topic of the article, from that topic's angle (docs/style-guide.md). */
-  byTopic: { topic: Topic; text: string }[];
-  /** For people and businesses in the country or bloc that decided. */
-  residents: string | null;
-  /** For people and businesses outside it. */
-  abroad: string | null;
-}
+export const HEADLINE_KINDS = ["question", "consequence", "contrast"] as const;
+export type HeadlineKind = (typeof HEADLINE_KINDS)[number];
+/** What the model says it wrote: the kind it was given, or plain. Stored as `headline_type`. */
+export const HEADLINE_TYPES = [...HEADLINE_KINDS, "plain"] as const;
+export type HeadlineType = (typeof HEADLINE_TYPES)[number];
 
 export interface Summary {
   isNews: boolean;
   decisionType: DecisionType | null;
   headline: string;
+  headlineType: HeadlineType;
   shortSummary: string;
   summary: string;
   topics: Topic[];
-  tags: string[];
   importance: number;
-  /** null when the article is not news, or nothing follows directly from it. */
-  impact: Impact | null;
 }
 
+/**
+ * What is accepted (#133). The prompt asks for less (a headline up to 80
+ * characters, a summary of 600 to 900): a little over costs nothing, more than
+ * this a retry, and on the last try it is clipped.
+ */
 export const LIMITS = {
   headline: 90,
   shortSummary: 200,
-  summary: 1200,
-  tags: 8,
-  tagLength: 60,
+  summary: 1000,
   topics: 3,
-  impactGeneral: 250,
-  impactLine: 200,
 };
 
-/** JSON schema sent with the request, so the model answers in this shape. */
+/**
+ * JSON schema sent with the request, so the model answers in this shape. The
+ * summary comes before the headline: the headline is written from it. Since
+ * #133 the model writes no `impact` (what it means is in the summary) and no
+ * `tags` (the app does not show them); they are stored empty.
+ */
 export const SUMMARY_SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["isNews", "decisionType", "headline", "shortSummary", "summary", "topics", "tags", "importance", "impact"],
+  required: ["isNews", "decisionType", "topics", "importance", "summary", "shortSummary", "headline", "headlineType"],
   properties: {
     isNews: { type: "boolean" },
     decisionType: { type: ["string", "null"], enum: [...DECISION_TYPES, null] },
-    headline: { type: "string" },
-    shortSummary: { type: "string" },
-    summary: { type: "string" },
     topics: { type: "array", items: { type: "string", enum: [...TOPICS] }, maxItems: LIMITS.topics },
-    tags: { type: "array", items: { type: "string" }, maxItems: LIMITS.tags },
     importance: { type: "integer", minimum: 1, maximum: 5 },
-    impact: {
-      type: ["object", "null"],
-      additionalProperties: false,
-      required: ["general", "byTopic", "residents", "abroad"],
-      properties: {
-        general: { type: ["string", "null"] },
-        byTopic: {
-          type: "array",
-          maxItems: LIMITS.topics,
-          items: {
-            type: "object",
-            additionalProperties: false,
-            required: ["topic", "text"],
-            properties: { topic: { type: "string", enum: [...TOPICS] }, text: { type: "string" } },
-          },
-        },
-        residents: { type: ["string", "null"] },
-        abroad: { type: ["string", "null"] },
-      },
-    },
+    summary: { type: "string" },
+    shortSummary: { type: "string" },
+    headline: { type: "string" },
+    headlineType: { type: "string", enum: [...HEADLINE_TYPES] },
   },
 } as const;
 
@@ -127,9 +107,11 @@ export function parseJson(text: string): unknown {
 
 /**
  * Checks the model's answer and normalises it. Returns the problems instead of
- * a summary when something essential is missing or wrong.
+ * a summary when something essential is missing or wrong. `kind` is the
+ * headline kind that was asked for: an answer that names another kind keeps it.
+ * Lengths are not clipped here: one over its limit costs a retry (`overLimits`).
  */
-export function toSummary(value: unknown): { summary: Summary } | { problems: string[] } {
+export function toSummary(value: unknown, kind: HeadlineKind): { summary: Summary } | { problems: string[] } {
   if (!value || typeof value !== "object" || Array.isArray(value)) return { problems: ["not a JSON object"] };
   const v = value as Record<string, unknown>;
   const problems: string[] = [];
@@ -150,55 +132,24 @@ export function toSummary(value: unknown): { summary: Summary } | { problems: st
   if (isNews) {
     decisionType = DECISION_TYPES.includes(v.decisionType as DecisionType) ? (v.decisionType as DecisionType) : "decision";
   }
-
   const topics = Array.isArray(v.topics)
     ? [...new Set(v.topics.filter((t): t is Topic => TOPICS.includes(t as Topic)))].slice(0, LIMITS.topics)
     : [];
-  const tags = Array.isArray(v.tags)
-    ? [...new Set(v.tags.map(clean).filter(Boolean).map((t) => clip(t, LIMITS.tagLength)))].slice(0, LIMITS.tags)
-    : [];
+  const headlineType = HEADLINE_TYPES.includes(v.headlineType as HeadlineType) ? (v.headlineType as HeadlineType) : kind;
 
   return {
-    summary: {
-      isNews,
-      decisionType,
-      headline: clip(headline, LIMITS.headline),
-      shortSummary: clip(shortSummary, LIMITS.shortSummary),
-      summary: clip(summary, LIMITS.summary),
-      topics,
-      tags,
-      importance,
-      impact: isNews ? toImpact(v.impact, topics) : null,
-    },
+    summary: { isNews, decisionType, headline, headlineType, shortSummary: clip(shortSummary, LIMITS.shortSummary), summary, topics, importance },
   };
 }
 
-/**
- * The impact part, cleaned: lines only for the article's own topics, and no
- * line that repeats another (the model tends to copy `general` into every
- * part). null when nothing is left.
- */
-function toImpact(value: unknown, topics: Topic[]): Impact | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  const v = value as Record<string, unknown>;
-  const seen = new Set<string>();
-  const line = (x: unknown, max: number): string | null => {
-    const text = clean(x);
-    const key = text.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
-    if (!text || seen.has(key)) return null;
-    seen.add(key);
-    return clip(text, max);
-  };
-  const general = line(v.general, LIMITS.impactGeneral);
-  const byTopic: Impact["byTopic"] = [];
-  for (const entry of Array.isArray(v.byTopic) ? v.byTopic : []) {
-    const e = entry as Record<string, unknown> | null;
-    const topic = e?.topic as Topic;
-    if (!topics.includes(topic) || byTopic.some((b) => b.topic === topic)) continue;
-    const text = line(e?.text, LIMITS.impactLine);
-    if (text) byTopic.push({ topic, text });
-  }
-  const residents = line(v.residents, LIMITS.impactLine);
-  const abroad = line(v.abroad, LIMITS.impactLine);
-  return general || byTopic.length || residents || abroad ? { general, byTopic, residents, abroad } : null;
+/** The fields longer than their limit (#133): a retry, or clipped on the last try. */
+export function overLimits(s: Summary): string[] {
+  return (["headline", "summary"] as const)
+    .filter((field) => s[field].length > LIMITS[field])
+    .map((field) => `${field} is ${s[field].length} characters, more than ${LIMITS[field]}`);
+}
+
+/** The summary with its fields clipped to their limits, for a last try. */
+export function clipped(s: Summary): Summary {
+  return { ...s, headline: clip(s.headline, LIMITS.headline), summary: clip(s.summary, LIMITS.summary) };
 }
