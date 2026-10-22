@@ -132,16 +132,28 @@ export function publishedDate(publishedAt: string, country: string): string {
   return `${part.year}-${part.month}-${part.day}`;
 }
 
+/**
+ * Straight double quotes as typographic ones (#99). The model copies a straight
+ * quote into its JSON answer unescaped, which ends the string early, and then
+ * pads with spaces up to the token limit: a DOF title with "El Copal, Irapuato"
+ * failed 3 tries of 3. A quote at the start, after a space, a bracket or a dash
+ * opens; any other closes. The checks still read the original text: they
+ * ignore quotes.
+ */
+export function typographicQuotes(text: string): string {
+  return text.replace(/(^|[\s([{–—])"/g, "$1“").replace(/"/g, "”");
+}
+
 export function userMessage(article: ArticleInput): string {
   // The tags fence the untrusted text, so the text itself may not contain them.
   const text = article.text?.trim()
-    ? article.text.slice(0, MAX_TEXT).replace(/<\/?article\b[^>]*>/gi, " ")
+    ? typographicQuotes(article.text.slice(0, MAX_TEXT).replace(/<\/?article\b[^>]*>/gi, " "))
     : "(only the title is available)";
   return [
     `Source: ${article.sourceName} (${article.country})`,
     `Published: ${article.published}`,
     `Original language: ${article.language ?? "unknown"}`,
-    `Original title: ${article.title}`,
+    `Original title: ${typographicQuotes(article.title)}`,
     "",
     "<article>",
     text,
