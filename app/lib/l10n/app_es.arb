@@ -191,5 +191,7 @@
   "aiChatNotifyOnce": "Una sola notificación, cuando el chat esté listo.",
   "aiChatNotifyAsk": "Esto activa las notificaciones: también recibirás las decisiones más importantes, 2 al día como máximo.",
   "aiChatNotifyOff": "Las notificaciones de esta app están desactivadas. Actívalas en la app Ajustes y vuelve aquí.",
-  "pictureFullScreen": "Ver la imagen a pantalla completa"
+  "pictureFullScreen": "Ver la imagen a pantalla completa",
+  "tryAgain": "Reintentar",
+  "copyLink": "Copiar enlace"
 }

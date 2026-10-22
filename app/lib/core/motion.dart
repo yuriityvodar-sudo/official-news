@@ -63,11 +63,13 @@ abstract final class Haptics {
 /// [child] shrinks a little while it is held and springs back when let go
 /// (#141), as cards do in Apple's apps. It takes no tap itself: the row's
 /// own gesture inside it still gets the tap, and a scroll that starts on it
-/// cancels the press, like the row's highlight.
+/// cancels the press, like the row's highlight. A long press, held past
+/// the tap, calls [onLongPress].
 class PressScale extends StatefulWidget {
-  const PressScale({super.key, required this.child});
+  const PressScale({super.key, required this.child, this.onLongPress});
 
   final Widget child;
+  final VoidCallback? onLongPress;
 
   @override
   State<PressScale> createState() => _PressScaleState();
@@ -82,20 +84,28 @@ class _PressScaleState extends State<PressScale> {
 
   @override
   Widget build(BuildContext context) {
-    if (Motion.reduced(context)) return widget.child;
+    final reduced = Motion.reduced(context);
     // Both this detector and the row's report the press after the same
     // short wait; the row wins the tap, and this one is cancelled then.
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
-      onTapDown: (_) => _press(true),
-      onTapUp: (_) => _press(false),
-      onTapCancel: () => _press(false),
-      child: AnimatedScale(
-        scale: _pressed ? Motion.pressedScale : 1,
-        duration: _pressed ? Motion.fast : Motion.slow,
-        curve: _pressed ? Motion.ease : Motion.spring,
-        child: widget.child,
-      ),
+      onTapDown: reduced ? null : (_) => _press(true),
+      onTapUp: reduced ? null : (_) => _press(false),
+      onTapCancel: reduced ? null : () => _press(false),
+      onLongPress: widget.onLongPress == null
+          ? null
+          : () {
+              _press(false);
+              widget.onLongPress!();
+            },
+      child: reduced
+          ? widget.child
+          : AnimatedScale(
+              scale: _pressed ? Motion.pressedScale : 1,
+              duration: _pressed ? Motion.fast : Motion.slow,
+              curve: _pressed ? Motion.ease : Motion.spring,
+              child: widget.child,
+            ),
     );
   }
 }

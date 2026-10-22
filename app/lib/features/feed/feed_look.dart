@@ -145,6 +145,7 @@ class FeedList {
     this.topic,
     this.maxTopics = maxCardTopics,
     this.arriving = false,
+    this.actions = _nothing,
   });
 
   final List<Article> articles;
@@ -152,6 +153,10 @@ class FeedList {
   /// The feed has just loaded (#141): its first rows arrive one after
   /// another ([tile]); rows built later, by scrolling, are there at once.
   final bool arriving;
+
+  /// A long press on `articles[index]`: what can be done without opening it
+  /// (share, the official page, copy the link; #141). [tile] wires it up.
+  final ValueChanged<int> actions;
 
   /// How many rows arrive one after another: about a screen.
   static const arrivingRows = 8;
@@ -194,7 +199,7 @@ class FeedList {
   Widget tile(int index, Widget row) => Arrive(
     animate: arriving && index < arrivingRows,
     delay: Duration(milliseconds: 45 * index),
-    child: PressScale(child: row),
+    child: PressScale(onLongPress: () => actions(index), child: row),
   );
   bool isRead(Article article) => readIds.contains(article.id);
 

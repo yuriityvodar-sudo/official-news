@@ -11,6 +11,7 @@ import '../../l10n/app_localizations.dart';
 import 'feed_look.dart';
 import 'feed_look_now.dart';
 import 'feed_topic_tags.dart';
+import 'feed_touches.dart';
 
 /// Design option A (#66, from the prototype, kept in Settings → Design): "Refined editorial".
 ///
@@ -290,10 +291,14 @@ class _Footer extends StatelessWidget {
   final Article article;
 
   @override
-  Widget build(BuildContext context) => Text(
-    feedTime(article, AppLocalizations.of(context)),
-    style: _AType.of(context).footer,
-  );
+  Widget build(BuildContext context) {
+    final time = feedTime(article, AppLocalizations.of(context));
+    final style = _AType.of(context).footer;
+    // A decision of the last hour stands out (#141).
+    return isFresh(article)
+        ? FreshTime(time, style: style)
+        : Text(time, style: style);
+  }
 }
 
 /// What VoiceOver reads for a card, once: the headline first, then where it
