@@ -8,7 +8,9 @@ import 'package:http/testing.dart';
 import 'package:official_news/core/analytics.dart';
 import 'package:official_news/core/api_client.dart';
 import 'package:official_news/core/feed_language.dart';
+import 'package:official_news/core/feed_store.dart';
 import 'package:official_news/core/router.dart';
+import 'package:official_news/core/theme.dart';
 import 'package:official_news/features/feed/feed_controller.dart';
 import 'package:official_news/features/feed/feed_look.dart';
 import 'package:official_news/features/feed/feed_screen.dart';
@@ -310,8 +312,8 @@ void main() {
         final api = ApiClient(
           baseUrl: 'https://api.test',
           client: MockClient((request) async {
-    final menu = fakeMenus(request);
-    if (menu != null) return menu;
+            final menu = fakeMenus(request);
+            if (menu != null) return menu;
             final query = request.url.queryParameters;
             final after = int.tryParse(query['after'] ?? '');
             final page = after == null
@@ -443,5 +445,22 @@ void main() {
     expect(saved, FeedDesign.b);
     expect(find.text('B'), findsOneWidget);
     feedDesign.value = FeedDesign.now;
+  });
+
+  test('the look and the headline weight are kept on the phone, today\'s '
+      'look and bold too, so a choice wins over a build\'s start', () async {
+    SharedPreferences.setMockInitialValues({});
+    final store = FeedStore(await SharedPreferences.getInstance());
+    expect(store.design(), isNull);
+    expect(store.headlineWeight(), isNull);
+    await store.saveDesign(FeedDesign.b);
+    await store.saveHeadlineWeight(HeadlineWeight.light);
+    expect(store.design(), FeedDesign.b);
+    expect(store.headlineWeight(), HeadlineWeight.light);
+    await store.saveDesign(FeedDesign.now);
+    await store.saveHeadlineWeight(HeadlineWeight.bold);
+    final again = FeedStore(await SharedPreferences.getInstance());
+    expect(again.design(), FeedDesign.now);
+    expect(again.headlineWeight(), HeadlineWeight.bold);
   });
 }

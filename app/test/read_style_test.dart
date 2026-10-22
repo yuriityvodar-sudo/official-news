@@ -322,6 +322,23 @@ void main() {
         }
       }
 
+      testWidgets('none, what the app ships with: a read article looks like '
+          'any other, not faded, with no dot', (tester) async {
+        readStyle.value = ReadStyle.none;
+        await _pumpFeed(tester);
+        expect(_dots(find.byType(FeedScreen), _blue), findsNothing);
+        expect(_dots(find.byType(FeedScreen), AppColors.accent), findsNothing);
+        expect(_headlineColor(tester, 't1'), _headlineColor(tester, 't2'));
+        expect(_headlineColor(tester, 'a1'), _headlineColor(tester, 'a2'));
+        for (final image in tester.widgetList<Image>(find.byType(Image))) {
+          expect(image.opacity, isNull);
+        }
+        // Today's official-source tick, in the designs that have one.
+        if (design == FeedDesign.now || design == FeedDesign.b) {
+          expect(find.byIcon(CupertinoIcons.checkmark_seal), findsWidgets);
+        }
+      });
+
       testWidgets('dim: read articles fade as before, with no dot', (
         tester,
       ) async {
@@ -422,5 +439,4 @@ void main() {
       });
     }
   });
-
 }

@@ -9,14 +9,6 @@
   "@yesterday": {
     "description": "A card's date for an article from yesterday."
   },
-  "topStories": "Top stories",
-  "@topStories": {
-    "description": "Red section title at the top of the feed: the day's most important decisions."
-  },
-  "latest": "Latest",
-  "@latest": {
-    "description": "Red section title in the feed: every other decision, newest first."
-  },
   "settings": "Settings",
   "@settings": {
     "description": "The settings screen's title, the back button to it, and what VoiceOver says for the gear button on the feed."
@@ -801,5 +793,17 @@
   "cancel": "Cancel",
   "@cancel": {
     "description": "The cancel button of an action sheet (Settings, headline weight)."
+  },
+  "splashOnly": "only",
+  "@splashOnly": {
+    "description": "The splash at start (#66): its first line, of three stacked words that read as one phrase, \"only official news\". Lower case as Yurii wrote them; keep each line one word."
+  },
+  "splashOfficial": "official",
+  "@splashOfficial": {
+    "description": "The splash's second line (see splashOnly). In a language that puts the adjective after the noun, the noun goes here (Spanish: \"noticias\")."
+  },
+  "splashNews": "news",
+  "@splashNews": {
+    "description": "The splash's third line (see splashOnly)."
   }
 }

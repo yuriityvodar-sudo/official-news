@@ -506,15 +506,15 @@ class FeedController extends ChangeNotifier {
     items = page?.items ?? const [];
   }
 
-  /// The look chosen in Settings → Design (#66), saved on the phone.
+  /// Saves the look chosen in Settings → Design (#66) on the phone; Settings
+  /// has already switched [feedDesign] to it.
   Future<void> saveDesign(FeedDesign design) async {
-    feedDesign.value = design;
     await _store?.saveDesign(design);
   }
 
-  /// The headline weight chosen in Settings → Design (#66), saved on the phone.
+  /// Saves the headline weight chosen in Settings → Design (#66) on the
+  /// phone; Settings has already switched [headlineWeight] to it.
   Future<void> saveHeadlineWeight(HeadlineWeight weight) async {
-    headlineWeight.value = weight;
     await _store?.saveHeadlineWeight(weight);
   }
 }

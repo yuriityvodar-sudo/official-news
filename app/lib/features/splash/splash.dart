@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../core/theme.dart';
+import '../../l10n/app_localizations.dart';
 
 /// The splash at app start (#66, Yurii, 16 Oct): three words stacked on
 /// a white page (black in dark mode), with a wave that moves from the bottom
@@ -19,9 +20,19 @@ import '../../core/theme.dart';
 /// while it plays. With Reduce Motion the words fade in, stand still for a
 /// moment and fade out.
 
-/// The splash's words, one per line, as Yurii wrote them (English for now).
-/// They live only here, to move into the ARB files when they are translated.
+/// The splash's words, one per line, as Yurii wrote them: the English ones.
+/// The splash shows [splashWords], in the app's language.
 const splashLines = ['only', 'official', 'news'];
+
+/// The splash's three words in the app's language (#52: every word the app
+/// shows is in it), from the ARB files: "тільки / офіційні / новини",
+/// "solo / noticias / oficiales". A long one ("Nachrichten") is drawn a
+/// little smaller, so it never runs past the screen.
+List<String> splashWords(AppLocalizations l10n) => [
+  l10n.splashOnly,
+  l10n.splashOfficial,
+  l10n.splashNews,
+];
 
 enum SplashStyle {
   /// The lines rise into place from below, one after another: "only" first.
@@ -83,13 +94,23 @@ const _stillIn = 200.0;
 /// app's navigator, and the feed in it, are built under it from the first
 /// frame.
 class SplashHost extends StatefulWidget {
-  const SplashHost({super.key, required this.child, this.onStart = true});
+  const SplashHost({
+    super.key,
+    required this.child,
+    this.onStart = true,
+    this.endOn,
+  });
 
   /// The app: the navigator from `MaterialApp.builder`.
   final Widget child;
 
   /// Shows the splash when the app starts.
   final bool onStart;
+
+  /// Ends a splash that is showing, with its fade, each time it notifies:
+  /// `push.opened`, so a notification that started the app shows its
+  /// article at once instead of under the splash.
+  final Listenable? endOn;
 
   /// Shows the [splashStyle] splash over the app now (Settings → Play).
   static void play(BuildContext context) =>
@@ -121,7 +142,12 @@ class _SplashHostState extends State<SplashHost> {
       // VoiceOver reads the splash while it shows, then the app.
       ExcludeSemantics(excluding: _showing, child: widget.child),
       if (_showing)
-        Splash(key: ValueKey(_run), style: splashStyle.value, onDone: _done),
+        Splash(
+          key: ValueKey(_run),
+          style: splashStyle.value,
+          onDone: _done,
+          endOn: widget.endOn,
+        ),
     ],
   );
 }
@@ -130,10 +156,18 @@ class _SplashHostState extends State<SplashHost> {
 /// [onDone] once it has faded out, or at once when the app is left while it
 /// shows (coming back, the app is as it was, without the rest of it).
 class Splash extends StatefulWidget {
-  const Splash({super.key, required this.style, required this.onDone});
+  const Splash({
+    super.key,
+    required this.style,
+    required this.onDone,
+    this.endOn,
+  });
 
   final SplashStyle style;
   final VoidCallback onDone;
+
+  /// Fades it out at once when it notifies, as a touch does ([SplashHost]).
+  final Listenable? endOn;
 
   @override
   State<Splash> createState() => _SplashState();
@@ -190,6 +224,15 @@ class _SplashState extends State<Splash> with TickerProviderStateMixin {
         View.of(context).platformDispatcher.accessibilityFeatures.reduceMotion;
     _clock.start();
     _life = AppLifecycleListener(onHide: _leave);
+    widget.endOn?.addListener(_end);
+  }
+
+  @override
+  void didUpdateWidget(Splash old) {
+    super.didUpdateWidget(old);
+    if (old.endOn == widget.endOn) return;
+    old.endOn?.removeListener(_end);
+    widget.endOn?.addListener(_end);
   }
 
   void _tick(Duration elapsed) {
@@ -222,6 +265,7 @@ class _SplashState extends State<Splash> with TickerProviderStateMixin {
 
   @override
   void dispose() {
+    widget.endOn?.removeListener(_end);
     _life?.dispose();
     _clock.dispose();
     _fade.dispose();
@@ -247,18 +291,28 @@ class _SplashState extends State<Splash> with TickerProviderStateMixin {
       color: ink,
       decoration: TextDecoration.none,
     );
+    // The words in the app's language (#52).
+    final lines = splashWords(AppLocalizations.of(context));
     // Where the baseline sits in each line, for the fill's water.
-    final baseline = widget.style == SplashStyle.fill ? _baseline(type) : 0.0;
+    final baseline = widget.style == SplashStyle.fill
+        ? _baseline(type, lines.first)
+        : 0.0;
     final words = ValueListenableBuilder(
       valueListenable: _ms,
       builder: (context, now, _) {
         // At rest, standing still, with Reduce Motion.
         final ms = _still ? double.infinity : now;
         final words = switch (widget.style) {
-          SplashStyle.rise => _Rise(ms: ms, style: type),
-          SplashStyle.riseUp => _Rise(ms: ms, style: type, fromBottom: true),
-          SplashStyle.sweep => _Sweep(ms: ms, style: type),
+          SplashStyle.rise => _Rise(lines: lines, ms: ms, style: type),
+          SplashStyle.riseUp => _Rise(
+            lines: lines,
+            ms: ms,
+            style: type,
+            fromBottom: true,
+          ),
+          SplashStyle.sweep => _Sweep(lines: lines, ms: ms, style: type),
           SplashStyle.fill => _Fill(
+            lines: lines,
             ms: ms,
             style: type,
             baseline: baseline,
@@ -285,7 +339,7 @@ class _SplashState extends State<Splash> with TickerProviderStateMixin {
           behavior: HitTestBehavior.opaque,
           onPointerDown: (_) => _end(),
           child: Semantics(
-            label: splashLines.join(' '),
+            label: lines.join(' '),
             container: true,
             child: ExcludeSemantics(
               child: Stack(
@@ -302,7 +356,11 @@ class _SplashState extends State<Splash> with TickerProviderStateMixin {
                       alignment: const Alignment(0, -0.1),
                       // Drawn like a logo: the reader's text size does not
                       // grow it past the screen (VoiceOver reads the words).
-                      child: MediaQuery.withNoTextScaling(child: words),
+                      // A word longer than the screen is wide ("Nachrichten",
+                      // "официальные") draws the words a little smaller.
+                      child: MediaQuery.withNoTextScaling(
+                        child: FittedBox(fit: BoxFit.scaleDown, child: words),
+                      ),
                     ),
                   ),
                 ],
@@ -315,10 +373,11 @@ class _SplashState extends State<Splash> with TickerProviderStateMixin {
   }
 }
 
-/// [splashLines] stacked and centred, each line drawn by [line].
+/// [lines] stacked and centred, each line drawn by [line].
 class _Lines extends StatelessWidget {
-  const _Lines({required this.style, this.line});
+  const _Lines({required this.lines, required this.style, this.line});
 
+  final List<String> lines;
   final TextStyle style;
   final Widget Function(int index, Widget text)? line;
 
@@ -339,7 +398,7 @@ class _Lines extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          for (final (i, word) in splashLines.indexed)
+          for (final (i, word) in lines.indexed)
             line?.call(i, Text(word)) ?? Text(word),
         ],
       ),
@@ -361,8 +420,14 @@ const _lead = 100.0;
 /// a fold, "only" first, then "official", then "news", overlapping like a wave.
 /// 1b ([fromBottom]): "news" first, then "official", then "only".
 class _Rise extends StatelessWidget {
-  const _Rise({required this.ms, required this.style, this.fromBottom = false});
+  const _Rise({
+    required this.lines,
+    required this.ms,
+    required this.style,
+    this.fromBottom = false,
+  });
 
+  final List<String> lines;
   final double ms;
   final TextStyle style;
   final bool fromBottom;
@@ -374,9 +439,10 @@ class _Rise extends StatelessWidget {
   Widget build(BuildContext context) {
     final size = style.fontSize!;
     return _Lines(
+      lines: lines,
       style: style,
       line: (i, text) {
-        final order = fromBottom ? splashLines.length - 1 - i : i;
+        final order = fromBottom ? lines.length - 1 - i : i;
         final start = _lead + order * _stagger;
         final t = _phase(ms, start, _length, Curves.easeOutCubic);
         // The fold does the reveal; this only softens the first points.
@@ -418,8 +484,9 @@ class _LineWindow extends CustomClipper<Rect> {
 /// 2 · sweep: the words come in black, then a band of red light passes up
 /// through them, from the bottom line to the top, and leaves them black.
 class _Sweep extends StatelessWidget {
-  const _Sweep({required this.ms, required this.style});
+  const _Sweep({required this.lines, required this.ms, required this.style});
 
+  final List<String> lines;
   final double ms;
   final TextStyle style;
 
@@ -454,7 +521,7 @@ class _Sweep extends StatelessWidget {
             1,
           ],
         ).createShader(rect),
-        child: _Lines(style: style),
+        child: _Lines(lines: lines, style: style),
       ),
     );
   }
@@ -468,12 +535,14 @@ class _Sweep extends StatelessWidget {
 /// with nothing to see, and look like it stops).
 class _Fill extends StatelessWidget {
   const _Fill({
+    required this.lines,
     required this.ms,
     required this.style,
     required this.baseline,
     required this.empty,
   });
 
+  final List<String> lines;
   final double ms;
   final TextStyle style;
 
@@ -485,16 +554,20 @@ class _Fill extends StatelessWidget {
   Widget build(BuildContext context) {
     final shown = _phase(ms, _lead, 300, Curves.easeOut);
     final size = style.fontSize!;
-    final levels = splashFillLevels(ms);
+    final levels = splashFillLevels(ms, lines);
     return Opacity(
       opacity: shown,
       child: Stack(
         children: [
-          _Lines(style: style.copyWith(color: empty)),
           _Lines(
+            lines: lines,
+            style: style.copyWith(color: empty),
+          ),
+          _Lines(
+            lines: lines,
             style: style,
             line: (i, text) {
-              final ink = _ink(splashLines[i]);
+              final ink = _ink(lines[i]);
               return ClipPath(
                 clipper: _Water(
                   level: levels[i],
@@ -543,15 +616,15 @@ const _fillNext = 0.35;
   return (over: over, under: under);
 }
 
-/// When each line of the fill fills, (start, length) in ms, in the order of
-/// [splashLines]. The bottom line goes first, and each next one starts
+/// When each line of [lines] fills, (start, length) in ms, in their order.
+/// The bottom line goes first, and each next one starts
 /// [_fillNext] of the way into the one under it; each takes as long as its
 /// ink is tall, so the water rises at the same speed in every line.
-final List<(double, double)> _fillTimes = () {
+List<(double, double)> _fillTimes(List<String> lines) {
   // The water's travel per line, bottom first: its ink, and the waves under
   // it at the start and (calmer, see [_Water]) over it at the end.
   final travel = [
-    for (final word in splashLines.reversed)
+    for (final word in lines.reversed)
       _ink(word).over + _ink(word).under + _fillWave * 1.35 * (1 + 0.6),
   ];
   final whole =
@@ -565,20 +638,22 @@ final List<(double, double)> _fillTimes = () {
     start += t * perEm * _fillNext;
   }
   return times.reversed.toList();
-}();
+}
 
-/// The fill's water level in each line at [ms] (0 empty, 1 full), in the
-/// order of [splashLines].
+/// The fill's water level in each line of [lines] at [ms] (0 empty, 1
+/// full), in their order.
 @visibleForTesting
-List<double> splashFillLevels(double ms) => [
-  for (final (start, length) in _fillTimes)
-    _phase(ms, start, length, Curves.easeInOutSine),
-];
+List<double> splashFillLevels(double ms, [List<String> lines = splashLines]) =>
+    [
+      for (final (start, length) in _fillTimes(lines))
+        _phase(ms, start, length, Curves.easeInOutSine),
+    ];
 
-/// Where the baseline sits in a line of [style], in points from its top.
-double _baseline(TextStyle style) {
+/// Where the baseline sits in a line of [style] reading [word], in points
+/// from its top.
+double _baseline(TextStyle style, String word) {
   final painter = TextPainter(
-    text: TextSpan(text: splashLines.first, style: style),
+    text: TextSpan(text: word, style: style),
     textDirection: TextDirection.ltr,
   )..layout();
   final baseline = painter.computeDistanceToActualBaseline(

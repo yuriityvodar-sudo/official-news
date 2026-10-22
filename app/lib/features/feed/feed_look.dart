@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/article.dart';
+import '../../core/feed_design.dart';
 import '../../core/read_mark.dart';
 import 'feed_look_a.dart';
 import 'feed_look_b.dart';
@@ -8,24 +9,20 @@ import 'feed_look_c.dart';
 import 'feed_look_now.dart';
 import 'feed_topic_tags.dart';
 
-/// The feed's looks (#66): today's and the design options Yurii compared; Settings → Design switches them.
+export '../../core/feed_design.dart';
+
+/// The look shown now ([FeedDesign], #66). Settings switches it (the
+/// "Design" row); a build can start with another one:
+/// `--dart-define=FEED_DESIGN=a`.
 ///
 /// Everything the feed draws goes through a [FeedLook]; everything it does
 /// (loading, errors, empty states, pull to refresh, loading more, the "N new"
 /// pill, opening an article, analytics) stays in the feed screen. To change a
 /// look, change only its own file: `feed_look_a.dart` for [ALook], and so on,
 /// plus any `feed_look_a_*.dart` files of its own. Nothing else needs editing.
-enum FeedDesign { now, a, b, c }
-
-/// The look shown now. Settings switches it (the "Design" row); a build can
-/// start with another one: `--dart-define=FEED_DESIGN=a`.
 final feedDesign = ValueNotifier<FeedDesign>(
   designNamed(const String.fromEnvironment('FEED_DESIGN')),
 );
-
-/// `now`, `a`, `b` or `c`, in any case; anything else is [FeedDesign.now].
-FeedDesign designNamed(String name) =>
-    FeedDesign.values.asNameMap()[name.trim().toLowerCase()] ?? FeedDesign.now;
 
 /// How read articles look, in every design. Yurii's pick (20 Oct): no
 /// marking at all. A build can start with another: `--dart-define=READ_STYLE=blue`.

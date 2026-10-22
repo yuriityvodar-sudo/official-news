@@ -3,10 +3,10 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'article.dart';
+import 'feed_design.dart';
 import 'feed_language.dart';
 import 'filters.dart';
 import 'theme.dart';
-import '../features/feed/feed_look.dart';
 
 /// What the phone keeps between launches: the feed's language and filters, the
 /// last first page of the unfiltered feed in each language, so the app opens
@@ -94,30 +94,28 @@ class FeedStore {
     }
   }
 
-  /// The one topic the feed shows, or null for all topics (#67).
   /// The look chosen in Settings → Design (#66), or null until one is chosen
-  /// (the app then keeps its default, or a build's `--dart-define`).
+  /// (the app then keeps its default, or a build's `--dart-define`). Today's
+  /// look is saved too once chosen, so the choice wins over a build's start.
   FeedDesign? design() {
     final saved = _prefs.getString(_designKey);
     return saved == null ? null : designNamed(saved);
   }
 
-  Future<void> saveDesign(FeedDesign design) => design == FeedDesign.now
-      ? _prefs.remove(_designKey)
-      : _prefs.setString(_designKey, design.name);
+  Future<void> saveDesign(FeedDesign design) =>
+      _prefs.setString(_designKey, design.name);
 
   /// The headline weight chosen in Settings → Design (#66), or null until
-  /// one is chosen.
+  /// one is chosen; bold is saved too once chosen, as [saveDesign] does.
   HeadlineWeight? headlineWeight() {
     final saved = _prefs.getString(_headlineWeightKey);
     return saved == null ? null : headlineWeightNamed(saved);
   }
 
   Future<void> saveHeadlineWeight(HeadlineWeight weight) =>
-      weight == HeadlineWeight.bold
-      ? _prefs.remove(_headlineWeightKey)
-      : _prefs.setString(_headlineWeightKey, weight.name);
+      _prefs.setString(_headlineWeightKey, weight.name);
 
+  /// The one topic the feed shows, or null for all topics (#67).
   String? topic() => _prefs.getString(_topicKey);
 
   Future<void> saveTopic(String? id) =>

@@ -17,16 +17,21 @@ import 'test_app.dart';
 /// Settings → Play.
 
 /// [app] under a [SplashHost], as `MaterialApp.builder` puts it.
-Widget _host({Widget app = const Text('the app'), bool onStart = true}) =>
-    MaterialApp(
-      theme: buildTheme(Brightness.light),
-      darkTheme: buildTheme(Brightness.dark),
-      locale: const Locale('en'),
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
-      supportedLocales: AppLocalizations.supportedLocales,
-      builder: (context, child) => SplashHost(onStart: onStart, child: child!),
-      home: app,
-    );
+Widget _host({
+  Widget app = const Text('the app'),
+  bool onStart = true,
+  String locale = 'en',
+  Listenable? endOn,
+}) => MaterialApp(
+  theme: buildTheme(Brightness.light),
+  darkTheme: buildTheme(Brightness.dark),
+  locale: Locale(locale),
+  localizationsDelegates: AppLocalizations.localizationsDelegates,
+  supportedLocales: AppLocalizations.supportedLocales,
+  builder: (context, child) =>
+      SplashHost(onStart: onStart, endOn: endOn, child: child!),
+  home: app,
+);
 
 /// Frame by frame, as a phone draws: the splash's clock moves on by at most
 /// 50 ms a frame, so one long pump would not play it through.
@@ -107,8 +112,8 @@ void main() {
         api: ApiClient(
           baseUrl: 'https://api.test',
           client: MockClient((request) async {
-    final menu = fakeMenus(request);
-    if (menu != null) return menu;
+            final menu = fakeMenus(request);
+            if (menu != null) return menu;
             asked.add(request.url);
             final q = request.url.queryParameters;
             final body = q.containsKey('after') || q.containsKey('since')
@@ -270,6 +275,8 @@ void main() {
     addTearDown(tester.view.reset);
     await tester.pumpWidget(_host());
     final normal = tester.getSize(find.text('official'));
+    // On the screen, after the fit that keeps a long word on it.
+    final shown = tester.getRect(find.text('official'));
     await _play(tester, _total(SplashStyle.rise));
 
     tester.platformDispatcher.textScaleFactorTestValue = 3;
@@ -277,8 +284,49 @@ void main() {
     // A new start of the app, with the large text size.
     await tester.pumpWidget(KeyedSubtree(key: UniqueKey(), child: _host()));
     expect(tester.getSize(find.text('official')), normal);
-    expect(normal.width, lessThan(390));
+    expect(tester.getRect(find.text('official')), shown);
+    expect(shown.width, lessThan(390));
     await _play(tester, _total(SplashStyle.rise));
+  });
+
+  testWidgets('the words are in the app\'s language, and a long one stays '
+      'on the screen', (tester) async {
+    tester.view.physicalSize = const Size(390, 844) * 3;
+    tester.view.devicePixelRatio = 3;
+    addTearDown(tester.view.reset);
+    final semantics = tester.ensureSemantics();
+    await tester.pumpWidget(_host(locale: 'uk'));
+    for (final word in ['тільки', 'офіційні', 'новини']) {
+      expect(find.text(word), findsOneWidget);
+    }
+    expect(find.bySemanticsLabel('тільки офіційні новини'), findsOneWidget);
+    await _play(tester, _total(SplashStyle.riseUp));
+    semantics.dispose();
+
+    await tester.pumpWidget(
+      KeyedSubtree(
+        key: UniqueKey(),
+        child: _host(locale: 'de'),
+      ),
+    );
+    await _play(tester, seconds(1.5));
+    final long = tester.getRect(find.text('Nachrichten'));
+    expect(long.left, greaterThanOrEqualTo(0));
+    expect(long.right, lessThanOrEqualTo(390));
+    await _play(tester, _total(SplashStyle.riseUp));
+  });
+
+  testWidgets('a notification that started the app ends it at once, with '
+      'its fade', (tester) async {
+    final opened = ValueNotifier(0);
+    addTearDown(opened.dispose);
+    await tester.pumpWidget(_host(endOn: opened));
+    await _play(tester, seconds(0.3));
+    expect(find.byType(Splash), findsOneWidget);
+    opened.value++;
+    await _play(tester, splashFade + seconds(0.05));
+    expect(find.byType(Splash), findsNothing);
+    expect(find.text('the app').hitTestable(), findsOneWidget);
   });
 
   testWidgets('a tap skips it: it fades out at once', (tester) async {
@@ -456,7 +504,6 @@ void main() {
     await _play(tester, _total(SplashStyle.rise));
     expect(find.byType(Splash), findsNothing);
   });
-
 }
 
 Duration seconds(double s) => Duration(milliseconds: (s * 1000).round());

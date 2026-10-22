@@ -64,7 +64,9 @@ class OfficialNewsApp extends StatelessWidget {
           navigatorObservers: navigatorObservers,
           initialRoute: Routes.feed,
           // The splash over the feed at start (#66); the feed loads under it.
-          builder: (context, app) => SplashHost(child: app!),
+          // A notification that started the app ends it (#62).
+          builder: (context, app) =>
+              SplashHost(endOn: push.opened, child: app!),
         ),
       ),
     );

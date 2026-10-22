@@ -3,8 +3,6 @@
 
   "today": "Сьогодні",
   "yesterday": "Учора",
-  "topStories": "Головне",
-  "latest": "Останнє",
   "settings": "Параметри",
   "feedLoadFailed": "Не вдалося завантажити новини. Потягніть униз, щоб повторити.",
   "feedRefreshFailed": "Не вдалося оновити. Потягніть униз, щоб повторити.",
@@ -181,5 +179,8 @@
   "headlineWeightBold": "Жирний",
   "feedUnread": "Непрочитане",
   "feedCardTopics": "{count, plural, =1{Тема: {names}} other{Теми: {names}}}",
-  "cancel": "Скасувати"
+  "cancel": "Скасувати",
+  "splashOnly": "тільки",
+  "splashOfficial": "офіційні",
+  "splashNews": "новини"
 }

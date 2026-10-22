@@ -3,8 +3,6 @@
 
   "today": "Hoy",
   "yesterday": "Ayer",
-  "topStories": "Destacadas",
-  "latest": "Lo último",
   "settings": "Ajustes",
   "feedLoadFailed": "No se pudieron cargar las noticias. Desliza hacia abajo para reintentar.",
   "feedRefreshFailed": "No se pudo actualizar. Desliza hacia abajo para reintentar.",
@@ -181,5 +179,8 @@
   "headlineWeightBold": "Negrita",
   "feedUnread": "No leído",
   "feedCardTopics": "{count, plural, =1{Tema: {names}} other{Temas: {names}}}",
-  "cancel": "Cancelar"
+  "cancel": "Cancelar",
+  "splashOnly": "solo",
+  "splashOfficial": "noticias",
+  "splashNews": "oficiales"
 }

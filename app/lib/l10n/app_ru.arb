@@ -3,8 +3,6 @@
 
   "today": "Сегодня",
   "yesterday": "Вчера",
-  "topStories": "Главное",
-  "latest": "Последние решения",
   "settings": "Настройки",
   "feedLoadFailed": "Не удалось загрузить новости. Потяните вниз, чтобы повторить.",
   "feedRefreshFailed": "Не удалось обновить. Потяните вниз, чтобы повторить.",
@@ -181,5 +179,8 @@
   "headlineWeightBold": "Жирный",
   "feedUnread": "Непрочитанное",
   "feedCardTopics": "{count, plural, =1{Тема: {names}} other{Темы: {names}}}",
-  "cancel": "Отмена"
+  "cancel": "Отмена",
+  "splashOnly": "только",
+  "splashOfficial": "официальные",
+  "splashNews": "новости"
 }
