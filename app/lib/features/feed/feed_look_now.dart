@@ -11,6 +11,7 @@ import '../../core/motion.dart';
 import '../../l10n/app_localizations.dart';
 import 'feed_look.dart';
 import 'feed_topic_tags.dart';
+import 'feed_touches.dart';
 
 /// The feed as it looks today (docs/design/mvp.png): the Apple News look, a
 /// big serif masthead, then one list of rows with a thumbnail on the right
@@ -211,10 +212,17 @@ class NowArticleRow extends StatelessWidget {
             ),
             if (showDay || !article.dateOnly || article.addedAt != null) ...[
               const SizedBox(height: 6),
-              Text(
-                feedTime(article, AppLocalizations.of(context)),
-                style: dim(text.meta, read),
-              ),
+              // A decision of the last hour stands out (#141).
+              if (!read && isFresh(article))
+                FreshTime(
+                  feedTime(article, AppLocalizations.of(context)),
+                  style: text.meta,
+                )
+              else
+                Text(
+                  feedTime(article, AppLocalizations.of(context)),
+                  style: dim(text.meta, read),
+                ),
             ],
             if (topics.isNotEmpty)
               Semantics(

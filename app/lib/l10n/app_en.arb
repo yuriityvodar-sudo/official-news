@@ -833,5 +833,13 @@
   "pictureFullScreen": "Show the picture full screen",
   "@pictureFullScreen": {
     "description": "What VoiceOver says for the article's picture: a tap shows it full screen (#141)."
+  },
+  "tryAgain": "Try again",
+  "@tryAgain": {
+    "description": "The button under the message shown when the news could not be loaded (#141)."
+  },
+  "copyLink": "Copy link",
+  "@copyLink": {
+    "description": "An action in the menu of a long-pressed card: copies the official page's address (#141)."
   }
 }

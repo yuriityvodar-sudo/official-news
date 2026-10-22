@@ -21,6 +21,7 @@ import 'feed_controller.dart';
 import 'feed_filters.dart';
 import 'feed_look.dart';
 import 'feed_skeleton.dart';
+import 'feed_touches.dart';
 
 /// Item 3: the feed (docs/design/mvp.png). One list of decisions in the order
 /// they arrived, with no sections (Yurii, 16 Oct: the server's top stories are
@@ -337,14 +338,23 @@ class _FeedScreenState extends State<FeedScreen> {
           child: Padding(
             padding: const EdgeInsets.all(20),
             child: _feed.error != null
-                ? Text(l10n.feedLoadFailed, style: text.meta)
+                // Offline or the server failed: say so, with a way to try again (#141).
+                ? FeedMessage(
+                    icon: CupertinoIcons.wifi_slash,
+                    action: l10n.tryAgain,
+                    onAction: () => unawaited(_feed.refresh()),
+                    children: [Text(l10n.feedLoadFailed, style: text.meta)],
+                  )
                 : _feed.filtered
                 ? _filteredEmpty(context)
                 : _feed.language == FeedLanguage.en
-                ? Text(l10n.feedEmpty, style: text.meta)
+                ? FeedMessage(
+                    icon: CupertinoIcons.news,
+                    children: [Text(l10n.feedEmpty, style: text.meta)],
+                  )
                 // The server lists only finished translations; they come in over the day.
-                : Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                : FeedMessage(
+                    icon: CupertinoIcons.globe,
                     children: [
                       Text(
                         l10n.feedNoTranslations,
@@ -379,6 +389,7 @@ class _FeedScreenState extends State<FeedScreen> {
             readIds: _feed.readIds,
             readStyle: readStyle.value,
             open: (i) => _open(shown[i], section: 'feed', position: i),
+            actions: (i) => showArticleActions(context, shown[i]),
             shown: (i) => _shownRow(i + 1),
             topic: _feed.topic,
             maxTopics: topicTagCount.value,
@@ -430,8 +441,8 @@ class _FeedScreenState extends State<FeedScreen> {
         ),
       ),
     );
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return FeedMessage(
+      icon: CupertinoIcons.line_horizontal_3_decrease_circle,
       children: [
         Text(l10n.filterEmpty, style: text.meta),
         const SizedBox(height: 4),

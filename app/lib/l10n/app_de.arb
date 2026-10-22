@@ -189,5 +189,7 @@
   "comingSoon": "Demnächst",
   "discussWithAiSoon": "Wir bauen einen Chat zu jeder Entscheidung, damit Sie fragen können, was sie für Sie bedeutet. Ihr Tippen zeigt uns, dass es sich lohnt.",
   "ok": "OK",
-  "pictureFullScreen": "Bild im Vollbild zeigen"
+  "pictureFullScreen": "Bild im Vollbild zeigen",
+  "tryAgain": "Erneut versuchen",
+  "copyLink": "Link kopieren"
 }
