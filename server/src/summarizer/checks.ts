@@ -8,7 +8,7 @@ import type { Summary } from "./schema";
  * Words that add a purpose, a prediction or a judgement the article did not state
  * (docs/style-guide.md, rule 1). "The ministry says the goal is …" is the allowed form.
  * "may" is not here: "providers may now sell the devices" is a permission the
- * decision grants, which the impact part asks for.
+ * decision grants, which a summary of what changes for the reader needs.
  */
 const BANNED = /\b(aims? to|seeks? to|(?:is|are) intended to|(?:is|are) expected to|could|might|significant(?:ly)?|routine|first step|landmark|historic)\b/gi;
 
@@ -181,10 +181,33 @@ function notEnglish(text: string): boolean {
 
 /** Every text of a summary that readers see. */
 function shown(s: Summary): string {
-  const i = s.impact;
-  return [s.headline, s.shortSummary, s.summary, i?.general, i?.residents, i?.abroad, ...(i?.byTopic ?? []).map((t) => t.text)]
-    .filter(Boolean)
-    .join("\n");
+  return [s.headline, s.shortSummary, s.summary].join("\n");
+}
+
+/** Words in a row a summary may share with the article before they count as copied (#133). */
+export const COPIED_WORDS = 12;
+
+/**
+ * Runs of COPIED_WORDS or more words in a row that the short summary and the
+ * summary take from the article (#133): they should say what changes for the
+ * reader, not retell the text. Compared in lower case, letters and digits only,
+ * so only a source in English can be copied. The headline may restate the title.
+ */
+function copiedRuns(s: Summary, source: string): string[] {
+  const words = (text: string) => text.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
+  const from = words(source);
+  const grams = new Set<string>();
+  for (let i = 0; i + COPIED_WORDS <= from.length; i++) grams.add(from.slice(i, i + COPIED_WORDS).join(" "));
+  const own = words(`${s.shortSummary}\n${s.summary}`);
+  const copied = (end: number) => grams.has(own.slice(end - COPIED_WORDS, end).join(" "));
+  const runs: string[] = [];
+  for (let end = COPIED_WORDS; end <= own.length; end++) {
+    if (!copied(end)) continue;
+    const start = end - COPIED_WORDS;
+    while (end < own.length && copied(end + 1)) end++;
+    runs.push(own.slice(start, end).join(" "));
+  }
+  return runs;
 }
 
 export interface CheckResult {
@@ -194,6 +217,8 @@ export interface CheckResult {
   banned: string[];
   /** Written in another language, often the article's own. */
   notEnglish: boolean;
+  /** Runs of COPIED_WORDS or more words taken from the article. */
+  copied: string[];
 }
 
 /**
@@ -253,5 +278,5 @@ export function checkSummary(s: Summary, source: string, year: number): CheckRes
     if (scaledAmountKnown(m[1], SCALE_VALUES[m[2].toLowerCase()], known)) known.add(m[1].replace(".", ""));
   }
   const invented = [...new Set(numbers(text).filter((n) => n.length >= 2 && !known.has(n)))];
-  return { invented, banned: bannedWords(text, original), notEnglish: notEnglish(text) };
+  return { invented, banned: bannedWords(text, original), notEnglish: notEnglish(text), copied: copiedRuns(s, original) };
 }
