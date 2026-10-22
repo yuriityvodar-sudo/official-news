@@ -123,7 +123,7 @@ jobs:
         run: |
           app="$RUNNER_TEMP/Runner.xcarchive/Products/Applications/Runner.app"
           ent="$RUNNER_TEMP/Runner.entitlements"
-          cp app/ios/Runner/Runner.entitlements "$ent"
+          cp "$GITHUB_WORKSPACE/app/ios/Runner/Runner.entitlements" "$ent"
           /usr/libexec/PlistBuddy -c "Set :aps-environment production" "$ent"
           # The app's signature needs its frameworks signed; the vendors' already are.
           for f in "$app"/Frameworks/*.framework "$app"/Frameworks/*.dylib; do

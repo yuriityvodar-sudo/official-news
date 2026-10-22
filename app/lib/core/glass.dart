@@ -44,3 +44,72 @@ class GlassCircle extends StatelessWidget {
     ),
   );
 }
+
+/// A capsule of Liquid Glass behind [child] (#141): the same native view as
+/// [GlassCircle], as wide as [child] with [padding] (or as wide as it is
+/// given, inside a full-width box), [height] high.
+class GlassCapsule extends StatelessWidget {
+  const GlassCapsule({
+    super.key,
+    required this.child,
+    this.height = 48,
+    this.padding = const EdgeInsets.symmetric(horizontal: 20),
+  });
+
+  final Widget child;
+  final double height;
+  final EdgeInsets padding;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+    height: height,
+    child: Stack(
+      children: [
+        Positioned.fill(
+          child: GlassCircle.native
+              ? const UiKitView(
+                  viewType: 'official_news/glass',
+                  hitTestBehavior: PlatformViewHitTestBehavior.transparent,
+                )
+              : DecoratedBox(
+                  decoration: ShapeDecoration(
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.surfaceContainerHighest,
+                    shape: const StadiumBorder(),
+                  ),
+                ),
+        ),
+        Padding(
+          padding: padding,
+          child: Center(widthFactor: 1, child: child),
+        ),
+      ],
+    ),
+  );
+}
+
+/// The top of a screen whose content scrolls under floating buttons (#141):
+/// the page's [color] fading out downwards, as iOS 26 softens a scroll edge,
+/// so the buttons stay clear over text. Takes no touches.
+class ScrollEdgeFade extends StatelessWidget {
+  const ScrollEdgeFade({super.key, required this.height, required this.color});
+
+  final double height;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => IgnorePointer(
+    child: Container(
+      height: height,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          stops: const [0.5, 1],
+          colors: [color.withValues(alpha: 0.94), color.withValues(alpha: 0)],
+        ),
+      ),
+    ),
+  );
+}

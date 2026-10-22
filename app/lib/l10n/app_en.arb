@@ -809,5 +809,33 @@
   "splashNews": "news",
   "@splashNews": {
     "description": "The splash's third line (see splashOnly)."
+  },
+  "discussWithAi": "Discuss with AI",
+  "@discussWithAi": {
+    "description": "The button under a summary that will open a chat about the decision (#133, #141); for now it opens a note that the chat is coming, with a switch to be told when it is ready."
+  },
+  "aiChatTitle": "A chat about each decision",
+  "@aiChatTitle": {
+    "description": "The title of the note that Discuss with AI opens (#141): the chat is coming."
+  },
+  "aiChatBody": "We're building a chat to ask what a decision means for you, answered from its official text. It isn't in the app yet.",
+  "@aiChatBody": {
+    "description": "What the chat will do, and that it is not there yet."
+  },
+  "aiChatNotify": "Tell me when it's ready",
+  "@aiChatNotify": {
+    "description": "The switch in the note: one notification when the chat is ready."
+  },
+  "aiChatNotifyOnce": "One notification, when the chat is ready.",
+  "@aiChatNotifyOnce": {
+    "description": "Under the switch while notifications are allowed."
+  },
+  "aiChatNotifyAsk": "This turns on notifications: you'll also get the most important decisions, at most 2 a day.",
+  "@aiChatNotifyAsk": {
+    "description": "Under the switch while iOS has not asked about notifications yet: turning it on allows them, breaking decisions included."
+  },
+  "aiChatNotifyOff": "Notifications are off for this app. Turn them on in the Settings app, then come back.",
+  "@aiChatNotifyOff": {
+    "description": "Under the switch while notifications are not allowed; the switch opens the iOS Settings app."
   }
 }
