@@ -2,7 +2,14 @@ import { env, exports } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 import { CLAIM_MINUTES, MAX_ATTEMPTS, MODEL, runSummarizer, type Summarize } from "../src/summarizer";
 import { runTranslator } from "../src/translator";
-import { type ArticleInput, headlineKind, publishedDate, systemPrompt, userMessage } from "../src/summarizer/prompt";
+import {
+  type ArticleInput,
+  headlineKind,
+  publishedDate,
+  systemPrompt,
+  typographicQuotes,
+  userMessage,
+} from "../src/summarizer/prompt";
 import { LIMITS, clipped, overLimits, toSummary } from "../src/summarizer/schema";
 
 const now = () => `${new Date().toISOString().slice(0, 19)}Z`;
@@ -316,6 +323,24 @@ describe("userMessage", () => {
     expect(message.match(/<\/article>/g)).toHaveLength(1);
     expect(message.trim().endsWith("</article>")).toBe(true);
     expect(message).toContain("Published: 2026-10-20");
+  });
+
+  it("sends straight double quotes as typographic ones (#99)", () => {
+    const title = 'Acuerdo ... el inmueble federal denominado "El Copal, Irapuato", con Registro 11-11580-2';
+    const message = userMessage({
+      sourceName: "Official Gazette of the Federation (DOF)",
+      country: "MX",
+      language: "es",
+      title,
+      text: `${title}\nUn texto con una comilla suelta: 12" y otra al final "abierta`,
+      published: "2026-10-22",
+      headlineKind: "question",
+    });
+    expect(message).not.toContain('"');
+    expect(message).toContain("Original title: Acuerdo ... el inmueble federal denominado “El Copal, Irapuato”, con");
+    expect(message).toContain("suelta: 12” y otra al final “abierta");
+    expect(typographicQuotes('Ley "A" y "B"')).toBe("Ley “A” y “B”");
+    expect(typographicQuotes("„Ustawa” «loi»")).toBe("„Ustawa” «loi»");
   });
 
   it("gives the publication day in the source country's capital (#99)", () => {
