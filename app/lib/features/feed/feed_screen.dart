@@ -60,11 +60,13 @@ class _FeedScreenState extends State<FeedScreen> {
   int _deepest = 0;
   bool _failed = false;
 
-  /// When the feed last went from nothing to articles: its first rows
-  /// arrive one after another for a moment then (#141).
-  DateTime? _arrivedAt;
+  /// The feed has just gone from nothing to articles: its first rows arrive
+  /// one after another for a moment (#141). Rows built after that (scrolled
+  /// away and back) come in still.
+  bool _arriving = false;
   bool _wasEmpty = true;
-  static const _arriving = Duration(milliseconds: 700);
+  Timer? _arrivalEnd;
+  static const _arrival = Duration(milliseconds: 700);
 
   @override
   void initState() {
@@ -85,6 +87,7 @@ class _FeedScreenState extends State<FeedScreen> {
   @override
   void dispose() {
     _newCheck?.cancel();
+    _arrivalEnd?.cancel();
     _feed.removeListener(_changed);
     feedDesign.removeListener(_designChanged);
     readStyle.removeListener(_designChanged);
@@ -105,7 +108,13 @@ class _FeedScreenState extends State<FeedScreen> {
     if (failed && !_failed) unawaited(analytics.feedFailed());
     _failed = failed;
     final empty = _feed.feed.isEmpty;
-    if (_wasEmpty && !empty) _arrivedAt = DateTime.now();
+    if (_wasEmpty && !empty) {
+      _arriving = true;
+      _arrivalEnd?.cancel();
+      _arrivalEnd = Timer(_arrival, () {
+        if (mounted) setState(() => _arriving = false);
+      });
+    }
     _wasEmpty = empty;
     _readAtStart();
     setState(() {});
@@ -393,9 +402,7 @@ class _FeedScreenState extends State<FeedScreen> {
             shown: (i) => _shownRow(i + 1),
             topic: _feed.topic,
             maxTopics: topicTagCount.value,
-            arriving:
-                _arrivedAt != null &&
-                DateTime.now().difference(_arrivedAt!) < _arriving,
+            arriving: _arriving,
           ),
         ),
       );
