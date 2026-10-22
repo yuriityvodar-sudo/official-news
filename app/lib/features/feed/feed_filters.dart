@@ -2,6 +2,7 @@ import 'dart:io' show Platform;
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/rendering.dart' show PlatformViewHitTestBehavior;
 import 'package:flutter/services.dart';
 
@@ -387,6 +388,11 @@ class _NativeMenuState extends State<_NativeMenu> {
             creationParamsCodec: const StandardMessageCodec(),
             onPlatformViewCreated: _created,
             hitTestBehavior: PlatformViewHitTestBehavior.opaque,
+            // The touch goes to the native button at once: iOS opens the
+            // menu as the finger goes down, which a delayed touch never does.
+            gestureRecognizers: {
+              Factory<OneSequenceGestureRecognizer>(EagerGestureRecognizer.new),
+            },
           ),
         ),
       ],
