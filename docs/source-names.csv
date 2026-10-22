@@ -3,6 +3,10 @@ us-presidential-actions,uk,Білий дім
 us-presidential-actions,ru,Белый дом
 us-presidential-actions,es,Casa Blanca
 us-presidential-actions,de,Weißes Haus
+us-federal-register,uk,Федеральний реєстр США (Federal Register)
+us-federal-register,ru,Федеральный реестр США (Federal Register)
+us-federal-register,es,Registro Federal de EE. UU. (Federal Register)
+us-federal-register,de,US-Bundesregister (Federal Register)
 ca-parliament-bills,uk,Парламент Канади (LEGISinfo)
 ca-parliament-bills,ru,Парламент Канады (LEGISinfo)
 ca-parliament-bills,es,Parlamento de Canadá (LEGISinfo)
@@ -11,10 +15,26 @@ mx-official-gazette,uk,Офіційний вісник Мексики (DOF)
 mx-official-gazette,ru,Официальный вестник Мексики (DOF)
 mx-official-gazette,es,Diario Oficial de la Federación (DOF)
 mx-official-gazette,de,Mexikanisches Amtsblatt (DOF)
-br-chamber-bills,uk,Палата депутатів Бразилії
-br-chamber-bills,ru,Палата депутатов Бразилии
-br-chamber-bills,es,Cámara de Diputados de Brasil
-br-chamber-bills,de,Brasilianische Abgeordnetenkammer
+br-senate-laws,uk,Федеральне законодавство Бразилії (Senado Federal)
+br-senate-laws,ru,Федеральное законодательство Бразилии (Senado Federal)
+br-senate-laws,es,Legislación federal de Brasil (Senado Federal)
+br-senate-laws,de,Brasilianisches Bundesrecht (Senado Federal)
+br-senate-complementary-laws,uk,Федеральне законодавство Бразилії (Senado Federal)
+br-senate-complementary-laws,ru,Федеральное законодательство Бразилии (Senado Federal)
+br-senate-complementary-laws,es,Legislación federal de Brasil (Senado Federal)
+br-senate-complementary-laws,de,Brasilianisches Bundesrecht (Senado Federal)
+br-senate-constitutional-amendments,uk,Федеральне законодавство Бразилії (Senado Federal)
+br-senate-constitutional-amendments,ru,Федеральное законодательство Бразилии (Senado Federal)
+br-senate-constitutional-amendments,es,Legislación federal de Brasil (Senado Federal)
+br-senate-constitutional-amendments,de,Brasilianisches Bundesrecht (Senado Federal)
+br-senate-provisional-measures,uk,Федеральне законодавство Бразилії (Senado Federal)
+br-senate-provisional-measures,ru,Федеральное законодательство Бразилии (Senado Federal)
+br-senate-provisional-measures,es,Legislación federal de Brasil (Senado Federal)
+br-senate-provisional-measures,de,Brasilianisches Bundesrecht (Senado Federal)
+br-senate-decrees,uk,Федеральне законодавство Бразилії (Senado Federal)
+br-senate-decrees,ru,Федеральное законодательство Бразилии (Senado Federal)
+br-senate-decrees,es,Legislación federal de Brasil (Senado Federal)
+br-senate-decrees,de,Brasilianisches Bundesrecht (Senado Federal)
 ar-saij-legislation,uk,Міністерство юстиції Аргентини (SAIJ)
 ar-saij-legislation,ru,Министерство юстиции Аргентины (SAIJ)
 ar-saij-legislation,es,Ministerio de Justicia de Argentina (SAIJ)
@@ -47,6 +67,10 @@ za-government-notices,uk,Уряд ПАР
 za-government-notices,ru,Правительство ЮАР
 za-government-notices,es,Gobierno de Sudáfrica
 za-government-notices,de,Südafrikanische Regierung
+za-cabinet-statements,uk,Кабінет міністрів ПАР
+za-cabinet-statements,ru,Кабинет министров ЮАР
+za-cabinet-statements,es,Gabinete de Sudáfrica
+za-cabinet-statements,de,Südafrikanisches Kabinett
 au-treasurer-media-releases,uk,Скарбник Австралії
 au-treasurer-media-releases,ru,Казначей Австралии
 au-treasurer-media-releases,es,Tesorero de Australia
@@ -87,10 +111,10 @@ es-council-of-ministers,uk,"Рада міністрів Іспанії, підс
 es-council-of-ministers,ru,"Совет министров Испании, итоги заседаний (Монклоа)"
 es-council-of-ministers,es,"La Moncloa, resúmenes del Consejo de Ministros"
 es-council-of-ministers,de,"La Moncloa, Zusammenfassungen des Ministerrats"
-ua-cabinet-of-ministers,uk,Кабінет Міністрів України
-ua-cabinet-of-ministers,ru,Кабинет министров Украины
-ua-cabinet-of-ministers,es,Gabinete de Ministros de Ucrania
-ua-cabinet-of-ministers,de,Ministerkabinett der Ukraine
+ua-government-courier,uk,Урядовий кур’єр
+ua-government-courier,ru,Правительственный курьер Украины (Урядовий кур’єр)
+ua-government-courier,es,Correo del Gobierno de Ucrania (Uriadovyi Kurier)
+ua-government-courier,de,Regierungskurier der Ukraine (Urjadowyj Kurjer)
 eu-ecb-decisions,uk,Європейський центральний банк
 eu-ecb-decisions,ru,Европейский центральный банк
 eu-ecb-decisions,es,Banco Central Europeo

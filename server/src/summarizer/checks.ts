@@ -79,6 +79,41 @@ const SPANISH = new RegExp(
   "g",
 );
 
+/**
+ * Italian numbers from 10 to 99 written out, as Italian laws write ages: "i minori
+ * che hanno compiuto i quattordici anni" is 14 (#99; one digit is never checked).
+ * The tens drop their vowel before uno and otto (ventuno, trentotto), and ventuno
+ * its o before a noun (ventun anni). Read without accents: ventitré is ventitre.
+ */
+const ITALIAN_UNITS: [string, number][] = [
+  ["uno", 1], ["un", 1], ["due", 2], ["tre", 3], ["quattro", 4], ["cinque", 5], ["sei", 6], ["sette", 7], ["otto", 8], ["nove", 9],
+];
+const ITALIAN_NUMBERS: Record<string, number> = Object.fromEntries([
+  ..."dieci undici dodici tredici quattordici quindici sedici diciassette diciotto diciannove"
+    .split(" ")
+    .map((word, i): [string, number] => [word, 10 + i]),
+  ..."venti trenta quaranta cinquanta sessanta settanta ottanta novanta".split(" ").flatMap((ten, i): [string, number][] => [
+    [ten, 20 + 10 * i],
+    ...ITALIAN_UNITS.map(([unit, n]): [string, number] => [(/^[uo]/.test(unit) ? ten.slice(0, -1) : ten) + unit, 20 + 10 * i + n]),
+  ]),
+]);
+const ITALIAN = new RegExp(String.raw`\b(${Object.keys(ITALIAN_NUMBERS).sort((a, b) => b.length - a.length).join("|")})\b`, "g");
+
+/**
+ * Turkish writes a large number in parts, each with its scale word: "455 bin 758"
+ * is 455,758 and "1 milyon 250 bin" 1,250,000 (#99). A scale word may have a case
+ * ending: "2 bini aşkın" is more than 2,000.
+ */
+const TURKISH_SCALES: Record<string, number> = { milyar: 1e9, milyon: 1e6, bin: 1e3 };
+const TURKISH_SCALE = String.raw`(?:bin(?:in|den|de|i|e)?|milyon(?:un|dan|da|u|a)?|milyar(?:ın|dan|da|ı|a)?)(?!\p{L})`;
+const TURKISH = new RegExp(String.raw`(?<![\d.,])(?:\d{1,3} ?${TURKISH_SCALE} ?)+(?:\d{1,3}(?!\d|[.,]\d))?`, "gu");
+
+function turkishValue(parts: string): number {
+  let value = 0;
+  for (const m of parts.matchAll(/(\d{1,3}) ?(milyar|milyon|bin)?/g)) value += Number(m[1]) * (TURKISH_SCALES[m[2]] ?? 1);
+  return value;
+}
+
 /** Japan's era years: 令和8年 is 2026, 令和元年 2019, 平成31年 2019. */
 const ERAS: [RegExp, number][] = [
   [/令和(\d{1,2}|元)年/g, 2018],
@@ -102,6 +137,8 @@ function knownNumbers(source: string, year: number): Set<string> {
   for (const [numeral] of source.matchAll(ROMAN)) if (numeral.length >= 2) known.add(String(romanValue(numeral)));
   const unaccented = source.toLowerCase().normalize("NFD").replace(/\p{M}/gu, "");
   for (const m of unaccented.matchAll(SPANISH)) known.add(String((m[1] ? 2000 : 0) + SPANISH_NUMBERS[m[2]]));
+  for (const m of unaccented.matchAll(ITALIAN)) known.add(String(ITALIAN_NUMBERS[m[1]]));
+  for (const [parts] of source.matchAll(TURKISH)) known.add(String(turkishValue(parts)));
   for (const [re, start] of ERAS) {
     for (const m of source.matchAll(re)) known.add(String(start + (m[1] === "元" ? 1 : Number(m[1]))));
   }

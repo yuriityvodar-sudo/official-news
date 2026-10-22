@@ -84,6 +84,29 @@ describe("checkSummary", () => {
     expect(checkSummary(summary("a fine of 100 pesos"), "Geosa, S. de R.L. de C.V.", 2026).invented).toEqual(["100"]);
   });
 
+  it("reads Italian numbers written out and Turkish numbers in parts (#99: two decisions hidden on 21 Oct)", () => {
+    const ok = (source: string, text: string) => expect(checkSummary(summary(text), source, 2026).invented, text).toEqual([]);
+    const minors =
+      "2026-10-20\nPer i minori che hanno compiuto i quattordici anni è introdotta una presunzione di imputabilità: " +
+      "la capacità di intendere e di volere si presume fino a prova contraria.";
+    ok(minors, "For minors aged 14 and older, the law introduces a presumption of criminal responsibility.");
+    ok("un termine di ventitré giorni", "a deadline of 23 days");
+    ok("i giovani di ventun anni", "young people aged 21");
+    ok("per trentotto mesi", "for 38 months");
+    const funds =
+      "2026-10-21\nCHP Karabük Milletvekili Cevdet Akay da fon soruşturmalarına değinerek, 455 bin 758 tekil kişiyi " +
+      "ilgilendiren bir mağduriyetin yaşandığını dile getirdi. Alan, \"Fon piyasamızda 2 bini aşkın yatırım fonu bulunmaktadır.";
+    ok(funds, "The proposal protects the rights of approximately 455,758 individual investors.");
+    ok(funds, "The market has more than 2,000 investment funds.");
+    ok("1 milyon 250 bin lira", "1,250,000 lira");
+    ok("1 milyon 250 bin lira", "1.25 million lira");
+
+    // Still caught: another number than the one written out, or a part read alone.
+    expect(checkSummary(summary("For minors aged 15 and older."), minors, 2026).invented).toEqual(["15"]);
+    expect(checkSummary(summary("about 455,759 investors"), funds, 2026).invented).toEqual(["455759"]);
+    expect(checkSummary(summary("about 758,000 investors"), funds, 2026).invented).toEqual(["758000"]);
+  });
+
   it("accepts a large amount rounded correctly in millions or billions, not a wrong rounding (#99)", () => {
     const credit = "MPV 1397/2026: Abre crédito extraordinário, em favor de Encargos Financeiros da União, no valor de R$6.494.296.446,00";
     const invented = (text: string) => checkSummary(summary(text), credit, 2026).invented;
