@@ -29,6 +29,7 @@ interface ArticleRow {
   published_at: string;
   date_only: number;
   headline: string | null;
+  headline_type: string | null;
   short_summary: string | null;
   summary: string | null;
   decision_type: string | null;
@@ -54,7 +55,7 @@ const sourceName = (lang: Lang | null) =>
 
 const articleColumns = (lang: Lang | null) => `
   a.id, s.country, a.source_id, ${sourceName(lang)} AS source_name, s.url AS source_url,
-  a.url, a.original_title, a.published_at, a.date_only, a.headline, a.short_summary,
+  a.url, a.original_title, a.published_at, a.date_only, a.headline, a.headline_type, a.short_summary,
   a.summary, a.decision_type, a.image_url, a.original_language, a.topics, a.tags, a.importance,
   a.feed_seq, a.added_at, a.impact`;
 
@@ -196,6 +197,7 @@ export function toArticle(row: ArticleRow) {
     publishedAt: row.published_at,
     dateOnly: row.date_only === 1,
     headline: row.headline,
+    headlineType: row.headline_type,
     shortSummary: row.short_summary,
     summary: row.summary,
     decisionType: row.decision_type,
