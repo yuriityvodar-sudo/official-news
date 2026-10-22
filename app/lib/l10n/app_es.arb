@@ -185,8 +185,10 @@
   "splashOfficial": "noticias",
   "splashNews": "oficiales",
   "discussWithAi": "Hablar con la IA",
-  "beta": "Beta",
-  "comingSoon": "Muy pronto",
-  "discussWithAiSoon": "Estamos creando un chat sobre cada decisión para que pueda preguntar qué significa para usted. Su toque nos dice que vale la pena.",
-  "ok": "Aceptar"
+  "aiChatTitle": "Un chat sobre cada decisión",
+  "aiChatBody": "Estamos creando un chat para preguntar qué significa una decisión para ti, con respuestas sacadas de su texto oficial. Todavía no está en la app.",
+  "aiChatNotify": "Avisarme cuando esté listo",
+  "aiChatNotifyOnce": "Una sola notificación, cuando el chat esté listo.",
+  "aiChatNotifyAsk": "Esto activa las notificaciones: también recibirás las decisiones más importantes, 2 al día como máximo.",
+  "aiChatNotifyOff": "Las notificaciones de esta app están desactivadas. Actívalas en la app Ajustes y vuelve aquí."
 }

@@ -812,22 +812,30 @@
   },
   "discussWithAi": "Discuss with AI",
   "@discussWithAi": {
-    "description": "The button under a summary that will open a chat about the decision (#133, #141); for now it says the chat is coming."
+    "description": "The button under a summary that will open a chat about the decision (#133, #141); for now it opens a note that the chat is coming, with a switch to be told when it is ready."
   },
-  "beta": "Beta",
-  "@beta": {
-    "description": "The small label next to Discuss with AI: the feature is new."
+  "aiChatTitle": "A chat about each decision",
+  "@aiChatTitle": {
+    "description": "The title of the note that Discuss with AI opens (#141): the chat is coming."
   },
-  "comingSoon": "Coming soon",
-  "@comingSoon": {
-    "description": "The title of the note shown by Discuss with AI."
+  "aiChatBody": "We're building a chat to ask what a decision means for you, answered from its official text. It isn't in the app yet.",
+  "@aiChatBody": {
+    "description": "What the chat will do, and that it is not there yet."
   },
-  "discussWithAiSoon": "We're building a chat about each decision, to ask what it means for you. Your tap tells us it's worth building.",
-  "@discussWithAiSoon": {
-    "description": "The note shown by Discuss with AI: the chat is not there yet, and the tap counts."
+  "aiChatNotify": "Tell me when it's ready",
+  "@aiChatNotify": {
+    "description": "The switch in the note: one notification when the chat is ready."
   },
-  "ok": "OK",
-  "@ok": {
-    "description": "The button that closes a note."
+  "aiChatNotifyOnce": "One notification, when the chat is ready.",
+  "@aiChatNotifyOnce": {
+    "description": "Under the switch while notifications are allowed."
+  },
+  "aiChatNotifyAsk": "This turns on notifications: you'll also get the most important decisions, at most 2 a day.",
+  "@aiChatNotifyAsk": {
+    "description": "Under the switch while iOS has not asked about notifications yet: turning it on allows them, breaking decisions included."
+  },
+  "aiChatNotifyOff": "Notifications are off for this app. Turn them on in the Settings app, then come back.",
+  "@aiChatNotifyOff": {
+    "description": "Under the switch while notifications are not allowed; the switch opens the iOS Settings app."
   }
 }

@@ -185,8 +185,10 @@
   "splashOfficial": "offizielle",
   "splashNews": "Nachrichten",
   "discussWithAi": "Mit KI besprechen",
-  "beta": "Beta",
-  "comingSoon": "Demnächst",
-  "discussWithAiSoon": "Wir bauen einen Chat zu jeder Entscheidung, damit Sie fragen können, was sie für Sie bedeutet. Ihr Tippen zeigt uns, dass es sich lohnt.",
-  "ok": "OK"
+  "aiChatTitle": "Ein Chat zu jeder Entscheidung",
+  "aiChatBody": "Wir bauen einen Chat, in dem Sie fragen können, was eine Entscheidung für Sie bedeutet, mit Antworten aus ihrem offiziellen Text. In der App gibt es ihn noch nicht.",
+  "aiChatNotify": "Beim Start benachrichtigen",
+  "aiChatNotifyOnce": "Eine Mitteilung, sobald der Chat bereit ist.",
+  "aiChatNotifyAsk": "Damit schalten Sie Mitteilungen ein: Sie erhalten auch die wichtigsten Entscheidungen, höchstens 2 pro Tag.",
+  "aiChatNotifyOff": "Mitteilungen sind für diese App aus. Schalten Sie sie in der App „Einstellungen“ ein und kommen Sie dann zurück."
 }

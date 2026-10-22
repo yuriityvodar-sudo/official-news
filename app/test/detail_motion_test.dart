@@ -116,24 +116,23 @@ void main() {
     expect(_scaleOf(tester, CupertinoIcons.share), 1);
   });
 
-  testWidgets('"Discuss with AI" says the chat is coming and counts the tap', (
-    tester,
-  ) async {
+  testWidgets('"Discuss with AI" opens the note about the chat and counts '
+      'the tap', (tester) async {
     final sent = <String>[];
     analytics = Analytics((name, _) async => sent.add(name));
     addTearDown(() => analytics = Analytics());
 
     await _open(tester, _article());
     await tester.scrollUntilVisible(find.text('Discuss with AI'), 100);
-    expect(find.text('Beta'), findsOneWidget);
+    // Nothing that reads as a beta or a placeholder (App Review 2.1, 2.2).
+    expect(find.text('Beta'), findsNothing);
     await tester.tap(find.text('Discuss with AI'));
     await tester.pumpAndSettle();
 
     expect(sent, contains('discuss_ai_tap'));
-    expect(find.text('Coming soon'), findsOneWidget);
-    await tester.tap(find.text('OK'));
-    await tester.pumpAndSettle();
-    expect(find.text('Coming soon'), findsNothing);
+    expect(find.text('A chat about each decision'), findsOneWidget);
+    // No push in tests: the note has no switch.
+    expect(find.byType(CupertinoSwitch), findsNothing);
   });
 
   testWidgets('no "Discuss with AI" before the summary is written', (
