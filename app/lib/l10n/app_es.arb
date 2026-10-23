@@ -114,7 +114,7 @@
   "notificationsUnavailable": "No disponible",
   "notificationsOpensSettings": "Abre los ajustes de tu teléfono",
   "pushOfferTitle": "Decisiones importantes",
-  "pushOfferBody": "Recibe las decisiones oficiales más importantes como notificación: 2 al día como máximo y ninguna de noche.",
+  "pushOfferBody": "Recibe las decisiones oficiales más importantes como notificación en cuanto salen, nunca de noche.",
   "pushOfferNotNow": "Ahora no",
   "pushOfferTurnOn": "Activar",
   "settingsAboutHeader": "Información",
@@ -189,6 +189,6 @@
   "aiChatBody": "Estamos creando un chat para preguntar qué significa una decisión para ti, con respuestas sacadas de su texto oficial. Todavía no está en la app.",
   "aiChatNotify": "Avisarme cuando esté listo",
   "aiChatNotifyOnce": "Una sola notificación, cuando el chat esté listo.",
-  "aiChatNotifyAsk": "Esto activa las notificaciones: también recibirás las decisiones más importantes, 2 al día como máximo.",
+  "aiChatNotifyAsk": "Esto activa las notificaciones: también recibirás las decisiones más importantes en cuanto salen, nunca de noche.",
   "aiChatNotifyOff": "Las notificaciones de esta app están desactivadas. Actívalas en la app Ajustes y vuelve aquí."
 }

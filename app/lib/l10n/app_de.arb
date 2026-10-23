@@ -114,7 +114,7 @@
   "notificationsUnavailable": "Nicht verfügbar",
   "notificationsOpensSettings": "Öffnet die App „Einstellungen“",
   "pushOfferTitle": "Wichtige Entscheidungen",
-  "pushOfferBody": "Erhalten Sie die wichtigsten offiziellen Entscheidungen als Mitteilung: höchstens 2 pro Tag, nachts keine.",
+  "pushOfferBody": "Erhalten Sie die wichtigsten offiziellen Entscheidungen als Mitteilung, sobald sie da sind, nachts nie.",
   "pushOfferNotNow": "Später",
   "pushOfferTurnOn": "Aktivieren",
   "settingsAboutHeader": "Info",
@@ -189,6 +189,6 @@
   "aiChatBody": "Wir bauen einen Chat, in dem Sie fragen können, was eine Entscheidung für Sie bedeutet, mit Antworten aus ihrem offiziellen Text. In der App gibt es ihn noch nicht.",
   "aiChatNotify": "Beim Start benachrichtigen",
   "aiChatNotifyOnce": "Eine Mitteilung, sobald der Chat bereit ist.",
-  "aiChatNotifyAsk": "Damit schalten Sie Mitteilungen ein: Sie erhalten auch die wichtigsten Entscheidungen, höchstens 2 pro Tag.",
+  "aiChatNotifyAsk": "Damit schalten Sie Mitteilungen ein: Sie erhalten auch die wichtigsten Entscheidungen, sobald sie da sind, nachts nie.",
   "aiChatNotifyOff": "Mitteilungen sind für diese App aus. Schalten Sie sie in der App „Einstellungen“ ein und kommen Sie dann zurück."
 }

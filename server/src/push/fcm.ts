@@ -197,6 +197,8 @@ export async function accessToken(env: Env, account: ServiceAccount, now: Date, 
 export interface PushMessage {
   topic: string;
   title: string;
+  /** The line under the title on iOS (#157); none when empty. */
+  subtitle?: string;
   body: string;
   data: Record<string, string>;
 }
@@ -221,13 +223,23 @@ export type SendResult =
   | { ok: true; messageId: string }
   | { ok: false; outcome: NotSent; error: string; status?: number; retryAfterSeconds?: number };
 
-/** The FCM HTTP v1 request body: a notification with a sound on iOS, and the data the app opens the article with. */
+/**
+ * The FCM HTTP v1 request body: a notification with a sound on iOS, and the
+ * data the app opens the article with. A subtitle goes in the APNs alert, which
+ * repeats the title and body so iOS shows all three; Android has no subtitle.
+ */
 export const fcmBody = (message: PushMessage) => ({
   message: {
     topic: message.topic,
     notification: { title: message.title, body: message.body },
     data: message.data,
-    apns: { payload: { aps: { sound: "default" } } },
+    apns: {
+      payload: {
+        aps: message.subtitle
+          ? { alert: { title: message.title, subtitle: message.subtitle, body: message.body }, sound: "default" }
+          : { sound: "default" },
+      },
+    },
   },
 });
 
