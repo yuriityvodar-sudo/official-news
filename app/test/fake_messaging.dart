@@ -45,6 +45,15 @@ class FakeMessaging implements Messaging {
   @override
   Future<bool> ready() async => apnsToken;
 
+  /// The FCM token [fcmToken] gives; it needs the APNs token first.
+  String token = 'fake-fcm-token';
+
+  @override
+  Future<bool> hasApnsToken() async => apnsToken;
+
+  @override
+  Future<String?> fcmToken() async => apnsToken ? token : null;
+
   @override
   Future<void> subscribe(String topic) async {
     calls.add('subscribe $topic');

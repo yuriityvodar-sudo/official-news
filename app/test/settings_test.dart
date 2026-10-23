@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:official_news/core/analytics.dart';
 import 'package:official_news/core/feed_language.dart';
@@ -257,6 +258,76 @@ void main() {
         'subscribe breaking_en',
         'unsubscribe breaking_en',
       ]);
+    });
+
+    // #149: "On" only says iOS allows notifications; the check line shows
+    // whether the phone really got its topic (TestFlight and debug builds).
+    testWidgets('the check line: every step done, a tap copies the FCM token', (
+      tester,
+    ) async {
+      String? copied;
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (call) async {
+          if (call.method == 'Clipboard.setData') {
+            copied = (call.arguments as Map)['text'] as String?;
+          }
+          return null;
+        },
+      );
+      addTearDown(
+        () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.platform,
+          null,
+        ),
+      );
+      final messaging = FakeMessaging(status: PushPermission.granted);
+      await pumpWithPush(tester, messaging);
+      await tester.pumpAndSettle();
+      const line = 'Apple token: yes · FCM token: yes · Topic: breaking_en';
+      expect(find.text(line), findsOneWidget);
+
+      await tester.tap(find.text(line));
+      await tester.pumpAndSettle();
+      expect(copied, 'fake-fcm-token');
+    });
+
+    testWidgets(
+      'the check line: no Apple token, so no FCM token and no topic',
+      (tester) async {
+        final messaging = FakeMessaging(status: PushPermission.granted)
+          ..apnsToken = false;
+        await pumpWithPush(tester, messaging);
+        await tester.pumpAndSettle();
+        expect(row(en.notificationsOn), findsOneWidget);
+        expect(
+          find.text('Apple token: no · FCM token: no · Topic: none'),
+          findsOneWidget,
+        );
+        expect(messaging.calls, isEmpty);
+      },
+    );
+
+    testWidgets('the check line: a topic change that failed shows its error', (
+      tester,
+    ) async {
+      final messaging = FakeMessaging(status: PushPermission.granted)
+        ..failTopics = 'no network';
+      await pumpWithPush(tester, messaging);
+      await tester.pumpAndSettle();
+      expect(
+        find.text(
+          'Apple token: yes · FCM token: yes · Topic: breaking_en\n'
+          'Last error: topic: no network',
+        ),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('no push in this build: no check line', (tester) async {
+      await pumpWithPush(tester, null);
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Apple token'), findsNothing);
     });
 
     // Every language, on the narrowest iPhone (SE, 375 pt): a grey value too
