@@ -837,5 +837,9 @@
   "aiChatNotifyOff": "Notifications are off for this app. Turn them on in the Settings app, then come back.",
   "@aiChatNotifyOff": {
     "description": "Under the switch while notifications are not allowed; the switch opens the iOS Settings app."
+  },
+  "pictureFullScreen": "Show the picture full screen",
+  "@pictureFullScreen": {
+    "description": "What VoiceOver says for the article's picture: a tap shows it full screen (#141)."
   }
 }

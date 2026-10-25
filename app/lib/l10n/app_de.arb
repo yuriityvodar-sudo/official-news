@@ -190,5 +190,6 @@
   "aiChatNotify": "Beim Start benachrichtigen",
   "aiChatNotifyOnce": "Eine Mitteilung, sobald der Chat bereit ist.",
   "aiChatNotifyAsk": "Damit schalten Sie Mitteilungen ein: Sie erhalten auch die wichtigsten Entscheidungen, sobald sie da sind, nachts nie.",
-  "aiChatNotifyOff": "Mitteilungen sind für diese App aus. Schalten Sie sie in der App „Einstellungen“ ein und kommen Sie dann zurück."
+  "aiChatNotifyOff": "Mitteilungen sind für diese App aus. Schalten Sie sie in der App „Einstellungen“ ein und kommen Sie dann zurück.",
+  "pictureFullScreen": "Bild im Vollbild zeigen"
 }
