@@ -243,7 +243,7 @@ class _DetailScreenState extends State<DetailScreen> {
   }
 }
 
-/// A round Liquid Glass button floating over the article, with a 44-pt
+/// A round Liquid Glass button floating over the article, with a 48-pt
 /// target and a light tap back (#141); smaller while [compact].
 class _BarButton extends StatelessWidget {
   const _BarButton({
@@ -263,12 +263,13 @@ class _BarButton extends StatelessWidget {
     curve: Motion.spring,
     child: CupertinoButton(
       padding: EdgeInsets.zero,
-      minimumSize: const Size(44, 44),
+      minimumSize: const Size(48, 48),
       onPressed: () {
         Haptics.light();
         onPressed();
       },
-      child: GlassCircle(size: 44, child: child),
+      // A little larger than 44, as iOS 26's own glass buttons (Yurii, #160).
+      child: GlassCircle(size: 48, child: child),
     ),
   );
 }
