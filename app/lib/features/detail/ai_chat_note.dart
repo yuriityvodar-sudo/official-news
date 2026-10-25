@@ -41,9 +41,12 @@ class AiChatNote extends StatelessWidget {
   Future<void> _switched(bool on) async {
     Haptics.selection();
     unawaited(analytics.aiChatNotify(on: on));
+    // Settings only when they were off before the tap: a reader who has just
+    // said "Don't Allow" to iOS's question stays here.
+    final wasOff = _target.permission.value == PushPermission.denied;
     // Kept even when notifications are off: turned on in Settings, it subscribes.
     await _target.notifyAiChat(on);
-    if (on && _target.permission.value == PushPermission.denied) {
+    if (on && wasOff && _target.permission.value == PushPermission.denied) {
       await openSettingsApp();
     }
   }

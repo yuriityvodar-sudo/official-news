@@ -113,6 +113,59 @@ jobs:
             DEVELOPMENT_TEAM="${{ secrets.APPLE_TEAM_ID }}" \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
 
+      - name: Give the archived app its push entitlement
+        # The archive above is unsigned, so it carries no entitlements, and the
+        # export re-signs the app with the entitlements it already has: none.
+        # Without aps-environment iOS never gives the app an APNs token, so no
+        # push ever reached a phone (#149: "Apple token: no" on build 28). An
+        # ad-hoc signature with the entitlements carries them into the export,
+        # which replaces the signature and keeps them.
+        run: |
+          app="$RUNNER_TEMP/Runner.xcarchive/Products/Applications/Runner.app"
+          ent="$RUNNER_TEMP/Runner.entitlements"
+          cp "$GITHUB_WORKSPACE/app/ios/Runner/Runner.entitlements" "$ent"
+          /usr/libexec/PlistBuddy -c "Set :aps-environment production" "$ent"
+          # The app's signature needs its frameworks signed; the vendors' already are.
+          for f in "$app"/Frameworks/*.framework "$app"/Frameworks/*.dylib; do
+            [ -e "$f" ] || continue
+            codesign -v "$f" 2>/dev/null || codesign --force --sign - "$f"
+          done
+          codesign --force --sign - --entitlements "$ent" "$app"
+          codesign -d --entitlements - "$app"
+
+      - name: Check that the signed app can receive pushes
+        # Signs a copy the way the upload below does and stops before anything
+        # reaches TestFlight when aps-environment is not production (#149).
+        working-directory: app/ios
+        run: |
+          cat > "$RUNNER_TEMP/CheckOptions.plist" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>export</string>
+            <key>signingStyle</key><string>automatic</string>
+            <key>teamID</key><string>${{ secrets.APPLE_TEAM_ID }}</string>
+          </dict></plist>
+          EOF
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/Runner.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/CheckOptions.plist" \
+            -exportPath "$RUNNER_TEMP/check" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/asc_key.p8" \
+            -authenticationKeyID "${{ secrets.ASC_KEY_ID }}" \
+            -authenticationKeyIssuerID "${{ secrets.ASC_ISSUER_ID }}"
+          mkdir -p "$RUNNER_TEMP/check/ipa"
+          unzip -q "$RUNNER_TEMP"/check/*.ipa -d "$RUNNER_TEMP/check/ipa"
+          codesign -d --entitlements - --xml "$RUNNER_TEMP"/check/ipa/Payload/*.app > "$RUNNER_TEMP/check/entitlements.plist"
+          aps=$(/usr/libexec/PlistBuddy -c "Print :aps-environment" "$RUNNER_TEMP/check/entitlements.plist" 2>/dev/null || true)
+          echo "aps-environment of the signed app: ${aps:-missing}"
+          if [ "$aps" != "production" ]; then
+            echo "::error::The signed app has no production aps-environment, so it could not receive pushes (#149). Not uploaded."
+            exit 1
+          fi
+
       - name: Sign with the Distribution certificate and upload to TestFlight
         # Automatic signing at export: the App Store profile for the bundle ID is
         # made or fetched with the API key, and the only Distribution identity in
