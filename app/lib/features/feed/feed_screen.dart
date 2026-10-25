@@ -12,6 +12,7 @@ import '../../core/feed_language.dart';
 import '../../core/filters.dart';
 import '../../core/motion.dart';
 import '../../core/news_widgets.dart';
+import '../../core/pictures.dart';
 import '../../core/router.dart';
 import '../../core/theme.dart';
 import '../../l10n/app_localizations.dart';
@@ -181,6 +182,14 @@ class _FeedScreenState extends State<FeedScreen> {
     );
     unawaited(_feed.markRead(article));
     Haptics.light();
+    // The article's picture, decoded for its screen while the card flies
+    // there (#141), so it lands sharp.
+    final url = article.imageUrl;
+    if (url != null) {
+      unawaited(
+        precacheImage(screenPicture(context, url), context, onError: (_, _) {}),
+      );
+    }
     // The article as the feed has it, so a translated one opens translated.
     Navigator.of(context).pushNamed(Routes.detail, arguments: article);
   }

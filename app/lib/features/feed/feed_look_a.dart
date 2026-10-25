@@ -461,7 +461,13 @@ class _Row extends StatelessWidget {
                   ),
                 ),
                 if (url != null)
-                  _Thumb(url: url, size: 76, gap: 16, dimmed: read),
+                  _Thumb(
+                    url: url,
+                    heroId: article.id,
+                    size: 76,
+                    gap: 16,
+                    dimmed: read,
+                  ),
               ],
             ),
             // The topics last, across the whole row, under the picture too:
@@ -570,12 +576,16 @@ double? _pictureOpacity(BuildContext context, bool dimmed) {
 class _Thumb extends StatelessWidget {
   const _Thumb({
     required this.url,
+    required this.heroId,
     required this.size,
     required this.gap,
     required this.dimmed,
   });
 
   final String url;
+
+  /// The article's id: the picture flies into the article (#141).
+  final String heroId;
   final double size;
   final double gap;
   final bool dimmed;
@@ -596,13 +606,17 @@ class _Thumb extends StatelessWidget {
       frameBuilder: (context, child, frame, sync) => Padding(
         // Lined up with the headline's first line, not the top of its box.
         padding: EdgeInsets.only(left: gap, top: 3),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(6),
-          child: ColoredBox(
-            color: frame == null
-                ? _pictureFill(context, dimmed)
-                : Colors.transparent,
-            child: fadeInPicture(context, child, frame, sync),
+        child: PictureHero(
+          articleId: heroId,
+          url: url,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: ColoredBox(
+              color: frame == null
+                  ? _pictureFill(context, dimmed)
+                  : Colors.transparent,
+              child: fadeInPicture(context, child, frame, sync),
+            ),
           ),
         ),
       ),
