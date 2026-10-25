@@ -20,6 +20,13 @@ class GlassCircle extends StatelessWidget {
   /// Where the native glass is used: the iOS app, not tests (macOS) or Android.
   static bool get native => !kIsWeb && Platform.isIOS;
 
+  /// The native glass while its screen is on top, the plain look while
+  /// another route covers it (#160): iOS draws the glass itself, above
+  /// Flutter, so under a sheet its glow showed through as a faint white box.
+  /// Back on top, the glass returns.
+  static bool nativeIn(BuildContext context) =>
+      native && (ModalRoute.of(context)?.isCurrent ?? true);
+
   @override
   Widget build(BuildContext context) => SizedBox(
     width: size,
@@ -27,7 +34,7 @@ class GlassCircle extends StatelessWidget {
     child: Stack(
       fit: StackFit.expand,
       children: [
-        if (native)
+        if (nativeIn(context))
           const UiKitView(
             viewType: 'official_news/glass',
             hitTestBehavior: PlatformViewHitTestBehavior.transparent,
@@ -66,7 +73,7 @@ class GlassCapsule extends StatelessWidget {
     child: Stack(
       children: [
         Positioned.fill(
-          child: GlassCircle.native
+          child: GlassCircle.nativeIn(context)
               ? const UiKitView(
                   viewType: 'official_news/glass',
                   hitTestBehavior: PlatformViewHitTestBehavior.transparent,
