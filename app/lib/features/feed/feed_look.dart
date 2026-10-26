@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/article.dart';
+import '../../core/card_zoom.dart';
 import '../../core/feed_design.dart';
 import '../../core/motion.dart';
 import '../../core/read_mark.dart';
@@ -194,12 +195,16 @@ class FeedList {
 
   /// The row of `articles[index]` as every look shows it (#141): it shrinks
   /// a little while held and springs back, and, just after the feed has
-  /// loaded, the first rows arrive one after another. Wrap each row in the
-  /// item builder: `list.tile(i, MyRow(...))`.
-  Widget tile(int index, Widget row) => Arrive(
-    animate: arriving && index < arrivingRows,
-    delay: Duration(milliseconds: 45 * index),
-    child: PressScale(onLongPress: () => actions(index), child: row),
+  /// loaded, the first rows arrive one after another. Its article grows out
+  /// of it when opened ([ZoomSource]). Wrap each row in the item builder:
+  /// `list.tile(i, MyRow(...))`.
+  Widget tile(int index, Widget row) => ZoomSource(
+    id: articles[index].id,
+    child: Arrive(
+      animate: arriving && index < arrivingRows,
+      delay: Duration(milliseconds: 45 * index),
+      child: PressScale(onLongPress: () => actions(index), child: row),
+    ),
   );
   bool isRead(Article article) => readIds.contains(article.id);
 

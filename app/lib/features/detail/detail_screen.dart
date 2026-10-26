@@ -446,8 +446,8 @@ class _Publisher extends StatelessWidget {
   }
 }
 
-/// The preview image of the official page, with where it comes from. It
-/// flew in from the feed's card (#141); a tap shows it full screen.
+/// The preview image of the official page, with where it comes from. A tap
+/// shows it full screen, flying there (#141).
 class _Picture extends StatelessWidget {
   const _Picture(this.url, {required this.articleId});
 

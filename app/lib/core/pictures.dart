@@ -28,9 +28,9 @@ ImageProvider picture(String url, {int? width}) => ResizeImage.resizeIfNeeded(
 );
 
 /// The picture as the article screen shows it, decoded at the screen's
-/// width. The article screen, the flight to it and the full-screen view all
-/// use this one (#141), so it is decoded once; the feed asks for it as an
-/// article opens, so it is ready when the flight lands.
+/// width. The article screen, the flight from it and the full-screen view
+/// all use this one (#141), so it is decoded once; the feed asks for it as an
+/// article opens, so it is ready when the article has grown out of its card.
 ImageProvider screenPicture(BuildContext context, String url) {
   final media = MediaQuery.of(context);
   return picture(
@@ -39,9 +39,10 @@ ImageProvider screenPicture(BuildContext context, String url) {
   );
 }
 
-/// An article's picture that flies between the feed's card, the article
-/// screen and the full-screen view (#141), as photos do in Apple's apps.
-/// With Reduce Motion on, it does not fly: the screens fade as usual.
+/// An article's picture that flies between the article screen and the
+/// full-screen view (#141), as photos do in Apple's apps. (From the feed the
+/// whole card grows into the article instead: `CardZoomRoute`.) With Reduce
+/// Motion on, it does not fly: the screens fade as usual.
 class PictureHero extends StatelessWidget {
   const PictureHero({
     super.key,
