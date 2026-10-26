@@ -334,92 +334,100 @@ class _FeedScreenState extends State<FeedScreen> {
     // A look whose masthead is a band of colour has it under the status bar
     // too, the status bar's words light or dark on it.
     final inset = look.topInset(context);
+    // A look's backdrop runs under the status bar and the masthead as one
+    // piece, so no seam shows between them.
+    final backdrop = look.backdrop(context);
     final page = Scaffold(
       backgroundColor: inset ?? look.background(context),
-      body: SafeArea(
-        bottom: false,
-        child: ColoredBox(
-          color: look.background(context),
-          child: Stack(
-            children: [
-              CustomScrollView(
-                controller: _scroll,
-                physics: const AlwaysScrollableScrollPhysics(
-                  parent: BouncingScrollPhysics(),
-                ),
-                slivers: [
-                  // Pull to refresh works in every state, including error and empty.
-                  // It taps back itself as the pull passes the refresh point.
-                  CupertinoSliverRefreshControl(
-                    onRefresh: _feed.refresh,
-                    builder: look.refreshIndicator,
+      body: DecoratedBox(
+        decoration: BoxDecoration(gradient: backdrop),
+        child: SafeArea(
+          bottom: false,
+          child: ColoredBox(
+            color: backdrop == null
+                ? look.background(context)
+                : const Color(0x00000000),
+            child: Stack(
+              children: [
+                CustomScrollView(
+                  controller: _scroll,
+                  physics: const AlwaysScrollableScrollPhysics(
+                    parent: BouncingScrollPhysics(),
                   ),
-                  _MastheadEdge(
-                    link: _masthead,
-                    sliver: look.masthead(
-                      context,
-                      FeedMasthead(
-                        // The app's name, the same in every language.
-                        title: 'Official News',
-                        date: longDay(DateTime.now(), l10n),
-                        openSettings: _openSettings,
-                        filterBar: FeedFilterBar(
-                          where: _feed.where,
-                          whereMenu: _feed.whereMenu,
+                  slivers: [
+                    // Pull to refresh works in every state, including error and empty.
+                    // It taps back itself as the pull passes the refresh point.
+                    CupertinoSliverRefreshControl(
+                      onRefresh: _feed.refresh,
+                      builder: look.refreshIndicator,
+                    ),
+                    _MastheadEdge(
+                      link: _masthead,
+                      sliver: look.masthead(
+                        context,
+                        FeedMasthead(
+                          // The app's name, the same in every language.
+                          title: 'Official News',
+                          date: longDay(DateTime.now(), l10n),
+                          openSettings: _openSettings,
+                          filterBar: FeedFilterBar(
+                            where: _feed.where,
+                            whereMenu: _feed.whereMenu,
+                            topic: _feed.topic,
+                            topics: _feed.topics,
+                            onWhere: _chooseWhere,
+                            onTopic: _chooseTopic,
+                          ),
+                          whereChip: FeedFilterBar(
+                            where: _feed.where,
+                            whereMenu: _feed.whereMenu,
+                            topic: null,
+                            topics: null,
+                            onWhere: _chooseWhere,
+                            onTopic: _chooseTopic,
+                          ),
                           topic: _feed.topic,
                           topics: _feed.topics,
-                          onWhere: _chooseWhere,
                           onTopic: _chooseTopic,
                         ),
-                        whereChip: FeedFilterBar(
-                          where: _feed.where,
-                          whereMenu: _feed.whereMenu,
-                          topic: null,
-                          topics: null,
-                          onWhere: _chooseWhere,
-                          onTopic: _chooseTopic,
+                      ),
+                    ),
+                    ..._content(context, look),
+                  ],
+                ),
+                // Rows fade softly at the top edge once the feed is scrolled, and
+                // the app's name folds into a small title there (#141).
+                if (look.fadesTopEdge)
+                  Positioned(
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    child: _TopFade(
+                      scroll: _scroll,
+                      color: look.background(context),
+                      title: foldedTitle,
+                      onTitleTap: () => unawaited(_toTopSmoothly()),
+                    ),
+                  ),
+                if (_feed.newCount > 0)
+                  Positioned.fill(
+                    child: _UnderMasthead(
+                      masthead: _masthead,
+                      scroll: _scroll,
+                      // Under the folded title, where there is one.
+                      top: foldedTitle == null ? _pillTop : _TopFade.bar + 8,
+                      gap: _pillGap,
+                      child: _SlideIn(
+                        child: look.newPill(
+                          context,
+                          count: _feed.newCount,
+                          onTap: _showNew,
                         ),
-                        topic: _feed.topic,
-                        topics: _feed.topics,
-                        onTopic: _chooseTopic,
                       ),
                     ),
                   ),
-                  ..._content(context, look),
-                ],
-              ),
-              // Rows fade softly at the top edge once the feed is scrolled, and
-              // the app's name folds into a small title there (#141).
-              if (look.fadesTopEdge)
-                Positioned(
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  child: _TopFade(
-                    scroll: _scroll,
-                    color: look.background(context),
-                    title: foldedTitle,
-                    onTitleTap: () => unawaited(_toTopSmoothly()),
-                  ),
-                ),
-              if (_feed.newCount > 0)
-                Positioned.fill(
-                  child: _UnderMasthead(
-                    masthead: _masthead,
-                    scroll: _scroll,
-                    // Under the folded title, where there is one.
-                    top: foldedTitle == null ? _pillTop : _TopFade.bar + 8,
-                    gap: _pillGap,
-                    child: _SlideIn(
-                      child: look.newPill(
-                        context,
-                        count: _feed.newCount,
-                        onTap: _showNew,
-                      ),
-                    ),
-                  ),
-                ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

@@ -9,6 +9,7 @@ import 'package:official_news/core/analytics.dart';
 import 'package:official_news/core/api_client.dart';
 import 'package:official_news/core/feed_language.dart';
 import 'package:official_news/core/feed_store.dart';
+import 'package:official_news/core/filters.dart';
 import 'package:official_news/core/router.dart';
 import 'package:official_news/core/theme.dart';
 import 'package:official_news/features/feed/feed_controller.dart';
@@ -266,17 +267,21 @@ void main() {
           for (final a in _items)
             a['id'] == 'a1' ? _article('a1', feedSeq: 6, country: 'FR') : a,
         ];
-        await pumpFeed(tester, items, _top);
-        await tester.tap(
-          find.byKey(const ValueKey('filter-where')).hitTestable(),
-        );
-        await tester.pumpAndSettle();
-        await tester.tap(
-          find.descendant(
-            of: find.byType(CupertinoMenuItem),
-            matching: find.text('Germany'),
-          ),
-        );
+        final feed = await pumpFeed(tester, items, _top);
+        final where = find.byKey(const ValueKey('filter-where')).hitTestable();
+        if (where.evaluate().isEmpty) {
+          // Garnet and Seal show no country to choose (Roman, 26 Oct).
+          await feed.setWhere(const FeedWhere.country('DE'));
+        } else {
+          await tester.tap(where);
+          await tester.pumpAndSettle();
+          await tester.tap(
+            find.descendant(
+              of: find.byType(CupertinoMenuItem),
+              matching: find.text('Germany'),
+            ),
+          );
+        }
         await tester.pumpAndSettle();
         expect(find.text('Decision a1'), findsNothing);
 

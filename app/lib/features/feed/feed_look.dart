@@ -122,6 +122,11 @@ abstract class FeedLook {
   /// [smallTitle] is the usual one.
   Widget? foldedTitle(BuildContext context, String title) => null;
 
+  /// A gradient behind the whole screen, under the status bar and the
+  /// masthead as one piece, fixed while the feed scrolls over it; null (the
+  /// default) for [background] alone.
+  Gradient? backdrop(BuildContext context) => null;
+
   /// Whether rows soften at the top edge once the feed is scrolled (#141);
   /// false for a look that pins something of its own there, such as glass
   /// the rows pass under.

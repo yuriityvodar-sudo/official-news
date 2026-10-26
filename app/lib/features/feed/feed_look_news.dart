@@ -37,8 +37,19 @@ class NewsLook extends FeedLook {
   Color background(BuildContext context) =>
       _NewsStyle.of(context, palette).page;
 
+  /// The colour's tint at the top of the screen, under the status bar and
+  /// the masthead as one piece, fading into the page; fixed while the cards
+  /// scroll over it.
   @override
-  Color? topInset(BuildContext context) => _NewsStyle.of(context, palette).top;
+  Gradient? backdrop(BuildContext context) {
+    final style = _NewsStyle.of(context, palette);
+    return LinearGradient(
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+      colors: [style.top, style.page],
+      stops: const [0, 0.32],
+    );
+  }
 
   @override
   Color cardColor(BuildContext context) => _NewsStyle.of(context, palette).card;
@@ -84,8 +95,6 @@ class NewsLook extends FeedLook {
       pinned: true,
       delegate: _NewsHeader(
         titleHeight: titleHeight,
-        top: style.top,
-        page: style.page,
         title: Padding(
           padding: const EdgeInsets.fromLTRB(16, 10, 8, 0),
           child: Row(
@@ -139,7 +148,6 @@ class NewsLook extends FeedLook {
           shadow: style.softShadow,
           chosen: style.gradient,
           glow: style.glow,
-          leading: masthead.whereChip,
         ),
       ),
     );
@@ -251,22 +259,18 @@ class NewsLook extends FeedLook {
   }
 }
 
-/// [NewsLook]'s masthead, pinned: the title and the date on the colour's
-/// tint scroll away and fade, as an iOS large title does, and the topic
-/// pills stay at the top with nothing behind them, so the rows pass under
-/// the glass.
+/// [NewsLook]'s masthead, pinned: the title and the date scroll away and
+/// fade, as an iOS large title does, and the topic pills stay at the top
+/// with nothing behind them, so the rows pass under the glass. The tint
+/// behind it all is the look's backdrop, one piece with the status bar's.
 class _NewsHeader extends SliverPersistentHeaderDelegate {
   _NewsHeader({
     required this.titleHeight,
-    required this.top,
-    required this.page,
     required this.title,
     required this.pills,
   });
 
   final double titleHeight;
-  final Color top;
-  final Color page;
   final Widget title;
   final Widget pills;
 
@@ -290,20 +294,7 @@ class _NewsHeader extends SliverPersistentHeaderDelegate {
             right: 0,
             top: -shrinkOffset,
             height: titleHeight,
-            child: Opacity(
-              opacity: 1 - gone,
-              child: DecoratedBox(
-                // The colour's tint at the top, fading into the page.
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [top, page],
-                  ),
-                ),
-                child: title,
-              ),
-            ),
+            child: Opacity(opacity: 1 - gone, child: title),
           ),
         Positioned(left: 0, right: 0, bottom: 0, height: _pills, child: pills),
       ],
@@ -313,8 +304,6 @@ class _NewsHeader extends SliverPersistentHeaderDelegate {
   @override
   bool shouldRebuild(_NewsHeader old) =>
       old.titleHeight != titleHeight ||
-      old.top != top ||
-      old.page != page ||
       old.title != title ||
       old.pills != pills;
 }
@@ -387,47 +376,43 @@ class _AuroraState extends State<_Aurora> with SingleTickerProviderStateMixin {
       decoration: BoxDecoration(shape: BoxShape.circle, color: color),
     );
     return ClipRect(
-      child: ColoredBox(
-        // The masthead's top tint, so the glow rises out of it.
-        color: style.top,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            Opacity(
-              opacity: shown * 0.75,
-              child: ImageFiltered(
-                imageFilter: ImageFilter.blur(sigmaX: 36, sigmaY: 36),
-                child: AnimatedBuilder(
-                  animation: _drift,
-                  builder: (context, _) {
-                    final d = Curves.easeInOut.transform(_drift.value);
-                    return Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        Positioned(
-                          left: -40 + 18 * d,
-                          bottom: -60 - 10 * d,
-                          child: blob(style.accent, 200),
-                        ),
-                        Positioned(
-                          right: -50 - 16 * d,
-                          bottom: -40 + 12 * d,
-                          child: blob(style.accent2, 190),
-                        ),
-                        Positioned(
-                          left: 120 - 14 * d,
-                          bottom: -90 + 8 * d,
-                          child: blob(style.aurora, 180),
-                        ),
-                      ],
-                    );
-                  },
-                ),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          Opacity(
+            opacity: shown * 0.75,
+            child: ImageFiltered(
+              imageFilter: ImageFilter.blur(sigmaX: 36, sigmaY: 36),
+              child: AnimatedBuilder(
+                animation: _drift,
+                builder: (context, _) {
+                  final d = Curves.easeInOut.transform(_drift.value);
+                  return Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Positioned(
+                        left: -40 + 18 * d,
+                        bottom: -60 - 10 * d,
+                        child: blob(style.accent, 200),
+                      ),
+                      Positioned(
+                        right: -50 - 16 * d,
+                        bottom: -40 + 12 * d,
+                        child: blob(style.accent2, 190),
+                      ),
+                      Positioned(
+                        left: 120 - 14 * d,
+                        bottom: -90 + 8 * d,
+                        child: blob(style.aurora, 180),
+                      ),
+                    ],
+                  );
+                },
               ),
             ),
-            widget.spinner,
-          ],
-        ),
+          ),
+          widget.spinner,
+        ],
       ),
     );
   }
