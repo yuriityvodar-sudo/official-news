@@ -92,6 +92,12 @@ class NowLook extends FeedLook {
     required VoidCallback onTap,
   }) => NowNewPill(count: count, onTap: onTap);
 
+  /// The masthead scrolls away whole, so the name folds into a small title
+  /// at the top (#141).
+  @override
+  Widget? foldedTitle(BuildContext context, String title) =>
+      FeedLook.smallTitle(context, title);
+
   /// [child] with the feed's 20-pt margins, as a sliver.
   Widget padded(Widget child) => SliverPadding(
     padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -104,7 +110,7 @@ class NowLook extends FeedLook {
     padding: const EdgeInsets.symmetric(horizontal: 20),
     sliver: SliverList.separated(
       itemCount: list.length,
-      separatorBuilder: (_, _) => const Divider(),
+      separatorBuilder: (_, i) => list.line(i, const Divider()),
       itemBuilder: (context, i) {
         final a = list.articles[i];
         list.shown(i);
