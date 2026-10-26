@@ -22,6 +22,12 @@ class BLook extends FeedLook {
   Color background(BuildContext context) => BStyle.of(context).page;
 
   @override
+  Color cardColor(BuildContext context) => BStyle.of(context).card;
+
+  @override
+  double get cardRadius => bRadius;
+
+  @override
   Widget masthead(BuildContext context, FeedMasthead masthead) =>
       // The date and the name scroll away; the filters and the settings
       // button stay pinned at the top. Both sizes are measured from the real

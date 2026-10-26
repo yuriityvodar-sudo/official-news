@@ -74,6 +74,12 @@ abstract class FeedLook {
   /// The colour behind the whole feed.
   Color background(BuildContext context);
 
+  /// A card's own colour and corners (#141): its article opens out of it
+  /// and takes its colour as the page. Rows drawn straight on the feed (the
+  /// default) have the feed's colour.
+  Color cardColor(BuildContext context) => background(context);
+  double get cardRadius => 12;
+
   /// The theme the feed is drawn with: [base] is the app's. Returning another
   /// one changes the shared pieces at once (NewsText styles used by
   /// PublisherLine and the loading, error and empty texts; the divider colour).
@@ -220,6 +226,7 @@ class FeedList {
   /// `list.tile(i, MyRow(...))`.
   Widget tile(int index, Widget row) => ZoomSource(
     id: articles[index].id,
+    card: row,
     child: Arrive(
       animate: arriving && index < arrivingRows,
       delay: Duration(milliseconds: 45 * index),

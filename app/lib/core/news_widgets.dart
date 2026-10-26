@@ -3,7 +3,6 @@ import 'package:intl/intl.dart';
 
 import '../l10n/app_localizations.dart';
 import 'article.dart';
-import 'card_zoom.dart';
 import 'countries.dart';
 import 'decision_types.dart';
 import 'read_mark.dart';
@@ -66,21 +65,16 @@ class PublisherLine extends StatelessWidget {
     return Row(
       children: [
         Flexible(
-          // Flies to the article's publisher when it opens (#141).
-          child: ZoomPart(
-            id: article.id,
-            piece: ZoomPiece.publisher,
-            child: Text(
-              '${article.source.name} · $country',
-              style: style,
-              overflow: TextOverflow.ellipsis,
-              // A line cut with "…" is as wide as its last letter, not as the
-              // room it was given, so the dot stays 5 pt after the "…". Dim
-              // keeps today's tick where it was.
-              textWidthBasis: dots
-                  ? TextWidthBasis.longestLine
-                  : TextWidthBasis.parent,
-            ),
+          child: Text(
+            '${article.source.name} · $country',
+            style: style,
+            overflow: TextOverflow.ellipsis,
+            // A line cut with "…" is as wide as its last letter, not as the
+            // room it was given, so the dot stays 5 pt after the "…". Dim
+            // keeps today's tick where it was.
+            textWidthBasis: dots
+                ? TextWidthBasis.longestLine
+                : TextWidthBasis.parent,
           ),
         ),
         if (dots)

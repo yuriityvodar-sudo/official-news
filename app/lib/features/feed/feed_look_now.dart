@@ -2,7 +2,6 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/article.dart';
-import '../../core/card_zoom.dart';
 import '../../core/glass.dart';
 import '../../core/news_widgets.dart';
 import '../../core/pictures.dart';
@@ -211,35 +210,26 @@ class NowArticleRow extends StatelessWidget {
           children: [
             PublisherLine(article, dimmed: read, mark: mark),
             const SizedBox(height: 4),
-            // The headline, the time and the picture fly to their places in
-            // the article when it opens (#141).
-            ZoomPart(
-              id: article.id,
-              piece: ZoomPiece.headline,
-              child: Text(
-                article.headline,
-                style: dim(text.headline, read),
-                maxLines: 4,
-                overflow: TextOverflow.ellipsis,
-              ),
+            Text(
+              article.headline,
+              style: dim(text.headline, read),
+              maxLines: 4,
+              overflow: TextOverflow.ellipsis,
             ),
             if (showDay || !article.dateOnly || article.addedAt != null) ...[
               const SizedBox(height: 6),
-              ZoomPart(
-                id: article.id,
-                piece: ZoomPiece.time,
-                // A decision of the last hour stands out (#141).
-                child: !read && isFresh(article)
-                    ? FreshTime(
-                        feedTime(article, AppLocalizations.of(context)),
-                        articleId: article.id,
-                        style: text.meta,
-                      )
-                    : Text(
-                        feedTime(article, AppLocalizations.of(context)),
-                        style: dim(text.meta, read),
-                      ),
-              ),
+              // A decision of the last hour stands out (#141).
+              if (!read && isFresh(article))
+                FreshTime(
+                  feedTime(article, AppLocalizations.of(context)),
+                  articleId: article.id,
+                  style: text.meta,
+                )
+              else
+                Text(
+                  feedTime(article, AppLocalizations.of(context)),
+                  style: dim(text.meta, read),
+                ),
             ],
             if (topics.isNotEmpty)
               Semantics(
@@ -256,7 +246,6 @@ class NowArticleRow extends StatelessWidget {
           width: 84,
           height: 84,
           dimmed: read,
-          articleId: article.id,
         ),
       ],
     ],
@@ -274,7 +263,6 @@ class FeedPicture extends StatelessWidget {
     this.height,
     this.dimmed = false,
     this.radius = 10,
-    this.articleId,
   });
 
   final String url;
@@ -285,56 +273,46 @@ class FeedPicture extends StatelessWidget {
   /// The corner radius.
   final double radius;
 
-  /// The article it shows, when its picture flies to the article's as it
-  /// opens ([ZoomPart]).
-  final String? articleId;
-
   @override
   Widget build(BuildContext context) {
     final ratio = MediaQuery.devicePixelRatioOf(context);
-    final corners = BorderRadius.circular(radius);
-    final box = Container(
-      width: width,
-      height: height,
-      // A read picture fades together with its placeholder, so it looks faded, not grey.
-      color: dim(
-        TextStyle(color: Theme.of(context).colorScheme.surfaceContainerHighest),
-        dimmed,
-      ).color,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          // Official pages often serve 2,000+ px images; decode near the size shown,
-          // so a long feed does not hold hundreds of MB of pictures. A square
-          // thumbnail with BoxFit.cover crops a landscape picture to its height,
-          // so it is decoded twice as wide as the box to stay sharp.
-          final square = width != null && height != null && width == height;
-          final shown = (width ?? constraints.maxWidth) * (square ? 2 : 1);
-          return Image(
-            image: picture(
-              url,
-              width: shown.isFinite ? (shown * ratio).round() : null,
-            ),
-            fit: BoxFit.cover,
-            width: width,
-            height: height,
-            opacity: dimmed ? const AlwaysStoppedAnimation(readOpacity) : null,
-            frameBuilder: fadeInPicture,
-            errorBuilder: (_, _, _) => const SizedBox.shrink(),
-          );
-        },
-      ),
-    );
-    final id = articleId;
     return ClipRRect(
-      borderRadius: corners,
-      child: id == null
-          ? box
-          : ZoomPart(
-              id: id,
-              piece: ZoomPiece.picture,
-              radius: corners,
-              child: box,
-            ),
+      borderRadius: BorderRadius.circular(radius),
+      child: Container(
+        width: width,
+        height: height,
+        // A read picture fades together with its placeholder, so it looks faded, not grey.
+        color: dim(
+          TextStyle(
+            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+          ),
+          dimmed,
+        ).color,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            // Official pages often serve 2,000+ px images; decode near the size shown,
+            // so a long feed does not hold hundreds of MB of pictures. A square
+            // thumbnail with BoxFit.cover crops a landscape picture to its height,
+            // so it is decoded twice as wide as the box to stay sharp.
+            final square = width != null && height != null && width == height;
+            final shown = (width ?? constraints.maxWidth) * (square ? 2 : 1);
+            return Image(
+              image: picture(
+                url,
+                width: shown.isFinite ? (shown * ratio).round() : null,
+              ),
+              fit: BoxFit.cover,
+              width: width,
+              height: height,
+              opacity: dimmed
+                  ? const AlwaysStoppedAnimation(readOpacity)
+                  : null,
+              frameBuilder: fadeInPicture,
+              errorBuilder: (_, _, _) => const SizedBox.shrink(),
+            );
+          },
+        ),
+      ),
     );
   }
 }
