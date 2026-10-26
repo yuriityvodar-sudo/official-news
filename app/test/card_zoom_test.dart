@@ -38,6 +38,8 @@ Widget _host() => testApp(
               onTap: () => Navigator.of(context).push(
                 CardZoomRoute<void>(
                   from: ZoomSource.rectOf('a1')!,
+                  card: ZoomSource.pictureOf('a1', 1)!,
+                  background: const Color(0xFFFFFFFF),
                   sourceId: 'a1',
                   builder: (_) => ColoredBox(
                     color: const Color(0xFFFFFFFF),
@@ -75,6 +77,24 @@ double _cardOpacity(WidgetTester tester) => tester
       ),
     )
     .opacity;
+
+/// How visible the article is in its box.
+double _pageShown(WidgetTester tester) => tester
+    .widget<Opacity>(
+      find.ancestor(of: find.byType(FittedBox), matching: find.byType(Opacity)),
+    )
+    .opacity;
+
+/// How visible the card's picture is over the article; 0 once it is gone.
+double _cardShown(WidgetTester tester) {
+  final picture = find.byType(RawImage);
+  if (picture.evaluate().isEmpty) return 0;
+  return tester
+      .widget<Opacity>(
+        find.ancestor(of: picture, matching: find.byType(Opacity)),
+      )
+      .opacity;
+}
 
 Future<void> _openArticle(WidgetTester tester) async {
   await tester.pumpWidget(_host());
@@ -171,10 +191,12 @@ void main() {
   ) async {
     await tester.pumpWidget(_host());
     await tester.tap(find.text('Card'));
-    // Its first frame is built offstage, for heroes to measure.
+    // Its first frame is built offstage, for heroes to measure: the card
+    // stays meanwhile, its place is not empty.
     await tester.pump();
+    expect(_cardOpacity(tester), 1);
     await tester.pump();
-    // It starts as the card, and shows through it.
+    // It starts as the card.
     expect(_box(tester), rectMoreOrLessEquals(_card, epsilon: 0.5));
     expect(_cardOpacity(tester), 1);
 
@@ -196,6 +218,36 @@ void main() {
     expect(_box(tester).width, lessThan(800));
     await tester.pumpAndSettle();
     expect(find.text('Line 0'), findsNothing);
+    expect(_cardOpacity(tester), 1);
+  });
+
+  testWidgets('the card fades out of the growing box before the article '
+      'fades in, and the other way round on the way back: never the two '
+      'at once', (tester) async {
+    await tester.pumpWidget(_host());
+    await tester.tap(find.text('Card'));
+    await tester.pump();
+    await tester.pump();
+    expect(_cardShown(tester), 1);
+    expect(_pageShown(tester), 0);
+
+    await tester.pump(const Duration(milliseconds: 40));
+    expect(_cardShown(tester), allOf(greaterThan(0), lessThan(1)));
+    expect(_pageShown(tester), 0);
+
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(_cardShown(tester), 0);
+    expect(_pageShown(tester), allOf(greaterThan(0), lessThan(1)));
+
+    await tester.pumpAndSettle();
+    expect(_pageShown(tester), 1);
+
+    tester.state<NavigatorState>(find.byType(Navigator)).pop();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(_pageShown(tester), 0);
+    expect(_cardShown(tester), greaterThan(0));
+    await tester.pumpAndSettle();
     expect(_cardOpacity(tester), 1);
   });
 
