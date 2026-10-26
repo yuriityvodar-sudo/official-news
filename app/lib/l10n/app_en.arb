@@ -501,7 +501,7 @@
   "@pushOfferTitle": {
     "description": "Title of the app's short question before iOS asks about notifications, shown once after three articles were read."
   },
-  "pushOfferBody": "Get the most important official decisions as a notification: at most 2 a day, none at night.",
+  "pushOfferBody": "Get the most important official decisions as a notification as soon as they come, never at night.",
   "@pushOfferBody": {
     "description": "Text of that question, under pushOfferTitle: what the notifications are, how many and when."
   },
@@ -830,7 +830,7 @@
   "@aiChatNotifyOnce": {
     "description": "Under the switch while notifications are allowed."
   },
-  "aiChatNotifyAsk": "This turns on notifications: you'll also get the most important decisions, at most 2 a day.",
+  "aiChatNotifyAsk": "This turns on notifications: you'll also get the most important decisions as they come, never at night.",
   "@aiChatNotifyAsk": {
     "description": "Under the switch while iOS has not asked about notifications yet: turning it on allows them, breaking decisions included."
   },
