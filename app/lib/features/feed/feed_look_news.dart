@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../../core/article.dart';
 import '../../core/card_zoom.dart';
 import '../../core/countries.dart';
+import '../../core/motion.dart';
 import '../../core/news_widgets.dart';
 import '../../core/read_mark.dart';
 import '../../core/theme.dart';
@@ -18,11 +19,15 @@ import 'feed_touches.dart';
 /// The two looks after Apple News that Roman picked (26 Oct), in our own
 /// colours ([NewsPalette]): a light grey page whose top takes a tint of the
 /// colour, a large title with a seal in a gradient and the date in grey,
-/// the topics as pills (the chosen one in the colour's gradient, glowing),
-/// and every decision on a white card with a soft shadow of the colour,
-/// its picture on the right. Liquid Glass for the settings button and the
-/// "N new" pill. A card grows into its article when opened (#141). Every
-/// card alike, as in every look (Yurii, 16 Oct): no bigger first story yet.
+/// the topics as pills of Liquid Glass that stay at the top while the rows
+/// pass under them (the chosen one coloured glass, glowing), and every
+/// decision on a white card with a soft shadow of the colour, its picture
+/// on the right. Pulled down to refresh, a soft glow of the colour rises
+/// from under the masthead and drifts while the feed refreshes ([_Aurora];
+/// Roman's picks 2 and C of `handoff/glass-row-and-pull.html`). Liquid Glass
+/// for the settings button and the "N new" pill too. A card grows into its
+/// article when opened (#141). Every card alike, as in every look (Yurii,
+/// 16 Oct): no bigger first story yet.
 class NewsLook extends FeedLook {
   NewsLook(this.palette);
 
@@ -41,85 +46,104 @@ class NewsLook extends FeedLook {
   @override
   double get cardRadius => _NewsStyle.radius;
 
+  /// The pinned glass row is the top edge: rows pass under it, not under a
+  /// fade or a folded title.
+  @override
+  bool get fadesTopEdge => false;
+
+  @override
+  Widget refreshIndicator(
+    BuildContext context,
+    RefreshIndicatorMode mode,
+    double pulledExtent,
+    double refreshTriggerPullDistance,
+    double refreshIndicatorExtent,
+  ) => _Aurora(
+    style: _NewsStyle.of(context, palette),
+    mode: mode,
+    pulled: pulledExtent,
+    trigger: refreshTriggerPullDistance,
+    spinner: CupertinoSliverRefreshControl.buildRefreshIndicator(
+      context,
+      mode,
+      pulledExtent,
+      refreshTriggerPullDistance,
+      refreshIndicatorExtent,
+    ),
+  );
+
   @override
   Widget masthead(BuildContext context, FeedMasthead masthead) {
     final style = _NewsStyle.of(context, palette);
-    return SliverToBoxAdapter(
-      child: DecoratedBox(
-        // The colour's tint at the top, fading into the page.
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [style.top, style.page],
-          ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 10, 8, 0),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+    final scaler = MediaQuery.textScalerOf(context);
+    // The title and the date as tall as their letters: they scroll away, the
+    // pills stay.
+    final titleHeight =
+        10 + scaler.scale(32) * 1.08 + scaler.scale(26) * 1.08 + 12;
+    return SliverPersistentHeader(
+      pinned: true,
+      delegate: _NewsHeader(
+        titleHeight: titleHeight,
+        top: style.top,
+        page: style.page,
+        title: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 10, 8, 0),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
                       children: [
-                        Row(
-                          children: [
-                            _Seal(style: style),
-                            const SizedBox(width: 8),
-                            Flexible(
-                              child: Text(
-                                masthead.title,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: style.title,
-                              ),
-                            ),
-                          ],
-                        ),
-                        FittedBox(
-                          fit: BoxFit.scaleDown,
-                          alignment: Alignment.centerLeft,
+                        _Seal(style: style),
+                        const SizedBox(width: 8),
+                        Flexible(
                           child: Text(
-                            masthead.date,
+                            masthead.title,
                             maxLines: 1,
-                            style: style.title.copyWith(
-                              fontSize: 26,
-                              color: style.muted,
-                            ),
+                            overflow: TextOverflow.ellipsis,
+                            style: style.title,
                           ),
                         ),
                       ],
                     ),
-                  ),
-                  masthead.settingsButton,
-                ],
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        masthead.date,
+                        maxLines: 1,
+                        style: style.title.copyWith(
+                          fontSize: 26,
+                          color: style.muted,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(height: 10),
-            TopicPills(
-              topic: masthead.topic,
-              topics: masthead.topics,
-              onTopic: masthead.onTopic,
-              ink: style.ink,
-              fill: style.card,
-              shadow: style.softShadow,
-              chosen: style.gradient,
-              glow: style.glow,
-              leading: masthead.whereChip,
-            ),
-          ],
+              masthead.settingsButton,
+            ],
+          ),
+        ),
+        // The topics stay at the top, glass over the rows.
+        pills: TopicPills(
+          topic: masthead.topic,
+          topics: masthead.topics,
+          onTopic: masthead.onTopic,
+          ink: style.ink,
+          fill: style.card,
+          edge: style.glassEdge,
+          shadow: style.softShadow,
+          chosen: style.gradient,
+          glow: style.glow,
+          leading: masthead.whereChip,
         ),
       ),
     );
   }
-
-  @override
-  Widget? foldedTitle(BuildContext context, String title) =>
-      FeedLook.smallTitle(context, title);
 
   @override
   Widget articles(BuildContext context, FeedList list) => SliverPadding(
@@ -221,6 +245,188 @@ class NewsLook extends FeedLook {
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// [NewsLook]'s masthead, pinned: the title and the date on the colour's
+/// tint scroll away and fade, as an iOS large title does, and the topic
+/// pills stay at the top with nothing behind them, so the rows pass under
+/// the glass.
+class _NewsHeader extends SliverPersistentHeaderDelegate {
+  _NewsHeader({
+    required this.titleHeight,
+    required this.top,
+    required this.page,
+    required this.title,
+    required this.pills,
+  });
+
+  final double titleHeight;
+  final Color top;
+  final Color page;
+  final Widget title;
+  final Widget pills;
+
+  static const _pills = 58.0;
+
+  @override
+  double get minExtent => _pills;
+
+  @override
+  double get maxExtent => titleHeight + _pills;
+
+  @override
+  Widget build(BuildContext context, double shrinkOffset, bool overlaps) {
+    final gone = (shrinkOffset / titleHeight).clamp(0.0, 1.0);
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        if (gone < 1)
+          Positioned(
+            left: 0,
+            right: 0,
+            top: -shrinkOffset,
+            height: titleHeight,
+            child: Opacity(
+              opacity: 1 - gone,
+              child: DecoratedBox(
+                // The colour's tint at the top, fading into the page.
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [top, page],
+                  ),
+                ),
+                child: title,
+              ),
+            ),
+          ),
+        Positioned(left: 0, right: 0, bottom: 0, height: _pills, child: pills),
+      ],
+    );
+  }
+
+  @override
+  bool shouldRebuild(_NewsHeader old) =>
+      old.titleHeight != titleHeight ||
+      old.top != top ||
+      old.page != page ||
+      old.title != title ||
+      old.pills != pills;
+}
+
+/// What shows above the masthead while the feed is pulled down: a soft glow
+/// of the look's colour rising from under it, stronger the further it is
+/// pulled, drifting slowly while the feed refreshes; the platform's spinner
+/// in front.
+class _Aurora extends StatefulWidget {
+  const _Aurora({
+    required this.style,
+    required this.mode,
+    required this.pulled,
+    required this.trigger,
+    required this.spinner,
+  });
+
+  final _NewsStyle style;
+  final RefreshIndicatorMode mode;
+  final double pulled;
+  final double trigger;
+  final Widget spinner;
+
+  @override
+  State<_Aurora> createState() => _AuroraState();
+}
+
+class _AuroraState extends State<_Aurora> with SingleTickerProviderStateMixin {
+  late final _drift = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 2400),
+  );
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _follow();
+  }
+
+  @override
+  void didUpdateWidget(_Aurora old) {
+    super.didUpdateWidget(old);
+    _follow();
+  }
+
+  void _follow() {
+    final refreshing =
+        widget.mode == RefreshIndicatorMode.refresh ||
+        widget.mode == RefreshIndicatorMode.armed;
+    if (refreshing && !Motion.reduced(context)) {
+      if (!_drift.isAnimating) _drift.repeat(reverse: true);
+    } else if (_drift.isAnimating) {
+      _drift.stop();
+    }
+  }
+
+  @override
+  void dispose() {
+    _drift.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final style = widget.style;
+    final shown = (widget.pulled / widget.trigger).clamp(0.0, 1.0);
+    Widget blob(Color color, double size) => Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(shape: BoxShape.circle, color: color),
+    );
+    return ClipRect(
+      child: ColoredBox(
+        // The masthead's top tint, so the glow rises out of it.
+        color: style.top,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            Opacity(
+              opacity: shown * 0.75,
+              child: ImageFiltered(
+                imageFilter: ImageFilter.blur(sigmaX: 36, sigmaY: 36),
+                child: AnimatedBuilder(
+                  animation: _drift,
+                  builder: (context, _) {
+                    final d = Curves.easeInOut.transform(_drift.value);
+                    return Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        Positioned(
+                          left: -40 + 18 * d,
+                          bottom: -60 - 10 * d,
+                          child: blob(style.accent, 200),
+                        ),
+                        Positioned(
+                          right: -50 - 16 * d,
+                          bottom: -40 + 12 * d,
+                          child: blob(style.accent2, 190),
+                        ),
+                        Positioned(
+                          left: 120 - 14 * d,
+                          bottom: -90 + 8 * d,
+                          child: blob(style.aurora, 180),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              ),
+            ),
+            widget.spinner,
+          ],
         ),
       ),
     );
@@ -486,6 +692,9 @@ class _NewsStyle {
     end: Alignment.bottomRight,
     colors: [accent, accent2],
   );
+
+  /// The aurora's third light: the colour mixed with a cool blue.
+  Color get aurora => Color.lerp(accent, const Color(0xFF5B8CFF), 0.5)!;
 
   /// The glow under what is filled with the colour.
   Color get glow => accent.withValues(alpha: dark ? 0.35 : 0.3);

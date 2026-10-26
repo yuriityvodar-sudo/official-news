@@ -491,4 +491,47 @@ void main() {
     expect(again.design(), FeedDesign.now);
     expect(again.headlineWeight(), HeadlineWeight.bold);
   });
+
+  for (final design in [FeedDesign.garnet, FeedDesign.seal]) {
+    group('design ${design.name}', () {
+      setUp(() => feedDesign.value = design);
+
+      testWidgets('the topic pills stay at the top as glass while the rows '
+          'pass under them; nothing fades over them', (tester) async {
+        await pumpFeed(
+          tester,
+          [for (var i = 0; i < 12; i++) _article('r$i', feedSeq: 20 - i)],
+          const [],
+          height: 700,
+        );
+        final pills = find.byType(TopicPills);
+        final before = tester.getTopLeft(pills).dy;
+        expect(before, greaterThan(60));
+        await tester.drag(find.text('Decision r3'), const Offset(0, -500));
+        await tester.pumpAndSettle();
+        // Pinned at the top of the safe area, rows scrolled under it.
+        expect(tester.getTopLeft(pills).dy, 0);
+        expect(find.text('All topics'), findsOneWidget);
+        expect(
+          find.descendant(of: pills, matching: find.byType(BackdropFilter)),
+          findsWidgets,
+        );
+      });
+
+      testWidgets('pulled down, a glow of the colour rises over the masthead', (
+        tester,
+      ) async {
+        await pumpFeed(tester, [_article('r0', feedSeq: 1)], const []);
+        final pull = await tester.startGesture(
+          tester.getCenter(find.text('Decision r0')),
+        );
+        await pull.moveBy(const Offset(0, 60));
+        await pull.moveBy(const Offset(0, 60));
+        await tester.pump();
+        expect(find.byType(ImageFiltered), findsOneWidget);
+        await pull.up();
+        await tester.pumpAndSettle();
+      });
+    });
+  }
 }

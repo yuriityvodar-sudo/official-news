@@ -350,7 +350,10 @@ class _FeedScreenState extends State<FeedScreen> {
                 slivers: [
                   // Pull to refresh works in every state, including error and empty.
                   // It taps back itself as the pull passes the refresh point.
-                  CupertinoSliverRefreshControl(onRefresh: _feed.refresh),
+                  CupertinoSliverRefreshControl(
+                    onRefresh: _feed.refresh,
+                    builder: look.refreshIndicator,
+                  ),
                   _MastheadEdge(
                     link: _masthead,
                     sliver: look.masthead(
@@ -387,17 +390,18 @@ class _FeedScreenState extends State<FeedScreen> {
               ),
               // Rows fade softly at the top edge once the feed is scrolled, and
               // the app's name folds into a small title there (#141).
-              Positioned(
-                top: 0,
-                left: 0,
-                right: 0,
-                child: _TopFade(
-                  scroll: _scroll,
-                  color: look.background(context),
-                  title: foldedTitle,
-                  onTitleTap: () => unawaited(_toTopSmoothly()),
+              if (look.fadesTopEdge)
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  child: _TopFade(
+                    scroll: _scroll,
+                    color: look.background(context),
+                    title: foldedTitle,
+                    onTitleTap: () => unawaited(_toTopSmoothly()),
+                  ),
                 ),
-              ),
               if (_feed.newCount > 0)
                 Positioned.fill(
                   child: _UnderMasthead(

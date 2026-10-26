@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/article.dart';
@@ -120,6 +121,28 @@ abstract class FeedLook {
   /// (the default) for a look whose masthead keeps a bar pinned itself.
   /// [smallTitle] is the usual one.
   Widget? foldedTitle(BuildContext context, String title) => null;
+
+  /// Whether rows soften at the top edge once the feed is scrolled (#141);
+  /// false for a look that pins something of its own there, such as glass
+  /// the rows pass under.
+  bool get fadesTopEdge => true;
+
+  /// What shows above the masthead while the feed is pulled down to refresh
+  /// ([CupertinoSliverRefreshControl]'s builder): the platform's spinner, or
+  /// a look's own.
+  Widget refreshIndicator(
+    BuildContext context,
+    RefreshIndicatorMode mode,
+    double pulledExtent,
+    double refreshTriggerPullDistance,
+    double refreshIndicatorExtent,
+  ) => CupertinoSliverRefreshControl.buildRefreshIndicator(
+    context,
+    mode,
+    pulledExtent,
+    refreshTriggerPullDistance,
+    refreshIndicatorExtent,
+  );
 
   /// [title] in the masthead's style, at a bar title's size.
   static Widget smallTitle(BuildContext context, String title) => Text(

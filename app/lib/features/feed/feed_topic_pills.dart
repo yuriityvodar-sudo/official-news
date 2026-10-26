@@ -1,3 +1,5 @@
+import 'dart:ui' show ImageFilter;
+
 import 'package:flutter/cupertino.dart';
 
 import '../../core/filters.dart';
@@ -6,9 +8,11 @@ import '../../l10n/app_localizations.dart';
 
 /// The topics as a row of pills you swipe sideways (Roman, 26 Oct), as Apple
 /// News shows its sections: "All topics" first, then each topic with its
-/// icon, busiest first; the chosen one filled with the look's colour, the
-/// others on [fill] with a soft [shadow]. [leading] goes before them: the
-/// Where pull-down, so a country can still be chosen and cleared.
+/// icon, busiest first. Each pill is Liquid Glass (Roman's pick 2 of the
+/// mockup `handoff/glass-row-and-pull.html`): the feed shows through it,
+/// blurred, under a tint of [fill]; the chosen one is glass in the look's
+/// colour, glowing. [leading] goes before them: the Where pull-down, so a
+/// country can still be chosen and cleared.
 class TopicPills extends StatelessWidget {
   const TopicPills({
     super.key,
@@ -17,6 +21,7 @@ class TopicPills extends StatelessWidget {
     required this.onTopic,
     required this.ink,
     required this.fill,
+    required this.edge,
     required this.shadow,
     required this.chosen,
     required this.glow,
@@ -30,9 +35,10 @@ class TopicPills extends StatelessWidget {
   final List<FeedTopic>? topics;
   final ValueChanged<String?> onTopic;
 
-  /// A pill's words and its colour, and its shadow.
+  /// A pill's words, the tint of its glass and its edge, and its shadow.
   final Color ink;
   final Color fill;
+  final Color edge;
   final List<BoxShadow> shadow;
 
   /// The chosen pill's fill, and the glow under it.
@@ -80,6 +86,7 @@ class TopicPills extends StatelessWidget {
                 isChosen: id == current,
                 ink: ink,
                 fill: fill,
+                edge: edge,
                 shadow: shadow,
                 chosen: chosen,
                 glow: glow,
@@ -100,6 +107,7 @@ class _Pill extends StatelessWidget {
     required this.isChosen,
     required this.ink,
     required this.fill,
+    required this.edge,
     required this.shadow,
     required this.chosen,
     required this.glow,
@@ -111,6 +119,7 @@ class _Pill extends StatelessWidget {
   final bool isChosen;
   final Color ink;
   final Color fill;
+  final Color edge;
   final List<BoxShadow> shadow;
   final Gradient chosen;
   final Color glow;
@@ -128,13 +137,10 @@ class _Pill extends StatelessWidget {
         child: ConstrainedBox(
           constraints: const BoxConstraints(minHeight: 44),
           child: Center(
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            // The shadow outside the glass, the blur inside its round edge.
+            child: DecoratedBox(
               decoration: BoxDecoration(
-                color: isChosen ? null : fill,
-                gradient: isChosen ? chosen : null,
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: _round,
                 boxShadow: isChosen
                     ? [
                         BoxShadow(
@@ -146,20 +152,39 @@ class _Pill extends StatelessWidget {
                       ]
                     : shadow,
               ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(icon, size: 16, color: color),
-                  const SizedBox(width: 6),
-                  Text(
-                    name,
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: color,
+              child: ClipRRect(
+                borderRadius: _round,
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: isChosen ? null : fill.withValues(alpha: 0.58),
+                      gradient: isChosen ? _glassy(chosen) : null,
+                      borderRadius: _round,
+                      border: Border.all(color: edge),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(icon, size: 16, color: color),
+                        const SizedBox(width: 6),
+                        Text(
+                          name,
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                            color: color,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ],
+                ),
               ),
             ),
           ),
@@ -168,3 +193,16 @@ class _Pill extends StatelessWidget {
     );
   }
 }
+
+const _round = BorderRadius.all(Radius.circular(20));
+
+/// The chosen pill's gradient, a little see-through: coloured glass.
+Gradient _glassy(Gradient gradient) => gradient is LinearGradient
+    ? LinearGradient(
+        begin: gradient.begin,
+        end: gradient.end,
+        colors: [
+          for (final c in gradient.colors) c.withValues(alpha: c.a * 0.88),
+        ],
+      )
+    : gradient;
