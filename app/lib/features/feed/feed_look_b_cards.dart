@@ -4,6 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/article.dart';
+import '../../core/card_zoom.dart';
 import '../../core/countries.dart';
 import '../../core/news_widgets.dart';
 import '../../core/pictures.dart';
@@ -421,13 +422,14 @@ class _BCardState extends State<BCard> {
       textScaler: _capped(scaler, 13, _Largest.label),
     );
     final quiet = CupertinoColors.quaternarySystemFill.resolveFrom(context);
+    final when = ZoomPart(id: a.id, piece: ZoomPiece.time, child: footerText);
     final footer = topics.isEmpty
-        ? footerText
+        ? when
         : TopicTags(
             topics,
             color: _fadeGrey(s.footer, read).color!,
             fill: read ? quiet.withValues(alpha: quiet.a * _readGrey) : quiet,
-            leading: footerText,
+            leading: when,
           );
 
     final text = Padding(
@@ -440,9 +442,11 @@ class _BCardState extends State<BCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          place,
+          // Who, the headline, when and the picture fly to their places in
+          // the article when it opens (#141).
+          ZoomPart(id: a.id, piece: ZoomPiece.publisher, child: place),
           const SizedBox(height: 8),
-          headline,
+          ZoomPart(id: a.id, piece: ZoomPiece.headline, child: headline),
           if (hasSummary) ...[
             const SizedBox(height: 6),
             _Teaser(
@@ -502,6 +506,7 @@ class _BCardState extends State<BCard> {
                   url: a.imageUrl!,
                   dimmed: read,
                   ratio: _Size.pictureRatio,
+                  articleId: a.id,
                 ),
               text,
             ],
@@ -561,6 +566,7 @@ class BCardPicture extends StatelessWidget {
     required this.url,
     this.dimmed = false,
     this.ratio = _pictureRatio,
+    this.articleId,
   });
 
   final String url;
@@ -568,6 +574,12 @@ class BCardPicture extends StatelessWidget {
 
   /// Width to height.
   final double ratio;
+
+  /// The article it shows, when its picture flies to the article's as it
+  /// opens ([ZoomPart]).
+  final String? articleId;
+
+  static const _corners = BorderRadius.vertical(top: Radius.circular(bRadius));
 
   @override
   Widget build(BuildContext context) {
@@ -579,25 +591,34 @@ class BCardPicture extends StatelessWidget {
       aspectRatio: ratio,
       child: ColoredBox(color: s.fill, child: child),
     );
+    final id = articleId;
+    Widget flies(Widget picture) => id == null
+        ? picture
+        : ZoomPart(
+            id: id,
+            piece: ZoomPiece.picture,
+            radius: _corners,
+            child: picture,
+          );
     return LayoutBuilder(
       builder: (context, constraints) => ClipRSuperellipse(
-        borderRadius: const BorderRadius.vertical(
-          top: Radius.circular(bRadius),
-        ),
-        child: Image(
-          // Decoded near the size shown, so a long feed keeps little in memory.
-          image: picture(
-            url,
-            width: constraints.maxWidth.isFinite
-                ? (constraints.maxWidth * pixels).round()
-                : null,
+        borderRadius: _corners,
+        child: flies(
+          Image(
+            // Decoded near the size shown, so a long feed keeps little in memory.
+            image: picture(
+              url,
+              width: constraints.maxWidth.isFinite
+                  ? (constraints.maxWidth * pixels).round()
+                  : null,
+            ),
+            fit: BoxFit.cover,
+            opacity: keep < 1 ? AlwaysStoppedAnimation(keep) : null,
+            frameBuilder: (context, child, frame, sync) =>
+                box(fadeInPicture(context, child, frame, sync)),
+            // Flutter skips frameBuilder on an error, so the box is drawn here too.
+            errorBuilder: (_, _, _) => box(),
           ),
-          fit: BoxFit.cover,
-          opacity: keep < 1 ? AlwaysStoppedAnimation(keep) : null,
-          frameBuilder: (context, child, frame, sync) =>
-              box(fadeInPicture(context, child, frame, sync)),
-          // Flutter skips frameBuilder on an error, so the box is drawn here too.
-          errorBuilder: (_, _, _) => box(),
         ),
       ),
     );

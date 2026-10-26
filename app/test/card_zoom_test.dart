@@ -20,7 +20,9 @@ import 'test_app.dart';
 const _card = Rect.fromLTWH(20, 200, 300, 100);
 
 /// A card at [_card] that opens a long article out of itself. Both screens
-/// have a glass button: 'Gear' under the article, 'Back' on it.
+/// have a glass button: 'Gear' under the article, 'Back' on it. The card's
+/// headline, 'Card', and its picture fly to the article's 'Headline' and
+/// picture.
 Widget _host() => testApp(
   home: Builder(
     builder: (context) => Stack(
@@ -38,7 +40,6 @@ Widget _host() => testApp(
               onTap: () => Navigator.of(context).push(
                 CardZoomRoute<void>(
                   from: ZoomSource.rectOf('a1')!,
-                  card: ZoomSource.pictureOf('a1', 1)!,
                   background: const Color(0xFFFFFFFF),
                   sourceId: 'a1',
                   builder: (_) => ColoredBox(
@@ -46,6 +47,24 @@ Widget _host() => testApp(
                     child: ListView(
                       children: [
                         const GlassCircle(size: 44, child: Text('Back')),
+                        const ZoomPart(
+                          id: 'a1',
+                          piece: ZoomPiece.headline,
+                          child: Text(
+                            'Headline',
+                            style: TextStyle(fontSize: 28),
+                          ),
+                        ),
+                        const ZoomPart(
+                          id: 'a1',
+                          piece: ZoomPiece.picture,
+                          radius: BorderRadius.all(Radius.circular(12)),
+                          child: SizedBox(
+                            key: ValueKey('article picture'),
+                            height: 100,
+                            child: ColoredBox(color: Color(0xFF44AA66)),
+                          ),
+                        ),
                         for (var i = 0; i < 40; i++)
                           SizedBox(height: 60, child: Text('Line $i')),
                       ],
@@ -55,7 +74,28 @@ Widget _host() => testApp(
               ),
               child: const ColoredBox(
                 color: Color(0xFF2266AA),
-                child: Text('Card'),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    ZoomPart(
+                      id: 'a1',
+                      piece: ZoomPiece.headline,
+                      child: Text('Card', style: TextStyle(fontSize: 14)),
+                    ),
+                    Spacer(),
+                    ZoomPart(
+                      id: 'a1',
+                      piece: ZoomPiece.picture,
+                      radius: BorderRadius.all(Radius.circular(4)),
+                      child: SizedBox(
+                        key: ValueKey('card picture'),
+                        width: 60,
+                        height: 60,
+                        child: ColoredBox(color: Color(0xFFAA4422)),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -85,16 +125,28 @@ double _pageShown(WidgetTester tester) => tester
     )
     .opacity;
 
-/// How visible the card's picture is over the article; 0 once it is gone.
-double _cardShown(WidgetTester tester) {
-  final picture = find.byType(RawImage);
-  if (picture.evaluate().isEmpty) return 0;
-  return tester
-      .widget<Opacity>(
-        find.ancestor(of: picture, matching: find.byType(Opacity)),
-      )
-      .opacity;
+/// Whether [element] is a piece in its place, in the card or the article.
+bool _inPlace(Element element) {
+  var inPlace = false;
+  element.visitAncestorElements((ancestor) {
+    inPlace = ancestor.widget is ZoomPart;
+    return !inPlace;
+  });
+  return inPlace;
 }
+
+/// [finder]'s widget in its place ([ZoomPart]), or drawn in flight.
+Finder _placed(Finder finder) => find.byElementPredicate(
+  (e) => finder.evaluate().contains(e) && _inPlace(e),
+);
+Finder _flying(Finder finder) => find.byElementPredicate(
+  (e) => finder.evaluate().contains(e) && !_inPlace(e),
+);
+
+/// What draws the piece of [finder] in its place: nothing while it flies.
+RenderObject _place(WidgetTester tester, Finder finder) => tester.renderObject(
+  find.ancestor(of: _placed(finder), matching: find.byType(ZoomPart)),
+);
 
 Future<void> _openArticle(WidgetTester tester) async {
   await tester.pumpWidget(_host());
@@ -221,34 +273,78 @@ void main() {
     expect(_cardOpacity(tester), 1);
   });
 
-  testWidgets('the card fades out of the growing box before the article '
-      'fades in, and the other way round on the way back: never the two '
-      'at once', (tester) async {
+  testWidgets('the headline and the picture fly from the card to the '
+      'article, growing; neither place draws them meanwhile', (tester) async {
+    final card = find.text('Card');
+    final headline = find.text('Headline');
+    final cardPicture = find.byKey(const ValueKey('card picture'));
     await tester.pumpWidget(_host());
-    await tester.tap(find.text('Card'));
-    await tester.pump();
-    await tester.pump();
-    expect(_cardShown(tester), 1);
-    expect(_pageShown(tester), 0);
+    final cardHeadlineAt = tester.getRect(card);
+    final cardPictureAt = tester.getRect(cardPicture);
 
-    await tester.pump(const Duration(milliseconds: 40));
-    expect(_cardShown(tester), allOf(greaterThan(0), lessThan(1)));
+    await tester.tap(card);
+    await tester.pump();
+    await tester.pump();
+    // They start where they are in the card, drawn in flight, not in place.
+    expect(
+      tester.getRect(_flying(card)),
+      rectMoreOrLessEquals(cardHeadlineAt, epsilon: 0.5),
+    );
+    expect(
+      tester.getRect(_flying(cardPicture)),
+      rectMoreOrLessEquals(cardPictureAt, epsilon: 0.5),
+    );
+    expect(_place(tester, card), paintsNothing);
+    expect(_place(tester, headline), paintsNothing);
     expect(_pageShown(tester), 0);
 
     await tester.pump(const Duration(milliseconds: 100));
-    expect(_cardShown(tester), 0);
-    expect(_pageShown(tester), allOf(greaterThan(0), lessThan(1)));
+    // On the way: bigger, the card's words turning into the article's.
+    expect(
+      tester.getRect(_flying(card)).height,
+      greaterThan(cardHeadlineAt.height),
+    );
+    expect(_flying(headline), findsOneWidget);
+    final picture = tester.getRect(_flying(cardPicture));
+    expect(picture.width, allOf(greaterThan(60), lessThan(800)));
+    expect(_place(tester, card), paintsNothing);
+    expect(_place(tester, headline), paintsNothing);
 
     await tester.pumpAndSettle();
+    // Landed: in its place in the article, nothing in flight.
+    expect(_flying(headline), findsNothing);
+    expect(_flying(cardPicture), findsNothing);
+    expect(_place(tester, headline), paints..paragraph());
     expect(_pageShown(tester), 1);
 
     tester.state<NavigatorState>(find.byType(Navigator)).pop();
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 400));
-    expect(_pageShown(tester), 0);
-    expect(_cardShown(tester), greaterThan(0));
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(_flying(card), findsOneWidget);
+    expect(_place(tester, headline), paintsNothing);
+    // The rest of the article is gone by now.
+    expect(_pageShown(tester), lessThan(1));
+
     await tester.pumpAndSettle();
+    expect(_flying(card), findsNothing);
+    expect(_place(tester, card), paints..paragraph());
     expect(_cardOpacity(tester), 1);
+  });
+
+  testWidgets('a piece scrolled out of the article does not fly back: it '
+      'goes with the article, and the card keeps its own', (tester) async {
+    await _openArticle(tester);
+    await tester.drag(find.text('Line 5'), const Offset(0, -400));
+    await tester.pumpAndSettle();
+
+    await tester.dragFrom(const Offset(5, 300), const Offset(320, 0));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(_flying(find.text('Headline')), findsNothing);
+    expect(_flying(find.text('Card')), findsNothing);
+    expect(_place(tester, find.text('Card')), paints..paragraph());
+    await tester.pumpAndSettle();
+    expect(find.text('Headline'), findsNothing);
   });
 
   testWidgets('a pull down at the top shrinks it under the finger; let go '
@@ -314,7 +410,7 @@ void main() {
 
   testWidgets('a scroll inside the article does not shrink it', (tester) async {
     await _openArticle(tester);
-    await tester.drag(find.text('Line 5'), const Offset(0, -200));
+    await tester.drag(find.text('Line 5'), const Offset(0, -400));
     await tester.pumpAndSettle();
     expect(find.text('Line 0'), findsNothing);
     expect(_box(tester), const Rect.fromLTWH(0, 0, 800, 600));
@@ -403,7 +499,12 @@ void main() {
       );
 
       await tester.tap(find.text('Decision a2'));
+      await tester.pump();
+      await tester.pump();
+      // The card's headline flies to the article's.
+      expect(_flying(find.text('Decision a2')), findsOneWidget);
       await tester.pumpAndSettle();
+      expect(_flying(find.text('Decision a2')), findsNothing);
       final route = pushed.last as CardZoomRoute<void>;
       expect(route.from, card);
       expect(route.sourceId, 'a2');
