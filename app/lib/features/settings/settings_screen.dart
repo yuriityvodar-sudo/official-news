@@ -318,26 +318,26 @@ class _DesignSection extends StatelessWidget {
 
 /// A look's icon in Settings → Design, a picture of its layout (Roman,
 /// 22 Oct: icons, not the letters A, B and C): today's list, A's newspaper
-/// page, B's cards, C's lines of text with no pictures, the newspaper's
-/// page of text, the wire's signal.
+/// page, B's cards, C's lines of text with no pictures, Garnet's stacked
+/// cards, Seal's seal.
 IconData designIcon(FeedDesign d) => switch (d) {
   FeedDesign.now => CupertinoIcons.square_list,
   FeedDesign.a => CupertinoIcons.news,
   FeedDesign.b => CupertinoIcons.rectangle_grid_1x2,
   FeedDesign.c => CupertinoIcons.text_alignleft,
-  FeedDesign.paper => CupertinoIcons.doc_richtext,
-  FeedDesign.wire => CupertinoIcons.antenna_radiowaves_left_right,
+  FeedDesign.garnet => CupertinoIcons.rectangle_stack,
+  FeedDesign.seal => CupertinoIcons.checkmark_seal,
 };
 
 /// A look's name beside its icon (Roman, 26 Oct: each one named):
-/// "Classic", "Newspaper"…
+/// "Classic", "Garnet"…
 String designName(FeedDesign d, AppLocalizations l10n) => switch (d) {
   FeedDesign.now => l10n.designClassic,
   FeedDesign.a => l10n.designMagazine,
   FeedDesign.b => l10n.designCards,
   FeedDesign.c => l10n.designBriefing,
-  FeedDesign.paper => l10n.designNewspaper,
-  FeedDesign.wire => l10n.designWire,
+  FeedDesign.garnet => l10n.designGarnet,
+  FeedDesign.seal => l10n.designSeal,
 };
 
 /// A weight's name in the app's language.

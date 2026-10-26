@@ -150,8 +150,8 @@ void main() {
       api: ApiClient(
         baseUrl: 'https://api.test',
         client: MockClient((request) async {
-    final menu = fakeMenus(request);
-    if (menu != null) return menu;
+          final menu = fakeMenus(request);
+          if (menu != null) return menu;
           final query = request.url.queryParameters;
           Map<String, dynamic> page(int from, int to, String? next) => {
             'items': [

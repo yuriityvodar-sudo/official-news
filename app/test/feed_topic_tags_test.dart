@@ -414,9 +414,9 @@ void main() {
           _article('a1', topics: ['economy', 'trade', 'health'], seq: 2),
           _article('a2', topics: ['trade'], seq: 1),
         ], width: 700);
-        final tabs = find.byType(TopicTabs);
+        final tabs = find.byType(TopicPills);
         if (tabs.evaluate().isNotEmpty) {
-          // Newspaper and Wire: the topics are tabs.
+          // Garnet and Seal: the topics are pills.
           final tab = find.descendant(of: tabs, matching: find.text('Health'));
           await tester.ensureVisible(tab);
           await tester.pumpAndSettle();

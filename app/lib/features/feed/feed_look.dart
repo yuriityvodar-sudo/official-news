@@ -11,13 +11,12 @@ import 'feed_look_a.dart';
 import 'feed_look_b.dart';
 import 'feed_look_c.dart';
 import 'feed_look_now.dart';
-import 'feed_look_paper.dart';
-import 'feed_look_wire.dart';
-import 'feed_topic_tabs.dart';
+import 'feed_look_news.dart';
+import 'feed_topic_pills.dart';
 import 'feed_topic_tags.dart';
 
 export '../../core/feed_design.dart';
-export 'feed_topic_tabs.dart';
+export 'feed_topic_pills.dart';
 
 /// The look shown now ([FeedDesign], #66). Settings switches it (the
 /// "Design" row); a build can start with another one:
@@ -62,8 +61,8 @@ FeedLook lookFor(FeedDesign design) => switch (design) {
   FeedDesign.a => ALook(),
   FeedDesign.b => BLook(),
   FeedDesign.c => CLook(),
-  FeedDesign.paper => PaperLook(),
-  FeedDesign.wire => WireLook(),
+  FeedDesign.garnet => NewsLook(NewsPalette.garnet),
+  FeedDesign.seal => NewsLook(NewsPalette.seal),
 };
 
 /// How the feed looks. The slot that holds the list returns a SLIVER, so a
@@ -80,6 +79,12 @@ FeedLook lookFor(FeedDesign design) => switch (design) {
 abstract class FeedLook {
   /// The colour behind the whole feed.
   Color background(BuildContext context);
+
+  /// A card's own colour and corners (#141): its article opens out of it
+  /// and takes its colour as the page. Rows drawn straight on the feed (the
+  /// default) have the feed's colour.
+  Color cardColor(BuildContext context) => background(context);
+  double get cardRadius => 12;
 
   /// The colour under the status bar, for a look whose masthead is a band of
   /// its own colour; null (the default) for [background]. The status bar's
@@ -160,7 +165,7 @@ class FeedMasthead {
   final Widget filterBar;
 
   /// The Where pull-down alone, for a look that shows the topics as tabs
-  /// instead of the Topics pull-down ([TopicTabs] with [topic], [topics] and
+  /// instead of the Topics pull-down ([TopicPills] with [topic], [topics] and
   /// [onTopic]).
   final Widget whereChip;
 
@@ -250,6 +255,7 @@ class FeedList {
   /// `list.tile(i, MyRow(...))`.
   Widget tile(int index, Widget row) => ZoomSource(
     id: articles[index].id,
+    card: row,
     child: Arrive(
       animate: arriving && index < arrivingRows,
       delay: Duration(milliseconds: 45 * index),

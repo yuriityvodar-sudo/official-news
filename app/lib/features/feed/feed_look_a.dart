@@ -2,7 +2,6 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/article.dart';
-import '../../core/card_zoom.dart';
 import '../../core/countries.dart';
 import '../../core/news_widgets.dart';
 import '../../core/pictures.dart';
@@ -447,13 +446,7 @@ class _Row extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Where from, the headline, when and the picture fly to their
-            // places in the article when it opens (#141).
-            ZoomPart(
-              id: article.id,
-              piece: ZoomPiece.publisher,
-              child: _Kicker(article, mark: mark, maxLines: huge ? 3 : 1),
-            ),
+            _Kicker(article, mark: mark, maxLines: huge ? 3 : 1),
             const SizedBox(height: 6),
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -462,32 +455,18 @@ class _Row extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      ZoomPart(
-                        id: article.id,
-                        piece: ZoomPiece.headline,
-                        child: _WholeWords(
-                          article.headline,
-                          style: type.read(type.headline, read),
-                          maxLines: huge ? 9 : 6,
-                        ),
+                      _WholeWords(
+                        article.headline,
+                        style: type.read(type.headline, read),
+                        maxLines: huge ? 9 : 6,
                       ),
                       const SizedBox(height: 6),
-                      ZoomPart(
-                        id: article.id,
-                        piece: ZoomPiece.time,
-                        child: _Footer(article),
-                      ),
+                      _Footer(article),
                     ],
                   ),
                 ),
                 if (url != null)
-                  _Thumb(
-                    url: url,
-                    articleId: article.id,
-                    size: 76,
-                    gap: 16,
-                    dimmed: read,
-                  ),
+                  _Thumb(url: url, size: 76, gap: 16, dimmed: read),
               ],
             ),
             // The topics last, across the whole row, under the picture too:
@@ -596,21 +575,15 @@ double? _pictureOpacity(BuildContext context, bool dimmed) {
 class _Thumb extends StatelessWidget {
   const _Thumb({
     required this.url,
-    required this.articleId,
     required this.size,
     required this.gap,
     required this.dimmed,
   });
 
   final String url;
-
-  /// The article it shows: the picture flies to the article's ([ZoomPart]).
-  final String articleId;
   final double size;
   final double gap;
   final bool dimmed;
-
-  static const _corners = BorderRadius.all(Radius.circular(6));
 
   @override
   Widget build(BuildContext context) {
@@ -629,17 +602,12 @@ class _Thumb extends StatelessWidget {
         // Lined up with the headline's first line, not the top of its box.
         padding: EdgeInsets.only(left: gap, top: 3),
         child: ClipRRect(
-          borderRadius: _corners,
-          child: ZoomPart(
-            id: articleId,
-            piece: ZoomPiece.picture,
-            radius: _corners,
-            child: ColoredBox(
-              color: frame == null
-                  ? _pictureFill(context, dimmed)
-                  : Colors.transparent,
-              child: fadeInPicture(context, child, frame, sync),
-            ),
+          borderRadius: BorderRadius.circular(6),
+          child: ColoredBox(
+            color: frame == null
+                ? _pictureFill(context, dimmed)
+                : Colors.transparent,
+            child: fadeInPicture(context, child, frame, sync),
           ),
         ),
       ),

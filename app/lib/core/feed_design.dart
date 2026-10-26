@@ -1,12 +1,12 @@
 /// The feed's looks (#66): today's, the design options Yurii compared, and
-/// two after real news apps that Roman asked for (26 Oct): [paper] like The
-/// New York Times, [wire] like Reuters. Settings → Design switches them.
-/// What each one draws is its `FeedLook` (`features/feed/feed_look.dart`);
-/// this file is only the names, so the phone's store can keep the choice
-/// without the feed's widgets.
-enum FeedDesign { now, a, b, c, paper, wire }
+/// two after Apple News that Roman picked (26 Oct) in our own colours:
+/// [garnet], a red deeper than Apple's, and [seal], an official seal's green.
+/// Settings → Design switches them. What each one draws is its `FeedLook`
+/// (`features/feed/feed_look.dart`); this file is only the names, so the
+/// phone's store can keep the choice without the feed's widgets.
+enum FeedDesign { now, a, b, c, garnet, seal }
 
-/// A look's name (`now`, `a`, `paper`…), in any case; anything else is
+/// A look's name (`now`, `a`, `garnet`…), in any case; anything else is
 /// [FeedDesign.now].
 FeedDesign designNamed(String name) =>
     FeedDesign.values.asNameMap()[name.trim().toLowerCase()] ?? FeedDesign.now;

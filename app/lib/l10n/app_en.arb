@@ -774,13 +774,13 @@
   "@designBriefing": {
     "description": "As designClassic: design C, text only, the time in a column on the left, as a morning briefing."
   },
-  "designNewspaper": "Newspaper",
-  "@designNewspaper": {
-    "description": "As designClassic: black on white with serif headlines and lines between the rows, after The New York Times."
+  "designGarnet": "Garnet",
+  "@designGarnet": {
+    "description": "As designClassic: after Apple News, white cards on a light grey page in our own deep red (a garnet), with its gradient and glow."
   },
-  "designWire": "Wire",
-  "@designWire": {
-    "description": "As designClassic: a dark-blue band with the topics as tabs over white cards, after Reuters and news agencies."
+  "designSeal": "Seal",
+  "@designSeal": {
+    "description": "As designClassic: the same look after Apple News in the green of an official seal."
   },
   "settingsHeadlineWeight": "Headline weight",
   "@settingsHeadlineWeight": {

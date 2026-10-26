@@ -30,7 +30,8 @@ List<String> cardTopics(
 
 /// Topic [id]'s name in the app's language, as the Topics menu shows it
 /// (`topicLabel`, core/topics.dart); an id the app does not know shows as it is.
-String topicName(String id, AppLocalizations l10n) => topicLabel(id, l10n) ?? id;
+String topicName(String id, AppLocalizations l10n) =>
+    topicLabel(id, l10n) ?? id;
 
 /// What VoiceOver says for the tags of [ids]: "Topics: Economy, Trade",
 /// "Тема: Економіка"; null for none.

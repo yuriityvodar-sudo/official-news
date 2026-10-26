@@ -36,13 +36,23 @@ AppLocalizations l10nFor([FeedLanguage language = FeedLanguage.en]) =>
 /// itself. Without this, the bar reads an articles page as a menu, gives up
 /// and hides its chips.
 http.Response? fakeMenus(http.Request request) {
-  final lang = FeedLanguage.fromCode(request.url.queryParameters['lang'] ?? 'en');
+  final lang = FeedLanguage.fromCode(
+    request.url.queryParameters['lang'] ?? 'en',
+  );
   final l10n = l10nFor(lang);
   return switch (request.url.path) {
     '/countries' => fakeJson({
       'groups': [
-        {'id': 'eu', 'name': 'EU', 'members': ['DE', 'PL', 'EU']},
-        {'id': 'g7', 'name': 'G7', 'members': ['DE', 'GB', 'US']},
+        {
+          'id': 'eu',
+          'name': 'EU',
+          'members': ['DE', 'PL', 'EU'],
+        },
+        {
+          'id': 'g7',
+          'name': 'G7',
+          'members': ['DE', 'GB', 'US'],
+        },
       ],
       'countries': [
         for (final code in ['DE', 'GB', 'PL', 'US'])
@@ -51,7 +61,8 @@ http.Response? fakeMenus(http.Request request) {
     }),
     '/topics' => fakeJson({
       'topics': [
-        for (final id in topicIds) {'id': id, 'name': topicLabel(id, l10n) ?? id},
+        for (final id in topicIds)
+          {'id': id, 'name': topicLabel(id, l10n) ?? id},
       ],
     }),
     _ => null,
@@ -79,7 +90,8 @@ List<Map<String, dynamic>> fakeFiltered(
   final group = q['group'];
   return [
     for (final a in items)
-      if ((topic == null || (a['topics'] as List? ?? const []).contains(topic)) &&
+      if ((topic == null ||
+              (a['topics'] as List? ?? const []).contains(topic)) &&
           (country == null || a['country'] == country) &&
           (group == null || (groups[group] ?? const []).contains(a['country'])))
         a,
@@ -87,11 +99,19 @@ List<Map<String, dynamic>> fakeFiltered(
 }
 
 /// A page's `items` and `top` narrowed by [q] ([fakeFiltered]); null stays null.
-Map<String, dynamic>? fakePage(Map<String, dynamic>? page, Map<String, String> q) =>
-    page == null
+Map<String, dynamic>? fakePage(
+  Map<String, dynamic>? page,
+  Map<String, String> q,
+) => page == null
     ? null
     : {
         ...page,
-        'items': fakeFiltered((page['items'] as List).cast<Map<String, dynamic>>(), q),
-        'top': fakeFiltered((page['top'] as List? ?? const []).cast<Map<String, dynamic>>(), q),
+        'items': fakeFiltered(
+          (page['items'] as List).cast<Map<String, dynamic>>(),
+          q,
+        ),
+        'top': fakeFiltered(
+          (page['top'] as List? ?? const []).cast<Map<String, dynamic>>(),
+          q,
+        ),
       };

@@ -448,8 +448,8 @@ void main() {
       (CupertinoIcons.news, 'Magazine'),
       (CupertinoIcons.rectangle_grid_1x2, 'Cards'),
       (CupertinoIcons.text_alignleft, 'Briefing'),
-      (CupertinoIcons.doc_richtext, 'Newspaper'),
-      (CupertinoIcons.antenna_radiowaves_left_right, 'Wire'),
+      (CupertinoIcons.rectangle_stack, 'Garnet'),
+      (CupertinoIcons.checkmark_seal, 'Seal'),
     ]) {
       expect(find.byIcon(icon), findsOneWidget);
       expect(
