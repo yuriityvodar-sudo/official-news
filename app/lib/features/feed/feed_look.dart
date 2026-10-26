@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/article.dart';
 import '../../core/card_zoom.dart';
 import '../../core/feed_design.dart';
+import '../../core/filters.dart';
 import '../../core/motion.dart';
 import '../../core/read_mark.dart';
 import '../../core/theme.dart';
@@ -10,9 +11,13 @@ import 'feed_look_a.dart';
 import 'feed_look_b.dart';
 import 'feed_look_c.dart';
 import 'feed_look_now.dart';
+import 'feed_look_paper.dart';
+import 'feed_look_wire.dart';
+import 'feed_topic_tabs.dart';
 import 'feed_topic_tags.dart';
 
 export '../../core/feed_design.dart';
+export 'feed_topic_tabs.dart';
 
 /// The look shown now ([FeedDesign], #66). Settings switches it (the
 /// "Design" row); a build can start with another one:
@@ -57,6 +62,8 @@ FeedLook lookFor(FeedDesign design) => switch (design) {
   FeedDesign.a => ALook(),
   FeedDesign.b => BLook(),
   FeedDesign.c => CLook(),
+  FeedDesign.paper => PaperLook(),
+  FeedDesign.wire => WireLook(),
 };
 
 /// How the feed looks. The slot that holds the list returns a SLIVER, so a
@@ -73,6 +80,11 @@ FeedLook lookFor(FeedDesign design) => switch (design) {
 abstract class FeedLook {
   /// The colour behind the whole feed.
   Color background(BuildContext context);
+
+  /// The colour under the status bar, for a look whose masthead is a band of
+  /// its own colour; null (the default) for [background]. The status bar's
+  /// own words turn light or dark to stay readable on it.
+  Color? topInset(BuildContext context) => null;
 
   /// The theme the feed is drawn with: [base] is the app's. Returning another
   /// one changes the shared pieces at once (NewsText styles used by
@@ -128,6 +140,10 @@ class FeedMasthead {
     required this.date,
     required this.openSettings,
     required this.filterBar,
+    required this.whereChip,
+    required this.topic,
+    required this.topics,
+    required this.onTopic,
   });
 
   /// "Official News": the app's name, the same in every language.
@@ -142,6 +158,20 @@ class FeedMasthead {
   /// The filter bar: the Where and Topics pull-downs (#67, #68), built by
   /// the screen from the feed's state ([FeedFilterBar]). A look places it.
   final Widget filterBar;
+
+  /// The Where pull-down alone, for a look that shows the topics as tabs
+  /// instead of the Topics pull-down ([TopicTabs] with [topic], [topics] and
+  /// [onTopic]).
+  final Widget whereChip;
+
+  /// The chosen topic's id, or null for all topics.
+  final String? topic;
+
+  /// The topics the feed offers, busiest first; null while none are known.
+  final List<FeedTopic>? topics;
+
+  /// Shows one topic, or every topic for null.
+  final ValueChanged<String?> onTopic;
 
   /// Today's settings button: a round gear with a 44-pt target and its
   /// VoiceOver label. A look may draw its own and call [openSettings].

@@ -433,22 +433,32 @@ void main() {
         ),
       ),
     );
-    // The row shows the icon of the look that is on; the sheet offers the
-    // four icons, no letters.
+    // The row shows the name of the look that is on; the sheet offers every
+    // look by its icon and name, no letters.
     final semantics = tester.ensureSemantics();
     expect(find.text('Design'), findsOneWidget);
-    expect(find.byIcon(CupertinoIcons.square_list), findsOneWidget);
+    expect(find.text('Classic'), findsOneWidget);
     // VoiceOver hears the look's name with the row's title.
-    expect(find.bySemanticsLabel(RegExp(r'\bNow\b')), findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp(r'\bClassic\b')), findsOneWidget);
     await tester.tap(find.text('Design'));
     await tester.pumpAndSettle();
     expect(find.byType(CupertinoActionSheet), findsOneWidget);
-    for (final icon in [
-      CupertinoIcons.news,
-      CupertinoIcons.rectangle_grid_1x2,
-      CupertinoIcons.text_alignleft,
+    for (final (icon, name) in [
+      (CupertinoIcons.square_list, 'Classic'),
+      (CupertinoIcons.news, 'Magazine'),
+      (CupertinoIcons.rectangle_grid_1x2, 'Cards'),
+      (CupertinoIcons.text_alignleft, 'Briefing'),
+      (CupertinoIcons.doc_richtext, 'Newspaper'),
+      (CupertinoIcons.antenna_radiowaves_left_right, 'Wire'),
     ]) {
       expect(find.byIcon(icon), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byType(CupertinoActionSheet),
+          matching: find.text(name),
+        ),
+        findsOneWidget,
+      );
     }
     for (final letter in ['A', 'B', 'C']) {
       expect(find.text(letter), findsNothing);
@@ -459,8 +469,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(feedDesign.value, FeedDesign.b);
     expect(saved, FeedDesign.b);
-    expect(find.byIcon(CupertinoIcons.rectangle_grid_1x2), findsOneWidget);
-    expect(find.bySemanticsLabel(RegExp(r'\bDesign B\b')), findsOneWidget);
+    expect(find.text('Cards'), findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp(r'\bCards\b')), findsOneWidget);
     semantics.dispose();
     feedDesign.value = FeedDesign.now;
   });

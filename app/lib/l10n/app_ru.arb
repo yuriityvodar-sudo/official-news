@@ -172,7 +172,12 @@
 
   "languageCs": "чешского",
   "settingsDesign": "Дизайн",
-  "settingsDesignNow": "Текущий",
+  "designClassic": "Классика",
+  "designMagazine": "Журнал",
+  "designCards": "Карточки",
+  "designBriefing": "Сводка",
+  "designNewspaper": "Газета",
+  "designWire": "Агентство",
   "settingsHeadlineWeight": "Толщина заголовков",
   "headlineWeightLight": "Тонкий",
   "headlineWeightRegular": "Обычный",

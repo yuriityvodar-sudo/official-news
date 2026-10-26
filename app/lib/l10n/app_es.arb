@@ -172,7 +172,12 @@
 
   "languageCs": "checo",
   "settingsDesign": "Diseño",
-  "settingsDesignNow": "Actual",
+  "designClassic": "Clásico",
+  "designMagazine": "Revista",
+  "designCards": "Tarjetas",
+  "designBriefing": "Resumen",
+  "designNewspaper": "Periódico",
+  "designWire": "Agencia",
   "settingsHeadlineWeight": "Grosor de los titulares",
   "headlineWeightLight": "Fina",
   "headlineWeightRegular": "Normal",

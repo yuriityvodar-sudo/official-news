@@ -172,7 +172,12 @@
 
   "languageCs": "Tschechischen",
   "settingsDesign": "Design",
-  "settingsDesignNow": "Aktuell",
+  "designClassic": "Klassisch",
+  "designMagazine": "Magazin",
+  "designCards": "Karten",
+  "designBriefing": "Briefing",
+  "designNewspaper": "Zeitung",
+  "designWire": "Agentur",
   "settingsHeadlineWeight": "Schriftstärke der Überschriften",
   "headlineWeightLight": "Leicht",
   "headlineWeightRegular": "Normal",

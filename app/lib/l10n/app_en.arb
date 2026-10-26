@@ -758,9 +758,29 @@
   "@settingsDesign": {
     "description": "The Design section of Settings and its first row: the look of the feed (#66)."
   },
-  "settingsDesignNow": "Now",
-  "@settingsDesignNow": {
-    "description": "The segment of the Design row for today's look, beside A, B and C (#66)."
+  "designClassic": "Classic",
+  "@designClassic": {
+    "description": "A feed look's name in Settings → Design (#66): today's list, a picture on the right of each row, as Apple News."
+  },
+  "designMagazine": "Magazine",
+  "@designMagazine": {
+    "description": "As designClassic: design A, rows with the country and the institution over a reading serif."
+  },
+  "designCards": "Cards",
+  "@designCards": {
+    "description": "As designClassic: design B, each decision on its own card, the picture across the top."
+  },
+  "designBriefing": "Briefing",
+  "@designBriefing": {
+    "description": "As designClassic: design C, text only, the time in a column on the left, as a morning briefing."
+  },
+  "designNewspaper": "Newspaper",
+  "@designNewspaper": {
+    "description": "As designClassic: black on white with serif headlines and lines between the rows, after The New York Times."
+  },
+  "designWire": "Wire",
+  "@designWire": {
+    "description": "As designClassic: a dark-blue band with the topics as tabs over white cards, after Reuters and news agencies."
   },
   "settingsHeadlineWeight": "Headline weight",
   "@settingsHeadlineWeight": {

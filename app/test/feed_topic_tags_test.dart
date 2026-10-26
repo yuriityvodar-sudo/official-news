@@ -414,16 +414,25 @@ void main() {
           _article('a1', topics: ['economy', 'trade', 'health'], seq: 2),
           _article('a2', topics: ['trade'], seq: 1),
         ], width: 700);
-        await tester.tap(
-          find.byKey(const ValueKey('filter-topic')).hitTestable(),
-        );
-        await tester.pumpAndSettle();
-        await tester.tap(
-          find.descendant(
-            of: find.byType(CupertinoMenuItem),
-            matching: find.text('Health'),
-          ),
-        );
+        final tabs = find.byType(TopicTabs);
+        if (tabs.evaluate().isNotEmpty) {
+          // Newspaper and Wire: the topics are tabs.
+          final tab = find.descendant(of: tabs, matching: find.text('Health'));
+          await tester.ensureVisible(tab);
+          await tester.pumpAndSettle();
+          await tester.tap(tab);
+        } else {
+          await tester.tap(
+            find.byKey(const ValueKey('filter-topic')).hitTestable(),
+          );
+          await tester.pumpAndSettle();
+          await tester.tap(
+            find.descendant(
+              of: find.byType(CupertinoMenuItem),
+              matching: find.text('Health'),
+            ),
+          );
+        }
         await tester.pumpAndSettle();
         expect(
           [for (final t in _tags(tester, 'a1')) t.name],
@@ -638,7 +647,6 @@ void main() {
       });
     }
   }
-
 
   // How many lines the tags take, in a real font: Yurii's brief is one line,
   // or neatly two. Roboto Medium (in the Flutter SDK, also on CI) draws the
