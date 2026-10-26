@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
@@ -8,12 +9,12 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/analytics.dart';
 import '../../core/article.dart';
-import '../../core/card_zoom.dart';
 import '../../core/countries.dart';
 import '../../core/glass.dart';
 import '../../core/languages.dart';
 import '../../core/motion.dart';
 import '../../core/news_widgets.dart';
+import '../../core/card_zoom.dart';
 import '../../core/pictures.dart';
 import '../../core/push.dart';
 import '../../core/theme.dart';
@@ -81,11 +82,25 @@ class DetailScreen extends StatefulWidget {
   const DetailScreen({
     super.key,
     required this.article,
+    this.top,
+    this.topFrom,
+    this.background,
     this.openLink = openOfficialPage,
     this.share = shareArticle,
   });
 
   final Article article;
+
+  /// The card the article opened out of (#141), as its top in place of the
+  /// publisher, headline, date and picture: the same card, at the same width
+  /// and the same distance from the left as in the feed ([topFrom]), so the
+  /// card grows into the article without anything in it changing.
+  final Widget? top;
+  final Rect? topFrom;
+
+  /// The page's colour: the card's, when the article opened out of one.
+  final Color? background;
+
   final OpenLink openLink;
   final ShareArticle share;
 
@@ -133,9 +148,20 @@ class _DetailScreenState extends State<DetailScreen> {
     final padding = MediaQuery.paddingOf(context);
     final summary = article.summary?.trim();
     final hasSummary = summary != null && summary.isNotEmpty;
+    final top = widget.top;
+    final from = widget.topFrom;
+    final page = widget.background ?? scheme.surface;
+    // Everything but the card at the top: at the page's margins, coming in
+    // around the card as it grows into the article (#141).
+    Widget rest(Widget child) => ZoomRest(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        child: child,
+      ),
+    );
 
     return Scaffold(
-      backgroundColor: scheme.surface,
+      backgroundColor: page,
       body: Stack(
         children: [
           _CountsRead(
@@ -143,53 +169,68 @@ class _DetailScreenState extends State<DetailScreen> {
             child: ListView(
               controller: _scroll,
               padding: EdgeInsets.fromLTRB(
-                20,
+                0,
                 padding.top + _bar,
-                20,
+                0,
                 48 + padding.bottom,
               ),
               children: [
-                _Publisher(article),
-                const SizedBox(height: 18),
-                KindLabel(article),
-                // The headline, the date, the publisher and the picture fly
-                // here from the card the article opens out of (#141).
-                ZoomPart(
-                  id: article.id,
-                  piece: ZoomPiece.headline,
-                  child: Text(article.headline, style: text.articleHeadline),
-                ),
-                const SizedBox(height: 10),
-                ZoomPart(
-                  id: article.id,
-                  piece: ZoomPiece.time,
-                  child: Text(_published(article, l10n), style: text.meta),
-                ),
-                if (article.imageUrl != null)
-                  _Picture(article.imageUrl!, articleId: article.id),
-                const SizedBox(height: 22),
-                if (hasSummary) ...[
-                  _AiLabel(article),
-                  const SizedBox(height: 10),
-                  for (final paragraph in _paragraphs(summary)) ...[
-                    Text(paragraph, style: text.body),
+                if (top != null && from != null) ...[
+                  // The card itself, where it stands in the feed.
+                  Padding(
+                    padding: EdgeInsets.only(left: math.max(0, from.left)),
+                    child: Align(
+                      alignment: Alignment.topLeft,
+                      child: SizedBox(
+                        width: from.width,
+                        child: ZoomTop(child: top),
+                      ),
+                    ),
+                  ),
+                  ...[
+                    const SizedBox(height: 12),
+                    _Official(article),
                     const SizedBox(height: 14),
-                  ],
-                  const SizedBox(height: 4),
-                  _DiscussWithAi(article),
-                  const SizedBox(height: 18),
+                    KindLabel(article),
+                    Text(_published(article, l10n), style: text.meta),
+                    const SizedBox(height: 22),
+                  ].map(rest),
                 ] else
-                  const _SummaryComing(),
-                const SizedBox(height: 14),
-                _OfficialLink(
-                  article: article,
-                  onTap: () {
-                    final page = officialPage(article.originalUrl);
-                    if (page == null) return;
-                    unawaited(analytics.officialLinkOpened(article));
-                    widget.openLink(page);
-                  },
-                ),
+                  ...[
+                    _Publisher(article),
+                    const SizedBox(height: 18),
+                    KindLabel(article),
+                    Text(article.headline, style: text.articleHeadline),
+                    const SizedBox(height: 10),
+                    Text(_published(article, l10n), style: text.meta),
+                    if (article.imageUrl != null)
+                      _Picture(article.imageUrl!, articleId: article.id),
+                    const SizedBox(height: 22),
+                  ].map(rest),
+                ...[
+                  if (hasSummary) ...[
+                    _AiLabel(article),
+                    const SizedBox(height: 10),
+                    for (final paragraph in _paragraphs(summary)) ...[
+                      Text(paragraph, style: text.body),
+                      const SizedBox(height: 14),
+                    ],
+                    const SizedBox(height: 4),
+                    _DiscussWithAi(article),
+                    const SizedBox(height: 18),
+                  ] else
+                    const _SummaryComing(),
+                  const SizedBox(height: 14),
+                  _OfficialLink(
+                    article: article,
+                    onTap: () {
+                      final page = officialPage(article.originalUrl);
+                      if (page == null) return;
+                      unawaited(analytics.officialLinkOpened(article));
+                      widget.openLink(page);
+                    },
+                  ),
+                ].map(rest),
               ],
             ),
           ),
@@ -197,55 +238,59 @@ class _DetailScreenState extends State<DetailScreen> {
             top: 0,
             left: 0,
             right: 0,
-            child: ScrollEdgeFade(
-              height: padding.top + _bar + 8,
-              color: scheme.surface,
+            child: ZoomRest(
+              child: ScrollEdgeFade(
+                height: padding.top + _bar + 8,
+                color: page,
+              ),
             ),
           ),
           Positioned(
             top: padding.top + 6,
             left: 12,
             right: 12,
-            child: Row(
-              children: [
-                if (ModalRoute.of(context)?.canPop ?? false)
-                  _BarButton(
-                    compact: _compact,
-                    onPressed: () => Navigator.of(context).maybePop(),
-                    // Its name for VoiceOver (and tests), never shown.
-                    child: Tooltip(
-                      message: MaterialLocalizations.of(
-                        context,
-                      ).backButtonTooltip,
-                      triggerMode: TooltipTriggerMode.manual,
+            child: ZoomRest(
+              child: Row(
+                children: [
+                  if (ModalRoute.of(context)?.canPop ?? false)
+                    _BarButton(
+                      compact: _compact,
+                      onPressed: () => Navigator.of(context).maybePop(),
+                      // Its name for VoiceOver (and tests), never shown.
+                      child: Tooltip(
+                        message: MaterialLocalizations.of(
+                          context,
+                        ).backButtonTooltip,
+                        triggerMode: TooltipTriggerMode.manual,
+                        child: Icon(
+                          CupertinoIcons.chevron_left,
+                          size: 20,
+                          color: CupertinoColors.label.resolveFrom(context),
+                        ),
+                      ),
+                    ),
+                  const Spacer(),
+                  Builder(
+                    builder: (buttonContext) => _BarButton(
+                      compact: _compact,
+                      onPressed: () {
+                        unawaited(analytics.shared(article));
+                        widget.share(
+                          article,
+                          shareText(article, l10n),
+                          _originOf(buttonContext),
+                        );
+                      },
                       child: Icon(
-                        CupertinoIcons.chevron_left,
+                        CupertinoIcons.share,
                         size: 20,
                         color: CupertinoColors.label.resolveFrom(context),
+                        semanticLabel: l10n.share,
                       ),
                     ),
                   ),
-                const Spacer(),
-                Builder(
-                  builder: (buttonContext) => _BarButton(
-                    compact: _compact,
-                    onPressed: () {
-                      unawaited(analytics.shared(article));
-                      widget.share(
-                        article,
-                        shareText(article, l10n),
-                        _originOf(buttonContext),
-                      );
-                    },
-                    child: Icon(
-                      CupertinoIcons.share,
-                      size: 20,
-                      color: CupertinoColors.label.resolveFrom(context),
-                      semanticLabel: l10n.share,
-                    ),
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ],
@@ -395,7 +440,6 @@ class _Publisher extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final text = NewsText.from(context);
-    final l10n = AppLocalizations.of(context);
     final scheme = Theme.of(context).colorScheme;
     return Row(
       children: [
@@ -417,44 +461,50 @@ class _Publisher extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              ZoomPart(
-                id: article.id,
-                piece: ZoomPiece.publisher,
-                child: Text(
-                  article.source.name,
-                  style: text.publisher,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
+              Text(
+                article.source.name,
+                style: text.publisher,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
               ),
               const SizedBox(height: 2),
-              // Wraps instead of overflowing: "Official source" is longer in
-              // some languages ("Официальный источник"), and at large text sizes.
-              Wrap(
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  Text(
-                    '${countryName(article.country, l10n)} · ',
-                    style: text.meta,
-                  ),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(
-                        CupertinoIcons.checkmark_seal,
-                        size: 15,
-                        color: AppColors.verified,
-                      ),
-                      const SizedBox(width: 3),
-                      Flexible(
-                        child: Text(l10n.officialSource, style: text.meta),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
+              _Official(article),
             ],
           ),
+        ),
+      ],
+    );
+  }
+}
+
+/// "Germany · ✓ Official source", under the publisher, or under the card an
+/// article opened out of (#141). Wraps instead of overflowing: "Official
+/// source" is longer in some languages ("Официальный источник"), and at
+/// large text sizes.
+class _Official extends StatelessWidget {
+  const _Official(this.article);
+
+  final Article article;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = NewsText.from(context);
+    final l10n = AppLocalizations.of(context);
+    return Wrap(
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        Text('${countryName(article.country, l10n)} · ', style: text.meta),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              CupertinoIcons.checkmark_seal,
+              size: 15,
+              color: AppColors.verified,
+            ),
+            const SizedBox(width: 3),
+            Flexible(child: Text(l10n.officialSource, style: text.meta)),
+          ],
         ),
       ],
     );
@@ -468,8 +518,6 @@ class _Picture extends StatelessWidget {
 
   final String url;
   final String articleId;
-
-  static const _pictureCorners = BorderRadius.all(Radius.circular(12));
 
   @override
   Widget build(BuildContext context) {
@@ -495,21 +543,16 @@ class _Picture extends StatelessWidget {
                 articleId: articleId,
                 url: url,
                 child: ClipRRect(
-                  borderRadius: _pictureCorners,
-                  child: ZoomPart(
-                    id: articleId,
-                    piece: ZoomPiece.picture,
-                    radius: _pictureCorners,
-                    child: AspectRatio(
-                      aspectRatio: 16 / 9,
-                      child: Image(
-                        // The picture the feed card saved, decoded at screen
-                        // size: official preview images can be several MB.
-                        image: screenPicture(context, url),
-                        fit: BoxFit.cover,
-                        frameBuilder: fadeInPicture,
-                        errorBuilder: (_, _, _) => const SizedBox.shrink(),
-                      ),
+                  borderRadius: BorderRadius.circular(12),
+                  child: AspectRatio(
+                    aspectRatio: 16 / 9,
+                    child: Image(
+                      // The picture the feed card saved, decoded at screen
+                      // size: official preview images can be several MB.
+                      image: screenPicture(context, url),
+                      fit: BoxFit.cover,
+                      frameBuilder: fadeInPicture,
+                      errorBuilder: (_, _, _) => const SizedBox.shrink(),
                     ),
                   ),
                 ),
