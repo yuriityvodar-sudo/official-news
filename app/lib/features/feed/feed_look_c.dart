@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/article.dart';
+import '../../core/card_zoom.dart';
 import '../../core/countries.dart';
 import '../../core/news_widgets.dart';
 import '../../core/read_mark.dart';
@@ -527,7 +528,11 @@ class _Item extends StatelessWidget {
               child: FittedBox(
                 fit: BoxFit.scaleDown,
                 alignment: Alignment.centerLeft,
-                child: Text(stamp.join('\n'), style: t.time),
+                child: ZoomPart(
+                  id: article.id,
+                  piece: ZoomPiece.time,
+                  child: Text(stamp.join('\n'), style: t.time),
+                ),
               ),
             ),
           );
@@ -593,7 +598,13 @@ class _Item extends StatelessWidget {
     // the left column (in the page margin with large text). Not a dot: a dot
     // before a row reads as "unread" on iOS. Grey once read, in Dim and in
     // the Red style, where red on a row means not opened yet.
-    Widget headline = Text(article.headline, style: inked(t.headline));
+    // Who, the headline and when fly to their places in the article when
+    // it opens (#141).
+    Widget headline = ZoomPart(
+      id: article.id,
+      piece: ZoomPiece.headline,
+      child: Text(article.headline, style: inked(t.headline)),
+    );
     if (important) {
       headline = Stack(
         clipBehavior: Clip.none,
@@ -623,7 +634,7 @@ class _Item extends StatelessWidget {
     final body = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        who,
+        ZoomPart(id: article.id, piece: ZoomPiece.publisher, child: who),
         const SizedBox(height: 4),
         headline,
         if (brief != null) ...[const SizedBox(height: 3), brief],

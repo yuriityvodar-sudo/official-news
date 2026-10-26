@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/analytics.dart';
 import '../../core/article.dart';
+import '../../core/card_zoom.dart';
 import '../../core/countries.dart';
 import '../../core/glass.dart';
 import '../../core/languages.dart';
@@ -151,9 +152,19 @@ class _DetailScreenState extends State<DetailScreen> {
                 _Publisher(article),
                 const SizedBox(height: 18),
                 KindLabel(article),
-                Text(article.headline, style: text.articleHeadline),
+                // The headline, the date, the publisher and the picture fly
+                // here from the card the article opens out of (#141).
+                ZoomPart(
+                  id: article.id,
+                  piece: ZoomPiece.headline,
+                  child: Text(article.headline, style: text.articleHeadline),
+                ),
                 const SizedBox(height: 10),
-                Text(_published(article, l10n), style: text.meta),
+                ZoomPart(
+                  id: article.id,
+                  piece: ZoomPiece.time,
+                  child: Text(_published(article, l10n), style: text.meta),
+                ),
                 if (article.imageUrl != null)
                   _Picture(article.imageUrl!, articleId: article.id),
                 const SizedBox(height: 22),
@@ -406,11 +417,15 @@ class _Publisher extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                article.source.name,
-                style: text.publisher,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
+              ZoomPart(
+                id: article.id,
+                piece: ZoomPiece.publisher,
+                child: Text(
+                  article.source.name,
+                  style: text.publisher,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
               const SizedBox(height: 2),
               // Wraps instead of overflowing: "Official source" is longer in
@@ -454,6 +469,8 @@ class _Picture extends StatelessWidget {
   final String url;
   final String articleId;
 
+  static const _pictureCorners = BorderRadius.all(Radius.circular(12));
+
   @override
   Widget build(BuildContext context) {
     final text = NewsText.from(context);
@@ -478,16 +495,21 @@ class _Picture extends StatelessWidget {
                 articleId: articleId,
                 url: url,
                 child: ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: AspectRatio(
-                    aspectRatio: 16 / 9,
-                    child: Image(
-                      // The picture the feed card saved, decoded at screen
-                      // size: official preview images can be several MB.
-                      image: screenPicture(context, url),
-                      fit: BoxFit.cover,
-                      frameBuilder: fadeInPicture,
-                      errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                  borderRadius: _pictureCorners,
+                  child: ZoomPart(
+                    id: articleId,
+                    piece: ZoomPiece.picture,
+                    radius: _pictureCorners,
+                    child: AspectRatio(
+                      aspectRatio: 16 / 9,
+                      child: Image(
+                        // The picture the feed card saved, decoded at screen
+                        // size: official preview images can be several MB.
+                        image: screenPicture(context, url),
+                        fit: BoxFit.cover,
+                        frameBuilder: fadeInPicture,
+                        errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                      ),
                     ),
                   ),
                 ),
