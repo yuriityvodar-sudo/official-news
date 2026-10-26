@@ -230,13 +230,21 @@ class _FeedScreenState extends State<FeedScreen> {
     // card not on screen, it opens as before. The article as the feed has
     // it, so a translated one opens translated.
     final card = Motion.reduced(context) ? null : ZoomSource.rectOf(article.id);
-    if (card == null) {
+    final picture = card == null
+        ? null
+        : ZoomSource.pictureOf(
+            article.id,
+            MediaQuery.devicePixelRatioOf(context),
+          );
+    if (card == null || picture == null) {
       Navigator.of(context).pushNamed(Routes.detail, arguments: article);
       return;
     }
     Navigator.of(context).push(
       CardZoomRoute<void>(
         from: card,
+        card: picture,
+        background: lookFor(feedDesign.value).background(context),
         sourceId: article.id,
         settings: RouteSettings(name: Routes.detail, arguments: article),
         builder: (_) => DetailScreen(article: article),

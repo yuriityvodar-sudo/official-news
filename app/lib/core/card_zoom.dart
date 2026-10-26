@@ -1,6 +1,8 @@
 import 'dart:math' as math;
+import 'dart:ui' as ui show Image;
 import 'dart:ui' show lerpDouble;
 
+import 'package:flutter/rendering.dart' show RenderRepaintBoundary;
 import 'package:flutter/widgets.dart';
 
 import 'motion.dart';
@@ -28,11 +30,29 @@ class ZoomSource extends StatefulWidget {
     return box.localToGlobal(Offset.zero) & box.size;
   }
 
+  /// A picture of the card of [id] as it is on screen now, at [pixelRatio],
+  /// for the article to grow out of; null when it is not built or cannot be
+  /// taken.
+  static ui.Image? pictureOf(String id, double pixelRatio) {
+    final box = _built[id]?._picture.currentContext?.findRenderObject();
+    if (box is! RenderRepaintBoundary || !box.attached || !box.hasSize) {
+      return null;
+    }
+    try {
+      return box.toImageSync(pixelRatio: pixelRatio);
+    } on Object {
+      // Not drawn yet, or changed since it was (debug builds check).
+      return null;
+    }
+  }
+
   @override
   State<ZoomSource> createState() => _ZoomSourceState();
 }
 
 class _ZoomSourceState extends State<ZoomSource> {
+  final _picture = GlobalKey();
+
   @override
   void initState() {
     super.initState();
@@ -62,14 +82,17 @@ class _ZoomSourceState extends State<ZoomSource> {
     valueListenable: ZoomSource._hidden,
     builder: (context, hidden, child) =>
         Opacity(opacity: hidden == widget.id ? 0 : 1, child: child),
-    child: widget.child,
+    child: RepaintBoundary(key: _picture, child: widget.child),
   );
 }
 
 /// An article that grows out of its card and goes back into it (#141), as
 /// iOS's zoom transition does in Photos and the App Store. The card's box
-/// grows to the whole screen while the article, laid out at full size and
-/// scaled to the box's width, shows through it.
+/// grows to the whole screen. A card and its article show the same decision
+/// laid out differently, so they never show on top of each other: first a
+/// picture of the card fades out of the growing box, then the article, laid
+/// out at full size and scaled to the box's width, fades in (Material's
+/// container transform does the same); on the way back, the other way round.
 ///
 /// A pull down at the top of the article, or a swipe from the left edge,
 /// shrinks it under the finger; let go far enough and it goes back into its
@@ -79,6 +102,8 @@ class CardZoomRoute<T> extends PageRoute<T> {
   CardZoomRoute({
     required this.builder,
     required this.from,
+    required this.card,
+    required this.background,
     required this.sourceId,
     super.settings,
   });
@@ -87,6 +112,14 @@ class CardZoomRoute<T> extends PageRoute<T> {
 
   /// The card's box on screen when it was tapped.
   final Rect from;
+
+  /// A picture of the card when it was tapped ([ZoomSource.pictureOf]); the
+  /// route disposes of it.
+  final ui.Image card;
+
+  /// The colour behind the card (the feed's): the growing box's own, under
+  /// the card and then the article.
+  final Color background;
 
   /// The article's id: its card ([ZoomSource]) is hidden while it is open.
   final String sourceId;
@@ -127,10 +160,14 @@ class CardZoomRoute<T> extends PageRoute<T> {
 
   void _statusChanged(AnimationStatus _) => _updateMoving();
 
-  /// The card hides once the article covers it, and shows again as the
-  /// article fades back into it.
+  /// The card hides once the growing box covers it, and shows again under the
+  /// box on the way back.
   void _hideCard() {
-    if (animation!.value > _fadeEnd) {
+    // The article's first frame is built offstage, for heroes to measure,
+    // and its animation stands at the end meanwhile: the card stays, or its
+    // place would be empty for that frame.
+    if (offstage) return;
+    if (animation!.value > _cardFade) {
       ZoomSource._hidden.value = sourceId;
     } else if (ZoomSource._hidden.value == sourceId) {
       ZoomSource._hidden.value = null;
@@ -159,6 +196,7 @@ class CardZoomRoute<T> extends PageRoute<T> {
       }
       moving.value = false;
     });
+    card.dispose();
     super.dispose();
   }
 
@@ -183,9 +221,12 @@ class CardZoomRoute<T> extends PageRoute<T> {
   }
 }
 
-/// The part of the opening in which the article shows through its card, and
-/// of the closing in which it fades back into it.
-const _fadeEnd = 0.3;
+/// The first part of the opening, in which the card fades out of its growing
+/// box (the last of the closing, in which it fades back in).
+const _cardFade = 0.15;
+
+/// The part after it, in which the article fades in (and out on the way back).
+const _pageFade = 0.3;
 
 class _CardZoom extends StatefulWidget {
   const _CardZoom({
@@ -391,24 +432,57 @@ class _CardZoomState extends State<_CardZoom>
             );
           }
           final open = t == 1 && shrunk == 0;
+          // The card first, then the article: never the two at once.
+          final progress = widget.animation.value;
+          final cardShown = 1 - (progress / _cardFade).clamp(0.0, 1.0);
+          final pageShown = ((progress - _cardFade) / _pageFade).clamp(
+            0.0,
+            1.0,
+          );
           return Stack(
             children: [
               Positioned.fromRect(
                 rect: box,
-                child: Opacity(
-                  opacity: (widget.animation.value / _fadeEnd).clamp(0.0, 1.0),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(
-                      lerpDouble(_cardRadius, 0, t)! + _shrunkRadius * shrunk,
-                    ),
-                    clipBehavior: open ? Clip.none : Clip.antiAlias,
-                    // The article keeps its full-size layout: no text moves
-                    // to a new line while it grows.
-                    child: FittedBox(
-                      fit: BoxFit.fitWidth,
-                      alignment: Alignment.topCenter,
-                      clipBehavior: open ? Clip.none : Clip.hardEdge,
-                      child: page,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(
+                    lerpDouble(_cardRadius, 0, t)! + _shrunkRadius * shrunk,
+                  ),
+                  clipBehavior: open ? Clip.none : Clip.antiAlias,
+                  child: ColoredBox(
+                    color: route.background,
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        Opacity(
+                          opacity: pageShown,
+                          // The article keeps its full-size layout: no text
+                          // moves to a new line while it grows.
+                          child: FittedBox(
+                            fit: BoxFit.fitWidth,
+                            alignment: Alignment.topCenter,
+                            clipBehavior: open ? Clip.none : Clip.hardEdge,
+                            child: page,
+                          ),
+                        ),
+                        if (cardShown > 0)
+                          Positioned(
+                            left: 0,
+                            top: 0,
+                            right: 0,
+                            child: Opacity(
+                              opacity: cardShown,
+                              // The card as it was, at the box's width.
+                              child: AspectRatio(
+                                aspectRatio:
+                                    route.from.width / route.from.height,
+                                child: RawImage(
+                                  image: route.card,
+                                  fit: BoxFit.fill,
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
                   ),
                 ),
