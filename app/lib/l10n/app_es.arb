@@ -114,7 +114,7 @@
   "notificationsUnavailable": "No disponible",
   "notificationsOpensSettings": "Abre los ajustes de tu teléfono",
   "pushOfferTitle": "Decisiones importantes",
-  "pushOfferBody": "Recibe las decisiones oficiales más importantes como notificación: 2 al día como máximo y ninguna de noche.",
+  "pushOfferBody": "Recibe las decisiones oficiales más importantes como notificación en cuanto salen, nunca de noche.",
   "pushOfferNotNow": "Ahora no",
   "pushOfferTurnOn": "Activar",
   "settingsAboutHeader": "Información",

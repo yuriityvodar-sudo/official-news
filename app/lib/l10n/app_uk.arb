@@ -114,7 +114,7 @@
   "notificationsUnavailable": "Недоступно",
   "notificationsOpensSettings": "Відкриває застосунок «Параметри»",
   "pushOfferTitle": "Важливі рішення",
-  "pushOfferBody": "Отримуйте найважливіші офіційні рішення в сповіщеннях: не більше 2 на день, уночі — жодних.",
+  "pushOfferBody": "Отримуйте найважливіші офіційні рішення в сповіщеннях, щойно вони з’являються; уночі — жодних.",
   "pushOfferNotNow": "Не зараз",
   "pushOfferTurnOn": "Увімкнути",
   "settingsAboutHeader": "Інформація",

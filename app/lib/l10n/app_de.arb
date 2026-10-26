@@ -114,7 +114,7 @@
   "notificationsUnavailable": "Nicht verfügbar",
   "notificationsOpensSettings": "Öffnet die App „Einstellungen“",
   "pushOfferTitle": "Wichtige Entscheidungen",
-  "pushOfferBody": "Erhalten Sie die wichtigsten offiziellen Entscheidungen als Mitteilung: höchstens 2 pro Tag, nachts keine.",
+  "pushOfferBody": "Erhalten Sie die wichtigsten offiziellen Entscheidungen als Mitteilung, sobald sie da sind, nachts nie.",
   "pushOfferNotNow": "Später",
   "pushOfferTurnOn": "Aktivieren",
   "settingsAboutHeader": "Info",
