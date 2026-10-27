@@ -539,6 +539,34 @@ void main() {
         );
       });
 
+      testWidgets('swiped sideways, the pills stay where they are as the '
+          'title scrolls away and back: the same row, not a new one', (
+        tester,
+      ) async {
+        await pumpFeed(
+          tester,
+          [for (var i = 0; i < 12; i++) _article('r$i', feedSeq: 20 - i)],
+          const [],
+          height: 700,
+        );
+        final pills = find.byType(TopicPills);
+        final all = find.text('All topics');
+        await tester.drag(all, const Offset(-120, 0));
+        await tester.pumpAndSettle();
+        final swiped = tester.getTopLeft(all).dx;
+        expect(swiped, lessThan(0));
+
+        await tester.drag(find.text('Decision r3'), const Offset(0, -500));
+        await tester.pumpAndSettle();
+        expect(tester.getTopLeft(pills).dy, 0);
+        expect(tester.getTopLeft(all).dx, swiped);
+
+        await tester.drag(find.text('Decision r5'), const Offset(0, 500));
+        await tester.pumpAndSettle();
+        expect(tester.getTopLeft(pills).dy, greaterThan(60));
+        expect(tester.getTopLeft(all).dx, swiped);
+      });
+
       testWidgets('pulled down, the title and the date grow from their left '
           'edge, grey words in the gap say to pull, and no glow rises', (
         tester,

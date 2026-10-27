@@ -7,8 +7,8 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../../core/card_zoom.dart';
 import '../../core/filters.dart';
+import '../../core/glass.dart';
 import '../../core/topics.dart';
 import '../../l10n/app_localizations.dart';
 
@@ -19,8 +19,9 @@ import '../../l10n/app_localizations.dart';
 /// On iOS the row is iOS's own (Roman, 27 Oct, #166): SwiftUI pills in
 /// Liquid Glass from iOS 26, the chosen one a drop of [tint] that flows to
 /// the pill tapped (`PillsView` in the Runner), the system's translucent
-/// material before iOS 26. Elsewhere, and on iOS while an article grows out
-/// of its card, Flutter draws it: each pill glass (Roman's pick 2 of the
+/// material before iOS 26. Elsewhere, and on iOS while anything is over the
+/// feed (an article growing out of its card, a sheet, the splash), Flutter
+/// draws it: each pill glass (Roman's pick 2 of the
 /// mockup `handoff/glass-row-and-pull.html`), the feed showing through it,
 /// blurred, under a tint of [fill]; the chosen one glass in the look's
 /// colour, glowing.
@@ -138,10 +139,10 @@ class TopicPills extends StatelessWidget {
 /// stays with the feed, as anywhere on it.
 ///
 /// [fallback], the same row drawn by Flutter and swiped as far as iOS's,
-/// shows until iOS has made its row, and while an article grows out of its
-/// card or goes back into it, since iOS would draw its row over the moving
-/// article (as with the gear's glass, `GlassCircle`). Hidden, not removed,
-/// so each is there again at once.
+/// shows until iOS has made its row, and while anything is over the feed
+/// (a sheet, an article growing out of its card: [NativeOrPlain]), since the
+/// glass's shadow would show through it, as with the gear's glass
+/// (`GlassCircle`).
 class _NativePills extends StatefulWidget {
   const _NativePills({
     required this.pills,
@@ -246,25 +247,10 @@ class _NativePillsState extends State<_NativePills> {
         Factory<TapGestureRecognizer>(TapGestureRecognizer.new),
       },
     );
-    final fallback = widget.fallback(_scroll);
-    return ValueListenableBuilder(
-      valueListenable: CardZoomRoute.moving,
-      builder: (context, moving, _) {
-        final ios = _ready && !moving;
-        return Stack(
-          fit: StackFit.expand,
-          children: [
-            IgnorePointer(
-              ignoring: ios,
-              child: Opacity(opacity: ios ? 0 : 1, child: fallback),
-            ),
-            IgnorePointer(
-              ignoring: !ios,
-              child: Opacity(opacity: ios ? 1 : 0, child: native),
-            ),
-          ],
-        );
-      },
+    return NativeOrPlain(
+      ready: _ready,
+      native: native,
+      plain: widget.fallback(_scroll),
     );
   }
 }
