@@ -106,7 +106,7 @@ class ChatSubscription extends ChangeNotifier {
   Future<void> start() async {
     _prefs = await SharedPreferences.getInstance();
     _keep(_prefs!.getString(_transactionKey), notify: false);
-    final store = _store ??= AppStore();
+    final store = _store ??= chatDemo ? DemoStore() : AppStore();
     _listening = store.purchases.listen(_purchased, onError: (_) {});
     notifyListeners();
   }
@@ -233,6 +233,67 @@ class ChatSubscription extends ChangeNotifier {
     state.dispose();
     super.dispose();
   }
+}
+
+/// For looking at the paywall and the chat in the simulator, which has no
+/// App Store products: a debug build with `--dart-define=CHAT_DEMO=1` sells a
+/// pretend subscription at once ([DemoStore]) and the chat answers with the
+/// article's summary. Release builds (TestFlight) never do.
+const chatDemo = kDebugMode && bool.fromEnvironment('CHAT_DEMO');
+
+/// [chatDemo]'s App Store: the price, and a purchase that goes through at once.
+class DemoStore implements Store {
+  final _purchases = StreamController<List<PurchaseDetails>>.broadcast();
+
+  @override
+  Stream<List<PurchaseDetails>> get purchases => _purchases.stream;
+
+  @override
+  Future<bool> available() async => true;
+
+  @override
+  Future<ProductDetails?> product(String id) async => ProductDetails(
+    id: id,
+    title: 'AI agent',
+    description: 'Monthly',
+    price: r'$4.99',
+    rawPrice: 4.99,
+    currencyCode: 'USD',
+  );
+
+  @override
+  Future<void> buy(
+    ProductDetails product, {
+    required String accountToken,
+  }) async {
+    final expires = DateTime.now().add(const Duration(days: 30));
+    final payload = base64Url
+        .encode(
+          utf8.encode(
+            jsonEncode({'expiresDate': expires.millisecondsSinceEpoch}),
+          ),
+        )
+        .replaceAll('=', '');
+    _purchases.add([
+      PurchaseDetails(
+        purchaseID: 'demo',
+        productID: product.id,
+        verificationData: PurchaseVerificationData(
+          localVerificationData: '',
+          serverVerificationData: 'demo.$payload.demo',
+          source: 'demo',
+        ),
+        transactionDate: '${DateTime.now().millisecondsSinceEpoch}',
+        status: PurchaseStatus.purchased,
+      ),
+    ]);
+  }
+
+  @override
+  Future<void> restore() async {}
+
+  @override
+  Future<void> finish(PurchaseDetails purchase) async {}
 }
 
 /// The app's subscription, started with the app on iOS (`main.dart`).

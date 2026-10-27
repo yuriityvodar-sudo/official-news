@@ -3,6 +3,7 @@ import 'dart:io' show Platform;
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart' show Material, MaterialType;
 
 import '../../core/analytics.dart';
 import '../../core/api_client.dart';
@@ -109,15 +110,17 @@ class _ChatScreenState extends State<ChatScreen> {
       ),
     );
     try {
-      final reply = await _api.askChat(
-        articleId: widget.article.id,
-        lang: Localizations.localeOf(context).languageCode,
-        messages: [
-          for (final t in _turns)
-            if (t != answer && t.text.isNotEmpty) (t.reader, t.text),
-        ],
-        transaction: transaction,
-      );
+      final reply = chatDemo
+          ? _demoAnswer()
+          : await _api.askChat(
+              articleId: widget.article.id,
+              lang: Localizations.localeOf(context).languageCode,
+              messages: [
+                for (final t in _turns)
+                  if (t != answer && t.text.isNotEmpty) (t.reader, t.text),
+              ],
+              transaction: transaction,
+            );
       _remaining = reply.remaining;
       await for (final piece in reply.text) {
         if (!mounted) return;
@@ -154,6 +157,20 @@ class _ChatScreenState extends State<ChatScreen> {
     }
     if (mounted) setState(() => _sending = false);
     _toEnd();
+  }
+
+  /// [chatDemo]: the summary, word by word, as an answer would come.
+  ChatAnswer _demoAnswer() {
+    final words = (widget.article.summary ?? widget.article.headline).split(
+      ' ',
+    );
+    return ChatAnswer(
+      text: Stream.periodic(
+        const Duration(milliseconds: 40),
+        (i) => i == 0 ? words[i] : ' ${words[i]}',
+      ).take(words.length),
+      remaining: 3,
+    );
   }
 
   Future<void> _paywall() async {
@@ -200,199 +217,203 @@ class _ChatScreenState extends State<ChatScreen> {
 
     return CupertinoPageScaffold(
       navigationBar: CupertinoNavigationBar(middle: Text(l10n.aiAgent)),
-      child: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              child: ListView(
-                controller: _scroll,
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-                children: [
-                  Text(
-                    article.headline,
-                    style: TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w700,
-                      color: label,
+      // Material for the default text style (no yellow underline on plain Text).
+      child: Material(
+        type: MaterialType.transparency,
+        child: SafeArea(
+          child: Column(
+            children: [
+              Expanded(
+                child: ListView(
+                  controller: _scroll,
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                  children: [
+                    Text(
+                      article.headline,
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w700,
+                        color: label,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    article.source.name,
-                    style: TextStyle(fontSize: 13, color: muted),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    l10n.chatNotAdvice,
-                    style: TextStyle(fontSize: 12, color: muted),
-                  ),
-                  if (_turns.isEmpty) ...[
-                    const SizedBox(height: 16),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        for (final q in [
-                          l10n.chatSuggestConcernsMe,
-                          l10n.chatSuggestWhatChanges,
-                          l10n.chatSuggestWhatToDo,
-                        ])
-                          CupertinoButton(
+                    const SizedBox(height: 4),
+                    Text(
+                      article.source.name,
+                      style: TextStyle(fontSize: 13, color: muted),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      l10n.chatNotAdvice,
+                      style: TextStyle(fontSize: 12, color: muted),
+                    ),
+                    if (_turns.isEmpty) ...[
+                      const SizedBox(height: 16),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          for (final q in [
+                            l10n.chatSuggestConcernsMe,
+                            l10n.chatSuggestWhatChanges,
+                            l10n.chatSuggestWhatToDo,
+                          ])
+                            CupertinoButton(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 8,
+                              ),
+                              minimumSize: const Size(44, 44),
+                              color: CupertinoColors.secondarySystemFill
+                                  .resolveFrom(context),
+                              borderRadius: BorderRadius.circular(18),
+                              onPressed: _sending ? null : () => _ask(q),
+                              child: Text(
+                                q,
+                                style: TextStyle(fontSize: 15, color: label),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ],
+                    for (final turn in _turns) ...[
+                      const SizedBox(height: 14),
+                      if (turn.reader)
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: Container(
+                            constraints: const BoxConstraints(maxWidth: 300),
                             padding: const EdgeInsets.symmetric(
                               horizontal: 14,
-                              vertical: 8,
+                              vertical: 10,
                             ),
-                            minimumSize: const Size(44, 44),
-                            color: CupertinoColors.secondarySystemFill
-                                .resolveFrom(context),
-                            borderRadius: BorderRadius.circular(18),
-                            onPressed: _sending ? null : () => _ask(q),
+                            decoration: BoxDecoration(
+                              color: style.fill,
+                              borderRadius: BorderRadius.circular(20),
+                            ),
                             child: Text(
-                              q,
-                              style: TextStyle(fontSize: 15, color: label),
+                              turn.text,
+                              style: const TextStyle(
+                                fontSize: 15,
+                                color: Color(0xFFFFFFFF),
+                              ),
+                            ),
+                          ),
+                        )
+                      else ...[
+                        if (turn.text.isEmpty)
+                          const Align(
+                            alignment: Alignment.centerLeft,
+                            child: CupertinoActivityIndicator(),
+                          )
+                        else
+                          Text(
+                            turn.text,
+                            style: TextStyle(
+                              fontSize: 16,
+                              height: 1.45,
+                              color: label,
+                            ),
+                          ),
+                        if (turn.cutOff)
+                          Text(
+                            l10n.chatCutOff,
+                            style: TextStyle(fontSize: 13, color: muted),
+                          ),
+                        if (turn.done)
+                          CupertinoButton(
+                            padding: EdgeInsets.zero,
+                            minimumSize: const Size(44, 44),
+                            onPressed: () =>
+                                widget.openLink(Uri.parse(article.originalUrl)),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  CupertinoIcons.arrow_up_right_square,
+                                  size: 16,
+                                  color: style.ink,
+                                ),
+                                const SizedBox(width: 6),
+                                Flexible(
+                                  child: Text(
+                                    l10n.readOfficialDecisionOn(site),
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: style.ink,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                       ],
-                    ),
-                  ],
-                  for (final turn in _turns) ...[
-                    const SizedBox(height: 14),
-                    if (turn.reader)
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: Container(
-                          constraints: const BoxConstraints(maxWidth: 300),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 10,
-                          ),
-                          decoration: BoxDecoration(
-                            color: style.fill,
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text(
-                            turn.text,
-                            style: const TextStyle(
-                              fontSize: 15,
-                              color: Color(0xFFFFFFFF),
-                            ),
-                          ),
-                        ),
-                      )
-                    else ...[
-                      if (turn.text.isEmpty)
-                        const Align(
-                          alignment: Alignment.centerLeft,
-                          child: CupertinoActivityIndicator(),
-                        )
-                      else
+                    ],
+                    if (_problem != null ||
+                        (_turns.isNotEmpty && _turns.last.cutOff)) ...[
+                      const SizedBox(height: 12),
+                      if (_problem != null)
                         Text(
-                          turn.text,
-                          style: TextStyle(
-                            fontSize: 16,
-                            height: 1.45,
-                            color: label,
-                          ),
+                          _problem!,
+                          style: TextStyle(fontSize: 14, color: muted),
                         ),
-                      if (turn.cutOff)
-                        Text(
-                          l10n.chatCutOff,
-                          style: TextStyle(fontSize: 13, color: muted),
+                      CupertinoButton(
+                        padding: EdgeInsets.zero,
+                        minimumSize: const Size(44, 44),
+                        onPressed: _sending ? null : _again,
+                        child: Text(
+                          l10n.tryAgain,
+                          style: TextStyle(fontSize: 15, color: style.ink),
                         ),
-                      if (turn.done)
-                        CupertinoButton(
-                          padding: EdgeInsets.zero,
-                          minimumSize: const Size(44, 44),
-                          onPressed: () =>
-                              widget.openLink(Uri.parse(article.originalUrl)),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                CupertinoIcons.arrow_up_right_square,
-                                size: 16,
-                                color: style.ink,
-                              ),
-                              const SizedBox(width: 6),
-                              Flexible(
-                                child: Text(
-                                  l10n.readOfficialDecisionOn(site),
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    color: style.ink,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
+                      ),
+                    ],
+                    if (remaining != null && remaining <= 3) ...[
+                      const SizedBox(height: 10),
+                      Text(
+                        l10n.chatRemaining(remaining),
+                        style: TextStyle(fontSize: 13, color: muted),
+                      ),
                     ],
                   ],
-                  if (_problem != null ||
-                      (_turns.isNotEmpty && _turns.last.cutOff)) ...[
-                    const SizedBox(height: 12),
-                    if (_problem != null)
-                      Text(
-                        _problem!,
-                        style: TextStyle(fontSize: 14, color: muted),
-                      ),
-                    CupertinoButton(
-                      padding: EdgeInsets.zero,
-                      minimumSize: const Size(44, 44),
-                      onPressed: _sending ? null : _again,
-                      child: Text(
-                        l10n.tryAgain,
-                        style: TextStyle(fontSize: 15, color: style.ink),
-                      ),
-                    ),
-                  ],
-                  if (remaining != null && remaining <= 3) ...[
-                    const SizedBox(height: 10),
-                    Text(
-                      l10n.chatRemaining(remaining),
-                      style: TextStyle(fontSize: 13, color: muted),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            // One row at the bottom: the field with its send button.
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 6, 12, 10),
-              child: CupertinoTextField(
-                controller: _field,
-                placeholder: l10n.chatAsk,
-                maxLength: 500,
-                minLines: 1,
-                maxLines: 4,
-                textInputAction: TextInputAction.send,
-                onSubmitted: _sending ? null : _ask,
-                padding: const EdgeInsets.fromLTRB(14, 10, 6, 10),
-                decoration: BoxDecoration(
-                  color: CupertinoColors.tertiarySystemFill.resolveFrom(
-                    context,
-                  ),
-                  borderRadius: BorderRadius.circular(22),
                 ),
-                suffix: CupertinoButton(
-                  padding: const EdgeInsets.only(right: 6),
-                  minimumSize: const Size(44, 44),
-                  onPressed: _sending
-                      ? null
-                      : () {
-                          Haptics.light();
-                          unawaited(_ask(_field.text));
-                        },
-                  child: Icon(
-                    CupertinoIcons.arrow_up_circle_fill,
-                    size: 32,
-                    color: style.fill,
-                    semanticLabel: l10n.chatSend,
+              ),
+              // One row at the bottom: the field with its send button.
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 6, 12, 10),
+                child: CupertinoTextField(
+                  controller: _field,
+                  placeholder: l10n.chatAsk,
+                  maxLength: 500,
+                  minLines: 1,
+                  maxLines: 4,
+                  textInputAction: TextInputAction.send,
+                  onSubmitted: _sending ? null : _ask,
+                  padding: const EdgeInsets.fromLTRB(14, 10, 6, 10),
+                  decoration: BoxDecoration(
+                    color: CupertinoColors.tertiarySystemFill.resolveFrom(
+                      context,
+                    ),
+                    borderRadius: BorderRadius.circular(22),
+                  ),
+                  suffix: CupertinoButton(
+                    padding: const EdgeInsets.only(right: 6),
+                    minimumSize: const Size(44, 44),
+                    onPressed: _sending
+                        ? null
+                        : () {
+                            Haptics.light();
+                            unawaited(_ask(_field.text));
+                          },
+                    child: Icon(
+                      CupertinoIcons.arrow_up_circle_fill,
+                      size: 32,
+                      color: style.fill,
+                      semanticLabel: l10n.chatSend,
+                    ),
                   ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

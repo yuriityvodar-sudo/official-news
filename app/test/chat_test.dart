@@ -184,6 +184,10 @@ void main() {
 
   group('the paywall', () {
     Future<Future<bool>> showPaywall(WidgetTester tester) async {
+      // An iPhone's screen, as the sheet shows on one.
+      tester.view.physicalSize = const Size(393, 852) * 3;
+      tester.view.devicePixelRatio = 3;
+      addTearDown(tester.view.reset);
       late Future<bool> closed;
       await tester.pumpWidget(
         testApp(
@@ -258,8 +262,15 @@ void main() {
         find.text("Purchases aren't available right now."),
         findsOneWidget,
       );
+      await tester.ensureVisible(find.text('Terms of Use'));
       await tester.tap(find.text('Terms of Use'));
       await tester.pumpAndSettle();
+      // The terms page, over the sheet: its subscription section, further down.
+      await tester.scrollUntilVisible(
+        find.text('AI agent subscription'),
+        200,
+        scrollable: find.byType(Scrollable).last,
+      );
       expect(find.text('AI agent subscription'), findsOneWidget);
     });
   });
