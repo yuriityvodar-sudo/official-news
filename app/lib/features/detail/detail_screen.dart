@@ -4,6 +4,7 @@ import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollDirection;
+import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -242,10 +243,18 @@ class _DetailScreenState extends State<DetailScreen> {
             top: 0,
             left: 0,
             right: 0,
-            child: ZoomRest(
-              child: ScrollEdgeFade(
-                height: padding.top + _bar + 8,
-                color: page,
+            // The status bar's words for the page, set here: a sheet over
+            // the article (the paywall) leaves its light ones otherwise.
+            child: AnnotatedRegion<SystemUiOverlayStyle>(
+              value:
+                  ThemeData.estimateBrightnessForColor(page) == Brightness.dark
+                  ? SystemUiOverlayStyle.light
+                  : SystemUiOverlayStyle.dark,
+              child: ZoomRest(
+                child: ScrollEdgeFade(
+                  height: padding.top + _bar + 8,
+                  color: page,
+                ),
               ),
             ),
           ),
