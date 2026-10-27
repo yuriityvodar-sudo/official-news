@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:official_news/core/card_zoom.dart';
 import 'package:official_news/core/filters.dart';
+import 'package:official_news/core/glass.dart';
 import 'package:official_news/core/topics.dart';
 import 'package:official_news/features/feed/feed_topic_pills.dart';
 
@@ -192,6 +195,56 @@ void main() {
     expect(tester.getTopLeft(all).dx, left - 120);
 
     CardZoomRoute.moving.value = false;
+    await tester.pump();
+    expect(shown(tester), (0.0, 1.0));
+  });
+
+  testWidgets("Flutter's row stands in while a sheet is over the feed, "
+      'until it has gone again', (tester) async {
+    recordRows(tester);
+    await tester.pumpWidget(pills());
+    await tester.pump();
+    expect(shown(tester), (0.0, 1.0));
+
+    final navigator = tester.state<NavigatorState>(find.byType(Navigator));
+    unawaited(
+      navigator.push(
+        CupertinoSheetRoute<void>(
+          scrollableBuilder: (_, _) => const Text('Sheet'),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(shown(tester), (1.0, 0.0));
+    await tester.pumpAndSettle();
+    expect(shown(tester), (1.0, 0.0));
+
+    // Still under the sheet as it slides away; iOS's again once it has gone.
+    navigator.pop();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(shown(tester), (1.0, 0.0));
+    await tester.pumpAndSettle();
+    expect(shown(tester), (0.0, 1.0));
+  });
+
+  testWidgets("under the splash iOS's row is hidden, and comes in as much as "
+      'the feed does as the splash fades', (tester) async {
+    recordRows(tester);
+    final cover = ValueNotifier(1.0);
+    addTearDown(cover.dispose);
+    await tester.pumpWidget(NativeCover(cover: cover, child: pills()));
+    await tester.pump();
+    expect(shown(tester).$2, 0);
+
+    cover.value = 0.4;
+    await tester.pump();
+    final (flutter, ios) = shown(tester);
+    expect(flutter, 0);
+    expect(ios, moreOrLessEquals(0.6));
+
+    cover.value = 0;
     await tester.pump();
     expect(shown(tester), (0.0, 1.0));
   });

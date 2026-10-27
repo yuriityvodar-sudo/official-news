@@ -282,17 +282,19 @@ class _NewsHeader extends SliverPersistentHeaderDelegate {
   @override
   Widget build(BuildContext context, double shrinkOffset, bool overlaps) {
     final gone = (shrinkOffset / titleHeight).clamp(0.0, 1.0);
+    // The title stays, unseen once gone, so the pills keep their place in
+    // the tree: iOS's row is not made again (it jumped as the title went),
+    // nor the gear's glass as the title comes back.
     return Stack(
       fit: StackFit.expand,
       children: [
-        if (gone < 1)
-          Positioned(
-            left: 0,
-            right: 0,
-            top: -shrinkOffset,
-            height: titleHeight,
-            child: Opacity(opacity: 1 - gone, child: title),
-          ),
+        Positioned(
+          left: 0,
+          right: 0,
+          top: -shrinkOffset,
+          height: titleHeight,
+          child: Opacity(opacity: 1 - gone, child: title),
+        ),
         Positioned(left: 0, right: 0, bottom: 0, height: _pills, child: pills),
       ],
     );
