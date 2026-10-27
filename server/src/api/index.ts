@@ -1,3 +1,4 @@
+import { receiveNotification } from "../appstore";
 import type { Env } from "../env";
 import { REAL_SOURCE, health } from "../health";
 import { TOPICS, type Topic } from "../summarizer/schema";
@@ -594,9 +595,16 @@ async function listCountries(url: URL, env: Env): Promise<Response> {
 }
 
 async function route(request: Request, env: Env): Promise<Response> {
+  const url = new URL(request.url);
+  // Apple's notifications about the chat's subscription (#146), the one POST so far.
+  if (url.pathname === "/v1/appstore/notifications") {
+    if (request.method !== "POST") return json({ error: "Method not allowed" }, 405, { allow: "POST" });
+    const { status, body } = await receiveNotification(await request.json().catch(() => null), env);
+    return json(body, status);
+  }
+
   if (request.method !== "GET") return json({ error: "Method not allowed" }, 405, { allow: "GET" });
 
-  const url = new URL(request.url);
   if (url.pathname === "/articles") return listArticles(url, env);
   if (url.pathname === "/topics") return listTopics(url, env);
   if (url.pathname === "/countries") return listCountries(url, env);
