@@ -109,6 +109,7 @@ class _FeedScreenState extends State<FeedScreen> {
     if (widget.controller == null) _feed.dispose();
     _scroll.dispose();
     _masthead.dispose();
+    _pull.dispose();
     super.dispose();
   }
 
@@ -189,6 +190,37 @@ class _FeedScreenState extends State<FeedScreen> {
   void _nearEnd() {
     if (_scroll.position.pixels > _scroll.position.maxScrollExtent - 600) {
       unawaited(_feed.loadMore());
+    }
+  }
+
+  /// How the last pull to refresh went, for the look to say it (#166).
+  FeedRefreshed? _refreshed;
+
+  /// The pull to refresh as the gap last showed it, for the masthead.
+  final _pull = ValueNotifier<FeedPull?>(null);
+
+  /// How long the gap stays open once the feed has loaded, with how it went.
+  static const _refreshedFor = Duration(milliseconds: 1100);
+
+  /// The pull to refresh: the feed again, then, held a moment before the gap
+  /// closes in a look that says it, how that went ("3 new decisions", "No
+  /// new decisions"). A failure is not held: the feed says it itself.
+  Future<void> _pullToRefresh() async {
+    // The Top stories block's decisions too: one that moves between the
+    // block and the list is not new.
+    Iterable<Article> shown() => [..._feed.topStories, ..._feed.feed];
+    final before = {for (final article in shown()) article.id};
+    setState(() => _refreshed = null);
+    await _feed.refresh();
+    if (!mounted || _feed.error != null) return;
+    setState(
+      () => _refreshed = FeedRefreshed(
+        shown().where((a) => !before.contains(a.id)).length,
+        wasEmpty: before.isEmpty,
+      ),
+    );
+    if (lookFor(feedDesign.value).saysHowRefreshWent) {
+      await Future<void>.delayed(_refreshedFor);
     }
   }
 
@@ -358,8 +390,20 @@ class _FeedScreenState extends State<FeedScreen> {
                     // Pull to refresh works in every state, including error and empty.
                     // It taps back itself as the pull passes the refresh point.
                     CupertinoSliverRefreshControl(
-                      onRefresh: _feed.refresh,
-                      builder: look.refreshIndicator,
+                      onRefresh: _pullToRefresh,
+                      builder: (context, mode, pulled, trigger, extent) {
+                        final pull = FeedPull(
+                          mode: mode,
+                          pulled: pulled,
+                          trigger: trigger,
+                          extent: extent,
+                          result: _refreshed,
+                        );
+                        // Called while the feed is laid out: only painters
+                        // listen (FeedMasthead.pull).
+                        _pull.value = pull;
+                        return look.refreshIndicator(context, pull);
+                      },
                     ),
                     _MastheadEdge(
                       link: _masthead,
@@ -389,6 +433,7 @@ class _FeedScreenState extends State<FeedScreen> {
                           topic: _feed.topic,
                           topics: _feed.topics,
                           onTopic: _chooseTopic,
+                          pull: _pull,
                         ),
                       ),
                     ),
