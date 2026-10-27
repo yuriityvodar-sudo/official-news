@@ -10,6 +10,8 @@
   "feedLoadMoreFailed": "Не удалось загрузить ещё. Коснитесь, чтобы повторить.",
   "feedEnd": "Вы всё просмотрели",
   "feedEmpty": "Сегодня решений пока нет.",
+  "topStoriesTitle": "Главное",
+  "topStoriesCaption": "По важности за три дня, по одному от страны",
   "feedNoTranslations": "Переведённых решений пока нет.",
   "feedTranslationsComing": "Переводы появятся здесь, как только будут готовы.",
   "newDecisions": "{count, plural, one{{count} новое решение} few{{count} новых решения} many{{count} новых решений} other{{count} нового решения}}",

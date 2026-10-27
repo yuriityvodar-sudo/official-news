@@ -104,13 +104,48 @@ abstract class FeedLook {
   Widget masthead(BuildContext context, FeedMasthead masthead);
 
   /// The feed's one list (Yurii, 16 Oct): every article, each once, in the
-  /// order it arrived in the feed, newest first. No section titles ("Top
-  /// stories", "Latest") and no block of its own for the first articles (a
-  /// lead card, a carousel, numbers): every row in the same style. No day
-  /// headings either: an article dated yesterday can arrive today, and each
-  /// row shows its own time. One sliver, built lazily; only called when
-  /// there is at least one article.
+  /// order it arrived in the feed, newest first; the Top stories block above
+  /// it is [topStories]. No section title of its own and no block for the
+  /// first articles (a lead card, a carousel, numbers): every row in the
+  /// same style. No day headings either: an article dated yesterday can
+  /// arrive today, and each row shows its own time. One sliver, built
+  /// lazily; called for the Top stories' rows too.
   Widget articles(BuildContext context, FeedList list);
+
+  /// The Top stories block (#164, Yurii 26 Oct), above the list: its
+  /// heading ([topStoriesHeading]), then its 3 decisions in the look's own
+  /// rows ([articles]). One sliver; it scrolls with the feed.
+  Widget topStories(BuildContext context, TopStories block) =>
+      SliverMainAxisGroup(
+        slivers: [
+          SliverToBoxAdapter(child: topStoriesHeading(context, block)),
+          articles(context, block.list),
+          const SliverToBoxAdapter(child: SizedBox(height: 16)),
+        ],
+      );
+
+  /// The Top stories title in the masthead's type, with what picked them
+  /// under it.
+  Widget topStoriesHeading(BuildContext context, TopStories block) {
+    final text = NewsText.from(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Semantics(
+            header: true,
+            child: Text(
+              block.title,
+              style: text.masthead.copyWith(fontSize: 24, height: 1.15),
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(block.caption, style: text.meta),
+        ],
+      ),
+    );
+  }
 
   /// The bottom of the feed: a spinner while more is loading, a retry when
   /// that failed, or the end of the feed. One sliver.
@@ -316,6 +351,25 @@ class FeedList {
   /// an article without topics (its card then has no tag row at all).
   List<String> topicsOf(Article article) =>
       cardTopics(article, first: topic, max: maxTopics);
+}
+
+/// The Top stories block for [FeedLook.topStories] (#164): the server's top
+/// stories, best first, which the list under it leaves out.
+class TopStories {
+  const TopStories({
+    required this.title,
+    required this.caption,
+    required this.list,
+  });
+
+  /// "Top stories", in the reader's language.
+  final String title;
+
+  /// What picked them: "By importance over three days, one per country".
+  final String caption;
+
+  /// Its decisions and what a row does, as in the list.
+  final FeedList list;
 }
 
 /// What the bottom of the feed shows for [FeedLook.feedEnd].

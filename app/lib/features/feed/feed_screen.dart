@@ -490,17 +490,41 @@ class _FeedScreenState extends State<FeedScreen> {
       ];
     }
 
-    // One list, no sections (Yurii, 16 Oct): the controller has merged the
-    // top stories into it, in the order the articles arrived; the server has
-    // applied the filters (#67, #68).
+    // The Top stories block, then one list without its decisions (#164); the
+    // server has applied the filters (#67, #68).
+    final block = _feed.topStories;
     final shown = _feed.feed;
     final slivers = <Widget>[];
 
     if (_feed.error != null) {
       slivers.add(_padded(Text(l10n.feedRefreshFailed, style: text.meta)));
     }
-    // Analytics (#60) record each opened article's place in the list (the
-    // section is always "feed" now), and how deep the list was drawn.
+    // Analytics (#60) record each opened article's section ("top" for the
+    // block, "feed" for the list) and place in it, and how deep the list was
+    // drawn.
+    if (block.isNotEmpty) {
+      slivers.add(
+        look.topStories(
+          context,
+          TopStories(
+            title: l10n.topStoriesTitle,
+            caption: l10n.topStoriesCaption,
+            list: FeedList(
+              articles: block,
+              readIds: _feed.readIds,
+              readStyle: readStyle.value,
+              open: (i) => _open(block[i], section: 'top', position: i),
+              actions: (i) => showArticleActions(context, block[i]),
+              shown: (i) => _shownRow(i + 1),
+              topic: _feed.topic,
+              maxTopics: topicTagCount.value,
+              arriving: _arriving,
+              entering: _entering,
+            ),
+          ),
+        ),
+      );
+    }
     if (shown.isNotEmpty) {
       slivers.add(
         look.articles(
@@ -511,7 +535,8 @@ class _FeedScreenState extends State<FeedScreen> {
             readStyle: readStyle.value,
             open: (i) => _open(shown[i], section: 'feed', position: i),
             actions: (i) => showArticleActions(context, shown[i]),
-            shown: (i) => _shownRow(i + 1),
+            // The depth counts the block's rows too.
+            shown: (i) => _shownRow(block.length + i + 1),
             topic: _feed.topic,
             maxTopics: topicTagCount.value,
             arriving: _arriving,

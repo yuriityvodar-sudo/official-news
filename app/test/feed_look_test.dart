@@ -24,9 +24,10 @@ import 'test_app.dart';
 /// option draws, opening an article and scrolling must still reach analytics
 /// with the same section, position and depth as today's feed.
 ///
-/// And every look draws the feed as one list (Yurii, 16 Oct): the top stories
-/// among the rest, each once, in the order they arrived, with no section
-/// titles and no block of its own for the first articles.
+/// And every look draws the Top stories block (#164, Yurii 26 Oct): a heading
+/// and the top stories in the look's own rows, then one list of the rest,
+/// each decision once, in the order they arrived, with no other section
+/// title.
 
 Map<String, dynamic> _article(
   String id, {
@@ -88,9 +89,9 @@ ApiClient _pagedApi(
   }),
 );
 
-/// The top stories t1 (with a picture, as a lead card had) and t2, among four
-/// more, as the server sends them: newest in the feed first, the top stories
-/// in the items too.
+/// The top stories t1 (with a picture) and t2, among four more, as the server
+/// sends them: the items newest in the feed first, the top stories in them
+/// too.
 final _top = [
   _article('t1', imageUrl: 'https://example.test/t1.jpg', feedSeq: 5),
   _article('t2', feedSeq: 2),
@@ -103,12 +104,21 @@ final _items = [
   _top[1],
   _article('a4', feedSeq: 1),
 ];
-const _order = ['a1', 't1', 'a2', 'a3', 't2', 'a4'];
+
+/// The block's two, then the list without them.
+const _order = ['t1', 't2', 'a1', 'a2', 'a3', 'a4'];
 
 /// Any section title, in English or Ukrainian, in any case (C drew them in
 /// capitals).
 final _sectionTitle = RegExp(
   r'top stories|latest|головне|останнє',
+  caseSensitive: false,
+  unicode: true,
+);
+
+/// A title other than the Top stories heading.
+final _otherTitle = RegExp(
+  r'latest|останнє',
   caseSensitive: false,
   unicode: true,
 );
@@ -185,8 +195,10 @@ void main() {
       setUp(() => feedDesign.value = design);
 
       for (final language in [FeedLanguage.en, FeedLanguage.uk]) {
-        testWidgets('one list in ${language.code}: every article once, newest '
-            'first, no section titles, every row alike', (tester) async {
+        testWidgets('Top stories, then one list in ${language.code}: every '
+            'article once, no other section title, every row alike', (
+          tester,
+        ) async {
           final semantics = tester.ensureSemantics();
           // Tall enough to build every row.
           await pumpFeed(
@@ -201,15 +213,19 @@ void main() {
             expect(find.text('Decision $id'), findsOneWidget, reason: id);
           }
           expect(shownOrder(tester), _order);
-          expect(find.textContaining(_sectionTitle), findsNothing);
+          final heading = language == FeedLanguage.en
+              ? 'Top stories'
+              : 'Головне';
+          expect(find.text(heading), findsOneWidget);
           expect(
             find.textContaining(_sectionTitle, findRichText: true),
-            findsNothing,
+            findsOneWidget,
           );
+          expect(find.textContaining(_otherTitle), findsNothing);
           expect(
             find.bySemanticsLabel(_sectionTitle),
-            findsNothing,
-            reason: 'no title for VoiceOver either',
+            findsOneWidget,
+            reason: 'VoiceOver hears the one heading',
           );
           // No lead card and no bigger top-story card: every headline is
           // drawn in the same size, the first top story's too.
@@ -230,39 +246,36 @@ void main() {
         });
       }
 
-      testWidgets('opens each article with section "feed" and its place in '
-          'the one list', (tester) async {
+      testWidgets('opens a top story with section "top" and its place in the '
+          'block, the rest with "feed" and theirs in the list', (tester) async {
         await pumpFeed(tester, _items, _top);
 
-        await tester.tap(find.text('Decision t1'));
+        await tester.tap(find.text('Decision t2'));
         await tester.pumpAndSettle();
-        expect(
-          (lastOpened()['section'], lastOpened()['position']),
-          ('feed', 1),
-        );
+        expect((lastOpened()['section'], lastOpened()['position']), ('top', 1));
         await tester.pageBack();
         await tester.pumpAndSettle();
 
         await tester.scrollUntilVisible(
-          find.text('Decision t2'),
+          find.text('Decision a3'),
           200,
           scrollable: find.byType(Scrollable).first,
         );
         // Wholly on screen: scrolling may stop with only its top in view.
-        await tester.ensureVisible(find.text('Decision t2'));
+        await tester.ensureVisible(find.text('Decision a3'));
         await tester.pumpAndSettle();
-        await tester.tap(find.text('Decision t2'));
+        await tester.tap(find.text('Decision a3'));
         await tester.pumpAndSettle();
         expect(
           (lastOpened()['section'], lastOpened()['position']),
-          ('feed', 4),
+          ('feed', 2),
         );
       });
 
       testWidgets('with a filter, the place is in the list as shown', (
         tester,
       ) async {
-        // a1 is French: with Germany chosen, t1 is first and t2 fourth.
+        // a1 is French: with Germany chosen, the list is a2, a3 and a4.
         final items = [
           for (final a in _items)
             a['id'] == 'a1' ? _article('a1', feedSeq: 6, country: 'FR') : a,
@@ -286,21 +299,21 @@ void main() {
         expect(find.text('Decision a1'), findsNothing);
 
         await tester.scrollUntilVisible(
-          find.text('Decision t2'),
+          find.text('Decision a3'),
           200,
           scrollable: find.byType(Scrollable).first,
         );
         // Wholly on screen, clear of a pinned masthead.
         await Scrollable.ensureVisible(
-          tester.element(find.text('Decision t2')),
+          tester.element(find.text('Decision a3')),
           alignment: 0.5,
         );
         await tester.pumpAndSettle();
-        await tester.tap(find.text('Decision t2'));
+        await tester.tap(find.text('Decision a3'));
         await tester.pumpAndSettle();
         expect(
           (lastOpened()['section'], lastOpened()['position']),
-          ('feed', 3),
+          ('feed', 1),
         );
       });
 
@@ -362,16 +375,16 @@ void main() {
         expect(find.textContaining(_sectionTitle), findsNothing);
       });
 
-      testWidgets('loading more adds to the end of the list; a top story on '
-          'a later page waits for it', (tester) async {
+      testWidgets('loading more adds to the end of the list; a lone top story '
+          '(no block) on a later page waits for it', (tester) async {
         final api = _pagedApi({
           '': {
             'items': [
               for (var i = 40; i > 20; i--) _article('p$i', feedSeq: i),
             ],
             'nextCursor': 'c2',
-            // p30 is on this page; p15 only on the next one.
-            'top': [_article('p30', feedSeq: 30), _article('p15', feedSeq: 15)],
+            // p15 is only on the next page.
+            'top': [_article('p15', feedSeq: 15)],
           },
           'c2': {
             'items': [
@@ -404,14 +417,16 @@ void main() {
 
       testWidgets('sends each feed depth once, as the reader scrolls down, '
           'the top stories\' rows counted too', (tester) async {
-        // 27 rows, 5 of them top stories: Latest alone had 22, short of 25.
+        // 27 rows, 3 of them in the Top stories block: the list alone has 24,
+        // short of 25.
         final items = [
           for (var i = 27; i >= 1; i--) _article('n$i', feedSeq: i),
         ];
         final feed = await pumpFeed(tester, items, [
           for (final i in [26, 20, 14, 8, 2]) items[27 - i],
         ]);
-        expect(feed.feed, hasLength(27));
+        expect(feed.topStories, hasLength(3));
+        expect(feed.feed, hasLength(24));
         await tester.drag(
           find.byType(CustomScrollView),
           const Offset(0, -20000),

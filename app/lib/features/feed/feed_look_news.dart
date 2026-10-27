@@ -83,6 +83,36 @@ class NewsLook extends FeedLook {
     ),
   );
 
+  /// The Top stories title in the look's colour, as the chosen pill (#164).
+  @override
+  Widget topStoriesHeading(BuildContext context, TopStories block) {
+    final style = _NewsStyle.of(context, palette);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Semantics(
+            header: true,
+            child: ShaderMask(
+              blendMode: BlendMode.srcIn,
+              shaderCallback: style.gradient.createShader,
+              child: Text(
+                block.title,
+                style: style.title.copyWith(fontSize: 26),
+              ),
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            block.caption,
+            style: TextStyle(fontSize: 14, color: style.muted),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget masthead(BuildContext context, FeedMasthead masthead) {
     final style = _NewsStyle.of(context, palette);
