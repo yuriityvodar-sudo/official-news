@@ -1,18 +1,29 @@
+import 'dart:io' show Platform;
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
+import '../../core/card_zoom.dart';
 import '../../core/filters.dart';
 import '../../core/topics.dart';
 import '../../l10n/app_localizations.dart';
 
 /// The topics as a row of pills you swipe sideways (Roman, 26 Oct), as Apple
 /// News shows its sections: "All topics" first, then each topic with its
-/// icon, busiest first. Each pill is Liquid Glass (Roman's pick 2 of the
-/// mockup `handoff/glass-row-and-pull.html`): the feed shows through it,
-/// blurred, under a tint of [fill]; the chosen one is glass in the look's
-/// colour, glowing. [leading] goes before them: the Where pull-down, so a
-/// country can still be chosen and cleared.
+/// icon, busiest first.
+///
+/// On iOS the row is iOS's own (Roman, 27 Oct, #166): SwiftUI pills in
+/// Liquid Glass from iOS 26, the chosen one a drop of [tint] that flows to
+/// the pill tapped (`PillsView` in the Runner), the system's translucent
+/// material before iOS 26. Elsewhere, and on iOS while an article grows out
+/// of its card, Flutter draws it: each pill glass (Roman's pick 2 of the
+/// mockup `handoff/glass-row-and-pull.html`), the feed showing through it,
+/// blurred, under a tint of [fill]; the chosen one glass in the look's
+/// colour, glowing.
 class TopicPills extends StatelessWidget {
   const TopicPills({
     super.key,
@@ -25,7 +36,7 @@ class TopicPills extends StatelessWidget {
     required this.shadow,
     required this.chosen,
     required this.glow,
-    this.leading,
+    required this.tint,
   });
 
   /// The chosen topic's id, or null for all topics.
@@ -45,7 +56,15 @@ class TopicPills extends StatelessWidget {
   final Gradient chosen;
   final Color glow;
 
-  final Widget? leading;
+  /// The colour of the chosen pill's glass in iOS's row.
+  final Color tint;
+
+  /// Where iOS draws the row: the iOS app, not tests (macOS) or Android,
+  /// unless a test sets [debugNative].
+  static bool get native => debugNative ?? (!kIsWeb && Platform.isIOS);
+
+  @visibleForTesting
+  static bool? debugNative;
 
   @override
   Widget build(BuildContext context) {
@@ -68,14 +87,13 @@ class TopicPills extends StatelessWidget {
           topicIcons[current] ?? CupertinoIcons.tag,
         ),
     ];
-    return SingleChildScrollView(
+    Widget row([ScrollController? scroll]) => SingleChildScrollView(
+      controller: scroll,
       scrollDirection: Axis.horizontal,
       clipBehavior: Clip.none,
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
       child: Row(
         children: [
-          if (leading != null)
-            Padding(padding: const EdgeInsets.only(right: 8), child: leading),
           for (final (id, name, icon) in pills)
             Padding(
               padding: const EdgeInsets.only(right: 8),
@@ -95,6 +113,158 @@ class TopicPills extends StatelessWidget {
             ),
         ],
       ),
+    );
+    if (!native) return row();
+    return _NativePills(
+      pills: [
+        for (final (id, name, _) in pills)
+          {
+            'id': id ?? '',
+            'title': name,
+            'symbol': id == null ? 'sparkles' : topicSymbol(id),
+          },
+      ],
+      chosen: current ?? '',
+      tint: tint,
+      onTopic: onTopic,
+      fallback: row,
+    );
+  }
+}
+
+/// iOS's row: Flutter sends it the [pills] (id, name and SF Symbol; "" is
+/// all topics), the [chosen] one, [tint] and light or dark, and hears which
+/// pill was tapped. A swipe sideways and a tap go to iOS; a swipe up or down
+/// stays with the feed, as anywhere on it.
+///
+/// [fallback], the same row drawn by Flutter and swiped as far as iOS's,
+/// shows until iOS has made its row, and while an article grows out of its
+/// card or goes back into it, since iOS would draw its row over the moving
+/// article (as with the gear's glass, `GlassCircle`). Hidden, not removed,
+/// so each is there again at once.
+class _NativePills extends StatefulWidget {
+  const _NativePills({
+    required this.pills,
+    required this.chosen,
+    required this.tint,
+    required this.onTopic,
+    required this.fallback,
+  });
+
+  final List<Map<String, String>> pills;
+  final String chosen;
+  final Color tint;
+  final ValueChanged<String?> onTopic;
+  final Widget Function(ScrollController scroll) fallback;
+
+  @override
+  State<_NativePills> createState() => _NativePillsState();
+}
+
+class _NativePillsState extends State<_NativePills> {
+  final _scroll = ScrollController();
+  MethodChannel? _channel;
+
+  /// iOS has made its row.
+  bool _ready = false;
+
+  /// What iOS's row was last told, so it hears only of a change.
+  String? _sent;
+
+  Map<String, Object?> get _params => {
+    'pills': widget.pills,
+    'chosen': widget.chosen,
+    'tint': widget.tint.toARGB32(),
+    'dark': Theme.of(context).brightness == Brightness.dark,
+  };
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _update();
+  }
+
+  @override
+  void didUpdateWidget(_NativePills old) {
+    super.didUpdateWidget(old);
+    _update();
+  }
+
+  @override
+  void dispose() {
+    _channel?.setMethodCallHandler(null);
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  /// The same row takes every change, so the drop flows to a topic chosen
+  /// anywhere, instead of a new row appearing. A row already gone misses it.
+  void _update() {
+    final channel = _channel;
+    if (channel == null) return;
+    final params = _params;
+    final sent = params.toString();
+    if (sent == _sent) return;
+    _sent = sent;
+    channel.invokeMethod<void>('update', params).ignore();
+  }
+
+  void _created(int id) {
+    _channel = MethodChannel('official_news/pills_$id')
+      ..setMethodCallHandler((call) async {
+        switch (call.method) {
+          case 'select':
+            final topic = call.arguments as String;
+            widget.onTopic(topic.isEmpty ? null : topic);
+          case 'scrolled' when _scroll.hasClients:
+            final position = _scroll.position;
+            _scroll.jumpTo(
+              clampDouble(
+                (call.arguments as num).toDouble(),
+                position.minScrollExtent,
+                position.maxScrollExtent,
+              ),
+            );
+        }
+      });
+    // Anything that changed while iOS was making the row.
+    _update();
+    if (mounted) setState(() => _ready = true);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final native = UiKitView(
+      viewType: 'official_news/pills',
+      creationParams: _params,
+      creationParamsCodec: const StandardMessageCodec(),
+      onPlatformViewCreated: _created,
+      gestureRecognizers: {
+        Factory<HorizontalDragGestureRecognizer>(
+          HorizontalDragGestureRecognizer.new,
+        ),
+        Factory<TapGestureRecognizer>(TapGestureRecognizer.new),
+      },
+    );
+    final fallback = widget.fallback(_scroll);
+    return ValueListenableBuilder(
+      valueListenable: CardZoomRoute.moving,
+      builder: (context, moving, _) {
+        final ios = _ready && !moving;
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            IgnorePointer(
+              ignoring: ios,
+              child: Opacity(opacity: ios ? 0 : 1, child: fallback),
+            ),
+            IgnorePointer(
+              ignoring: !ios,
+              child: Opacity(opacity: ios ? 1 : 0, child: native),
+            ),
+          ],
+        );
+      },
     );
   }
 }
