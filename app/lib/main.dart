@@ -5,7 +5,9 @@ import 'package:flutter/material.dart';
 import 'core/analytics.dart';
 import 'core/push.dart';
 import 'core/router.dart';
+import 'core/subscription.dart';
 import 'core/theme.dart';
+import 'features/chat/chat_screen.dart';
 import 'features/feed/feed_controller.dart';
 import 'features/splash/splash.dart';
 import 'l10n/app_localizations.dart';
@@ -18,6 +20,8 @@ Future<void> main() async {
   await feed.open();
   // Not awaited: the feed shows at once; events before Firebase is up are not sent.
   unawaited(_startFirebase(feed));
+  // The AI chat's subscription (#146): what the phone kept, and StoreKit's news.
+  if (ChatScreen.available) unawaited(chatSubscription.start());
   runApp(OfficialNewsApp(feed: feed));
 }
 

@@ -1,0 +1,423 @@
+import 'dart:async';
+import 'dart:convert';
+
+import 'package:flutter/cupertino.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+import 'package:in_app_purchase/in_app_purchase.dart';
+import 'package:official_news/core/analytics.dart';
+import 'package:official_news/core/api_client.dart';
+import 'package:official_news/core/article.dart';
+import 'package:official_news/core/subscription.dart';
+import 'package:official_news/features/chat/chat_consent.dart';
+import 'package:official_news/features/chat/chat_screen.dart';
+import 'package:official_news/features/chat/paywall_sheet.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import 'test_app.dart';
+
+/// The AI chat by subscription in the app (#146): the subscription kept from
+/// StoreKit, the paywall, the consent and the chat. StoreKit itself and the
+/// glass are checked on a phone.
+
+final _article = Article.fromJson({
+  'id': 'c1',
+  'country': 'GB',
+  'source': {'id': 'gb-gov', 'name': 'GOV.UK', 'url': 'https://www.gov.uk'},
+  'publishedAt': '2026-10-26T08:00:00Z',
+  'dateOnly': false,
+  'headline': 'New cars must meet Euro 7 from 2027',
+  'shortSummary': 'Euro 7 for new cars.',
+  'summary': 'From November 2027 new cars and vans must meet Euro 7.',
+  'decisionType': 'regulation',
+  'originalTitle': 'Euro 7',
+  'originalLanguage': 'en',
+  'topics': ['economy'],
+  'tags': <String>[],
+  'importance': 3,
+  'imageUrl': null,
+  'originalUrl': 'https://www.gov.uk/euro-7',
+});
+
+/// A signed transaction as the phone sees it: only the expiry is read here.
+String _jws(DateTime expires) =>
+    'h.${base64Url.encode(utf8.encode(jsonEncode({'expiresDate': expires.millisecondsSinceEpoch}))).replaceAll('=', '')}.s';
+
+final _now = DateTime(2026, 10, 27, 12);
+
+class FakeStore implements Store {
+  final controller = StreamController<List<PurchaseDetails>>.broadcast();
+  final bought = <String>[];
+  final finished = <PurchaseDetails>[];
+  int restores = 0;
+  bool open = true;
+
+  @override
+  Stream<List<PurchaseDetails>> get purchases => controller.stream;
+
+  @override
+  Future<bool> available() async => open;
+
+  @override
+  Future<ProductDetails?> product(String id) async => ProductDetails(
+    id: id,
+    title: 'AI agent',
+    description: 'Monthly',
+    price: r'$4.99',
+    rawPrice: 4.99,
+    currencyCode: 'USD',
+  );
+
+  @override
+  Future<void> buy(
+    ProductDetails product, {
+    required String accountToken,
+  }) async => bought.add(accountToken);
+
+  @override
+  Future<void> restore() async => restores++;
+
+  @override
+  Future<void> finish(PurchaseDetails purchase) async => finished.add(purchase);
+
+  /// StoreKit reporting a purchase of the chat's product.
+  void report(PurchaseStatus status, {String jws = ''}) => controller.add([
+    PurchaseDetails(
+      purchaseID: 'p1',
+      productID: ChatSubscription.productId,
+      verificationData: PurchaseVerificationData(
+        localVerificationData: '',
+        serverVerificationData: jws,
+        source: 'app_store',
+      ),
+      transactionDate: '1793000000000',
+      status: status,
+    )..pendingCompletePurchase = true,
+  ]);
+}
+
+void main() {
+  late List<(String, Map<String, Object>)> events;
+  late FakeStore store;
+  late ChatSubscription subscription;
+
+  setUp(() async {
+    SharedPreferences.setMockInitialValues({});
+    events = [];
+    analytics = Analytics(
+      (name, parameters) async => events.add((name, parameters)),
+      (_, _) async {},
+    );
+    store = FakeStore();
+    subscription = ChatSubscription(store: store, clock: () => _now);
+    await subscription.start();
+  });
+  tearDown(() => analytics = Analytics());
+
+  List<String> sent() => [for (final e in events) e.$1];
+
+  group('the subscription', () {
+    test(
+      'keeps what StoreKit sold, finishes it, and is open until it expires',
+      () async {
+        expect(subscription.active, isFalse);
+        store.report(
+          PurchaseStatus.purchased,
+          jws: _jws(_now.add(const Duration(days: 30))),
+        );
+        await pumpEventQueue();
+        expect(subscription.active, isTrue);
+        expect(store.finished, hasLength(1));
+
+        // Kept on the phone for the next start.
+        final again = ChatSubscription(store: FakeStore(), clock: () => _now);
+        await again.start();
+        expect(again.transaction, subscription.transaction);
+        expect(
+          ChatSubscription(
+            store: FakeStore(),
+            clock: () => _now.add(const Duration(days: 31)),
+          ).active,
+          isFalse,
+        );
+
+        // The server said it is not paid.
+        subscription.lapsed();
+        expect(subscription.active, isFalse);
+        final third = ChatSubscription(store: FakeStore(), clock: () => _now);
+        await third.start();
+        expect(third.transaction, isNull);
+      },
+    );
+
+    test('buys with the phone\'s own UUID, the same every time', () async {
+      await subscription.buy();
+      await subscription.buy();
+      expect(store.bought, hasLength(2));
+      expect(
+        store.bought.first,
+        matches(
+          RegExp(
+            r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
+          ),
+        ),
+      );
+      expect(store.bought.toSet(), hasLength(1));
+      expect(subscription.state.value, PurchaseState.buying);
+      store.report(PurchaseStatus.pending);
+      await pumpEventQueue();
+      expect(subscription.state.value, PurchaseState.pending);
+      store.report(PurchaseStatus.error);
+      await pumpEventQueue();
+      expect(subscription.state.value, PurchaseState.failed);
+    });
+
+    testWidgets('a restore that finds nothing says so', (tester) async {
+      await subscription.restore();
+      expect(store.restores, 1);
+      expect(subscription.state.value, PurchaseState.restoring);
+      await tester.pump(ChatSubscription.restoreWait);
+      expect(subscription.state.value, PurchaseState.nothingToRestore);
+    });
+  });
+
+  group('the paywall', () {
+    Future<Future<bool>> showPaywall(WidgetTester tester) async {
+      late Future<bool> closed;
+      await tester.pumpWidget(
+        testApp(
+          home: Builder(
+            builder: (context) => CupertinoButton(
+              onPressed: () => closed = showCupertinoSheet<bool>(
+                context: context,
+                scrollableBuilder: (_, scroll) => PaywallSheet(
+                  article: _article,
+                  subscription: subscription,
+                  scroll: scroll,
+                ),
+              ).then((v) => v ?? false),
+              child: const Text('open'),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+      return closed;
+    }
+
+    testWidgets(
+      'shows the sample about this decision, the price and what Apple asks for, and closes once bought',
+      (tester) async {
+        final closed = await showPaywall(tester);
+        expect(find.text('Does this concern me?'), findsOneWidget);
+        expect(
+          find.text('From November 2027 new cars and vans must meet Euro 7.'),
+          findsOneWidget,
+        );
+        expect(find.text(r'$4.99 a month'), findsOneWidget);
+        expect(
+          find.text(
+            'Renews automatically. Cancel any time in your Apple ID settings.',
+          ),
+          findsOneWidget,
+        );
+        for (final link in [
+          'Restore Purchases',
+          'Terms of Use',
+          'Privacy Policy',
+        ]) {
+          expect(find.text(link), findsOneWidget);
+        }
+        expect(find.bySemanticsLabel('Close'), findsWidgets);
+        expect(sent(), contains('paywall_view'));
+
+        await tester.tap(find.text('Subscribe'));
+        await tester.pump();
+        expect(store.bought, hasLength(1));
+        store.report(
+          PurchaseStatus.purchased,
+          jws: _jws(_now.add(const Duration(days: 30))),
+        );
+        await tester.pumpAndSettle();
+        expect(await closed, isTrue);
+        expect(sent(), containsAll(['subscribe_tap', 'subscribe_result']));
+        expect(events.lastWhere((e) => e.$1 == 'subscribe_result').$2, {
+          'result': 'purchased',
+        });
+      },
+    );
+
+    testWidgets('says when the App Store is not there, and opens the terms', (
+      tester,
+    ) async {
+      store.open = false;
+      await showPaywall(tester);
+      expect(
+        find.text("Purchases aren't available right now."),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('Terms of Use'));
+      await tester.pumpAndSettle();
+      expect(find.text('AI agent subscription'), findsOneWidget);
+    });
+  });
+
+  group('the consent', () {
+    testWidgets('asks once, before the first question', (tester) async {
+      final answers = <bool>[];
+      await tester.pumpWidget(
+        testApp(
+          home: Builder(
+            builder: (context) => CupertinoButton(
+              onPressed: () async =>
+                  answers.add(await ChatConsent.ask(context)),
+              child: const Text('ask'),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('ask'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('sent to OpenAI'), findsOneWidget);
+      await tester.tap(find.text('Allow'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('ask'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('sent to OpenAI'), findsNothing);
+      expect(answers, [true, true]);
+    });
+  });
+
+  group('the chat', () {
+    late List<Map<String, dynamic>> asked;
+
+    /// The server: answers in pieces, or with [status].
+    ApiClient server({
+      int status = 200,
+      int remaining = 9,
+      String body = '{}',
+    }) => ApiClient(
+      baseUrl: 'https://api.test',
+      client: MockClient.streaming((request, bodyStream) async {
+        asked.add(
+          jsonDecode(await bodyStream.bytesToString()) as Map<String, dynamic>,
+        );
+        if (status != 200) {
+          return http.StreamedResponse(Stream.value(utf8.encode(body)), status);
+        }
+        return http.StreamedResponse(
+          Stream.fromIterable(
+            ['Yes,', ' from November', ' 2027.'].map(utf8.encode),
+          ),
+          200,
+          headers: {'x-chat-remaining': '$remaining'},
+        );
+      }),
+    );
+
+    Future<void> openChat(
+      WidgetTester tester,
+      ApiClient api, {
+      List<Uri>? opened,
+    }) async {
+      asked = [];
+      store.report(
+        PurchaseStatus.purchased,
+        jws: _jws(_now.add(const Duration(days: 30))),
+      );
+      await tester.pumpWidget(
+        testApp(
+          home: ChatScreen(
+            key: UniqueKey(),
+            article: _article,
+            api: api,
+            subscription: subscription,
+            openLink: (uri) async => opened?.add(uri),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets(
+      'asks about this decision and shows the answer as it comes, with the official link',
+      (tester) async {
+        final opened = <Uri>[];
+        asked = [];
+        await openChat(tester, server(remaining: 2), opened: opened);
+        await tester.tap(find.text('What changes and when?'));
+        await tester.pumpAndSettle();
+        expect(find.text('Yes, from November 2027.'), findsOneWidget);
+        expect(asked.single['articleId'], 'c1');
+        expect(asked.single['lang'], 'en');
+        expect(asked.single['messages'], [
+          {'role': 'user', 'text': 'What changes and when?'},
+        ]);
+        expect(asked.single['transaction'], subscription.transaction);
+        expect(find.text('2 questions left today'), findsOneWidget);
+        await tester.tap(find.text('Read the official decision on gov.uk'));
+        expect(opened, [Uri.parse('https://www.gov.uk/euro-7')]);
+        expect(sent(), contains('chat_question'));
+        expect(
+          events.lastWhere((e) => e.$1 == 'chat_question').$2['number'],
+          1,
+        );
+
+        // The next question carries the conversation.
+        await tester.enterText(
+          find.byType(CupertinoTextField),
+          'What should I do?',
+        );
+        await tester.testTextInput.receiveAction(TextInputAction.send);
+        await tester.pumpAndSettle();
+        expect(asked.last['messages'], [
+          {'role': 'user', 'text': 'What changes and when?'},
+          {'role': 'assistant', 'text': 'Yes, from November 2027.'},
+          {'role': 'user', 'text': 'What should I do?'},
+        ]);
+      },
+    );
+
+    testWidgets(
+      'says when today\'s questions are used up, or the agent is not there',
+      (tester) async {
+        await openChat(
+          tester,
+          server(
+            status: 429,
+            body:
+                '{"error":"10 questions a day","resetsAt":"2026-10-28T00:00:00Z"}',
+          ),
+        );
+        await tester.tap(find.text('Does this concern me?'));
+        await tester.pumpAndSettle();
+        expect(
+          find.textContaining("That's today's 10 questions"),
+          findsOneWidget,
+        );
+
+        await openChat(tester, server(status: 503));
+        await tester.tap(find.text('Does this concern me?'));
+        await tester.pumpAndSettle();
+        expect(
+          find.text("The AI agent isn't available right now."),
+          findsOneWidget,
+        );
+        expect(find.text('Try again'), findsOneWidget);
+      },
+    );
+
+    testWidgets('not paid any more: the paywall again', (tester) async {
+      await openChat(tester, server(status: 402));
+      await tester.tap(find.text('Does this concern me?'));
+      await tester.pumpAndSettle();
+      expect(subscription.active, isFalse);
+      expect(
+        find.text('Continue the conversation with the AI agent'),
+        findsOneWidget,
+      );
+    });
+  });
+}
