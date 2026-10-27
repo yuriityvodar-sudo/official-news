@@ -1012,7 +1012,7 @@
   "@termsSubscriptionHeading": {
     "description": "A heading of the terms of use."
   },
-  "termsSubscription": "The AI agent is a monthly subscription through the App Store. It renews automatically until you cancel it in your Apple ID settings, at least 24 hours before the end of the period. Apple handles refunds. The agent answers only from the official text, can make mistakes, and its answers are not legal, financial or medical advice. Up to 10 questions a day.",
+  "termsSubscription": "The AI agent is a monthly subscription through the App Store. It renews automatically until you cancel it in your Apple ID settings, at least 24 hours before the end of the period. Apple handles refunds. The agent answers only from the official text, can make mistakes, and its answers are not legal, financial or medical advice. 20 questions a day are included; more can be bought in packs that don't expire.",
   "@termsSubscription": {
     "description": "The terms of use's section on the AI agent subscription (#146)."
   },
@@ -1025,12 +1025,63 @@
       }
     }
   },
-  "chatLimitReached": "That's today's 10 questions. New ones from {time}.",
-  "@chatLimitReached": {
-    "description": "In the AI chat when the day's 10 questions are used up; {time} is when new ones come, in the phone's time.",
+  "chatLongDocument": "Long document: a question about it counts as {count}",
+  "@chatLongDocument": {
+    "description": "In the AI chat over a long document: one question about it takes {count} of the day's questions (#146).",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "chatOutTitle": "No questions left for today",
+  "@chatOutTitle": {
+    "description": "The AI chat's card in the field's place once the day's questions are used up."
+  },
+  "chatOutBody": "New ones at {time}. Or buy more: they don't expire.",
+  "@chatOutBody": {
+    "description": "Under the card's title; {time} is when today's questions come back, in the phone's time.",
     "placeholders": {
       "time": {
         "type": "String"
+      }
+    }
+  },
+  "chatTopUp": "Buy more questions",
+  "@chatTopUp": {
+    "description": "The card's button: opens the packs of questions."
+  },
+  "topUpTitle": "More questions",
+  "@topUpTitle": {
+    "description": "The top-up sheet's title."
+  },
+  "topUpSubtitle": "Used after the 20 a day, and they don't expire.",
+  "@topUpSubtitle": {
+    "description": "Under the top-up sheet's title."
+  },
+  "topUpBest": "better value",
+  "@topUpBest": {
+    "description": "A tag on the bigger pack."
+  },
+  "topUpBuy": "Buy for {price}",
+  "@topUpBuy": {
+    "description": "The top-up sheet's button; {price} as the App Store gives it.",
+    "placeholders": {
+      "price": {
+        "type": "String"
+      }
+    }
+  },
+  "topUpFine": "A one-time App Store purchase. A question about a long document can count as several.",
+  "@topUpFine": {
+    "description": "Under the top-up sheet's button."
+  },
+  "topUpPack": "{count, plural, =1{+1 question} other{+{count} questions}}",
+  "@topUpPack": {
+    "description": "A pack of questions on the top-up sheet.",
+    "placeholders": {
+      "count": {
+        "type": "int"
       }
     }
   }

@@ -234,7 +234,16 @@
   "privacyChatHeading": "Chat con IA",
   "privacyChat": "Si te suscribes al agente de IA, tu pregunta y el texto del artículo se envían a OpenAI para escribir la respuesta. No guardamos tus conversaciones ni las enviamos a la analítica. Apple gestiona la suscripción: recibimos de Apple un registro firmado de ella, con un identificador anónimo que crea la app, nunca tu nombre ni tus datos de pago. Contamos las preguntas de cada suscripción al día, para el límite diario.",
   "termsSubscriptionHeading": "Suscripción al agente de IA",
-  "termsSubscription": "La suscripción al agente de IA es mensual, a través de la App Store. Se renueva automáticamente hasta que la canceles en los ajustes de tu Apple ID al menos 24 horas antes del final del periodo. Apple gestiona los reembolsos. El agente responde solo a partir del texto oficial, puede equivocarse y sus respuestas no son asesoramiento legal, financiero ni médico. Hasta 10 preguntas al día.",
+  "termsSubscription": "La suscripción al agente de IA es mensual, a través de la App Store. Se renueva automáticamente hasta que la canceles en los ajustes de tu Apple ID al menos 24 horas antes del final del periodo. Apple gestiona los reembolsos. El agente responde solo a partir del texto oficial, puede equivocarse y sus respuestas no son asesoramiento legal, financiero ni médico. La suscripción incluye 20 preguntas al día; puedes comprar más en paquetes que no caducan.",
   "chatRemaining": "{count, plural, =1{Te queda 1 pregunta hoy} other{Te quedan {count} preguntas hoy}}",
-  "chatLimitReached": "Ya son las 10 preguntas de hoy. Nuevas a partir de las {time}."
+  "chatLongDocument": "Documento largo: una pregunta sobre él cuenta como {count}",
+  "chatOutTitle": "Se acabaron las preguntas de hoy",
+  "chatOutBody": "Nuevas a las {time}. O compra más: no caducan.",
+  "chatTopUp": "Comprar más preguntas",
+  "topUpTitle": "Más preguntas",
+  "topUpSubtitle": "Se usan después de las 20 diarias y no caducan.",
+  "topUpBest": "mejor precio",
+  "topUpBuy": "Comprar por {price}",
+  "topUpFine": "Una compra única en la App Store. Una pregunta sobre un documento largo puede contar como varias.",
+  "topUpPack": "{count, plural, =1{+1 pregunta} other{+{count} preguntas}}"
 }

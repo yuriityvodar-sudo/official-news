@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -49,6 +50,7 @@ final _now = DateTime(2026, 10, 27, 12);
 class FakeStore implements Store {
   final controller = StreamController<List<PurchaseDetails>>.broadcast();
   final bought = <String>[];
+  final boughtPacks = <String>[];
   final finished = <PurchaseDetails>[];
   int restores = 0;
   bool open = true;
@@ -60,20 +62,48 @@ class FakeStore implements Store {
   Future<bool> available() async => open;
 
   @override
-  Future<ProductDetails?> product(String id) async => ProductDetails(
-    id: id,
-    title: 'AI agent',
-    description: 'Monthly',
-    price: r'$4.99',
-    rawPrice: 4.99,
-    currencyCode: 'USD',
-  );
+  Future<ProductDetails?> product(String id) async {
+    final price = switch (ChatSubscription.packs[id]) {
+      50 => 0.99,
+      200 => 2.99,
+      _ => 4.99,
+    };
+    return ProductDetails(
+      id: id,
+      title: 'AI agent',
+      description: 'Monthly',
+      price: '\$$price',
+      rawPrice: price,
+      currencyCode: 'USD',
+    );
+  }
 
   @override
   Future<void> buy(
     ProductDetails product, {
     required String accountToken,
   }) async => bought.add(accountToken);
+
+  @override
+  Future<void> buyPack(
+    ProductDetails pack, {
+    required String accountToken,
+  }) async => boughtPacks.add(pack.id);
+
+  /// StoreKit reporting a pack of 50 questions bought.
+  void reportPack(PurchaseStatus status) => controller.add([
+    PurchaseDetails(
+      purchaseID: 'pack1',
+      productID: 'com.officialnews.app.agent.questions50',
+      verificationData: PurchaseVerificationData(
+        localVerificationData: '',
+        serverVerificationData: 'pack.jws',
+        source: 'app_store',
+      ),
+      transactionDate: '1793000000000',
+      status: status,
+    )..pendingCompletePurchase = true,
+  ]);
 
   @override
   Future<void> restore() async => restores++;
@@ -102,15 +132,29 @@ void main() {
   late FakeStore store;
   late ChatSubscription subscription;
 
+  /// What the server was asked to credit, and whether it can.
+  late List<(String, String)> credits;
+  late bool serverUp;
+
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
     events = [];
+    credits = [];
+    serverUp = true;
     analytics = Analytics(
       (name, parameters) async => events.add((name, parameters)),
       (_, _) async {},
     );
     store = FakeStore();
-    subscription = ChatSubscription(store: store, clock: () => _now);
+    subscription = ChatSubscription(
+      store: store,
+      credit: (pack, transaction) async {
+        if (!serverUp) throw Exception('offline');
+        credits.add((pack, transaction));
+        return 50;
+      },
+      clock: () => _now,
+    );
     await subscription.start();
   });
   tearDown(() => analytics = Analytics());
@@ -171,6 +215,31 @@ void main() {
       store.report(PurchaseStatus.error);
       await pumpEventQueue();
       expect(subscription.state.value, PurchaseState.failed);
+    });
+
+    test('a pack is credited on the server before it is finished; one not '
+        'credited stays unfinished, for StoreKit to give again', () async {
+      store.report(
+        PurchaseStatus.purchased,
+        jws: _jws(_now.add(const Duration(days: 30))),
+      );
+      await pumpEventQueue();
+      store.finished.clear();
+
+      serverUp = false;
+      store.reportPack(PurchaseStatus.purchased);
+      await pumpEventQueue();
+      expect(store.finished, isEmpty);
+      expect(subscription.state.value, PurchaseState.failed);
+
+      // The next start: StoreKit gives the unfinished pack again.
+      serverUp = true;
+      store.reportPack(PurchaseStatus.purchased);
+      await pumpEventQueue();
+      expect(credits, [('pack.jws', subscription.transaction!)]);
+      expect(store.finished, hasLength(1));
+      expect(subscription.credited, 1);
+      expect(subscription.boughtQuestions, 50);
     });
 
     testWidgets('a restore that finds nothing says so', (tester) async {
@@ -304,29 +373,56 @@ void main() {
   group('the chat', () {
     late List<Map<String, dynamic>> asked;
 
-    /// The server: answers in pieces, or with [status].
+    /// The server: answers in pieces, or with [status]; [left] questions
+    /// left before asking, at [units] a question.
     ApiClient server({
       int status = 200,
       int remaining = 9,
       String body = '{}',
-    }) => ApiClient(
-      baseUrl: 'https://api.test',
-      client: MockClient.streaming((request, bodyStream) async {
-        asked.add(
-          jsonDecode(await bodyStream.bytesToString()) as Map<String, dynamic>,
-        );
-        if (status != 200) {
-          return http.StreamedResponse(Stream.value(utf8.encode(body)), status);
-        }
-        return http.StreamedResponse(
-          Stream.fromIterable(
-            ['Yes,', ' from November', ' 2027.'].map(utf8.encode),
-          ),
-          200,
-          headers: {'x-chat-remaining': '$remaining'},
-        );
-      }),
-    );
+      List<int> left = const [20],
+      int units = 1,
+    }) {
+      var statuses = 0;
+      return ApiClient(
+        baseUrl: 'https://api.test',
+        client: MockClient.streaming((request, bodyStream) async {
+          final sent = await bodyStream.bytesToString();
+          if (request.url.path == '/v1/chat/status') {
+            final now = left[math.min(statuses++, left.length - 1)];
+            return http.StreamedResponse(
+              Stream.value(
+                utf8.encode(
+                  jsonEncode({
+                    'questionsLeft': now,
+                    'boughtQuestions': 0,
+                    'units': units,
+                    'resetsAt': '2026-10-28T00:00:00Z',
+                  }),
+                ),
+              ),
+              200,
+            );
+          }
+          asked.add(jsonDecode(sent) as Map<String, dynamic>);
+          if (status != 200) {
+            return http.StreamedResponse(
+              Stream.value(utf8.encode(body)),
+              status,
+            );
+          }
+          return http.StreamedResponse(
+            Stream.fromIterable(
+              ['Yes,', ' from November', ' 2027.'].map(utf8.encode),
+            ),
+            200,
+            headers: {
+              'x-chat-remaining': '$remaining',
+              'x-chat-units': '$units',
+            },
+          );
+        }),
+      );
+    }
 
     Future<void> openChat(
       WidgetTester tester,
@@ -334,10 +430,14 @@ void main() {
       List<Uri>? opened,
     }) async {
       asked = [];
-      store.report(
-        PurchaseStatus.purchased,
-        jws: _jws(_now.add(const Duration(days: 30))),
-      );
+      // Bought before the chat opens, and done with (outside the test's fake time).
+      await tester.runAsync(() async {
+        store.report(
+          PurchaseStatus.purchased,
+          jws: _jws(_now.add(const Duration(days: 30))),
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+      });
       await tester.pumpWidget(
         testApp(
           home: ChatScreen(
@@ -399,15 +499,16 @@ void main() {
           server(
             status: 429,
             body:
-                '{"error":"10 questions a day","resetsAt":"2026-10-28T00:00:00Z"}',
+                '{"error":"No questions left today","resetsAt":"2026-10-28T00:00:00Z","units":1}',
           ),
         );
         await tester.tap(find.text('Does this concern me?'));
         await tester.pumpAndSettle();
-        expect(
-          find.textContaining("That's today's 10 questions"),
-          findsOneWidget,
-        );
+        // The card in the field's place, and the question kept for later.
+        expect(find.text('No questions left for today'), findsOneWidget);
+        expect(find.text('Buy more questions'), findsOneWidget);
+        expect(find.byType(CupertinoTextField), findsNothing);
+        expect(find.text('Does this concern me?'), findsOneWidget);
 
         await openChat(tester, server(status: 503));
         await tester.tap(find.text('Does this concern me?'));
@@ -417,6 +518,66 @@ void main() {
           findsOneWidget,
         );
         expect(find.text('Try again'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'nothing left on opening: the card, the packs, and a pack bought '
+      'brings the field back',
+      (tester) async {
+        await openChat(tester, server(left: [0, 50]));
+        expect(find.text('No questions left for today'), findsOneWidget);
+        expect(find.textContaining('Or buy more'), findsOneWidget);
+        await tester.tap(find.text('Buy more questions'));
+        await tester.pumpAndSettle();
+        expect(find.text('More questions'), findsOneWidget);
+        expect(find.text('+50 questions'), findsOneWidget);
+        expect(find.text('+200 questions'), findsOneWidget);
+        expect(find.text('better value'), findsOneWidget);
+        expect(find.text(r'Buy for $0.99'), findsOneWidget);
+        expect(sent(), contains('topup_view'));
+
+        await tester.tap(find.text('+200 questions'));
+        await tester.pump();
+        expect(find.text(r'Buy for $2.99'), findsOneWidget);
+        await tester.tap(find.text('+50 questions'));
+        await tester.pump();
+        await tester.tap(find.text(r'Buy for $0.99'));
+        await tester.pump();
+        expect(store.boughtPacks, ['com.officialnews.app.agent.questions50']);
+
+        // The subscription listens to StoreKit outside the test's fake time.
+        await tester.runAsync(() async {
+          store.reportPack(PurchaseStatus.purchased);
+          await Future<void>.delayed(const Duration(milliseconds: 20));
+        });
+        await tester.pumpAndSettle();
+        expect(credits, hasLength(1));
+        expect(find.text('More questions'), findsNothing);
+        expect(find.byType(CupertinoTextField), findsOneWidget);
+        expect(find.text('No questions left for today'), findsNothing);
+        expect(
+          events
+              .where((e) => e.$1 == 'topup_result')
+              .map((e) => e.$2['result']),
+          ['credited'],
+        );
+        expect(events.lastWhere((e) => e.$1 == 'topup_result').$2, {
+          'result': 'credited',
+          'questions': 50,
+        });
+      },
+    );
+
+    testWidgets(
+      'a long document says how much of the limit a question takes, and when few are left',
+      (tester) async {
+        await openChat(tester, server(left: [3], units: 3));
+        expect(
+          find.text('Long document: a question about it counts as 3'),
+          findsOneWidget,
+        );
+        expect(find.text('3 questions left today'), findsOneWidget);
       },
     );
 

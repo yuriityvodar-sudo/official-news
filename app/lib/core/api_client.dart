@@ -16,19 +16,50 @@ class ApiException implements Exception {
   String toString() => 'ApiException($statusCode): $message';
 }
 
-/// The AI agent's answer as it is written, and the questions left today.
+/// The AI agent's answer as it is written; the questions left after it,
+/// today's and the bought ones together; and how many of the limit one
+/// question about this article takes (a long document more than one).
 class ChatAnswer {
-  const ChatAnswer({required this.text, this.remaining});
+  const ChatAnswer({required this.text, this.remaining, this.units = 1});
 
   final Stream<String> text;
   final int? remaining;
+  final int units;
 }
 
-/// Today's questions to the AI agent are used up (429), until [resetsAt].
+/// No questions left for today (429): today's come back at [resetsAt]; bought
+/// ones would go on at once.
 class ChatLimit extends ApiException {
-  ChatLimit(this.resetsAt) : super(429, 'Daily limit');
+  ChatLimit(this.resetsAt, {this.units = 1}) : super(429, 'Daily limit');
 
   final DateTime? resetsAt;
+  final int units;
+}
+
+/// What a subscriber has left for questions about one article (#146):
+/// today's, the bought ones (spent after them, never expiring), how many of
+/// the limit one question about it takes, and when today's come back.
+class ChatStatus {
+  const ChatStatus({
+    required this.questionsLeft,
+    required this.boughtQuestions,
+    required this.units,
+    this.resetsAt,
+  });
+
+  factory ChatStatus.fromJson(Map<String, dynamic> json) => ChatStatus(
+    questionsLeft: (json['questionsLeft'] as num?)?.toInt() ?? 0,
+    boughtQuestions: (json['boughtQuestions'] as num?)?.toInt() ?? 0,
+    units: (json['units'] as num?)?.toInt() ?? 1,
+    resetsAt: DateTime.tryParse('${json['resetsAt']}'),
+  );
+
+  final int questionsLeft;
+  final int boughtQuestions;
+  final int units;
+  final DateTime? resetsAt;
+
+  int get total => questionsLeft + boughtQuestions;
 }
 
 /// Client for the endpoints in docs/contract.md.
@@ -200,14 +231,61 @@ class ApiClient {
       final body = await response.stream.bytesToString();
       if (response.statusCode == 429) {
         final json = jsonDecode(body) as Map<String, dynamic>;
-        throw ChatLimit(DateTime.tryParse('${json['resetsAt']}'));
+        throw ChatLimit(
+          DateTime.tryParse('${json['resetsAt']}'),
+          units: (json['units'] as num?)?.toInt() ?? 1,
+        );
       }
       throw ApiException(response.statusCode, body);
     }
     return ChatAnswer(
       text: response.stream.transform(utf8.decoder),
       remaining: int.tryParse(response.headers['x-chat-remaining'] ?? ''),
+      units: int.tryParse(response.headers['x-chat-units'] ?? '') ?? 1,
     );
+  }
+
+  /// `POST /v1/chat/status` (#146): what is left for questions about
+  /// [articleId] before asking. Throws an [ApiException] (402 not paid).
+  Future<ChatStatus> chatStatus({
+    required String articleId,
+    required String transaction,
+  }) async => ChatStatus.fromJson(
+    await _postJson('/v1/chat/status', {
+      'articleId': articleId,
+      'transaction': transaction,
+    }),
+  );
+
+  /// `POST /v1/chat/credits` (#146): a pack of questions bought, credited to
+  /// the subscription of [transaction] once, however often it is sent.
+  /// Returns the bought questions there now.
+  Future<int> creditPack({
+    required String pack,
+    required String transaction,
+  }) async {
+    final json = await _postJson('/v1/chat/credits', {
+      'pack': pack,
+      'transaction': transaction,
+    });
+    return (json['boughtQuestions'] as num?)?.toInt() ?? 0;
+  }
+
+  Future<Map<String, dynamic>> _postJson(
+    String path,
+    Map<String, Object> body,
+  ) async {
+    final response = await _client
+        .post(
+          Uri.parse('$_baseUrl$path'),
+          headers: {'content-type': 'application/json'},
+          body: jsonEncode(body),
+        )
+        .timeout(timeout);
+    if (response.statusCode != 200) {
+      throw ApiException(response.statusCode, response.body);
+    }
+    return jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
   }
 
   /// English is the API without `lang`, so its requests stay as they were.
