@@ -11,6 +11,9 @@ export async function runCleanup(env: Env, now = new Date()): Promise<number> {
     .bind(toStoredTime(now))
     .run();
   const cleared = meta.changes ?? 0;
-  console.log(JSON.stringify({ message: "cleanup run", cleared }));
+  // The chat's daily counts (#146) are needed for today only; a week is kept to look back.
+  const weekAgo = toStoredTime(new Date(now.getTime() - 7 * 86_400_000)).slice(0, 10);
+  const chat = await env.DB.prepare("DELETE FROM chat_usage WHERE day < ?").bind(weekAgo).run();
+  console.log(JSON.stringify({ message: "cleanup run", cleared, chatDaysRemoved: chat.meta.changes ?? 0 }));
   return cleared;
 }

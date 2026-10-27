@@ -1,4 +1,5 @@
 import { receiveNotification } from "../appstore";
+import { answerChat } from "../chat";
 import type { Env } from "../env";
 import { REAL_SOURCE, health } from "../health";
 import { TOPICS, type Topic } from "../summarizer/schema";
@@ -596,11 +597,20 @@ async function listCountries(url: URL, env: Env): Promise<Response> {
 
 async function route(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
-  // Apple's notifications about the chat's subscription (#146), the one POST so far.
-  if (url.pathname === "/v1/appstore/notifications") {
+  // The AI chat by subscription (#146) and Apple's notifications about it: the two POSTs.
+  if (url.pathname === "/v1/chat" || url.pathname === "/v1/appstore/notifications") {
     if (request.method !== "POST") return json({ error: "Method not allowed" }, 405, { allow: "POST" });
-    const { status, body } = await receiveNotification(await request.json().catch(() => null), env);
-    return json(body, status);
+    const body = await request.json().catch(() => null);
+    if (url.pathname === "/v1/appstore/notifications") {
+      const { status, body: answer } = await receiveNotification(body, env);
+      return json(answer, status);
+    }
+    const result = await answerChat(body, env);
+    if ("status" in result) return json(result.body, result.status);
+    // The answer as OpenAI writes it, never kept by Cloudflare's cache.
+    return new Response(result.stream, {
+      headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store", "x-chat-remaining": String(result.remaining) },
+    });
   }
 
   if (request.method !== "GET") return json({ error: "Method not allowed" }, 405, { allow: "GET" });
