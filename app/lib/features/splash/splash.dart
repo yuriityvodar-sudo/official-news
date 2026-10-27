@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../core/glass.dart';
 import '../../core/theme.dart';
 import '../../l10n/app_localizations.dart';
 
@@ -123,16 +124,30 @@ class SplashHost extends StatefulWidget {
 class _SplashHostState extends State<SplashHost> {
   late bool _showing = widget.onStart;
 
+  /// How much of the app the splash hides: all of it while it shows, less
+  /// as its page fades. iOS's own views under it show only as much as the
+  /// app does, or their glass's shadow would show through ([NativeCover]).
+  late final _cover = ValueNotifier<double>(_showing ? 1 : 0);
+
   /// A new splash for each play, so Play during one starts it over.
   int _run = 0;
 
   void _play() => setState(() {
     _showing = true;
     _run++;
+    _cover.value = 1;
   });
 
   void _done() {
-    if (mounted) setState(() => _showing = false);
+    if (!mounted) return;
+    _cover.value = 0;
+    setState(() => _showing = false);
+  }
+
+  @override
+  void dispose() {
+    _cover.dispose();
+    super.dispose();
   }
 
   @override
@@ -140,12 +155,16 @@ class _SplashHostState extends State<SplashHost> {
     fit: StackFit.expand,
     children: [
       // VoiceOver reads the splash while it shows, then the app.
-      ExcludeSemantics(excluding: _showing, child: widget.child),
+      NativeCover(
+        cover: _cover,
+        child: ExcludeSemantics(excluding: _showing, child: widget.child),
+      ),
       if (_showing)
         Splash(
           key: ValueKey(_run),
           style: splashStyle.value,
           onDone: _done,
+          onFade: (page) => _cover.value = page,
           endOn: widget.endOn,
         ),
     ],
@@ -160,11 +179,15 @@ class Splash extends StatefulWidget {
     super.key,
     required this.style,
     required this.onDone,
+    this.onFade,
     this.endOn,
   });
 
   final SplashStyle style;
   final VoidCallback onDone;
+
+  /// Told how much of its page is still there as it fades, 1 down to 0.
+  final ValueChanged<double>? onFade;
 
   /// Fades it out at once when it notifies, as a touch does ([SplashHost]).
   final Listenable? endOn;
@@ -247,8 +270,11 @@ class _SplashState extends State<Splash> with TickerProviderStateMixin {
     if (_fading || !mounted) return;
     setState(() => _fading = true);
     _clock.stop();
+    _pageOpacity.addListener(_pageFades);
     _fade.forward().then((_) => _finish());
   }
+
+  void _pageFades() => widget.onFade?.call(_pageOpacity.value);
 
   /// The app was left: gone at once, unseen.
   void _leave() {
@@ -266,6 +292,7 @@ class _SplashState extends State<Splash> with TickerProviderStateMixin {
   @override
   void dispose() {
     widget.endOn?.removeListener(_end);
+    _pageOpacity.removeListener(_pageFades);
     _life?.dispose();
     _clock.dispose();
     _fade.dispose();
