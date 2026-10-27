@@ -1,12 +1,14 @@
 import { env, exports } from "cloudflare:workers";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { BUNDLE_ID, CHAT_PRODUCT_ID, recordTransaction, verifyTransaction } from "../src/appstore";
-import { CHAT_DAILY_LIMIT, CHAT_MODEL, answerChat, type ChatResult } from "../src/chat";
+import { BUNDLE_ID, CHAT_PRODUCT_ID, receiveNotification, recordTransaction, verifyTransaction } from "../src/appstore";
+import { CHAT_MODEL, DAILY_QUESTIONS, QUESTION_MICROS, answerChat, chatStatus, creditChatPack, type ChatResult } from "../src/chat";
+import { costMicros, unitsFor } from "../src/chat/usage";
 import { runCleanup } from "../src/health/cleanup";
 import { testAppStore, type TestAppStore } from "./apple-pki";
 
 const DAY = 86_400_000;
 const NOW = new Date("2026-10-27T12:00:00Z");
+const PACK_50 = "com.officialnews.app.agent.questions50";
 
 /** A month of the chat's subscription, bought yesterday, as the App Store signs it. */
 const transaction = (changes: object = {}) => ({
@@ -20,21 +22,39 @@ const transaction = (changes: object = {}) => ({
   ...changes,
 });
 
+/** A pack of 50 questions, bought today. */
+const pack = (changes: object = {}) => ({
+  originalTransactionId: "3000000001",
+  transactionId: "3000000001",
+  bundleId: BUNDLE_ID,
+  productId: PACK_50,
+  environment: "Production",
+  type: "Consumable",
+  signedDate: NOW.getTime() - 1000,
+  ...changes,
+});
+
 let store: TestAppStore;
 beforeAll(async () => {
   store = await testAppStore();
 });
+const trusted = () => ({ rootSha256: store.rootSha256, now: NOW });
 
-/** A released decision with its official text, translated into Ukrainian. */
-beforeEach(async () => {
+/** A released decision with its official text of `chars` characters, translated into Ukrainian. */
+async function decision(chars = 70) {
+  await env.DB.prepare("DELETE FROM article_translations WHERE article_id = 'c1'").run();
+  await env.DB.prepare("DELETE FROM articles WHERE id = 'c1'").run();
+  const text = "The official text: Euro 7 applies to new cars from 29 November 2027.".padEnd(chars, " Lorem ipsum.");
   await env.DB.prepare(
     `INSERT INTO articles (id, source_id, url, original_title, published_at, fetched_at, headline, short_summary, summary, text,
                            is_news, importance, decision_type, summarized_at, topics, tags, feed_seq, added_at)
      VALUES ('c1', 'de-federal-government', 'https://example.gov/c1', 'Euro 7 for new cars', '2026-10-26T08:00:00Z', '2026-10-26T08:00:00Z',
              'New cars must meet Euro 7 from 2027', 'Short.', 'From November 2027 new cars and vans must meet Euro 7.',
-             'The official text: Euro 7 applies to new cars from 29 November 2027.', 1, 3, 'decision', '2026-10-26T08:00:00Z', '[]', '[]',
+             ?1, 1, 3, 'decision', '2026-10-26T08:00:00Z', '[]', '[]',
              (SELECT COALESCE(MAX(feed_seq), 0) + 1 FROM articles WHERE feed_seq IS NOT NULL), '2026-10-26T08:00:00Z')`,
-  ).run();
+  )
+    .bind(text)
+    .run();
   await env.DB.prepare(
     `INSERT INTO article_translations (article_id, lang, headline, short_summary, summary, model, source_summarized_at,
                                        attempts_source, lang_seq, translated_at, published_at, state, state_at)
@@ -43,15 +63,21 @@ beforeEach(async () => {
              (SELECT COALESCE(MAX(lang_seq), 0) + 1 FROM article_translations WHERE lang = 'uk'),
              '2026-10-26T08:00:00Z', '2026-10-26T08:00:00Z', 'published', '2026-10-26T08:00:00Z')`,
   ).run();
-});
+}
+beforeEach(() => decision());
 
-/** OpenAI answering in three pieces, cut at odd places as a network would; the requests it got. */
-function openAi(status = 200) {
-  const requests: { url: string; body: { model: string; stream: boolean; messages: { role: string; content: string }[] }; auth: string | null }[] = [];
+/** What OpenAI counts for the fake answer below: 1,500 tokens in, 200 out. */
+const USAGE = { prompt_tokens: 1500, completion_tokens: 200, prompt_tokens_details: { cached_tokens: 0 } };
+const COST = costMicros(USAGE);
+
+/** OpenAI answering in three pieces, cut at odd places as a network would, then counting its tokens (unless `counts` is false). */
+function openAi(status = 200, { counts = true } = {}) {
+  const requests: { url: string; body: Record<string, unknown> & { messages: { role: string; content: string }[] }; auth: string | null }[] = [];
   const fakeFetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     requests.push({ url: String(input), body: JSON.parse(String(init?.body)), auth: new Headers(init?.headers).get("authorization") });
     if (status !== 200) return new Response('{"error":{"message":"down"}}', { status });
     const events = ["Так,", " з листопада", " 2027 року."].map((content) => `data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\n`);
+    if (counts) events.push(`data: ${JSON.stringify({ choices: [], usage: USAGE })}\n\n`);
     const bytes = new TextEncoder().encode(`${events.join("")}data: [DONE]\n\n`);
     const stream = new ReadableStream<Uint8Array>({
       start(controller) {
@@ -76,10 +102,21 @@ const answer = async (result: ChatResult) => {
   return new Response(result.stream).text();
 };
 
-const asked = () => env.DB.prepare("SELECT COALESCE(SUM(questions), 0) AS n FROM chat_usage").first<number>("n");
+const usage = () =>
+  env.DB.prepare("SELECT COALESCE(SUM(questions), 0) AS questions, COALESCE(SUM(spent_micros), 0) AS spent FROM chat_usage").first<{
+    questions: number;
+    spent: number;
+  }>();
+const wallet = () => env.DB.prepare("SELECT extra_micros FROM chat_wallet WHERE original_transaction_id = '2000000001'").first<number>("extra_micros");
+const spendToday = (micros: number) =>
+  env.DB.prepare("INSERT INTO chat_usage (original_transaction_id, day, questions, spent_micros) VALUES ('2000000001', '2026-10-27', 20, ?)")
+    .bind(micros)
+    .run();
+const buy = async (changes: object = {}) =>
+  creditChatPack({ pack: await store.sign(pack(changes)), transaction: await store.sign(transaction()) }, env, trusted());
 
 describe("POST /v1/chat (#146)", () => {
-  it("answers a subscriber as plain text, streamed, from the decision's official text in the reader's language, and counts the question", async () => {
+  it("answers a subscriber as plain text, streamed, from the decision's official text in the reader's language, and counts what it really cost", async () => {
     const ai = openAi();
     const conversation = [
       { role: "user", text: "Що змінюється?" },
@@ -88,19 +125,34 @@ describe("POST /v1/chat (#146)", () => {
     ];
     const result = await ask({ messages: conversation }, { ai });
     expect(await answer(result)).toBe("Так, з листопада 2027 року.");
-    expect(result).toMatchObject({ remaining: CHAT_DAILY_LIMIT - 1 });
-    expect(await asked()).toBe(1);
+    expect(result).toMatchObject({ remaining: DAILY_QUESTIONS - 1, units: 1 });
+    // The estimate, then the real cost in its place.
+    expect(await usage()).toEqual({ questions: 1, spent: COST });
 
     const [request] = ai.requests;
     expect(request.url).toBe("https://api.openai.com/v1/chat/completions");
     expect(request.auth).toBe("Bearer sk-test");
-    expect(request.body).toMatchObject({ model: CHAT_MODEL, stream: true });
+    expect(request.body).toMatchObject({ model: CHAT_MODEL, stream: true, stream_options: { include_usage: true } });
     const [system, ...rest] = request.body.messages;
     expect(system.role).toBe("system");
     expect(system.content).toContain("The official text: Euro 7 applies to new cars from 29 November 2027.");
     expect(system.content).toContain("З листопада 2027 року нові авто мають відповідати Євро-7.");
     expect(system.content).toContain("Answer in Ukrainian");
     expect(rest).toEqual(conversation.map((m) => ({ role: m.role, content: m.text })));
+  });
+
+  it("an answer whose cost never came still counts its estimate, so leaving early asks nothing for free", async () => {
+    await answer(await ask({}, { ai: openAi(200, { counts: false }) }));
+    expect(await usage()).toEqual({ questions: 1, spent: QUESTION_MICROS });
+  });
+
+  it("a question about a long document takes more of the limit, and gives back what it did not cost", async () => {
+    await decision(20_000);
+    expect(unitsFor(20_000)).toBe(3);
+    const result = await ask();
+    expect(result).toMatchObject({ units: 3, remaining: Math.floor((DAILY_QUESTIONS * QUESTION_MICROS) / (3 * QUESTION_MICROS)) - 1 });
+    await answer(result);
+    expect(await usage()).toEqual({ questions: 1, spent: COST });
   });
 
   it("closes without an active subscription, and asks OpenAI nothing", async () => {
@@ -114,14 +166,20 @@ describe("POST /v1/chat (#146)", () => {
     expect(ai.requests).toHaveLength(0);
   });
 
-  it(`stops at ${CHAT_DAILY_LIMIT} questions a day until midnight UTC`, async () => {
-    await env.DB.prepare("INSERT INTO chat_usage (original_transaction_id, day, questions) VALUES ('2000000001', '2026-10-27', ?)")
-      .bind(CHAT_DAILY_LIMIT)
-      .run();
+  it("with today's budget spent, stops until midnight UTC, unless questions were bought: then it takes them", async () => {
+    await spendToday(DAILY_QUESTIONS * QUESTION_MICROS);
     const ai = openAi();
-    expect(await ask({}, { ai })).toEqual({ status: 429, body: { error: "10 questions a day", resetsAt: "2026-10-28T00:00:00Z" } });
+    expect(await ask({}, { ai })).toEqual({ status: 429, body: { error: "No questions left today", resetsAt: "2026-10-28T00:00:00Z", units: 1 } });
     expect(ai.requests).toHaveLength(0);
+
+    expect((await buy()).body).toMatchObject({ credited: true, boughtQuestions: 50 });
+    const result = await ask({}, { ai });
+    expect(result).toMatchObject({ remaining: 49 });
+    await answer(result);
+    expect(await wallet()).toBe(50 * QUESTION_MICROS - COST);
+    // A new day: today's questions again, the bought ones kept.
     expect(await answer(await ask({}, { at: new Date(NOW.getTime() + DAY) }))).toBe("Так, з листопада 2027 року.");
+    expect(await wallet()).toBe(50 * QUESTION_MICROS - COST);
   });
 
   it("refuses a bad request (400) and an article outside the feed (404)", async () => {
@@ -144,19 +202,22 @@ describe("POST /v1/chat (#146)", () => {
     expect(await ask({}, { key: "" })).toMatchObject({ status: 503 });
     expect(await ask({}, { ai })).toMatchObject({ status: 503 });
     expect(ai.requests).toHaveLength(1);
-    expect(await asked()).toBe(0);
+    expect(await usage()).toEqual({ questions: 0, spent: 0 });
   });
 
   it("through the Worker: POST only, JSON errors, Apple's root only", async () => {
-    const get = await exports.default.fetch("https://api.test/v1/chat");
-    expect(get.status).toBe(405);
-    expect(get.headers.get("allow")).toBe("POST");
-    const post = (body: string) => exports.default.fetch("https://api.test/v1/chat", { method: "POST", body });
-    const garbage = await post("{");
+    for (const path of ["/v1/chat", "/v1/chat/status", "/v1/chat/credits"]) {
+      const get = await exports.default.fetch(`https://api.test${path}`);
+      expect(get.status).toBe(405);
+      expect(get.headers.get("allow")).toBe("POST");
+    }
+    const post = (path: string, body: string) => exports.default.fetch(`https://api.test${path}`, { method: "POST", body });
+    const garbage = await post("/v1/chat", "{");
     expect(garbage.status).toBe(400);
     expect(garbage.headers.get("cache-control")).toBe("no-store");
-    const notApple = await post(JSON.stringify({ articleId: "c1", lang: "uk", messages: [QUESTION], transaction: await store.sign(transaction()) }));
+    const notApple = await post("/v1/chat", JSON.stringify({ articleId: "c1", lang: "uk", messages: [QUESTION], transaction: await store.sign(transaction()) }));
     expect(notApple.status).toBe(402);
+    expect((await post("/v1/chat/status", JSON.stringify({ articleId: "c1", transaction: await store.sign(transaction()) }))).status).toBe(402);
   });
 
   it("forgets the daily counts after a week", async () => {
@@ -164,5 +225,69 @@ describe("POST /v1/chat (#146)", () => {
     await runCleanup(env, NOW);
     const { results } = await env.DB.prepare("SELECT day FROM chat_usage").all<{ day: string }>();
     expect(results.map((r) => r.day)).toEqual(["2026-10-27"]);
+  });
+});
+
+describe("POST /v1/chat/status (#146)", () => {
+  const status = async (sold = transaction()) => chatStatus({ articleId: "c1", transaction: await store.sign(sold) }, env, trusted());
+
+  it("says what is left today, the bought questions, and how much of the limit one question about this article takes", async () => {
+    expect(await status()).toEqual({ status: 200, body: { questionsLeft: 20, boughtQuestions: 0, units: 1, resetsAt: "2026-10-28T00:00:00Z" } });
+    await spendToday(17 * QUESTION_MICROS);
+    await buy();
+    expect((await status()).body).toMatchObject({ questionsLeft: 3, boughtQuestions: 50 });
+    await decision(20_000);
+    expect((await status()).body).toMatchObject({ questionsLeft: 1, boughtQuestions: 16, units: 3 });
+    // Another subscription, expired: an older transaction of this one would not close it.
+    expect(await status(transaction({ originalTransactionId: "2000000099", transactionId: "2000000099", expiresDate: NOW.getTime() - 1000 }))).toMatchObject({
+      status: 402,
+    });
+    expect(await chatStatus({ articleId: "nope", transaction: await store.sign(transaction()) }, env, trusted())).toMatchObject({ status: 404 });
+  });
+});
+
+describe("packs of questions (#146)", () => {
+  const notify = async (type: string, changes: object) =>
+    receiveNotification(
+      {
+        signedPayload: await store.sign({
+          notificationType: type,
+          data: { bundleId: BUNDLE_ID, environment: "Production", signedTransactionInfo: await store.sign(pack(changes)) },
+          signedDate: NOW.getTime(),
+        }),
+      },
+      env,
+      trusted(),
+    );
+
+  it("are credited once to the subscription's wallet, however often the app sends them", async () => {
+    expect(await buy()).toEqual({ status: 200, body: { credited: true, boughtQuestions: 50 } });
+    expect(await buy()).toEqual({ status: 200, body: { credited: false, boughtQuestions: 50 } });
+    expect((await buy({ transactionId: "3000000002", productId: "com.officialnews.app.agent.questions200" })).body).toMatchObject({ boughtQuestions: 250 });
+    expect(await wallet()).toBe(250 * QUESTION_MICROS);
+  });
+
+  it("refuses what is not a pack of this app, a pack without a subscription, and a refunded pack", async () => {
+    expect(await buy({ productId: CHAT_PRODUCT_ID })).toMatchObject({ status: 400 });
+    expect(await buy({ bundleId: "com.example.other" })).toMatchObject({ status: 400 });
+    expect(await creditChatPack({ pack: await store.sign(pack()), transaction: "not.a.jws" }, env, trusted())).toMatchObject({ status: 402 });
+    expect((await buy({ revocationDate: NOW.getTime() })).body).toMatchObject({ credited: false, boughtQuestions: 0 });
+  });
+
+  it("a refund takes a pack back out of the wallet, below zero when already spent; Apple's reversal puts it back", async () => {
+    await buy();
+    await spendToday(DAILY_QUESTIONS * QUESTION_MICROS);
+    await answer(await ask());
+    expect((await notify("REFUND", { revocationDate: NOW.getTime() })).status).toBe(200);
+    expect(await wallet()).toBe(-COST);
+    // Apple may send it again: taken once.
+    await notify("REFUND", { revocationDate: NOW.getTime() });
+    expect(await wallet()).toBe(-COST);
+    expect(await ask()).toMatchObject({ status: 429 });
+    await notify("REFUND_REVERSED", {});
+    expect(await wallet()).toBe(50 * QUESTION_MICROS - COST);
+    // A pack never credited has nothing to take back.
+    await notify("REFUND", { transactionId: "3000000009", revocationDate: NOW.getTime() });
+    expect(await wallet()).toBe(50 * QUESTION_MICROS - COST);
   });
 });

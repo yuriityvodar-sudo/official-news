@@ -1,18 +1,22 @@
-import { JwsError, isActive, recordTransaction, verifyTransaction, type VerifyOptions } from "../appstore";
+import { JwsError, isActive, recordTransaction, verifyTransaction, type Subscription, type VerifyOptions } from "../appstore";
+import { creditPack, verifyPack, walletMicros } from "../appstore/packs";
 import type { Env } from "../env";
 import { toStoredTime } from "../fetcher/text";
 import { SHOWN, isLang } from "../translator";
+import { QUESTION_MICROS, charge, costMicros, questionsLeft, readBudget, spend, unitsFor, type Usage } from "./usage";
+
+export { DAILY_QUESTIONS, QUESTION_MICROS } from "./usage";
 
 /**
  * The AI chat about one decision, for subscribers only (#146, docs/contract.md):
- * `POST /v1/chat`. Paid AI is used only here (CLAUDE.md), one OpenAI call per
- * question. Nothing of the conversation is stored or logged.
+ * `POST /v1/chat`, with `/v1/chat/status` (what is left) and `/v1/chat/credits`
+ * (a pack bought). Paid AI is used only here (CLAUDE.md), one OpenAI call per
+ * question, within the limit of `./usage.ts`. Nothing of the conversation is
+ * stored or logged.
  */
 
 /** The model that answers (#146: GPT-5.4 mini, after a test against nano on 10 real articles). */
 export const CHAT_MODEL = "gpt-5.4-mini";
-/** Questions per subscription per UTC day. */
-export const CHAT_DAILY_LIMIT = 10;
 /** The longest answer in tokens, room for the model's reasoning included: bounds the cost of a question. */
 export const CHAT_MAX_OUTPUT_TOKENS = 1500;
 
@@ -36,16 +40,21 @@ interface ChatRequest {
   transaction: string;
 }
 
-export type ChatResult =
-  | { stream: ReadableStream<Uint8Array>; remaining: number }
-  | { status: number; body: Record<string, string> };
+/** An answer: the stream, the questions left after it, and how many of the limit it took. */
+export type ChatResult = { stream: ReadableStream<Uint8Array>; remaining: number; units: number } | Refusal;
+
+/** Anything but an answer: JSON with a status. */
+export interface Refusal {
+  status: number;
+  body: Record<string, string | number | boolean>;
+}
 
 export interface ChatOptions extends VerifyOptions {
   fetch?: typeof fetch;
   now?: Date;
 }
 
-const error = (status: number, message: string, extra: Record<string, string> = {}): ChatResult => ({
+const error = (status: number, message: string, extra: Record<string, string | number> = {}): Refusal => ({
   status,
   body: { error: message, ...extra },
 });
@@ -101,17 +110,24 @@ function systemPrompt(article: ChatArticle, lang: string): string {
   ].join("\n");
 }
 
-/** OpenAI's stream of events, as the answer's text alone. */
-function answerText(events: ReadableStream<Uint8Array>): ReadableStream<Uint8Array> {
+/**
+ * OpenAI's stream of events, as the answer's text alone. Its last event counts
+ * the call's tokens (`stream_options.include_usage`): given to `counted` once
+ * the stream has ended, never when the reader left before.
+ */
+function answerText(events: ReadableStream<Uint8Array>, counted: (usage: Usage) => Promise<void>): ReadableStream<Uint8Array> {
   const decoder = new TextDecoder();
   const encoder = new TextEncoder();
   let buffer = "";
+  let usage: Usage | undefined;
   const emit = (line: string, controller: TransformStreamDefaultController<Uint8Array>) => {
     const data = line.startsWith("data:") ? line.slice(5).trim() : "";
     if (!data || data === "[DONE]") return;
     try {
-      const delta = (JSON.parse(data) as { choices?: { delta?: { content?: unknown } }[] }).choices?.[0]?.delta?.content;
+      const event = JSON.parse(data) as { choices?: { delta?: { content?: unknown } }[]; usage?: Usage | null };
+      const delta = event.choices?.[0]?.delta?.content;
       if (typeof delta === "string" && delta) controller.enqueue(encoder.encode(delta));
+      if (event.usage) usage = event.usage;
     } catch {
       // Not an event of the answer.
     }
@@ -124,8 +140,14 @@ function answerText(events: ReadableStream<Uint8Array>): ReadableStream<Uint8Arr
         buffer = lines.pop() ?? "";
         for (const line of lines) emit(line, controller);
       },
-      flush(controller) {
+      async flush(controller) {
         emit(buffer + decoder.decode(), controller);
+        if (!usage) return;
+        try {
+          await counted(usage);
+        } catch (e) {
+          console.error(JSON.stringify({ message: "chat usage not counted", error: e instanceof Error ? e.message : String(e) }));
+        }
       },
     }),
   );
@@ -134,40 +156,49 @@ function answerText(events: ReadableStream<Uint8Array>): ReadableStream<Uint8Arr
 /** Midnight UTC after `now`, when the day's questions come back. */
 const nextDay = (now: Date) => toStoredTime(new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1)));
 
+/** The subscription a signed transaction belongs to, kept up to date; null unless it is paid now. */
+async function activeSubscription(transaction: string, env: Env, options: VerifyOptions, now: Date): Promise<Subscription | null> {
+  try {
+    const subscription = await recordTransaction(env, await verifyTransaction(transaction, options), { now });
+    return isActive(subscription, now) ? subscription : null;
+  } catch (e) {
+    if (!(e instanceof JwsError)) throw e;
+    return null;
+  }
+}
+
+const IN_FEED = "a.is_news = 1 AND a.feed_seq IS NOT NULL";
+const today = (now: Date) => toStoredTime(now).slice(0, 10);
+
 /**
  * `POST /v1/chat`: the subscription first (402 without an active one), then the
- * article (404 outside the feed), the day's limit (429), the key (503); the
- * question counts once OpenAI starts answering, so one it never answered does not.
+ * article (404 outside the feed), what is left of the limit (429), the key
+ * (503). The question's share of the limit (`units`) is taken as OpenAI starts
+ * answering, so an answer the reader leaves still counts, and one OpenAI never
+ * gave does not; its real cost replaces it once the answer has ended.
  */
 export async function answerChat(body: unknown, env: Env, options: ChatOptions = {}): Promise<ChatResult> {
   const now = options.now ?? new Date();
   const request = readRequest(body);
   if (typeof request === "string") return error(400, request);
-
-  let subscription;
-  try {
-    subscription = await recordTransaction(env, await verifyTransaction(request.transaction, options), { now });
-  } catch (e) {
-    if (!(e instanceof JwsError)) throw e;
-    return error(402, "Subscription required");
-  }
-  if (!isActive(subscription, now)) return error(402, "Subscription required");
+  const subscription = await activeSubscription(request.transaction, env, options, now);
+  if (!subscription) return error(402, "Subscription required");
 
   const article = await env.DB.prepare(
     `SELECT a.headline, a.summary, a.text, a.original_title, a.published_at, s.name AS source, s.country, t.summary AS translated_summary
      FROM articles a JOIN sources s ON s.id = a.source_id
      LEFT JOIN article_translations t ON t.article_id = a.id AND t.lang = ?2 AND t.headline IS NOT NULL AND ${SHOWN}
-     WHERE a.id = ?1 AND a.is_news = 1 AND a.feed_seq IS NOT NULL`,
+     WHERE a.id = ?1 AND ${IN_FEED}`,
   )
     .bind(request.articleId, request.lang)
     .first<ChatArticle>();
   if (!article) return error(404, "Not found");
 
   const id = subscription.original_transaction_id;
-  const day = toStoredTime(now).slice(0, 10);
-  const used =
-    (await env.DB.prepare("SELECT questions FROM chat_usage WHERE original_transaction_id = ? AND day = ?").bind(id, day).first<number>("questions")) ?? 0;
-  if (used >= CHAT_DAILY_LIMIT) return error(429, `${CHAT_DAILY_LIMIT} questions a day`, { resetsAt: nextDay(now) });
+  const day = today(now);
+  const units = unitsFor(Math.min(article.text?.length ?? 0, MAX_TEXT));
+  const left = questionsLeft(await readBudget(env, id, day), units);
+  if (left.today + left.bought < 1) return error(429, "No questions left today", { resetsAt: nextDay(now), units });
 
   if (!env.OPENAI_API_KEY) return error(503, "The AI agent is not available");
   let response: Response;
@@ -178,6 +209,7 @@ export async function answerChat(body: unknown, env: Env, options: ChatOptions =
       body: JSON.stringify({
         model: CHAT_MODEL,
         stream: true,
+        stream_options: { include_usage: true },
         max_completion_tokens: CHAT_MAX_OUTPUT_TOKENS,
         messages: [
           { role: "system", content: systemPrompt(article, request.lang) },
@@ -194,13 +226,87 @@ export async function answerChat(body: unknown, env: Env, options: ChatOptions =
     return error(503, "The AI agent is not available");
   }
 
-  await env.DB.prepare(
-    `INSERT INTO chat_usage (original_transaction_id, day, questions) VALUES (?1, ?2, 1)
-     ON CONFLICT (original_transaction_id, day) DO UPDATE SET questions = questions + 1`,
-  )
-    .bind(id, day)
-    .run();
-  const remaining = Math.max(CHAT_DAILY_LIMIT - used - 1, 0);
-  console.log(JSON.stringify({ message: "chat question", subscription: id, article: request.articleId, lang: request.lang, remaining }));
-  return { stream: answerText(response.body), remaining };
+  const estimate = units * QUESTION_MICROS;
+  const taken = await charge(env, id, day, estimate, now, true);
+  const remaining = Math.max(left.today + left.bought - 1, 0);
+  console.log(JSON.stringify({ message: "chat question", subscription: id, article: request.articleId, lang: request.lang, units, remaining }));
+  // The real cost replaces the estimate: more is taken as before, less is given back where it came from.
+  const counted = async (usage: Usage) => {
+    const cost = costMicros(usage);
+    const at = new Date();
+    if (cost > estimate) {
+      await charge(env, id, day, cost - estimate, at);
+    } else if (cost < estimate) {
+      const back = estimate - cost;
+      const toWallet = Math.min(back, taken.wallet);
+      await spend(env, id, day, -(back - toWallet), -toWallet, at);
+    }
+    console.log(
+      JSON.stringify({
+        message: "chat usage",
+        subscription: id,
+        article: request.articleId,
+        units,
+        estimateMicros: estimate,
+        costMicros: cost,
+        promptTokens: usage.prompt_tokens ?? 0,
+        cachedTokens: usage.prompt_tokens_details?.cached_tokens ?? 0,
+        completionTokens: usage.completion_tokens ?? 0,
+      }),
+    );
+  };
+  return { stream: answerText(response.body, counted), remaining, units };
+}
+
+/**
+ * `POST /v1/chat/status`: what a subscriber has left for questions about one
+ * article, before asking: today's, the bought ones, how many of the limit one
+ * question about it takes (a long document more than one), and when today's
+ * come back.
+ */
+export async function chatStatus(body: unknown, env: Env, options: ChatOptions = {}): Promise<Refusal> {
+  const now = options.now ?? new Date();
+  const b = body as { articleId?: unknown; transaction?: unknown } | null;
+  if (!b || typeof b.articleId !== "string" || typeof b.transaction !== "string") return error(400, "Expected { articleId, transaction }");
+  const subscription = await activeSubscription(b.transaction, env, options, now);
+  if (!subscription) return error(402, "Subscription required");
+  const article = await env.DB.prepare(`SELECT LENGTH(a.text) AS chars FROM articles a WHERE a.id = ? AND ${IN_FEED}`)
+    .bind(b.articleId)
+    .first<{ chars: number | null }>();
+  if (!article) return error(404, "Not found");
+  const units = unitsFor(Math.min(article.chars ?? 0, MAX_TEXT));
+  const left = questionsLeft(await readBudget(env, subscription.original_transaction_id, today(now)), units);
+  return { status: 200, body: { questionsLeft: left.today, boughtQuestions: left.bought, units, resetsAt: nextDay(now) } };
+}
+
+/**
+ * `POST /v1/chat/credits`: a pack of questions bought in the app, with the
+ * subscription it is for: credited to that subscription's wallet once (a
+ * second call changes nothing), so the app can send it until this answers
+ * and only then finish the purchase. 400 for anything but a pack of this app,
+ * 402 without a subscription's transaction to credit it to.
+ */
+export async function creditChatPack(body: unknown, env: Env, options: ChatOptions = {}): Promise<Refusal> {
+  const now = options.now ?? new Date();
+  const b = body as { pack?: unknown; transaction?: unknown } | null;
+  if (!b || typeof b.pack !== "string" || typeof b.transaction !== "string") return error(400, "Expected { pack, transaction }");
+  let pack;
+  try {
+    pack = await verifyPack(b.pack, options);
+  } catch (e) {
+    if (!(e instanceof JwsError)) throw e;
+    return error(400, "Not a pack of this app");
+  }
+  let subscription;
+  try {
+    subscription = await recordTransaction(env, await verifyTransaction(b.transaction, options), { now });
+  } catch (e) {
+    if (!(e instanceof JwsError)) throw e;
+    return error(402, "Subscription required");
+  }
+  const id = subscription.original_transaction_id;
+  const credited = await creditPack(env, id, pack, now);
+  const wallet = await walletMicros(env, id);
+  console.log(JSON.stringify({ message: "chat pack", subscription: id, product: pack.productId, credited }));
+  return { status: 200, body: { credited, boughtQuestions: Math.max(0, Math.floor(wallet / QUESTION_MICROS)) } };
 }

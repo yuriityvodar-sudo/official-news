@@ -1,12 +1,11 @@
 import type { Env } from "../env";
 import { toStoredTime } from "../fetcher/text";
 import { JwsError, verifyAppleJws, type VerifyOptions } from "./jws";
+import { checkPack, packNotification, type PackTransaction } from "./packs";
+import { BUNDLE_ID, CHAT_PRODUCT_ID, PACK_QUESTIONS } from "./products";
 
 export { JwsError, type VerifyOptions } from "./jws";
-
-/** The app, and the one subscription that opens the AI chat (#146; docs/setup.md). */
-export const BUNDLE_ID = "com.officialnews.app";
-export const CHAT_PRODUCT_ID = "com.officialnews.app.agent.monthly";
+export { BUNDLE_ID, CHAT_PRODUCT_ID, PACK_QUESTIONS } from "./products";
 
 /** What the server reads of an App Store signed transaction (JWSTransactionDecodedPayload). */
 export interface AppleTransaction {
@@ -40,7 +39,11 @@ export interface Subscription {
  * JwsError otherwise.
  */
 export async function verifyTransaction(jws: string, options: VerifyOptions = {}): Promise<AppleTransaction> {
-  const t = await verifyAppleJws<AppleTransaction>(jws, options);
+  return checkSubscription(await verifyAppleJws<AppleTransaction>(jws, options));
+}
+
+/** The subscription's transaction, Apple's signature already checked. */
+function checkSubscription(t: AppleTransaction): AppleTransaction {
   if (t.bundleId !== BUNDLE_ID || t.productId !== CHAT_PRODUCT_ID) throw new JwsError("another app or product");
   if (t.environment !== "Production" && t.environment !== "Sandbox") throw new JwsError("unknown environment");
   if (typeof t.originalTransactionId !== "string" || typeof t.transactionId !== "string" || typeof t.expiresDate !== "number") {
@@ -151,8 +154,17 @@ export async function receiveNotification(
   let subscription: Subscription | undefined;
   if (signed) {
     try {
-      const t = await verifyTransaction(signed, options);
-      subscription = await recordTransaction(env, t, { notification: type, reversed: type === "REFUND_REVERSED", now: options.now });
+      const t = await verifyAppleJws<AppleTransaction & PackTransaction>(signed, options);
+      if (t.productId in PACK_QUESTIONS) {
+        // A pack of questions: a refund takes it back out of its wallet.
+        await packNotification(env, checkPack(t), type, options.now);
+      } else {
+        subscription = await recordTransaction(env, checkSubscription(t), {
+          notification: type,
+          reversed: type === "REFUND_REVERSED",
+          now: options.now,
+        });
+      }
     } catch (error) {
       // Another product of the app, or a transaction that fails the check: nothing to keep.
       if (!(error instanceof JwsError)) throw error;
