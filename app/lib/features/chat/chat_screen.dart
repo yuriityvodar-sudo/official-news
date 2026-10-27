@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io' show Platform;
+import 'dart:math' show max;
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
@@ -116,7 +117,8 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _topUp() async {
     if (await TopUpSheet.show(context, subscription: widget.subscription) &&
         mounted) {
-      setState(() => _left = null);
+      // [chatDemo] asks no server: what is left is the pack it bought.
+      setState(() => _left = chatDemo ? _subscription.boughtQuestions : null);
       await _loadStatus();
     }
   }
@@ -203,7 +205,9 @@ class _ChatScreenState extends State<ChatScreen> {
     _toEnd();
   }
 
-  /// [chatDemo]: the summary, word by word, as an answer would come.
+  /// [chatDemo]: the summary, word by word, as an answer would come, with one
+  /// question fewer left each time from 3, so the line over the field, the
+  /// card and the top-up sheet can be seen too.
   ChatAnswer _demoAnswer() {
     final words = (widget.article.summary ?? widget.article.headline).split(
       ' ',
@@ -213,7 +217,7 @@ class _ChatScreenState extends State<ChatScreen> {
         const Duration(milliseconds: 40),
         (i) => i == 0 ? words[i] : ' ${words[i]}',
       ).take(words.length),
-      remaining: 3,
+      remaining: _left == null ? 3 : max(0, _left! - 1),
     );
   }
 
