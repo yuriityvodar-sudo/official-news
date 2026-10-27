@@ -4,7 +4,7 @@ import { parseFeed } from "./feed";
 import { extractContent, findLink, parsePage } from "./page";
 import { type Robots, isAllowed, robotsFromResponse } from "./robots";
 import { decodeBody, getStrings, htmlToText, toStoredTime, ulid } from "./text";
-import { type FoundItem, type SourceConfig, type SourceRow, configRegex, readConfig } from "./types";
+import { type FilterField, type FoundItem, type SourceConfig, type SourceRow, configRegex, readConfig } from "./types";
 
 export const USER_AGENT = "OfficialNewsBot/0.1 (+https://github.com/yuriityvodar-sudo/official-news)";
 
@@ -164,10 +164,13 @@ function onSourceSite(item: FoundItem, sourceUrl: string, config: SourceConfig):
 
 function passesFilters(item: FoundItem, config: SourceConfig): boolean {
   for (const [field, pattern] of Object.entries(config.match ?? {})) {
-    if (!configRegex(pattern).test(item[field as "title" | "category"] ?? "")) return false;
+    const regex = configRegex(pattern);
+    // A newspaper's lead may leave out the decision its headline names (Урядовий кур'єр).
+    const headline = field === "title" && item.headline !== undefined && regex.test(item.headline);
+    if (!headline && !regex.test(item[field as FilterField] ?? "")) return false;
   }
   for (const [field, pattern] of Object.entries(config.exclude ?? {})) {
-    if (configRegex(pattern).test(item[field as "title" | "category"] ?? "")) return false;
+    if (configRegex(pattern).test(item[field as FilterField] ?? "")) return false;
   }
   return true;
 }

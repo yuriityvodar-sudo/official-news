@@ -5,7 +5,8 @@ export interface DateSpec {
   /**
    * Numeric pattern with yyyy, mm, dd, HH, MM, e.g. "dd/mm/yyyy" or "yyyy. mm. dd."; "fr" for "14 octobre 2026";
    * "en" for "7 September 2026" or "7 Sep 2026", also after other words ("Record of decisions | 7 September 2026");
-   * "uk" for "16 жовтня 2026", "15 жовтня 17:34" or "12:31, 16 жовтня" (no year: the latest such date).
+   * "uk" for "16 жовтня 2026", "15 жовтня 17:34" or "12:31, 16 жовтня" (no year: the latest such date),
+   * also with the month's own name ("26 Жовтень 2026, Понеділок 16:21").
    */
   format?: string;
   /** Offset of the source's local time when the date has no zone, e.g. "+03:00". Default UTC. */
@@ -25,6 +26,8 @@ const ENGLISH_MONTHS = ["january", "february", "march", "april", "may", "june", 
 const FRENCH_MONTHS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
 /** Genitive, as a date writes them ("16 жовтня"). */
 const UKRAINIAN_MONTHS = ["січня", "лютого", "березня", "квітня", "травня", "червня", "липня", "серпня", "вересня", "жовтня", "листопада", "грудня"];
+/** Nominative, as the Verkhovna Rada's feed writes them ("26 Жовтень 2026"). */
+const UKRAINIAN_MONTH_NAMES = ["січень", "лютий", "березень", "квітень", "травень", "червень", "липень", "серпень", "вересень", "жовтень", "листопад", "грудень"];
 
 function offsetMinutes(offset: string | undefined): number {
   const m = offset?.match(/^([+-])(\d{2}):?(\d{2})$/);
@@ -84,7 +87,7 @@ export function parseDate(raw: string | null | undefined, spec: DateSpec = {}, n
   if (spec.format === "uk") {
     const lower = text.toLowerCase();
     const m = lower.match(/(\d{1,2})\s+([а-яіїєґ]+)(?:\s+(\d{4}))?/);
-    const month = m ? UKRAINIAN_MONTHS.indexOf(m[2]) + 1 : 0;
+    const month = m ? Math.max(UKRAINIAN_MONTHS.indexOf(m[2]), UKRAINIAN_MONTH_NAMES.indexOf(m[2])) + 1 : 0;
     if (!m || !month) return null;
     // The time may come before or after the date ("12:31, 16 жовтня", "15 жовтня  17:34").
     const time = lower.match(/(\d{1,2}):(\d{2})/);

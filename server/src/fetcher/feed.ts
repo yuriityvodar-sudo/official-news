@@ -74,6 +74,7 @@ export function parseFeed(xml: string, baseUrl: string, config: SourceConfig, no
 
     const content = element(block, "content:encoded") ?? element(block, "description") ?? element(block, "summary") ?? element(block, "content");
     const category = plain(block, "category") ?? attribute(block.match(/<category\b[^>]*>/i)?.[0] ?? "", "term");
+    const headline = titleField === "title" ? null : plain(block, "title");
 
     return [
       {
@@ -84,6 +85,7 @@ export function parseFeed(xml: string, baseUrl: string, config: SourceConfig, no
         text: content ? htmlToText(content) || null : null,
         imageUrl: image(block, baseUrl),
         category,
+        ...(headline ? { headline } : {}),
       },
     ];
   });
