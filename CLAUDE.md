@@ -56,6 +56,7 @@ After the MVP, towards the App Store release (call, 16 Oct; each is an issue ass
 - Official sources only: verified government and international-body websites, never media, aggregators or trending lists.
 - The shared definitions in `docs/plan.md` (repo layout, article format, API, database). From the Kickoff they live in `docs/contract.md`.
 - One AI call per article for its summary, run once on the server and stored (an unusable answer is asked again, at most 3 tries in all); translations add one call per language (#46).
+- Paid AI only for the chat: the AI chat by subscription (#146) is the one exception to the line above, one call per subscriber's question, paid for by the subscription. Summaries and translations stay on free tiers.
 - The fetcher works in small runs (every minute, 1 source) to stay within Cloudflare's free limits.
 - Never bypass CAPTCHAs or bot checks on source websites; respect `robots.txt`.
 
