@@ -333,10 +333,21 @@ describe("other requests", () => {
       "/nope",
       "/health",
       "/queue",
+      "/locate",
     ]) {
       expect(await cacheControl(path), path).toBe("no-store");
     }
     expect(await cacheControl("/articles", { method: "POST" })).toBe("no-store");
+  });
+
+  it("GET /locate answers the country Cloudflare sees the request from, for For you (#170)", async () => {
+    const locate = async (country?: string) => {
+      const response = await exports.default.fetch(new Request("https://api.test/locate", country ? { cf: { country } } : {}));
+      return { status: response.status, body: await response.json() };
+    };
+    expect(await locate("CZ")).toEqual({ status: 200, body: { country: "CZ" } });
+    // Unknown, Tor, or no country at all (a local run): the phone keeps its own guess.
+    for (const country of ["XX", "T1", undefined]) expect(await locate(country), String(country)).toEqual({ status: 200, body: { country: null } });
   });
 
   it("returns JSON errors for unknown paths and other methods", async () => {
