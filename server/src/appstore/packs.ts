@@ -68,20 +68,34 @@ export async function creditPack(env: Env, subscription: string, pack: PackTrans
 /**
  * Apple's notification about a pack: a refund or a revocation takes it out of
  * its wallet (which may go below zero: the bought questions were already
- * asked), and `REFUND_REVERSED` puts it back. A pack never credited has
- * nothing to take back.
+ * asked), and `REFUND_REVERSED` puts it back. A pack refunded before the app
+ * sent it leaves a row with no subscription (''), so the transaction the app
+ * still holds, signed before the refund, can never be credited (Yurii's
+ * review of #184); `REFUND_REVERSED` removes that row.
  */
 export async function packNotification(env: Env, pack: PackTransaction, type: string, now = new Date()): Promise<void> {
   const at = toStoredTime(now);
   const refunded = type === "REFUND" || type === "REVOKE";
   if (!refunded && type !== "REFUND_REVERSED") return;
+  const revokedAt = toStoredTime(pack.revocationDate ? new Date(pack.revocationDate) : now);
+  if (!refunded) await env.DB.prepare("DELETE FROM chat_credits WHERE transaction_id = ? AND original_transaction_id = ''").bind(pack.transactionId).run();
   const statement = refunded
     ? env.DB.prepare(
         "UPDATE chat_credits SET revoked_at = ?2 WHERE transaction_id = ?1 AND revoked_at IS NULL RETURNING original_transaction_id, micros",
-      ).bind(pack.transactionId, toStoredTime(pack.revocationDate ? new Date(pack.revocationDate) : now))
+      ).bind(pack.transactionId, revokedAt)
     : env.DB.prepare(
         "UPDATE chat_credits SET revoked_at = NULL WHERE transaction_id = ?1 AND revoked_at IS NOT NULL RETURNING original_transaction_id, micros",
       ).bind(pack.transactionId);
   const row = await statement.first<{ original_transaction_id: string; micros: number }>();
-  if (row) await addToWallet(env, row.original_transaction_id, refunded ? -row.micros : row.micros, at).run();
+  if (row) {
+    await addToWallet(env, row.original_transaction_id, refunded ? -row.micros : row.micros, at).run();
+  } else if (refunded) {
+    // Not credited yet (or refunded again): the row keeps it from being credited later.
+    await env.DB.prepare(
+      `INSERT INTO chat_credits (transaction_id, original_transaction_id, product_id, micros, environment, revoked_at, created_at)
+       VALUES (?1, '', ?2, ?3, ?4, ?5, ?6) ON CONFLICT (transaction_id) DO NOTHING`,
+    )
+      .bind(pack.transactionId, pack.productId, packMicros(pack.productId), pack.environment, revokedAt, at)
+      .run();
+  }
 }
