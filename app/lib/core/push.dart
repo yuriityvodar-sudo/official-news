@@ -188,8 +188,6 @@ Future<void> openAppSettings() async {
 ///   after "Turn On". Whatever the answer, it never asks by itself again.
 /// - Allowed: subscribed to `breaking_<feed language>`, moved with the
 ///   language; the topic is saved, so a start corrects it.
-/// - "Tell me when it's ready" under the AI chat's note ([notifyAiChat],
-///   #141): `ai_chat_<feed language>` too, moved and saved the same way.
 /// - A tap opens the article in the notification's language, or the feed.
 ///
 /// The Settings row (`SettingsScreen`) shows [permission], live, and asks with
@@ -206,7 +204,7 @@ class Push with WidgetsBindingObserver {
   static const _readsKey = 'push.readIds';
   static const _offeredKey = 'push.offered';
   static const _topicKey = 'push.topic';
-  static const _aiChatKey = 'push.aiChat';
+  /// The topic of the AI chat note's earlier switch (#141), dropped (#160).
   static const _aiChatTopicKey = 'push.aiChatTopic';
 
   /// How long the app waits for a topic change; then it is tried again at the
@@ -239,15 +237,6 @@ class Push with WidgetsBindingObserver {
 
   /// The topic of a feed language: `breaking_uk`.
   static String topicFor(FeedLanguage language) => 'breaking_${language.code}';
-
-  /// The topic for the news that the AI chat is ready, in a feed language:
-  /// `ai_chat_uk` (#141).
-  static String aiChatTopicFor(FeedLanguage language) =>
-      'ai_chat_${language.code}';
-
-  /// Whether the reader asked to hear when the AI chat is ready.
-  ValueListenable<bool> get aiChat => _aiChat;
-  final _aiChat = ValueNotifier(false);
 
   /// What the phone allows; [PushPermission.unavailable] while push is off.
   ValueListenable<PushPermission> get permission => _permission;
@@ -311,7 +300,6 @@ class Push with WidgetsBindingObserver {
     _messaging = messaging;
     _prefs = prefs;
     _language = language;
-    _aiChat.value = prefs.getBool(_aiChatKey) ?? false;
     WidgetsBinding.instance.addObserver(this);
     _subscriptions
       ..add(messaging.taps.listen((tap) => unawaited(open(tap))))
@@ -341,7 +329,6 @@ class Push with WidgetsBindingObserver {
     _prefs = null;
     _confirmed.clear();
     _enabling = null;
-    _aiChat.value = false;
     // A new chain: the old one may belong to an earlier test's fake clock.
     _syncing = Future.value();
     _permission.value = PushPermission.unavailable;
@@ -383,25 +370,7 @@ class Push with WidgetsBindingObserver {
     }
   }
 
-  /// "Tell me when it's ready" under the AI chat's note (#141): [on] subscribes
-  /// to [aiChatTopicFor] the feed's language while notifications are allowed.
-  /// While iOS has not asked, it asks first ([enable], `trigger` `ai_chat`);
-  /// allowed notifications bring the breaking decisions too, as the note says.
-  /// The wish is kept when they are not allowed, so turning them on in the
-  /// iOS Settings app subscribes. Returns the permission after it.
-  Future<PushPermission> notifyAiChat(bool on) async {
-    final prefs = _prefs;
-    if (prefs == null) return _permission.value;
-    await prefs.setBool(_aiChatKey, on);
-    _aiChat.value = on;
-    if (on && _permission.value == PushPermission.notAsked) {
-      return enable(trigger: 'ai_chat');
-    }
-    await _sync();
-    return _permission.value;
-  }
-
-  /// The feed's language changed: the topics move with it.
+  /// The feed's language changed: the topic moves with it.
   Future<void> setLanguage(FeedLanguage language) async {
     if (language == _language) return;
     _language = language;
@@ -490,12 +459,8 @@ class Push with WidgetsBindingObserver {
       _topicKey,
       allowed ? topicFor(_language) : null,
     );
-    await _syncTopic(
-      messaging,
-      prefs,
-      _aiChatTopicKey,
-      allowed && _aiChat.value ? aiChatTopicFor(_language) : null,
-    );
+    // The earlier switch's topic, gone from the phones that took it (#160).
+    await _syncTopic(messaging, prefs, _aiChatTopicKey, null);
   }
 
   /// Makes the topic saved under [key] the one wanted, or none.
