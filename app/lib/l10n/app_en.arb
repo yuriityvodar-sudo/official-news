@@ -854,6 +854,14 @@
   "@chatSuggestConcernsMe": {
     "description": "A suggested first question in the AI chat, and the paywall's sample question."
   },
+  "chatSuggestWhatChanges": "What changes and when?",
+  "@chatSuggestWhatChanges": {
+    "description": "A suggested first question in the AI chat."
+  },
+  "chatSuggestWhatToDo": "What should I do?",
+  "@chatSuggestWhatToDo": {
+    "description": "A suggested first question in the AI chat."
+  },
   "paywallTitle": "Continue the conversation with the AI agent",
   "@paywallTitle": {
     "description": "The paywall's title, under the sample answer that fades out."
@@ -903,6 +911,38 @@
   "@paywallClose": {
     "description": "VoiceOver's name for the paywall's close button."
   },
+  "chatConsentTitle": "Before your first question",
+  "@chatConsentTitle": {
+    "description": "The AI chat's consent sheet, shown once (App Store guideline 5.1.2)."
+  },
+  "chatConsentBody": "Your question and this article's text are sent to OpenAI for the answer. We don't keep your conversations. If you ask Apple for a refund, we may tell Apple how much you used the chat.",
+  "@chatConsentBody": {
+    "description": "What the consent sheet says is sent, to whom, and what may be told to Apple on a refund."
+  },
+  "chatConsentAllow": "Allow",
+  "@chatConsentAllow": {
+    "description": "The consent sheet's button that allows sending."
+  },
+  "chatAsk": "Ask about this decision",
+  "@chatAsk": {
+    "description": "The AI chat's field, before anything is typed."
+  },
+  "chatSend": "Send",
+  "@chatSend": {
+    "description": "VoiceOver's name for the AI chat's send button."
+  },
+  "chatNotAdvice": "Answers come only from the official text and are not legal advice.",
+  "@chatNotAdvice": {
+    "description": "Once, at the top of the AI chat."
+  },
+  "chatUnavailable": "The AI agent isn't available right now.",
+  "@chatUnavailable": {
+    "description": "In the AI chat when the server or OpenAI does not answer."
+  },
+  "chatCutOff": "The answer was cut off.",
+  "@chatCutOff": {
+    "description": "In the AI chat when an answer stopped in the middle (offline)."
+  },
   "privacyChatHeading": "AI chat",
   "@privacyChatHeading": {
     "description": "A heading of the privacy policy."
@@ -918,5 +958,23 @@
   "termsSubscription": "The AI agent is a monthly subscription through the App Store. It renews automatically until you cancel it in your Apple ID settings, at least 24 hours before the end of the period. Apple handles refunds. The agent answers only from the official text, can make mistakes, and its answers are not legal, financial or medical advice. 20 questions a day; a question about a long document counts as 2 or 3; packs of questions add more.",
   "@termsSubscription": {
     "description": "The terms of use's section on the AI agent subscription (#146)."
+  },
+  "chatRemaining": "{count, plural, =1{1 question left today} other{{count} questions left today}}",
+  "@chatRemaining": {
+    "description": "In the AI chat once 3 or fewer of the day's questions are left.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "chatLimitReached": "That's all of today's questions. New ones from {time}.",
+  "@chatLimitReached": {
+    "description": "In the AI chat when the day's 10 questions are used up; {time} is when new ones come, in the phone's time.",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
   }
 }

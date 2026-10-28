@@ -21,6 +21,8 @@ import '../../core/push.dart';
 import '../../core/subscription.dart';
 import '../../core/theme.dart';
 import '../../l10n/app_localizations.dart';
+import '../chat/chat_consent.dart';
+import '../chat/chat_screen.dart';
 import '../chat/paywall_sheet.dart';
 import 'ai_chat_note.dart';
 import 'picture_viewer.dart';
@@ -341,21 +343,31 @@ class _BarButton extends StatelessWidget {
   );
 }
 
-/// "Discuss with AI" under the summary (#133, #141, #146): until the chat
-/// screen comes it opens the note about the chat ([AiChatNote]), with "Tell me
-/// when it's ready"; in the simulator's demo build ([chatDemo]) the chat's
-/// paywall comes first. Each tap is counted.
+/// "Discuss with AI" under the summary (#133, #141, #146): on iOS the AI chat
+/// about this decision, behind its paywall (a subscriber goes straight in);
+/// once just bought, the consent and the paywall's sample question follow.
+/// Where there is no App Store purchase yet (Android), the note about the
+/// chat ([AiChatNote]), with "Tell me when it's ready". Each tap is counted.
 class _DiscussWithAi extends StatelessWidget {
   const _DiscussWithAi(this.article);
 
   final Article article;
 
   Future<void> _open(BuildContext context) async {
-    if (chatDemo && !chatSubscription.active) {
-      await PaywallSheet.show(context, article);
-      return;
+    if (!ChatScreen.available) return AiChatNote.show(context);
+    final l10n = AppLocalizations.of(context);
+    String? first;
+    if (!chatSubscription.active) {
+      if (!await PaywallSheet.show(context, article)) return;
+      first = l10n.chatSuggestConcernsMe;
     }
-    await AiChatNote.show(context);
+    if (!context.mounted || !await ChatConsent.ask(context)) return;
+    if (!context.mounted) return;
+    await Navigator.of(context).push(
+      CupertinoPageRoute<void>(
+        builder: (_) => ChatScreen(article: article, firstQuestion: first),
+      ),
+    );
   }
 
   @override

@@ -2,19 +2,23 @@ import 'dart:convert';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
 import 'package:official_news/core/analytics.dart';
+import 'package:official_news/core/api_client.dart';
 import 'package:official_news/core/article.dart';
 import 'package:official_news/core/subscription.dart';
+import 'package:official_news/features/chat/chat_consent.dart';
+import 'package:official_news/features/chat/chat_screen.dart';
 import 'package:official_news/features/chat/paywall_sheet.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'fake_store.dart';
 import 'test_app.dart';
 
-/// The AI chat by subscription in the app (#146): its paywall. StoreKit itself
-/// and the glass are checked on a phone; the consent and the chat come with
-/// the chat screen.
+/// The AI chat by subscription in the app (#146): the paywall, the consent and
+/// the chat. StoreKit itself and the glass are checked on a phone.
 
 final _article = Article.fromJson({
   'id': 'c1',
@@ -151,6 +155,163 @@ void main() {
         scrollable: find.byType(Scrollable).last,
       );
       expect(find.text('AI agent subscription'), findsOneWidget);
+    });
+  });
+
+  group('the consent', () {
+    testWidgets('asks once, before the first question', (tester) async {
+      final answers = <bool>[];
+      await tester.pumpWidget(
+        testApp(
+          home: Builder(
+            builder: (context) => CupertinoButton(
+              onPressed: () async =>
+                  answers.add(await ChatConsent.ask(context)),
+              child: const Text('ask'),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('ask'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('sent to OpenAI'), findsOneWidget);
+      await tester.tap(find.text('Allow'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('ask'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('sent to OpenAI'), findsNothing);
+      expect(answers, [true, true]);
+    });
+  });
+
+  group('the chat', () {
+    late List<Map<String, dynamic>> asked;
+
+    /// The server: answers in pieces, or with [status].
+    ApiClient server({
+      int status = 200,
+      int remaining = 9,
+      String body = '{}',
+    }) => ApiClient(
+      baseUrl: 'https://api.test',
+      client: MockClient.streaming((request, bodyStream) async {
+        asked.add(
+          jsonDecode(await bodyStream.bytesToString()) as Map<String, dynamic>,
+        );
+        if (status != 200) {
+          return http.StreamedResponse(Stream.value(utf8.encode(body)), status);
+        }
+        return http.StreamedResponse(
+          Stream.fromIterable(
+            ['Yes,', ' from November', ' 2027.'].map(utf8.encode),
+          ),
+          200,
+          headers: {'x-chat-remaining': '$remaining'},
+        );
+      }),
+    );
+
+    Future<void> openChat(
+      WidgetTester tester,
+      ApiClient api, {
+      List<Uri>? opened,
+    }) async {
+      asked = [];
+      store.report(
+        PurchaseStatus.purchased,
+        jws: _jws(_now.add(const Duration(days: 30))),
+      );
+      await tester.pumpWidget(
+        testApp(
+          home: ChatScreen(
+            key: UniqueKey(),
+            article: _article,
+            api: api,
+            subscription: subscription,
+            openLink: (uri) async => opened?.add(uri),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets(
+      'asks about this decision and shows the answer as it comes, with the official link',
+      (tester) async {
+        final opened = <Uri>[];
+        asked = [];
+        await openChat(tester, server(remaining: 2), opened: opened);
+        await tester.tap(find.text('What changes and when?'));
+        await tester.pumpAndSettle();
+        expect(find.text('Yes, from November 2027.'), findsOneWidget);
+        expect(asked.single['articleId'], 'c1');
+        expect(asked.single['lang'], 'en');
+        expect(asked.single['messages'], [
+          {'role': 'user', 'text': 'What changes and when?'},
+        ]);
+        expect(asked.single['transaction'], subscription.transaction);
+        expect(find.text('2 questions left today'), findsOneWidget);
+        await tester.tap(find.text('Read the official decision on gov.uk'));
+        expect(opened, [Uri.parse('https://www.gov.uk/euro-7')]);
+        expect(sent(), contains('chat_question'));
+        expect(
+          events.lastWhere((e) => e.$1 == 'chat_question').$2['number'],
+          1,
+        );
+
+        // The next question carries the conversation.
+        await tester.enterText(
+          find.byType(CupertinoTextField),
+          'What should I do?',
+        );
+        await tester.testTextInput.receiveAction(TextInputAction.send);
+        await tester.pumpAndSettle();
+        expect(asked.last['messages'], [
+          {'role': 'user', 'text': 'What changes and when?'},
+          {'role': 'assistant', 'text': 'Yes, from November 2027.'},
+          {'role': 'user', 'text': 'What should I do?'},
+        ]);
+      },
+    );
+
+    testWidgets(
+      'says when today\'s questions are used up, or the agent is not there',
+      (tester) async {
+        await openChat(
+          tester,
+          server(
+            status: 429,
+            body:
+                '{"error":"No questions left today","resetsAt":"2026-10-28T00:00:00Z"}',
+          ),
+        );
+        await tester.tap(find.text('Does this concern me?'));
+        await tester.pumpAndSettle();
+        expect(
+          find.textContaining("That's all of today's questions"),
+          findsOneWidget,
+        );
+
+        await openChat(tester, server(status: 503));
+        await tester.tap(find.text('Does this concern me?'));
+        await tester.pumpAndSettle();
+        expect(
+          find.text("The AI agent isn't available right now."),
+          findsOneWidget,
+        );
+        expect(find.text('Try again'), findsOneWidget);
+      },
+    );
+
+    testWidgets('not paid any more: the paywall again', (tester) async {
+      await openChat(tester, server(status: 402));
+      await tester.tap(find.text('Does this concern me?'));
+      await tester.pumpAndSettle();
+      expect(subscription.active, isFalse);
+      expect(
+        find.text('Continue the conversation with the AI agent'),
+        findsOneWidget,
+      );
     });
   });
 }

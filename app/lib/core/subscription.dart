@@ -299,6 +299,5 @@ class DemoStore implements Store {
   Future<void> finish(PurchaseDetails purchase) async {}
 }
 
-/// The app's subscription, started with the app (`main.dart`): for now only in
-/// the simulator's demo build, on iOS once the chat screen comes (#146).
+/// The app's subscription, started with the app on iOS (`main.dart`).
 final chatSubscription = ChatSubscription();
