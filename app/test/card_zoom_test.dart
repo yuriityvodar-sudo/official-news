@@ -363,6 +363,29 @@ void main() {
     expect(find.text('Line 0'), findsOneWidget);
   });
 
+  testWidgets('a sheet over the open article comes and goes cleanly (the '
+      'paywall): the article stays as it was', (tester) async {
+    await tester.pumpWidget(_host());
+    await tester.tap(find.text('Card'));
+    await tester.pumpAndSettle();
+    final navigator = tester.state<NavigatorState>(find.byType(Navigator));
+    final top = tester.getRect(find.text('Card'));
+
+    navigator.push(
+      CupertinoSheetRoute<void>(
+        scrollableBuilder: (_, _) => const Text('Paywall'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Paywall'), findsOneWidget);
+    navigator.pop();
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('Paywall'), findsNothing);
+    expect(tester.getRect(find.text('Card')), top);
+  });
+
   testWidgets('the native glass under the moving article is drawn plainly '
       'meanwhile; the article keeps its own', (tester) async {
     GlassCircle.debugNative = true;
