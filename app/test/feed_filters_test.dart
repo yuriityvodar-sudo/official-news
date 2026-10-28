@@ -1,6 +1,9 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -163,6 +166,7 @@ class _Server {
     this.pageSize = 20,
     this.located,
     this.topIds = const [],
+    this.holdForYou,
   }) : articles = articles ?? _week;
 
   List<Map<String, dynamic>> articles;
@@ -173,6 +177,9 @@ class _Server {
   final int pageSize;
   final String? located;
   final List<String> topIds;
+
+  /// For you's pages wait for it, when given.
+  final Completer<void>? holdForYou;
   final log = <Uri>[];
   bool offline = false;
 
@@ -228,6 +235,7 @@ class _Server {
             ],
           });
         case '/articles':
+          if (q.containsKey('for')) await holdForYou?.future;
           var shown = _matching(q);
           if (lang != 'en') {
             shown = [for (final a in shown) _translated(a, lang)];
@@ -458,7 +466,7 @@ void main() {
   });
   tearDown(() {
     analytics = Analytics();
-    readPhoneRegion = () => null;
+    readPhoneRegion = () async => null;
   });
 
   List<Map<String, Object>> filterEvents() => [
@@ -467,7 +475,7 @@ void main() {
   ];
 
   /// A phone whose region is [country] (#170).
-  void region(String country) => readPhoneRegion = () => country;
+  void region(String country) => readPhoneRegion = () async => country;
 
   /// For you for a reader in Germany: Japan and Türkiye matter less.
   const forGermany = ['de1', 'us1', 'eu1', 'gb1', 'de2', 'us2'];
@@ -538,15 +546,45 @@ void main() {
     expect(server.log.where((u) => u.path == '/locate'), hasLength(1));
   });
 
-  test("the phone's region from its locale name", () {
-    expect(regionOf('cs_CZ'), 'CZ');
-    expect(regionOf('en-CZ'), 'CZ');
-    expect(regionOf('en_CZ.UTF-8'), 'CZ');
-    expect(regionOf('zh_Hans_CN'), 'CN');
-    // Latin America is no country, and a language alone has none.
-    expect(regionOf('es_419'), isNull);
-    expect(regionOf('en'), isNull);
-    expect(regionOf('C'), isNull);
+  testWidgets("the phone's region is iOS's Region setting, asked of iOS: "
+      'not the first language\'s', (tester) async {
+    const channel = MethodChannel('official_news/region');
+    final messenger = tester.binding.defaultBinaryMessenger;
+    String? answer;
+    var asked = 0;
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      asked++;
+      return answer;
+    });
+    addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    // A phone in English (UK) set to Germany (Yurii, #201): iOS says DE.
+    answer = 'DE';
+    expect(await phoneRegion(), 'DE');
+    // Anything but two capital letters is no country: the server is asked.
+    for (final odd in ['en-GB', '419', '', null]) {
+      answer = odd;
+      expect(await phoneRegion(), isNull, reason: odd);
+    }
+    // Android keeps no region apart from its languages: not asked.
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    asked = 0;
+    expect(await phoneRegion(), isNull);
+    expect(asked, 0);
+    debugDefaultTargetPlatformOverride = null;
+  });
+
+  testWidgets('when the server tells the country, the feed on screen stays '
+      "until For you's page arrives", (tester) async {
+    final server = _Server(located: 'DE', holdForYou: Completer<void>());
+    await _pump(tester, server);
+    // The whole world's feed, readable, while For you's page is on its way.
+    expect(server.feedRequests.last.queryParameters['for'], 'DE');
+    expect(_shown(tester), contains('tr1'));
+    expect(find.byType(CupertinoActivityIndicator), findsNothing);
+    server.holdForYou!.complete();
+    await tester.pumpAndSettle();
+    expect(_shown(tester), forGermany);
   });
 
   testWidgets('the menu: For you, the whole world, then the topics, busiest '

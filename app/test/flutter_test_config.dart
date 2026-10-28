@@ -33,7 +33,7 @@ Future<void> testExecutable(FutureOr<void> Function() testMain) async {
   Arrive.enabled = false;
   readStyle.value = ReadStyle.dim;
   feedDesign.value = FeedDesign.now;
-  readPhoneRegion = () => null;
+  readPhoneRegion = () async => null;
   await GlobalMaterialLocalizations.delegate.load(const Locale('en'));
   await testMain();
 }

@@ -199,7 +199,7 @@ class FeedController extends ChangeNotifier {
     _topic = store.topic();
     // A topic is the whole world's (#170), also one saved with a Where.
     if (_topic != null) _where = FeedWhere.all;
-    _region = readPhoneRegion();
+    _region = await readPhoneRegion();
     _located = store.located();
     unawaited(analytics.homeCountry(homeCountry));
     _noCountries = store.noCountries();
@@ -310,7 +310,7 @@ class FeedController extends ChangeNotifier {
       _located = country;
       unawaited(_store?.saveLocated(country));
       unawaited(analytics.homeCountry(country));
-      if (where.isForYou) await _reload(menus: false);
+      if (where.isForYou) await _reload(menus: false, keepShown: true);
     } catch (_) {
       // Not known this time.
     }
@@ -319,14 +319,22 @@ class FeedController extends ChangeNotifier {
   /// Shows another feed (a language or a filter) from the top: the page saved
   /// for it at once, if it has one, then the fresh one, with its menus unless
   /// [menus] is false. Anything still loading for the previous feed is dropped.
-  Future<void> _reload({bool menus = true}) async {
+  /// With [keepShown] and nothing saved, the feed on screen stays until the
+  /// new one arrives (For you for a country just learned, #170: no spinner
+  /// over a feed the reader can read; Yurii, #201).
+  Future<void> _reload({bool menus = true, bool keepShown = false}) async {
     final saved = filtered ? null : _store?.lastPage(language, _forCountry);
-    _show(saved);
+    final quiet = keepShown && saved == null;
+    if (quiet) {
+      _generation++;
+    } else {
+      _show(saved);
+      loading = saved == null;
+    }
     newCount = 0;
     error = null;
-    loading = saved == null;
     notifyListeners();
-    await (menus ? refresh() : _load());
+    await (menus ? refresh() : _load(quiet: quiet));
   }
 
   /// The first page again, and the menus for it, which the pull does not wait for.
