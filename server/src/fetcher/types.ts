@@ -55,12 +55,19 @@ export interface FullTextStep {
   encoding?: string;
 }
 
+/** The item fields `match` and `exclude` test. */
+export type FilterField = "title" | "category" | "url";
+
 /** The `config` column of a source (docs/sources.md). */
 export interface SourceConfig {
   seed?: boolean;
-  /** Keep only items whose field matches (regular expressions; "(?i)" at the start ignores case). */
-  match?: Partial<Record<"title" | "category", string>>;
-  exclude?: Partial<Record<"title" | "category", string>>;
+  /**
+   * Keep only items whose field matches (regular expressions; "(?i)" at the
+   * start ignores case). A feed whose title comes from another field (`title`)
+   * also passes `match.title` on its own headline.
+   */
+  match?: Partial<Record<FilterField, string>>;
+  exclude?: Partial<Record<FilterField, string>>;
   /** Character set when the server does not say it, e.g. "iso-8859-1". */
   encoding?: string;
   /** false: never open item pages (robots.txt forbids it, or they are built by JavaScript); `fullText` is still read when set. */
@@ -123,6 +130,8 @@ export interface FoundItem {
   text: string | null;
   imageUrl: string | null;
   category: string | null;
+  /** Feeds: the item's own `<title>`, when the config takes the title from another field. */
+  headline?: string;
 }
 
 export function readConfig(source: SourceRow): SourceConfig {

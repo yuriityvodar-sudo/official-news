@@ -126,10 +126,9 @@ class Analytics {
   Future<void> discussAiTapped(Article article) =>
       _event('discuss_ai_tap', _about(article));
 
-  /// "Tell me when it's ready" switched in the AI chat's note (#141): `on` or
-  /// `off`. With the taps, it shows how many readers want the chat.
-  Future<void> aiChatNotify({required bool on}) =>
-      _event('ai_chat_notify', {'state': on ? 'on' : 'off'});
+  /// "Tell me when it's ready" tapped in the AI chat's note (#160), once per
+  /// phone: with the taps on "Discuss with AI", how many readers want the chat.
+  Future<void> aiChatInterest() => _event('ai_chat_interest', const {});
 
   /// How far down the feed the reader came this visit: the first time a row
   /// of [feedDepths] is shown, `feed_scroll_10`, `feed_scroll_25` and so on.
@@ -140,8 +139,7 @@ class Analytics {
 
   /// The answer about notifications (#62): `granted` or `denied` to the iOS
   /// question, `not_now` to the app's own explanation before it. [trigger] is
-  /// what asked: `reads` (after the third article read), `settings`, or
-  /// `ai_chat` ("Tell me when it's ready" in the AI chat's note, #141).
+  /// what asked: `reads` (after the third article read) or `settings`.
   Future<void> pushPermission(String result, {required String trigger}) =>
       _event('push_permission', {'result': result, 'trigger': trigger});
 
