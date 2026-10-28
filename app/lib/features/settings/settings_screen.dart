@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../../core/feed_language.dart';
 import '../../core/motion.dart';
@@ -108,7 +107,6 @@ class SettingsScreen extends StatelessWidget {
                       push: notifications ?? push,
                       openSettingsApp: openSettingsApp,
                     ),
-                    if (showPushCheck) _PushCheckLine(notifications ?? push),
                   ],
                 ),
                 CupertinoListSection.insetGrouped(
@@ -439,75 +437,6 @@ class _NotificationsTile extends StatelessWidget {
       },
     );
   }
-}
-
-/// Whether Settings shows the push check line (#149): TestFlight and debug
-/// builds only, never the App Store's.
-const showPushCheck =
-    kDebugMode || String.fromEnvironment('APP_BUILD') == 'testflight';
-
-/// Under Notifications in TestFlight builds (#149): each step between "On"
-/// and a notification on this phone ([Push.check]), in small grey English,
-/// since a step that fails is otherwise silent. A tap checks again and copies
-/// the FCM token, so a test message can be sent to this phone from the
-/// Firebase console.
-class _PushCheckLine extends StatefulWidget {
-  const _PushCheckLine(this.push);
-
-  final Push push;
-
-  @override
-  State<_PushCheckLine> createState() => _PushCheckLineState();
-}
-
-class _PushCheckLineState extends State<_PushCheckLine> {
-  late Future<PushCheck?> _check = widget.push.check();
-
-  @override
-  void initState() {
-    super.initState();
-    widget.push.permission.addListener(_again);
-  }
-
-  @override
-  void dispose() {
-    widget.push.permission.removeListener(_again);
-    super.dispose();
-  }
-
-  void _again() {
-    final check = widget.push.check();
-    // A block: an arrow would hand setState the Future it assigns.
-    setState(() {
-      _check = check;
-    });
-  }
-
-  Future<void> _tapped(PushCheck check) async {
-    final token = check.fcmToken;
-    if (token != null) await Clipboard.setData(ClipboardData(text: token));
-    _again();
-  }
-
-  @override
-  Widget build(BuildContext context) => FutureBuilder(
-    future: _check,
-    builder: (context, snapshot) {
-      final check = snapshot.data;
-      if (check == null) return const SizedBox.shrink();
-      return CupertinoListTile(
-        title: Text(
-          check.text,
-          maxLines: 6,
-          style: TextStyle(
-            fontSize: 12,
-            color: CupertinoColors.secondaryLabel.resolveFrom(context),
-          ),
-        ),
-        onTap: () => unawaited(_tapped(check)),
-      );
-    },
-  );
 }
 
 /// A row that opens an information page.
