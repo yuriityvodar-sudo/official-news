@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:official_news/core/article.dart';
 import 'package:official_news/core/feed_language.dart';
@@ -60,6 +61,26 @@ Future<void> _pump(
 }
 
 void main() {
+  testWidgets('the status bar has dark words on the page again once a sheet '
+      'over the article has gone (the paywall leaves light ones)', (
+    tester,
+  ) async {
+    await _pump(tester, _article());
+    await tester.pump();
+    expect(SystemChrome.latestStyle?.statusBarIconBrightness, Brightness.dark);
+    final navigator = tester.state<NavigatorState>(find.byType(Navigator));
+    navigator.push(
+      CupertinoSheetRoute<void>(
+        scrollableBuilder: (_, _) => const Text('Sheet'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(SystemChrome.latestStyle?.statusBarIconBrightness, Brightness.light);
+    navigator.pop();
+    await tester.pumpAndSettle();
+    expect(SystemChrome.latestStyle?.statusBarIconBrightness, Brightness.dark);
+  });
+
   testWidgets(
     'shows the ministry, decision, date, AI label and the summary paragraphs',
     (tester) async {

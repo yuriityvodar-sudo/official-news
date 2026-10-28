@@ -2,7 +2,7 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import { FROM_TRANSLATED, PAGE_CONDITIONS, RECENT_TRANSLATION, TRANSLATED_CONDITIONS, feedFilters, feedTopics, topStories } from "../src/api";
-import { GROUPS, type GroupId, TOPIC_NAMES, type Where, countryName, groupCountries, hasCountryName } from "../src/api/filters";
+import { EU_MEMBERS, GROUPS, type GroupId, TOPIC_NAMES, type Where, countryName, groupCountries, hasCountryName } from "../src/api/filters";
 import { TOPICS, type Topic } from "../src/summarizer/schema";
 import { LANGS, type Lang } from "../src/translator";
 import { type ArticlesPage, QWEN, get, hideSeed, hoursAgo, ids, minutesAgo, rowsRead } from "./helpers";
@@ -312,30 +312,30 @@ describe("GET /articles with filters: paging, after= and top", () => {
       { id: "fr-4", country: "FR", importance: 4, topics: ["health"] },
       { id: "ua-2", country: "UA", importance: 2, topics: ["economy"] },
     );
-    // Global: by importance, at most 2 per country, 5 in all, shown newest first.
-    expect(await topIds("/articles")).toEqual(["fr-4", "us-5", "eu-3", "de-4", "de-5"]);
-    // One country: its own only; Ukraine has a top story of its own, however low its importance.
-    expect(await topIds("/articles?country=DE")).toEqual(["de-4", "de-5"]);
+    // Global: the best scores (all published at once here, so by importance; on equal scores the later id),
+    // at most 1 per country, 3 in all, best first.
+    expect(await topIds("/articles")).toEqual(["us-5", "de-5", "fr-4"]);
+    // One country: its own only, all 3 from it; Ukraine has a top story of its own, however low its importance.
+    expect(await topIds("/articles?country=DE")).toEqual(["de-5", "de-4", "de-3"]);
     expect(await topIds("/articles?country=UA")).toEqual(["ua-2"]);
     expect(await topIds("/articles?topic=health")).toEqual(["fr-4", "de-4"]);
-    // At most 2 per country: de-3 makes it here, below de-5.
-    expect(await topIds("/articles?country=DE&topic=economy")).toEqual(["de-3", "de-5"]);
+    expect(await topIds("/articles?country=DE&topic=economy")).toEqual(["de-5", "de-3"]);
     expect(await topIds("/articles?country=US&topic=health")).toEqual([]);
-    // A group: among its members' (and the EU institutions'), still at most 2 per country, the EU counted as its own.
-    expect(await topIds("/articles?group=eu")).toEqual(["fr-4", "eu-3", "de-4", "de-5"]);
-    expect(await topIds("/articles?group=nato")).toEqual(["fr-4", "us-5", "de-4", "de-5"]);
-    expect(await topIds("/articles?group=g7&topic=economy")).toEqual(["us-5", "eu-3", "de-3", "de-5"]);
+    // A group: among its members' (and the EU institutions'), still at most 1 per country, the EU counted as its own.
+    expect(await topIds("/articles?group=eu")).toEqual(["de-5", "fr-4", "eu-3"]);
+    expect(await topIds("/articles?group=nato")).toEqual(["us-5", "de-5", "fr-4"]);
+    expect(await topIds("/articles?group=g7&topic=economy")).toEqual(["us-5", "de-5", "eu-3"]);
     // Top stories are in items too.
     const p = await page("/articles?group=eu&topic=economy");
     expect(p.items.map((a) => a.id)).toEqual(["eu-3", "de-3", "de-5"]);
-    expect(p.top.map((a) => a.id)).toEqual(["eu-3", "de-3", "de-5"]);
+    expect(p.top.map((a) => a.id)).toEqual(["de-5", "eu-3"]);
 
-    // In Ukrainian: the same top stories that are translated.
+    // In Ukrainian: the same top stories that are translated, in the same order.
     await translated("de-5", "us-5", "fr-4");
     expect(await topIds("/articles?lang=uk&country=DE")).toEqual(["de-5"]);
-    expect(await topIds("/articles?lang=uk&group=nato")).toEqual(["fr-4", "us-5", "de-5"]);
+    expect(await topIds("/articles?lang=uk&group=nato")).toEqual(["us-5", "de-5", "fr-4"]);
     expect(await topIds("/articles?lang=uk&topic=health")).toEqual(["fr-4"]);
-    expect(await topIds("/articles?lang=uk")).toEqual(["fr-4", "us-5", "de-5"]);
+    expect(await topIds("/articles?lang=uk")).toEqual(["us-5", "de-5", "fr-4"]);
   });
 
   it("walks the feed index from the 7-day edge with filters too, also with table statistics", async () => {
@@ -443,7 +443,7 @@ describe("GET /articles with filters: paging, after= and top", () => {
           .all<{ detail: string }>();
         const plan = results.map((r) => r.detail).join("; ");
         const label = `${step} ${i}: ${plan}`;
-        // The (is_news, published_at) index over the 24 hours; the window and its order then sort what it read.
+        // The (is_news, published_at) index over the 72 hours; the window and its order then sort what it read.
         expect(plan, label).toMatch(/SEARCH a USING INDEX articles_feed \(is_news=\? AND published_at>\?\)/);
         expect(plan, label).not.toMatch(/articles_feed_seq|SCAN (a|s|t)\b|AUTOMATIC/);
         expect(plan, label).toMatch(/SEARCH s USING (COVERING )?INDEX sqlite_autoindex_sources_1 \(id=\?\)/);
@@ -452,14 +452,14 @@ describe("GET /articles with filters: paging, after= and top", () => {
       }
     }
 
-    // The 110 articles of the last 24 hours and the sources table, not the 300 older articles.
+    // The 110 articles of the last 72 hours and the sources table, not the 300 older articles.
     const sources = (await env.DB.prepare("SELECT COUNT(*) AS n FROM sources").first<{ n: number }>())?.n ?? 0;
     for (const [i, query] of queries.entries()) {
       const { meta } = await env.DB.prepare(query.sql).bind(...query.binds).all();
       expect(meta.rows_read, `${i}`).toBeLessThan(recent.length + 3 * sources + 40);
     }
     // And still the right ones.
-    expect(await topIds("/articles")).toEqual(["top-8", "top-7", "top-5", "top-4", "top-2"]);
+    expect(await topIds("/articles")).toEqual(["top-8", "top-5", "top-2"]);
     expect(await topIds("/articles?lang=uk")).toEqual(["top-2"]);
   });
 });
@@ -714,8 +714,97 @@ describe("GET /countries", () => {
   });
 });
 
+describe("GET /articles?for= (For you, #170)", () => {
+  /** A fixed hour of a day before today (UTC), so a test never straddles midnight. */
+  const daysAgoAt = (days: number, hour: number) => {
+    const at = new Date();
+    at.setUTCDate(at.getUTCDate() - days);
+    at.setUTCHours(hour, 0, 0, 0);
+    return at.toISOString().replace(/\.\d{3}Z$/, "Z");
+  };
+
+  beforeEach(async () => {
+    await hideSeed();
+    // Released in this order: the last is the newest in the feed.
+    await add(
+      { id: "de-3-earlier", country: "DE", importance: 3, publishedAt: daysAgoAt(2, 12) },
+      { id: "de-5", country: "DE", importance: 5, publishedAt: daysAgoAt(1, 10) },
+      { id: "de-4", country: "DE", importance: 4, publishedAt: daysAgoAt(1, 10) },
+      { id: "de-3", country: "DE", importance: 3, publishedAt: daysAgoAt(1, 10) },
+      { id: "de-2", country: "DE", importance: 2, publishedAt: daysAgoAt(1, 11) },
+      { id: "us-3", country: "US", importance: 3, publishedAt: daysAgoAt(1, 10), topics: ["health"] },
+      { id: "cz-1", country: "CZ", importance: 1, publishedAt: daysAgoAt(1, 10), topics: ["health"] },
+      { id: "cz-plain", country: "CZ", importance: null, publishedAt: daysAgoAt(1, 10) },
+      { id: "eu-2", country: "EU", importance: 2, publishedAt: daysAgoAt(1, 10) },
+      { id: "ua-2", country: "UA", importance: 2, publishedAt: daysAgoAt(1, 10) },
+    );
+  });
+
+  it("keeps the reader's own country, the EU institutions for an EU member, and the world's that matter", async () => {
+    // Czechia: all its own, whatever the importance, and the EU's. The world: importance 3 or more, at most 2 a
+    // country a day, the most important first (de-3 is Germany's third of that day; de-3-earlier is another day).
+    expect(await ids("/articles?for=CZ")).toEqual(["eu-2", "cz-plain", "cz-1", "us-3", "de-4", "de-5", "de-3-earlier"]);
+    // Ukraine is not in the EU: the EU institutions' decision of importance 2 stays out, as Czechia's do.
+    expect(await ids("/articles?for=UA")).toEqual(["ua-2", "us-3", "de-4", "de-5", "de-3-earlier"]);
+    // An EU member without sources of its own still gets the EU's.
+    expect(await ids("/articles?for=AT")).toEqual(["eu-2", "us-3", "de-4", "de-5", "de-3-earlier"]);
+    expect(await ids("/articles?for=DE")).toEqual(["eu-2", "us-3", "de-2", "de-3", "de-4", "de-5", "de-3-earlier"]);
+  });
+
+  it("works with topic, lang and paging, as the other filters do", async () => {
+    expect(await ids("/articles?for=CZ&topic=health")).toEqual(["cz-1", "us-3"]);
+    await translated("cz-1", "de-5", "ua-2");
+    expect(await ids("/articles?for=CZ&lang=uk")).toEqual(["cz-1", "de-5"]);
+    const first = await page("/articles?for=CZ&limit=3");
+    expect(first.items.map((a) => a.id)).toEqual(["eu-2", "cz-plain", "cz-1"]);
+    expect(await ids(`/articles?for=CZ&limit=3&cursor=${first.nextCursor}`)).toEqual(["us-3", "de-4", "de-5"]);
+    expect(await ids(`/articles?for=CZ&after=${first.items[1].feedSeq}`)).toEqual(["eu-2"]);
+  });
+
+  it("gives the reader's own country a point more in the top stories, and the EU institutions half a point for an EU member", async () => {
+    await hideSeed();
+    await env.DB.prepare("UPDATE articles SET is_news = 0").run();
+    await add(
+      { id: "fr-5-3-days", country: "FR", importance: 5, publishedAt: hoursAgo(70) },
+      { id: "de-4-2-days", country: "DE", importance: 4, publishedAt: hoursAgo(55) },
+      { id: "us-4-yesterday", country: "US", importance: 4, publishedAt: hoursAgo(26) },
+      { id: "cz-3", country: "CZ", importance: 3, publishedAt: hoursAgo(2) },
+      { id: "eu-3", country: "EU", importance: 3, publishedAt: hoursAgo(1) },
+    );
+    // Importance less half a point a day: fr-5 3.54, us-4 3.46, eu-3 2.98, cz-3 2.96, de-4 2.85.
+    expect(await topIds("/articles")).toEqual(["fr-5-3-days", "us-4-yesterday", "eu-3"]);
+    // For Czechia: cz-3 3.96 and eu-3 3.48 (us-4 3.46 drops out).
+    expect(await topIds("/articles?for=CZ")).toEqual(["cz-3", "fr-5-3-days", "eu-3"]);
+    // For Ukraine, outside the EU: no bonus for the EU's, and none of its own.
+    expect(await topIds("/articles?for=UA")).toEqual(["fr-5-3-days", "us-4-yesterday", "eu-3"]);
+  });
+
+  it("reads the feed's 7 days once, not older articles", async () => {
+    await add(...Array.from({ length: 300 }, (_, i) => ({ id: `old-${i}`, importance: 4, publishedAt: hoursAgo(8 * 24 + i) })));
+    // As in the live table: older articles appeared earlier, with lower numbers.
+    await env.DB.prepare("UPDATE articles SET feed_seq = feed_seq - 100000, added_at = published_at WHERE id LIKE 'old-%'").run();
+    // The world's picks read the 7 days through the (is_news, published_at) index, in the page and again in the top
+    // stories: about one and a half times what a group reads here (182 rows against 115 for group=eu), never the 300 older ones.
+    for (const path of ["/articles?for=CZ", "/articles?for=CZ&lang=uk", "/topics?for=CZ"]) {
+      expect(await rowsRead(() => get(path)), path).toBeLessThan(300);
+    }
+    expect(await rowsRead(() => get("/articles?for=CZ"))).toBeLessThan(2 * (await rowsRead(() => get("/articles?group=eu"))));
+  });
+
+  it("lists every EU member, among them the eu group's", () => {
+    expect(EU_MEMBERS).toHaveLength(27);
+    for (const member of GROUPS.find((g) => g.id === "eu")!.members) expect(EU_MEMBERS).toContain(member);
+  });
+});
+
 describe("filter errors", () => {
   it.each([
+    ["/articles?for=cz", "for must be a country code of 2 capital letters, such as CZ"],
+    ["/articles?for=CZE", "for must be a country code of 2 capital letters, such as CZ"],
+    ["/articles?for=", "for must be a country code of 2 capital letters, such as CZ"],
+    ["/topics?for=1", "for must be a country code of 2 capital letters, such as CZ"],
+    ["/articles?for=CZ&country=DE", "for cannot be used with country or group: For you picks the countries itself"],
+    ["/articles?group=eu&for=CZ&topic=health", "for cannot be used with country or group: For you picks the countries itself"],
     ["/articles?country=de", "country must be a country code of 2 capital letters, such as DE"],
     ["/articles?country=DEU", "country must be a country code of 2 capital letters, such as DE"],
     ["/articles?country=", "country must be a country code of 2 capital letters, such as DE"],

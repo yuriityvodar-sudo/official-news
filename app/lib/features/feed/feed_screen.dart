@@ -7,6 +7,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
 import '../../core/analytics.dart';
+import '../../core/card_zoom.dart';
+import '../../core/glass.dart';
 import '../../core/article.dart';
 import '../../core/feed_language.dart';
 import '../../core/filters.dart';
@@ -16,6 +18,7 @@ import '../../core/pictures.dart';
 import '../../core/router.dart';
 import '../../core/theme.dart';
 import '../../l10n/app_localizations.dart';
+import '../detail/detail_screen.dart';
 import '../settings/settings_screen.dart';
 import 'feed_controller.dart';
 import 'feed_filters.dart';
@@ -68,6 +71,15 @@ class _FeedScreenState extends State<FeedScreen> {
   Timer? _arrivalEnd;
   static const _arrival = Duration(milliseconds: 700);
 
+  /// Decisions that have just come in at the top (a refresh, the "N new"
+  /// pill): they spring in and push the others down (#141), for a moment.
+  Set<String> _entering = const {};
+  Set<String> _shownIds = const {};
+  Timer? _enteringEnd;
+
+  /// At most this many spring in: about a screen.
+  static const _enteringRows = 6;
+
   @override
   void initState() {
     super.initState();
@@ -88,6 +100,7 @@ class _FeedScreenState extends State<FeedScreen> {
   void dispose() {
     _newCheck?.cancel();
     _arrivalEnd?.cancel();
+    _enteringEnd?.cancel();
     _feed.removeListener(_changed);
     feedDesign.removeListener(_designChanged);
     readStyle.removeListener(_designChanged);
@@ -116,6 +129,7 @@ class _FeedScreenState extends State<FeedScreen> {
       });
     }
     _wasEmpty = empty;
+    _springIn();
     _readAtStart();
     setState(() {});
     // A page dropped because a refresh replaced the feed leaves the list at its end:
@@ -126,6 +140,22 @@ class _FeedScreenState extends State<FeedScreen> {
         _scrollAtStart();
       }
     });
+  }
+
+  /// The decisions above the first one shown before: new at the top. A feed
+  /// that is all new (another filter, another language) arrives as a feed
+  /// that has just loaded instead.
+  void _springIn() {
+    final ids = [for (final article in _feed.feed) article.id];
+    final fresh = ids.takeWhile((id) => !_shownIds.contains(id)).toList();
+    if (_shownIds.isNotEmpty && fresh.isNotEmpty && fresh.length < ids.length) {
+      _entering = fresh.take(_enteringRows).toSet();
+      _enteringEnd?.cancel();
+      _enteringEnd = Timer(const Duration(milliseconds: 1200), () {
+        if (mounted) setState(() => _entering = const {});
+      });
+    }
+    _shownIds = ids.toSet();
   }
 
   /// For screenshots (#66): a script cannot scroll the simulator, so a build with
@@ -161,16 +191,21 @@ class _FeedScreenState extends State<FeedScreen> {
     }
   }
 
+  /// The "N new" pill: to the top first, then the new decisions spring in
+  /// there, in view (#141).
   Future<void> _showNew() async {
     Haptics.light();
+    await _toTopSmoothly();
     await _feed.refresh();
-    if (_scroll.hasClients) {
-      await _scroll.animateTo(
-        0,
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeOut,
-      );
-    }
+  }
+
+  Future<void> _toTopSmoothly() async {
+    if (!_scroll.hasClients || _scroll.offset <= 0) return;
+    await _scroll.animateTo(
+      0,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOut,
+    );
   }
 
   void _open(
@@ -183,16 +218,41 @@ class _FeedScreenState extends State<FeedScreen> {
     );
     unawaited(_feed.markRead(article));
     Haptics.light();
-    // The article's picture, decoded for its screen while the card flies
-    // there (#141), so it lands sharp.
+    // The article's picture, decoded for its screen while the card grows
+    // into the article (#141), so it is sharp when it is there.
     final url = article.imageUrl;
     if (url != null) {
       unawaited(
         precacheImage(screenPicture(context, url), context, onError: (_, _) {}),
       );
     }
-    // The article as the feed has it, so a translated one opens translated.
-    Navigator.of(context).pushNamed(Routes.detail, arguments: article);
+    // The article grows out of its card (#141); with Reduce Motion on, or a
+    // card not on screen, it opens as before. The article as the feed has
+    // it, so a translated one opens translated.
+    final card = Motion.reduced(context) ? null : ZoomSource.rectOf(article.id);
+    final top = card == null ? null : ZoomSource.cardOf(article.id);
+    if (card == null || top == null) {
+      Navigator.of(context).pushNamed(Routes.detail, arguments: article);
+      return;
+    }
+    final look = lookFor(feedDesign.value);
+    final color = look.cardColor(context);
+    Navigator.of(context).push(
+      CardZoomRoute<void>(
+        from: card,
+        background: color,
+        radius: look.cardRadius,
+        sourceId: article.id,
+        settings: RouteSettings(name: Routes.detail, arguments: article),
+        // The card itself is the article's top, where it is in the feed.
+        builder: (_) => DetailScreen(
+          article: article,
+          top: top,
+          topFrom: card,
+          background: color,
+        ),
+      ),
+    );
   }
 
   void _openSettings() {
@@ -269,6 +329,7 @@ class _FeedScreenState extends State<FeedScreen> {
 
   Widget _page(BuildContext context, FeedLook look) {
     final l10n = AppLocalizations.of(context);
+    final foldedTitle = look.foldedTitle(context, 'Official News');
     return Scaffold(
       backgroundColor: look.background(context),
       body: SafeArea(
@@ -307,12 +368,26 @@ class _FeedScreenState extends State<FeedScreen> {
                 ..._content(context, look),
               ],
             ),
+            // Rows fade softly at the top edge once the feed is scrolled, and
+            // the app's name folds into a small title there (#141).
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: _TopFade(
+                scroll: _scroll,
+                color: look.background(context),
+                title: foldedTitle,
+                onTitleTap: () => unawaited(_toTopSmoothly()),
+              ),
+            ),
             if (_feed.newCount > 0)
               Positioned.fill(
                 child: _UnderMasthead(
                   masthead: _masthead,
                   scroll: _scroll,
-                  top: _pillTop,
+                  // Under the folded title, where there is one.
+                  top: foldedTitle == null ? _pillTop : _TopFade.bar + 8,
                   gap: _pillGap,
                   child: _SlideIn(
                     child: look.newPill(
@@ -330,8 +405,8 @@ class _FeedScreenState extends State<FeedScreen> {
   }
 
   /// The "N new" pill's place: [_pillGap] under the masthead, and never
-  /// higher than [_pillTop] from the top of the safe area (where it floated
-  /// before, once the masthead has scrolled away).
+  /// higher than [_pillTop] from the top of the safe area (where it floats
+  /// once the masthead has scrolled away).
   static const _pillTop = 12.0;
   static const _pillGap = 8.0;
 
@@ -403,6 +478,7 @@ class _FeedScreenState extends State<FeedScreen> {
             topic: _feed.topic,
             maxTopics: topicTagCount.value,
             arriving: _arriving,
+            entering: _entering,
           ),
         ),
       );
@@ -460,6 +536,92 @@ class _FeedScreenState extends State<FeedScreen> {
       ],
     );
   }
+}
+
+/// The top edge of the feed (#141): the feed's colour fading out downwards,
+/// shown as soon as the list is scrolled, so rows soften under the status
+/// bar instead of being cut, as iOS 26's scroll edges do. Once the masthead's
+/// big title has scrolled away, [title] fades in there, small, as iOS folds
+/// a large title into its bar; a tap on it goes back to the top.
+class _TopFade extends StatelessWidget {
+  const _TopFade({
+    required this.scroll,
+    required this.color,
+    required this.title,
+    required this.onTitleTap,
+  });
+
+  final ScrollController scroll;
+  final Color color;
+  final Widget? title;
+  final VoidCallback onTitleTap;
+
+  /// The folded title's bar.
+  static const bar = 44.0;
+
+  /// Scrolled this far, the big title is going: the small one starts to
+  /// show, and is all there [_foldOver] further down.
+  static const _foldFrom = 40.0;
+  static const _foldOver = 36.0;
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: scroll,
+    builder: (context, _) {
+      final offset = scroll.hasClients ? scroll.offset : 0.0;
+      final folded = title == null
+          ? 0.0
+          : ((offset - _foldFrom) / _foldOver).clamp(0.0, 1.0);
+      final rise = Motion.reduced(context) ? 0.0 : (1 - folded) * 6;
+      return Stack(
+        children: [
+          Opacity(
+            opacity: (offset / 24).clamp(0.0, 1.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Behind the small title, rows do not show through.
+                IgnorePointer(
+                  child: ColoredBox(
+                    color: color,
+                    child: SizedBox(
+                      height: bar * folded,
+                      width: double.infinity,
+                    ),
+                  ),
+                ),
+                ScrollEdgeFade(height: 20, color: color),
+              ],
+            ),
+          ),
+          // Not there at all while the big title is.
+          if (folded > 0)
+            Positioned(
+              left: 0,
+              right: 0,
+              top: 0,
+              height: bar,
+              child: IgnorePointer(
+                ignoring: folded < 1,
+                // The masthead says it already: VoiceOver reads the list.
+                child: ExcludeSemantics(
+                  child: GestureDetector(
+                    onTap: onTitleTap,
+                    child: Opacity(
+                      opacity: folded,
+                      child: Transform.translate(
+                        offset: Offset(0, rise),
+                        child: Center(child: title),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      );
+    },
+  );
 }
 
 /// The "N new" pill arriving (#141): it slides down a little and settles

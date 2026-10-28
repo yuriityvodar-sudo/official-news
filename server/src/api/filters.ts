@@ -34,19 +34,29 @@ export const GROUPS = [
 export type Group = (typeof GROUPS)[number];
 export type GroupId = Group["id"];
 
+/**
+ * The EU's 27 member states (ISO 3166-1 alpha-2; Greece is GR), sources or
+ * not: For you (#170) gives a reader in any of them the EU institutions'
+ * decisions too. The `eu` group lists only those with sources.
+ */
+export const EU_MEMBERS: readonly string[] = [
+  "AT", "BE", "BG", "CY", "CZ", "DE", "DK", "EE", "ES", "FI", "FR", "GR", "HR", "HU",
+  "IE", "IT", "LT", "LU", "LV", "MT", "NL", "PL", "PT", "RO", "SE", "SI", "SK",
+];
+
 /** The source countries a group shows: its members, then the EU institutions where the group includes them. */
 export const groupCountries = (group: Group): string[] => [...group.members, ...(group.includesEU ? [EU] : [])];
 
 /**
  * Where the feed's articles come from: one country alone (only that
- * country's sources, never the EU's mixed in), or a group; null is all
- * countries.
+ * country's sources, never the EU's mixed in), or a group; `home`, For you
+ * (#170): what concerns a reader in that country; null is all countries.
  */
-export type Where = { country: string } | { group: Group } | null;
+export type Where = { country: string } | { group: Group } | { home: string } | null;
 
-/** The source countries `where` shows, or null for all countries. */
+/** The source countries `where` shows, or null for all countries (and For you, which is not a list of countries). */
 export const whereCountries = (where: Where): string[] | null =>
-  where === null ? null : "country" in where ? [where.country] : groupCountries(where.group);
+  where === null || "home" in where ? null : "country" in where ? [where.country] : groupCountries(where.group);
 
 /** The fixed topic list (TOPICS, docs/contract.md) in each language. */
 export const TOPIC_NAMES: Record<NameLang, Record<Topic, string>> = {
@@ -227,11 +237,14 @@ export function byName<T extends { name: string }>(items: T[], lang: NameLang): 
 export const COUNTRY_ERROR = "country must be a country code of 2 capital letters, such as DE";
 export const GROUP_ERROR = `group must be one of: ${GROUPS.map((g) => g.id).join(", ")}`;
 export const WHERE_ERROR = "country and group cannot be used together: send one of them";
+export const FOR_ERROR = "for must be a country code of 2 capital letters, such as CZ";
+export const FOR_WHERE_ERROR = "for cannot be used with country or group: For you picks the countries itself";
 
 /**
  * The Where filter of a request: `country=XX` (2 capital letters) or
- * `group=<id>` (one of GROUPS), at most one of them; neither is all
- * countries. A message for a 400 otherwise.
+ * `group=<id>` (one of GROUPS), at most one of them, or `for=XX`, For you
+ * (#170) for a reader in that country, alone; none is all countries. A
+ * message for a 400 otherwise.
  */
 export function readWhere(params: URLSearchParams): { where: Where } | { error: string } {
   const country = params.get("country");
@@ -240,7 +253,10 @@ export function readWhere(params: URLSearchParams): { where: Where } | { error: 
   const group = groupId === null ? null : GROUPS.find((g) => g.id === groupId);
   if (group === undefined) return { error: GROUP_ERROR };
   if (country !== null && group !== null) return { error: WHERE_ERROR };
-  return { where: country !== null ? { country } : group !== null ? { group } : null };
+  const home = params.get("for");
+  if (home !== null && !/^[A-Z]{2}$/.test(home)) return { error: FOR_ERROR };
+  if (home !== null && (country !== null || group !== null)) return { error: FOR_WHERE_ERROR };
+  return { where: home !== null ? { home } : country !== null ? { country } : group !== null ? { group } : null };
 }
 
 /** `topic`: null when absent (All topics), undefined when it is not one of TOPICS. */

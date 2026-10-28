@@ -121,6 +121,7 @@ The MVP is a Kickoff plus 8 items, 4 each. This is our suggested split: Yurii ow
 | #66 | Feed redesign: one list, topics on the cards, no read marking, the splash, and a Design section in Settings (look, headline weight); the prototype's looks A, B and C kept to switch between | Yurii (design and build) | Yurii approves it on the phone (20 Oct: builds 19, 20, 23) |
 | #67 | News categories: a Topics chip under the date, one topic at a time, busiest first, from the server, also for a country or a group | Yurii (design and build) | Server filters and `GET /topics` (Proposed, `docs/decisions.md`), then the app's chip; Yurii approves it on the phone |
 | #68 | Where filter: all countries (default), a group of countries (European Union, G7, G20, NATO: its members' decisions together) or one country (that country's only) | Yurii (design and build) | Server filters (`country=`, `group=`) and `GET /countries` with its groups (Proposed, `docs/decisions.md`), then the app's chip; Yurii approves it on the phone |
+| #170 | For you (proposed by Roman, 27 Oct; Yurii agreed on #170, 27 Oct): the default feed for the reader's own country, its decisions, the EU's for a member and the world's that matter, with no country or group to choose (it replaces the Where chip of #68) | Roman | Server `for=` and `GET /locate`, then the app; Yurii approves it on the phone. Before an App Store release, the privacy policy mentions `GET /locate` and the home country (Yurii, on #170) |
 | #60 | Analytics (Google Analytics through Firebase) | Yurii | Events arrive in GA from TestFlight; release checklist done |
 | #62 | Push notifications, breaking decisions (importance 4+, each as it comes, #157) | Yurii | A breaking decision reaches a phone in its language |
 
@@ -181,7 +182,7 @@ The feed card reads `headline`, `shortSummary`, `imageUrl` and `topics` (shown a
 
 **API**
 
-- `GET /articles?limit=20&cursor=<c>` → `{ "items": [Article], "nextCursor": "…" | null, "top": [Article] }`: news from the last 7 days where `is_news = 1`, newest first; `cursor` is an opaque string; `top` only on the first page (last 24 hours, highest importance, at most 2 per country, up to 5) and may be an empty array, so the app must not depend on it
+- `GET /articles?limit=20&cursor=<c>` → `{ "items": [Article], "nextCursor": "…" | null, "top": [Article] }`: news from the last 7 days where `is_news = 1`, newest first; `cursor` is an opaque string; `top` only on the first page (the 3 best scores of the last 72 hours, importance − 0.5 × age in days, at most 1 per country: #164) and may be an empty array, so the app must not depend on it
 - `GET /articles?since=<ISO time>` → only articles newer than that time, used for the "new updates" check
 - `GET /articles/:id` → `Article`
 - `GET /health` → sources per status, time of the last fetcher run, articles waiting for the AI and those it gave up on (#99)
@@ -415,7 +416,7 @@ Every minute the fetcher reads the next source on the list, so all sources are c
 
 ## Feed and reading experience
 
-The feed shows official news from the last 7 days as one list, newest first, with no sections; the day's top stories are in it at their own place (Yurii, 16 Oct). Nothing is ever pulled from trending or media sites.
+The feed shows official news from the last 7 days as one list, newest first, under one small "Top stories" block (#164, Yurii 26 Oct; it replaces his one-list decision of 16 Oct for the top of the feed). Nothing is ever pulled from trending or media sites.
 
 **What counts as a new item**
 
@@ -429,8 +430,8 @@ The feed shows official news from the last 7 days as one list, newest first, wit
 
 **Order**
 
-- **One list (Yurii, 16 Oct):** every decision once, in the order it appeared in the feed (`feedSeq`), newest first (each card shows its official publication date), with no section titles ("Top stories", "Latest") and no day headings (decision 2026-10-15 for the order)
-- **Top today:** the server still picks 3–5 items from the last 24 hours with the highest AI importance score, at most 2 per country, and sends them as `top`; the app shows each in the list at its own place, not as a section of its own
+- **Top stories (#164, Yurii 26 Oct):** one block at the top of the feed, under the filter chips, with the heading "Top stories" and 3 cards in the look's own style; it scrolls with the feed and is not shown with fewer than 2. The server picks them (`top`): the 3 decisions of the last 72 hours with the highest score, the AI's importance less half a point a day since publication (a 4 from yesterday beats a fresh 3), at most 1 per country (a one-country view has only its own). Later inputs, each in its own issue: the size of a story (several publications about one story) and readers' opens
+- **One list below it (Yurii, 16 Oct):** every decision once, in the order it appeared in the feed (`feedSeq`), newest first (each card shows its official publication date), with no further section titles and no day headings (decision 2026-10-15 for the order). A decision in the Top stories block is left out of the list below
 - Country chips filter the feed (after the MVP)
 - At the end of the 7 days: "You're all caught up" (a "Show older" button can be added later)
 

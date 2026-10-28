@@ -238,20 +238,20 @@ describe("GET /articles", () => {
     expect(page.items.map((a) => a.id)).not.toContain("no-number");
   });
 
-  it("puts the most important of the last 24 hours in top, at most 2 per country and 5 in all", async () => {
+  it("puts the 3 best scores of the last 72 hours in top, best first, at most 1 per country (#164)", async () => {
     await insertArticles([
       { id: "de-5", publishedAt: hoursAgo(1), importance: 5, sourceId: "de-federal-government" },
       { id: "de-4", publishedAt: hoursAgo(2), importance: 4, sourceId: "de-federal-government" },
-      { id: "de-3", publishedAt: hoursAgo(3), importance: 3, sourceId: "de-federal-government" },
-      { id: "us-5", publishedAt: hoursAgo(4), importance: 5, sourceId: "us-white-house" },
-      { id: "fr-4", publishedAt: hoursAgo(1), importance: 4, sourceId: "fr-foreign-ministry" },
-      { id: "jp-3", publishedAt: hoursAgo(1), importance: 3, sourceId: "jp-foreign-ministry" },
+      { id: "us-4-yesterday", publishedAt: hoursAgo(26), importance: 4, sourceId: "us-white-house" },
+      { id: "fr-3", publishedAt: hoursAgo(1), importance: 3, sourceId: "fr-foreign-ministry" },
+      { id: "jp-4-3-days", publishedAt: hoursAgo(70), importance: 4, sourceId: "jp-foreign-ministry" },
       { id: "gb-2", publishedAt: hoursAgo(1), importance: 2, sourceId: "gb-prime-minister-s-office" },
-      { id: "it-5-old", publishedAt: hoursAgo(30), importance: 5, sourceId: "it-government-pm-meloni" },
+      { id: "it-5-4-days", publishedAt: hoursAgo(80), importance: 5, sourceId: "it-government-pm-meloni" },
     ]);
     const top = (await getPage("/articles")).top;
-    // Picked by importance (de-3, gb-2 and the 30-hour-old it-5 left out), shown newest first.
-    expect(top.map((a) => a.id)).toEqual(["jp-3", "fr-4", "us-5", "de-4", "de-5"]);
+    // Importance less half a point a day: de-5 4.98, us-4 3.46 (yesterday's 4 beats a fresh 3), fr-3 2.98, jp-4 2.54, gb-2 1.98.
+    // de-4 is Germany's second; it-5 is past the 72 hours.
+    expect(top.map((a) => a.id)).toEqual(["de-5", "us-4-yesterday", "fr-3"]);
   });
 
   it("reads broken JSON in topics as an empty list instead of failing the feed", async () => {
@@ -333,10 +333,21 @@ describe("other requests", () => {
       "/nope",
       "/health",
       "/queue",
+      "/locate",
     ]) {
       expect(await cacheControl(path), path).toBe("no-store");
     }
     expect(await cacheControl("/articles", { method: "POST" })).toBe("no-store");
+  });
+
+  it("GET /locate answers the country Cloudflare sees the request from, for For you (#170)", async () => {
+    const locate = async (country?: string) => {
+      const response = await exports.default.fetch(new Request("https://api.test/locate", country ? { cf: { country } } : {}));
+      return { status: response.status, body: await response.json() };
+    };
+    expect(await locate("CZ")).toEqual({ status: 200, body: { country: "CZ" } });
+    // Unknown, Tor, or no country at all (a local run): the phone keeps its own guess.
+    for (const country of ["XX", "T1", undefined]) expect(await locate(country), String(country)).toEqual({ status: 200, body: { country: null } });
   });
 
   it("returns JSON errors for unknown paths and other methods", async () => {

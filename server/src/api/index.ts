@@ -6,6 +6,7 @@ import { TOPICS, type Topic } from "../summarizer/schema";
 import { LANGS, type Lang, SHOWN, isLang, queueStatus, releaseStatus } from "../translator";
 import {
   EU,
+  EU_MEMBERS,
   GROUPS,
   TOPIC_ERROR,
   TOPIC_NAMES,
@@ -85,29 +86,49 @@ export const PAGE_CONDITIONS = [
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 50;
 
+/** How many top stories the first page sends (#164). */
+const TOP_SIZE = 3;
+
 /**
- * Top today: last 24 hours, highest importance, at most 2 per country, up to 5,
- * among the articles `where` picks (the feed's, or a language's: #46). Picked by
- * importance, shown newest first (feed order), so times only go down here too.
+ * A top story's score (#164): the AI's importance (1 to 5) less half a point
+ * for each day since it was published, so a 4 from yesterday beats a fresh 3.
  */
-const topQuery = (columns: string, from: string, where: string) => `
+const TOP_SCORE = "a.importance - 0.5 * (julianday('now') - julianday(a.published_at))";
+
+/**
+ * The score in For you (#170): the reader's own country gets a point more,
+ * and the EU institutions half a point for a reader in an EU member, so the
+ * block becomes "Top stories for you".
+ */
+function topScore(filters: Filters): string {
+  if (filters.home === null) return TOP_SCORE;
+  const [home, union] = homeCountries(filters.home);
+  return `${TOP_SCORE} + CASE s.country WHEN '${home}' THEN 1${union ? ` WHEN '${union}' THEN 0.5` : ""} ELSE 0 END`;
+}
+
+/**
+ * Top stories: the highest scores of the last 72 hours, TOP_SIZE in all, at
+ * most 1 from one country so one gazette cannot fill the block (a one-country
+ * view has only its own), among the articles `where` picks (the feed's, or a
+ * language's: #46). Best first; on equal scores the newer. Within a country
+ * the For you bonus is the same for all, so the plain score ranks them.
+ */
+const topQuery = (columns: string, from: string, where: string, filters: Filters) => `
   SELECT * FROM (
-  SELECT * FROM (
-    SELECT ${columns},
+    SELECT ${columns}, ${topScore(filters)} AS score,
            ROW_NUMBER() OVER (
-             PARTITION BY s.country ORDER BY a.importance DESC, a.published_at DESC, a.id DESC
+             PARTITION BY s.country ORDER BY ${TOP_SCORE} DESC, a.published_at DESC, a.id DESC
            ) AS country_rank
     ${from}
     WHERE ${where} AND a.importance IS NOT NULL
-      AND a.published_at >= strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-24 hours')
+      AND a.published_at >= strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-72 hours')
   )
-  WHERE country_rank <= 2
-  ORDER BY importance DESC, published_at DESC, id DESC
-  LIMIT 5
-  ) ORDER BY feed_seq DESC`;
+  WHERE country_rank <= ${filters.oneCountry ? TOP_SIZE : 1}
+  ORDER BY score DESC, published_at DESC, id DESC
+  LIMIT ${TOP_SIZE}`;
 
 /**
- * The top stories read the last 24 hours through the (is_news, published_at)
+ * The top stories read the last 72 hours through the (is_news, published_at)
  * index. The unary + keeps SQLite from walking articles_feed_seq instead, over
  * every released article, which it picks once the table has statistics
  * (ANALYZE; test/filters.test.ts checks both).
@@ -116,7 +137,7 @@ const TOP_WHERE = "a.is_news = 1 AND +a.feed_seq IS NOT NULL";
 /** The top-story conditions plus `filters` (their values are bound first). */
 const topWhere = (filters: Filters) => [TOP_WHERE, ...filters.where].join(" AND ");
 /** The top stories among the feed's articles that pass `filters`. */
-const englishTop = (filters: Filters) => topQuery(ARTICLE_COLUMNS, FROM_ARTICLES, topWhere(filters));
+const englishTop = (filters: Filters) => topQuery(ARTICLE_COLUMNS, FROM_ARTICLES, topWhere(filters), filters);
 
 /** The top stories' query among the articles that pass `filters`, in English (`lang` null) or in `lang`, with the values it binds. */
 export const topStories = (filters: Filters, lang: Lang | null) => ({
@@ -131,6 +152,46 @@ export const topStories = (filters: Filters, lang: Lang | null) => ({
 export interface Filters {
   where: string[];
   binds: string[];
+  /** Where is one country: the top stories may all be its own. */
+  oneCountry: boolean;
+  /** For you (#170): the reader's country, whose decisions get a bonus in the top stories. */
+  home: string | null;
+}
+
+/** For you (#170): from the rest of the world only decisions of this importance or more… */
+const FOR_YOU_MIN_IMPORTANCE = 3;
+/** …and at most this many a day (by publication date, UTC) from one country, so a gazette cannot fill the feed. */
+const FOR_YOU_PER_DAY = 2;
+
+/** The source countries a reader in `home` gets every decision of: its own, and the EU institutions' for an EU member. */
+function homeCountries(home: string): string[] {
+  // Written into the SQL as it is: readWhere lets through only 2 capital letters.
+  if (!/^[A-Z]{2}$/.test(home)) throw new Error(`not a country code: ${home}`);
+  return EU_MEMBERS.includes(home) ? [home, EU] : [home];
+}
+
+/**
+ * For you (#170): every decision of the reader's own country (and of the EU
+ * institutions for a reader in an EU member), and from the rest of the world
+ * only what matters: importance FOR_YOU_MIN_IMPORTANCE or more, at most
+ * FOR_YOU_PER_DAY a day from one country, the most important first, then the
+ * first released. The world's picks are one subquery over the feed's 7 days,
+ * read once per query through the (is_news, published_at) index.
+ */
+function forYouCondition(home: string): string {
+  const own = homeCountries(home)
+    .map((country) => `'${country}'`)
+    .join(", ");
+  return `(a.source_id IN (SELECT id FROM sources WHERE +country IN (${own}))
+    OR a.id IN (SELECT id FROM (
+      SELECT w.id, ROW_NUMBER() OVER (
+               PARTITION BY ws.country, substr(w.published_at, 1, 10) ORDER BY w.importance DESC, w.feed_seq
+             ) AS day_rank
+      FROM articles w JOIN sources ws ON ws.id = w.source_id
+      WHERE w.is_news = 1 AND +w.feed_seq IS NOT NULL AND w.importance >= ${FOR_YOU_MIN_IMPORTANCE}
+        AND w.published_at >= strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-7 days')
+        AND ws.country NOT IN (${own})
+    ) WHERE day_rank <= ${FOR_YOU_PER_DAY}))`;
 }
 
 /**
@@ -143,8 +204,8 @@ const TOPIC_LIST = `CASE WHEN NOT json_valid(a.topics) THEN '[]' WHEN json_type(
 /**
  * Where: `country`, the articles of that country's sources only; `group`, the
  * articles of its members' sources, and of the EU institutions' where the group
- * includes them (GROUPS). `topic`: articles the AI gave that topic. Neither:
- * the whole feed (all countries, all topics).
+ * includes them (GROUPS); `home`, For you (forYouCondition). `topic`: articles
+ * the AI gave that topic. Neither: the whole feed (all countries, all topics).
  *
  * The source countries are checked on the article's source_id against the
  * matching sources, read once (a few dozen rows), so a page skips another
@@ -155,7 +216,9 @@ const TOPIC_LIST = `CASE WHEN NOT json_valid(a.topics) THEN '[]' WHEN json_type(
  * build an automatic index on sources for it, which reads them all as well.
  */
 export function feedFilters(where: Where, topic: Topic | null): Filters {
-  const filters: Filters = { where: [], binds: [] };
+  const home = where !== null && "home" in where ? where.home : null;
+  const filters: Filters = { where: [], binds: [], oneCountry: where !== null && "country" in where, home };
+  if (home !== null) filters.where.push(forYouCondition(home));
   const countries = whereCountries(where);
   if (countries) {
     filters.where.push(`a.source_id IN (SELECT id FROM sources WHERE +country IN (${countries.map(() => "?").join(", ")}))`);
@@ -292,7 +355,8 @@ function nonNegativeInteger(value: string): number | null {
  *
  * With `country` or `group`, and/or `topic` (#67, #68), the same feed keeping
  * only the articles that pass the filters (feedFilters): items, cursors,
- * `after` and top alike.
+ * `after` and top alike. With `for` instead of `country` or `group`, For you
+ * (#170): what concerns a reader in that country (forYouCondition).
  */
 async function listArticles(url: URL, env: Env): Promise<Response> {
   const params = url.searchParams;
@@ -468,16 +532,16 @@ const fromLangArticles = (lang: Lang) =>
  * never gets a top story the English feed does not have. Their sources are
  * named in `lang` (#76). Picked only while the language has a translation in
  * the 7 days (RECENT_TRANSLATION). Binds the filters' values, then the language.
- * CROSS JOIN keeps the 5 top stories the outer loop, each translation found
+ * CROSS JOIN keeps the top stories the outer loop, each translation found
  * by its primary key: with table statistics SQLite would otherwise read every
  * translation into the language first.
  */
 const translatedTop = (filters: Filters, lang: Lang) => `
   SELECT top.*, t.headline AS t_headline, t.short_summary AS t_short_summary, t.summary AS t_summary
-  FROM (${topQuery(articleColumns(lang), fromLangArticles(lang), `${RECENT_TRANSLATION} AND ${topWhere(filters)}`)}) top
+  FROM (${topQuery(articleColumns(lang), fromLangArticles(lang), `${RECENT_TRANSLATION} AND ${topWhere(filters)}`, filters)}) top
   CROSS JOIN article_translations t ON t.article_id = top.id AND t.lang = ?
   WHERE ${TRANSLATED_CONDITIONS.join(" AND ")}
-  ORDER BY top.feed_seq DESC`;
+  ORDER BY top.score DESC, top.published_at DESC, top.id DESC`;
 
 /** 0 while the language is translated as it should be; 1 while it is paused (by hand or automatically) or off. */
 const LANG_SWITCH = "SELECT CASE WHEN enabled = 1 AND paused = 0 THEN 0 ELSE 1 END AS delayed FROM translation_langs WHERE lang = ?";
@@ -595,6 +659,12 @@ async function listCountries(url: URL, env: Env): Promise<Response> {
   return json({ groups, countries: byName(countries, nameLang) }, 200, LIST_CACHE);
 }
 
+/** The country Cloudflare sees the request from, or null: unknown (XX), Tor (T1), or none (a local run). */
+function requestCountry(request: Request): string | null {
+  const country = (request.cf as { country?: unknown } | undefined)?.country;
+  return typeof country === "string" && /^[A-Z]{2}$/.test(country) && country !== "XX" ? country : null;
+}
+
 /** The POST paths (#146). */
 const POSTS: Record<string, "chat" | "status" | "credits" | "notifications"> = {
   "/v1/chat": "chat",
@@ -649,6 +719,9 @@ async function route(request: Request, env: Env): Promise<Response> {
     if (lang === undefined) return badRequest(LANG_ERROR);
     return lang === null ? getArticle(id, env) : getTranslated(id, lang, env);
   }
+
+  // For you (#170): the country the request comes from, for a phone without a region. Never cached (no-store), never stored.
+  if (url.pathname === "/locate") return json({ country: requestCountry(request) });
 
   // Never cached (no-store, json): both show whether the steps are running now.
   if (url.pathname === "/health") {
