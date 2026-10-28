@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
 import '../../core/analytics.dart';
+import '../../core/card_zoom.dart';
 import '../../core/glass.dart';
 import '../../core/article.dart';
 import '../../core/feed_language.dart';
@@ -17,6 +18,7 @@ import '../../core/pictures.dart';
 import '../../core/router.dart';
 import '../../core/theme.dart';
 import '../../l10n/app_localizations.dart';
+import '../detail/detail_screen.dart';
 import '../settings/settings_screen.dart';
 import 'feed_controller.dart';
 import 'feed_filters.dart';
@@ -184,16 +186,41 @@ class _FeedScreenState extends State<FeedScreen> {
     );
     unawaited(_feed.markRead(article));
     Haptics.light();
-    // The article's picture, decoded for its screen while the card flies
-    // there (#141), so it lands sharp.
+    // The article's picture, decoded for its screen while the card grows
+    // into the article (#141), so it is sharp when it is there.
     final url = article.imageUrl;
     if (url != null) {
       unawaited(
         precacheImage(screenPicture(context, url), context, onError: (_, _) {}),
       );
     }
-    // The article as the feed has it, so a translated one opens translated.
-    Navigator.of(context).pushNamed(Routes.detail, arguments: article);
+    // The article grows out of its card (#141); with Reduce Motion on, or a
+    // card not on screen, it opens as before. The article as the feed has
+    // it, so a translated one opens translated.
+    final card = Motion.reduced(context) ? null : ZoomSource.rectOf(article.id);
+    final top = card == null ? null : ZoomSource.cardOf(article.id);
+    if (card == null || top == null) {
+      Navigator.of(context).pushNamed(Routes.detail, arguments: article);
+      return;
+    }
+    final look = lookFor(feedDesign.value);
+    final color = look.cardColor(context);
+    Navigator.of(context).push(
+      CardZoomRoute<void>(
+        from: card,
+        background: color,
+        radius: look.cardRadius,
+        sourceId: article.id,
+        settings: RouteSettings(name: Routes.detail, arguments: article),
+        // The card itself is the article's top, where it is in the feed.
+        builder: (_) => DetailScreen(
+          article: article,
+          top: top,
+          topFrom: card,
+          background: color,
+        ),
+      ),
+    );
   }
 
   void _openSettings() {
