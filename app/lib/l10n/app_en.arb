@@ -826,18 +826,6 @@
   "@cancel": {
     "description": "The cancel button of an action sheet (Settings, headline weight)."
   },
-  "splashOnly": "only",
-  "@splashOnly": {
-    "description": "The splash at start (#66): its first line, of three stacked words that read as one phrase, \"only official news\". Lower case as Yurii wrote them; keep each line one word."
-  },
-  "splashOfficial": "official",
-  "@splashOfficial": {
-    "description": "The splash's second line (see splashOnly). In a language that puts the adjective after the noun, the noun goes here (Spanish: \"noticias\")."
-  },
-  "splashNews": "news",
-  "@splashNews": {
-    "description": "The splash's third line (see splashOnly)."
-  },
   "discussWithAi": "Discuss with AI",
   "@discussWithAi": {
     "description": "The button under a summary that will open a chat about the decision (#133, #141); for now it opens a note that the chat is coming, with a switch to be told when it is ready."

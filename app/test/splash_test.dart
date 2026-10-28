@@ -289,31 +289,24 @@ void main() {
     await _play(tester, _total(SplashStyle.rise));
   });
 
-  testWidgets('the words are in the app\'s language, and a long one stays '
-      'on the screen', (tester) async {
-    tester.view.physicalSize = const Size(390, 844) * 3;
-    tester.view.devicePixelRatio = 3;
-    addTearDown(tester.view.reset);
+  testWidgets('the words are English in every language (Yurii, 28 Oct)', (
+    tester,
+  ) async {
     final semantics = tester.ensureSemantics();
-    await tester.pumpWidget(_host(locale: 'uk'));
-    for (final word in ['тільки', 'офіційні', 'новини']) {
-      expect(find.text(word), findsOneWidget);
+    for (final locale in ['uk', 'de']) {
+      await tester.pumpWidget(
+        KeyedSubtree(
+          key: UniqueKey(),
+          child: _host(locale: locale),
+        ),
+      );
+      for (final word in splashLines) {
+        expect(find.text(word), findsOneWidget);
+      }
+      expect(find.bySemanticsLabel('only official news'), findsOneWidget);
+      await _play(tester, _total(SplashStyle.riseUp));
     }
-    expect(find.bySemanticsLabel('тільки офіційні новини'), findsOneWidget);
-    await _play(tester, _total(SplashStyle.riseUp));
     semantics.dispose();
-
-    await tester.pumpWidget(
-      KeyedSubtree(
-        key: UniqueKey(),
-        child: _host(locale: 'de'),
-      ),
-    );
-    await _play(tester, seconds(1.5));
-    final long = tester.getRect(find.text('Nachrichten'));
-    expect(long.left, greaterThanOrEqualTo(0));
-    expect(long.right, lessThanOrEqualTo(390));
-    await _play(tester, _total(SplashStyle.riseUp));
   });
 
   testWidgets('a notification that started the app ends it at once, with '
