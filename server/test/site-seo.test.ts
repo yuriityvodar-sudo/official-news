@@ -2,9 +2,10 @@
 // it and an article's structured data.
 import { beforeEach, describe, expect, it } from "vitest";
 import { slugify } from "../src/site/urls";
+import { CONSENT_JS, GA_ID, consentHash } from "../src/site/consent";
 import { SITE_LANGS } from "../src/site/texts";
 import { hideSeed } from "./helpers";
-import { ORIGIN, insertArticle, insertTranslation, site, testId } from "./site-helpers";
+import { ORIGIN, insertArticle, insertTranslation, site, testId, withoutConsentScript } from "./site-helpers";
 
 const ID = testId(1);
 const OTHER = testId(2);
@@ -80,5 +81,28 @@ describe("/ opens the visitor's language (no page to choose one)", () => {
     expect((await go("de-DE,de;q=0.9")).location).toBe(`${ORIGIN}/en`);
     expect((await go(null)).location).toBe(`${ORIGIN}/en`);
     expect((await go("*")).location).toBe(`${ORIGIN}/en`);
+  });
+});
+
+describe("Google Analytics, only with the visitor's yes", () => {
+  it("every page carries the banner hidden and the one script the CSP allows by its hash; Google's tag is not in the page", async () => {
+    for (const path of ["/en", "/uk", EN, "/es/about"]) {
+      const { body, headers } = await site(path);
+      expect(body, path).toMatch(/<div class="consent" id="consent" role="region" aria-label="[^"]+" hidden>/);
+      expect(body, path).toContain(`<script>${CONSENT_JS}</script>`);
+      // Google's tag is added by the script after a yes, never written into the page.
+      expect(withoutConsentScript(body), path).not.toContain("googletagmanager");
+      expect(headers.get("content-security-policy"), path).toContain(`script-src '${await consentHash()}' https://*.googletagmanager.com`);
+    }
+    expect(CONSENT_JS).toContain(`"${GA_ID}"`);
+    expect(GA_ID).toBe("G-D0H8XW2SWJ");
+  });
+});
+
+describe("the front page's title", () => {
+  it("leads with the name; a filtered list names its filters first", async () => {
+    expect((await site("/uk")).body).toContain("<title>Outer News · ");
+    expect((await site("/en")).body).toContain("<title>Outer News · Official decisions</title>");
+    expect((await site("/en/de")).body).toMatch(/<title>Germany · [^<]* · Outer News<\/title>/);
   });
 });

@@ -7,7 +7,7 @@ import { LANGUAGE_NAMES, SITE_LANGS, aiNoticeText, text } from "../src/site/text
 import { INFO_PAGES } from "../src/site/urls";
 import { hideSeed } from "./helpers";
 // `site` follows an article's 301 to its own URL, as a reader's browser does (an article path here has no slug).
-import { insertArticle, insertTranslation, reach as site, testId } from "./site-helpers";
+import { insertArticle, insertTranslation, reach as site, testId, withoutConsentScript } from "./site-helpers";
 
 describe("every page in every language", () => {
   beforeEach(async () => {
@@ -24,7 +24,7 @@ describe("every page in every language", () => {
       const { status, body } = await site(path);
       expect([200, 404], path).toContain(status);
       // CSS has braces; the page's text has none left.
-      const visible = body.replace(/<style>[\s\S]*<\/style>/, "");
+      const visible = withoutConsentScript(body).replace(/<style>[\s\S]*<\/style>/, "");
       expect(visible, path).not.toMatch(/\{\w+\}|undefined|null|NaN|\[object/);
     }
   });

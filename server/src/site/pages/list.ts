@@ -154,7 +154,9 @@ ${first ? "" : html`<a class="more" href="${listPath(lang, filter)}">${t(lang, "
   return {
     lang,
     kind: "list",
-    title: [...names, text(lang, "latestLink"), SITE_NAME].join(" · "),
+    // The front page leads with the name, "Outer News · Official decisions" (Yurii, 29 Oct);
+    // a filtered or later page names its filters first, for tabs and history.
+    title: first && !filtered ? `${SITE_NAME} · ${text(lang, "listTitle")}` : [...names, text(lang, "latestLink"), SITE_NAME].join(" · "),
     description: text(lang, "aboutIntro"),
     canonical: origin + listPath(lang, filter, before),
     alternates: [

@@ -35,6 +35,11 @@ interface SiteTexts {
   getApp: string;
   getAppBody: string;
   comingSoon: string;
+  /** The analytics banner (consent.ts): nothing from Google loads before a yes. */
+  consentTitle: string;
+  consentText: string;
+  consentYes: string;
+  consentNo: string;
   notInLang: string;
   readIn: string;
   notFound: string;
@@ -92,6 +97,10 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     getApp: "Get the app",
     getAppBody: "Official decisions from around the world, in a few calm sentences, on your phone.",
     comingSoon: "Coming soon",
+    consentTitle: "Analytics",
+    consentText: "May we use Google Analytics to see how this site is used? It counts visits and what is read, sets cookies, and loads only if you allow it.",
+    consentYes: "Allow",
+    consentNo: "No, thanks",
     notInLang: "This decision is not available in this language yet.",
     readIn: "Read it in:",
     notFound: "Page not found",
@@ -130,6 +139,10 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     getApp: "Завантажте застосунок",
     getAppBody: "Офіційні рішення з усього світу кількома спокійними реченнями у вашому телефоні.",
     comingSoon: "Незабаром",
+    consentTitle: "Аналітика",
+    consentText: "Чи можемо ми використовувати Google Analytics, щоб бачити, як користуються сайтом? Він рахує відвідування й прочитане, ставить файли cookie і вмикається лише з вашого дозволу.",
+    consentYes: "Дозволити",
+    consentNo: "Ні, дякую",
     notInLang: "Цього рішення ще немає цією мовою.",
     readIn: "Читати:",
     notFound: "Сторінку не знайдено",
@@ -168,6 +181,10 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     getApp: "Скачайте приложение",
     getAppBody: "Официальные решения со всего мира в нескольких спокойных предложениях в вашем телефоне.",
     comingSoon: "Скоро",
+    consentTitle: "Аналитика",
+    consentText: "Можно ли нам использовать Google Analytics, чтобы видеть, как пользуются сайтом? Он считает посещения и прочитанное, ставит файлы cookie и включается только с вашего разрешения.",
+    consentYes: "Разрешить",
+    consentNo: "Нет, спасибо",
     notInLang: "Этого решения пока нет на этом языке.",
     readIn: "Читать:",
     notFound: "Страница не найдена",
@@ -206,6 +223,10 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     getApp: "Descarga la app",
     getAppBody: "Decisiones oficiales de todo el mundo, en pocas frases serenas, en tu móvil.",
     comingSoon: "Próximamente",
+    consentTitle: "Analítica",
+    consentText: "¿Podemos usar Google Analytics para ver cómo se usa este sitio? Cuenta visitas y lo que se lee, usa cookies y solo se activa si lo permites.",
+    consentYes: "Permitir",
+    consentNo: "No, gracias",
     notInLang: "Esta decisión aún no está disponible en este idioma.",
     readIn: "Leer en:",
     notFound: "Página no encontrada",
@@ -244,6 +265,10 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     getApp: "Hol dir die App",
     getAppBody: "Offizielle Entscheidungen aus aller Welt, in wenigen ruhigen Sätzen, auf deinem Handy.",
     comingSoon: "Demnächst",
+    consentTitle: "Analyse",
+    consentText: "Dürfen wir Google Analytics nutzen, um zu sehen, wie diese Website genutzt wird? Es zählt Besuche und Gelesenes, setzt Cookies und lädt nur mit deiner Erlaubnis.",
+    consentYes: "Erlauben",
+    consentNo: "Nein, danke",
     notInLang: "Diese Entscheidung gibt es in dieser Sprache noch nicht.",
     readIn: "Lesen auf:",
     notFound: "Seite nicht gefunden",

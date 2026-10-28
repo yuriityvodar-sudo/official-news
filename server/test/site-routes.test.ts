@@ -8,7 +8,7 @@ import { CACHE } from "../src/site/respond";
 import { INFO_PAGES, slugify } from "../src/site/urls";
 import { SITE_LANGS } from "../src/site/texts";
 import { hideSeed } from "./helpers";
-import { ORIGIN, insertArticle, insertTranslation, reach, site, siteEnv, siteRowsRead as rowsRead, testId } from "./site-helpers";
+import { ORIGIN, insertArticle, insertTranslation, reach, site, siteEnv, siteRowsRead as rowsRead, testId, withoutConsentScript } from "./site-helpers";
 
 const ID = testId(1);
 const NOT_IN_UK = testId(2);
@@ -77,7 +77,7 @@ describe("every route", () => {
         expect(headers.get("cloudflare-cdn-cache-control")).toBe(CACHE[kind].edge);
         expect(headers.get("x-robots-tag")).toBe("noindex");
         expect(headers.get("x-content-type-options")).toBe("nosniff");
-        expect(headers.get("content-security-policy")).toMatch(/^default-src 'none'; style-src 'sha256-[A-Za-z0-9+/]+=*'; img-src data:;/);
+        expect(headers.get("content-security-policy")).toMatch(/^default-src 'none'; style-src 'sha256-[A-Za-z0-9+/]+=*'; script-src 'sha256-[A-Za-z0-9+/]+=*' https:\/\/\*\.googletagmanager\.com; img-src 'self' data: /);
         expect(headers.get("content-language")).toBe(lang);
         expect(headers.get("set-cookie")).toBeNull();
         expect(headers.get("vary")).toBeNull();
@@ -207,7 +207,7 @@ describe("one request per page view", () => {
     ];
     for (const path of paths) {
       const { body } = await site(path);
-      expect(body.replace(/<script type="application\/ld\+json">[^<]*<\/script>/g, ""), path).not.toMatch(/<script|<iframe|<object|<embed|<video|<audio|<source|rel="stylesheet"|rel="preload"|rel="prefetch"|rel="preconnect"|rel="dns-prefetch"|@import|@font-face/i);
+      expect(withoutConsentScript(body).replace(/<script type="application\/ld\+json">[^<]*<\/script>/g, ""), path).not.toMatch(/<script|<iframe|<object|<embed|<video|<audio|<source|rel="stylesheet"|rel="preload"|rel="prefetch"|rel="preconnect"|rel="dns-prefetch"|@import|@font-face/i);
       // CSS url() only for data:, and the tab icon a data: URL (no /favicon.ico request).
       for (const m of body.matchAll(/url\(([^)]*)\)/g)) expect(m[1], path).toMatch(/^["']?data:/);
       expect(body).toMatch(/<link rel="icon" href="data:image\/png;base64,/);
@@ -259,7 +259,7 @@ describe("text from the data and the address", () => {
       expect(status).toBe(200);
       // The article's structured data is a JSON-LD block, never run, with no "<" inside it.
       for (const m of body.matchAll(/<script type="application\/ld\+json">([^]*?)<\/script>/g)) expect(m[1]).not.toContain("<");
-      expect(body.replace(/<script type="application\/ld\+json">[^<]*<\/script>/g, "")).not.toMatch(/<script|<img|<svg onload|<b>bold/i);
+      expect(withoutConsentScript(body).replace(/<script type="application\/ld\+json">[^<]*<\/script>/g, "")).not.toMatch(/<script|<img|<svg onload|<b>bold/i);
       // No tag carries an event handler: the escaped text may say "onerror=", a tag never does.
       // (Attribute values are blanked first: a meta description may quote the escaped text.)
       expect(body.replace(/"[^"]*"/g, '""')).not.toMatch(/<[^>]*\son\w+=/i);
@@ -288,7 +288,7 @@ describe("text from the data and the address", () => {
       const { status, body } = await site(path);
       expect(status).toBe(404);
       // (The tab icon's data: URL holds %3C, and "description" holds "script".)
-      expect(body).not.toMatch(/alert|<script|%3Cscript|<b>|x%3Cb/i);
+      expect(withoutConsentScript(body)).not.toMatch(/alert|<script|%3Cscript|<b>|x%3Cb/i);
     }
   });
 });

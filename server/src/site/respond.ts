@@ -72,9 +72,14 @@ export const robotsFor = (_page: Page): string => "noindex";
 /** What a response that is not a page (robots.txt, a redirect, an icon, a 405) says. */
 export const ROBOTS_DEFAULT = "noindex";
 
-/** The site's Content-Security-Policy: no scripts, no frames, nothing loaded from elsewhere; only our one inline stylesheet (by its hash) and data: icons. */
-export const csp = (styleHash: string) =>
-  `default-src 'none'; style-src '${styleHash}'; img-src data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`;
+/**
+ * The site's Content-Security-Policy: our one inline stylesheet and our one
+ * inline script (consent.ts), each by its hash, data: icons, and Google
+ * Analytics' own hosts, which the script loads only after a visitor's yes. No
+ * frames, nothing else from elsewhere.
+ */
+export const csp = (styleHash: string, scriptHash: string) =>
+  `default-src 'none'; style-src '${styleHash}'; script-src '${scriptHash}' https://*.googletagmanager.com; img-src 'self' data: https://*.google-analytics.com https://*.googletagmanager.com; connect-src https://*.google-analytics.com https://*.analytics.google.com https://*.googletagmanager.com; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`;
 
 export interface Reply {
   kind: CacheKind;
@@ -93,7 +98,7 @@ export interface Reply {
 }
 
 /** The one place that sets the site's headers. A HEAD request gets the same headers and no body. */
-export function respond(reply: Reply, method: string, styleHash: string): Response {
+export function respond(reply: Reply, method: string, styleHash: string, scriptHash: string): Response {
   const cache = CACHE[reply.kind];
   const isText = typeof reply.body === "string";
   const isPng = reply.body instanceof Uint8Array;
@@ -102,7 +107,7 @@ export function respond(reply: Reply, method: string, styleHash: string): Respon
     "cloudflare-cdn-cache-control": cache.edge,
     "x-robots-tag": reply.robots ?? ROBOTS_DEFAULT,
     "x-content-type-options": "nosniff",
-    "content-security-policy": csp(styleHash),
+    "content-security-policy": csp(styleHash, scriptHash),
     "content-type": reply.contentType ?? (isPng ? "image/png" : isText ? "text/plain; charset=utf-8" : "text/html; charset=utf-8"),
   });
   if (reply.lang) headers.set("content-language", reply.lang);

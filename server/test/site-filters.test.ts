@@ -15,7 +15,7 @@ import { SITE_LANGS, type SiteLang, text } from "../src/site/texts";
 import { ALL, COUNTRY_PAGES, INFO_PAGES, isCountryPage } from "../src/site/urls";
 import { TOPICS } from "../src/summarizer/schema";
 import { get, hideSeed } from "./helpers";
-import { ORIGIN, hreflangs, insertArticle, insertTranslation, linkedIds, site, siteRowsRead as rowsRead, testId } from "./site-helpers";
+import { ORIGIN, hreflangs, insertArticle, insertTranslation, linkedIds, site, siteRowsRead as rowsRead, testId, withoutConsentScript } from "./site-helpers";
 
 const SOURCE = {
   DE: "de-federal-government",
@@ -524,7 +524,7 @@ describe("every new page", () => {
       expect(status, path).toBe(200);
       expect(headers.get("x-robots-tag"), path).toBe("noindex");
       expect(body, path).toContain('<meta name="robots" content="noindex">');
-      expect(body, path).not.toMatch(/<script|<img|<iframe|rel="stylesheet"|rel="preload"|rel="prefetch"/i);
+      expect(withoutConsentScript(body), path).not.toMatch(/<script|<img|<iframe|rel="stylesheet"|rel="preload"|rel="prefetch"/i);
       expect(headers.get("cloudflare-cdn-cache-control"), path).toBe(CACHE.list.edge);
     }
   });
@@ -532,7 +532,7 @@ describe("every new page", () => {
   it("has no placeholder, undefined or null left, in every language", async () => {
     for (const lang of SITE_LANGS) {
       for (const path of PAGES.map((p) => p.replace(/^\/[a-z]{2}/, `/${lang}`))) {
-        const visible = (await site(path)).body.replace(/<style>[\s\S]*<\/style>/, "");
+        const visible = withoutConsentScript((await site(path)).body).replace(/<style>[\s\S]*<\/style>/, "");
         expect(visible, path).not.toMatch(/\{\w+\}|undefined|null|NaN|\[object/);
       }
     }

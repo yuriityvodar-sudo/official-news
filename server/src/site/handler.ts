@@ -17,6 +17,7 @@ import type { SiteEnv } from "./env";
 import { APPLE_TOUCH_ICON, OG_IMAGE } from "./icon";
 import { type Page, cssHash, layout } from "./layout";
 import { sitemapXml } from "./seo";
+import { consentHash } from "./consent";
 import { visitorLang } from "./lang";
 import { articlePage, notInLanguagePage } from "./pages/article";
 import { errorPage, notFoundPage } from "./pages/errors";
@@ -208,7 +209,7 @@ async function route(request: Request, env: SiteEnv): Promise<Reply> {
 
 /** The site's request handler; tests call it with `{ DB, SITE_ORIGIN }`. */
 export async function handleSite(request: Request, env: SiteEnv): Promise<Response> {
-  const styleHash = await cssHash();
+  const [styleHash, scriptHash] = await Promise.all([cssHash(), consentHash()]);
   let reply: Reply;
   try {
     reply = await route(request, env);
@@ -218,5 +219,5 @@ export async function handleSite(request: Request, env: SiteEnv): Promise<Respon
     const lang = LANG_PATH.exec(path)?.[1];
     reply = page(errorPage(lang && isSiteLang(lang) ? lang : "en"), 500, "none");
   }
-  return respond(reply, request.method, styleHash);
+  return respond(reply, request.method, styleHash, scriptHash);
 }

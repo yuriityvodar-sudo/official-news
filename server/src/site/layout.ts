@@ -5,6 +5,7 @@
 // app's theme (app/lib/core/theme.dart: Georgia, not the system's New York),
 // light and dark; if #66 changes the app's font, change it here too.
 import { type Html, html, raw } from "./html";
+import { consent } from "./consent";
 import { TAB_ICON } from "./icon";
 import { LANGUAGE_NAMES, type SiteLang, publisher, t, text } from "./texts";
 import { INFO_PAGES, type InfoPage, infoPath, listPath } from "./urls";
@@ -111,6 +112,13 @@ body:has(main :focus-visible:not(.filters *),footer :focus-visible) .pick[open] 
 .store{display:inline-flex;flex-direction:column;justify-content:center;min-width:150px;min-height:52px;padding:6px 16px;border-radius:12px;background:var(--fill);color:var(--secondary)}
 .store span{font-size:12px}
 .store .name{color:var(--text);font-size:16px;font-weight:700}
+.consent{position:fixed;left:0;right:0;bottom:0;z-index:3;padding:14px 0 calc(14px + env(safe-area-inset-bottom));background:var(--menu);border-top:.5px solid var(--separator);box-shadow:0 -8px 24px var(--shadow)}
+.consent[hidden]{display:none}
+.consent p{margin:0 0 10px;font-size:14px;color:var(--secondary)}
+.consent-buttons{display:flex;gap:10px;flex-wrap:wrap}
+.consent button{min-height:44px;padding:0 18px;border:0;border-radius:22px;background:var(--fill);color:var(--text);font:600 15px/1 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;cursor:pointer}
+.consent button.yes{background:var(--accent);color:#fff}
+.consent button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .more{display:inline-flex;align-items:center;min-height:44px;margin-top:8px;font-weight:600}
 .info h2{margin:24px 0 6px;font-size:17px;font-weight:600}
 .info p,.info li{font-size:16px;line-height:1.5}
@@ -266,6 +274,7 @@ ${page.body}
 </div></main>
 ${getApp(lang)}
 ${footer(lang)}
+${consent(lang)}
 </body>
 </html>
 `;
