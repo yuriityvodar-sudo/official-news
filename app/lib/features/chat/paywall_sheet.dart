@@ -9,6 +9,7 @@ import '../../core/article.dart';
 import '../../core/glass.dart';
 import '../../core/motion.dart';
 import '../../core/subscription.dart';
+import '../../core/theme.dart';
 import '../../l10n/app_localizations.dart';
 import '../settings/info_pages.dart';
 import 'chat_style.dart';
@@ -143,6 +144,10 @@ class _PaywallSheetState extends State<PaywallSheet> {
       _ => null,
     };
     final sample = article.summary ?? article.shortSummary ?? '';
+    // The app's type (theme.dart), as its other sheets: the serif for the
+    // title and the sample answer, the sans for buttons, links and labels
+    // (Yurii, review of #188).
+    final news = NewsText.from(context);
 
     final header = Row(
       children: [
@@ -272,7 +277,7 @@ class _PaywallSheetState extends State<PaywallSheet> {
           sample,
           maxLines: 5,
           overflow: TextOverflow.clip,
-          style: TextStyle(fontSize: 15, height: 1.45, color: label),
+          style: news.body.copyWith(color: label),
         ),
       ),
     );
@@ -305,12 +310,7 @@ class _PaywallSheetState extends State<PaywallSheet> {
           Text(
             l10n.paywallTitle,
             textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 19,
-              fontWeight: FontWeight.w800,
-              letterSpacing: -0.4,
-              color: label,
-            ),
+            style: news.headline.copyWith(color: label),
           ),
           const SizedBox(height: 6),
           Text(
