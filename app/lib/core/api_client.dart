@@ -16,6 +16,21 @@ class ApiException implements Exception {
   String toString() => 'ApiException($statusCode): $message';
 }
 
+/// The AI agent's answer as it is written, and the questions left today.
+class ChatAnswer {
+  const ChatAnswer({required this.text, this.remaining});
+
+  final Stream<String> text;
+  final int? remaining;
+}
+
+/// Today's questions to the AI agent are used up (429), until [resetsAt].
+class ChatLimit extends ApiException {
+  ChatLimit(this.resetsAt) : super(429, 'Daily limit');
+
+  final DateTime? resetsAt;
+}
+
 /// Client for the endpoints in docs/contract.md.
 class ApiClient {
   ApiClient({
@@ -154,6 +169,45 @@ class ApiClient {
       throw FormatException('No "$key" in $json');
     }
     return value;
+  }
+
+  /// `POST /v1/chat` (#146): the AI agent's answer about one decision, for a
+  /// subscriber. [messages] is the conversation so far, ending with the new
+  /// question, as `(fromReader, text)`; [transaction] the subscription's
+  /// latest signed transaction. The answer comes as it is written. Throws an
+  /// [ApiException] with the server's status: 402 not paid, 404 not in the
+  /// feed, 429 today's questions used up ([ChatLimit] with when they come
+  /// back), 503 the agent not available.
+  Future<ChatAnswer> askChat({
+    required String articleId,
+    required String lang,
+    required List<(bool, String)> messages,
+    required String transaction,
+  }) async {
+    final request = http.Request('POST', Uri.parse('$_baseUrl/v1/chat'))
+      ..headers['content-type'] = 'application/json'
+      ..body = jsonEncode({
+        'articleId': articleId,
+        'lang': lang,
+        'messages': [
+          for (final (reader, text) in messages)
+            {'role': reader ? 'user' : 'assistant', 'text': text},
+        ],
+        'transaction': transaction,
+      });
+    final response = await _client.send(request).timeout(timeout);
+    if (response.statusCode != 200) {
+      final body = await response.stream.bytesToString();
+      if (response.statusCode == 429) {
+        final json = jsonDecode(body) as Map<String, dynamic>;
+        throw ChatLimit(DateTime.tryParse('${json['resetsAt']}'));
+      }
+      throw ApiException(response.statusCode, body);
+    }
+    return ChatAnswer(
+      text: response.stream.transform(utf8.decoder),
+      remaining: int.tryParse(response.headers['x-chat-remaining'] ?? ''),
+    );
   }
 
   /// English is the API without `lang`, so its requests stay as they were.
