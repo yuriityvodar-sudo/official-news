@@ -208,12 +208,7 @@ class _DesignSection extends StatelessWidget {
           builder: (context, design, _) => CupertinoListTile(
             leading: const _Icon(CupertinoIcons.paintbrush),
             title: Text(l10n.settingsDesign),
-            additionalInfo: Icon(
-              designIcon(design),
-              size: 22,
-              color: CupertinoColors.secondaryLabel.resolveFrom(context),
-              semanticLabel: designName(design, l10n),
-            ),
+            additionalInfo: Text(designName(design, l10n)),
             trailing: const CupertinoListTileChevron(),
             onTap: () => _pickDesign(context, design),
           ),
@@ -232,8 +227,8 @@ class _DesignSection extends StatelessWidget {
     );
   }
 
-  /// The looks as an action sheet of their icons, the current one with a
-  /// check mark. Back to the feed to show the new look.
+  /// The looks as an action sheet, each with its icon and name, the current
+  /// one with a check mark. Back to the feed to show the new look.
   Future<void> _pickDesign(BuildContext context, FeedDesign current) {
     final l10n = AppLocalizations.of(context);
     return showCupertinoModalPopup<void>(
@@ -259,14 +254,11 @@ class _DesignSection extends StatelessWidget {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // As wide as the check mark, so the icon stays centred.
+                      // As wide as the check mark, so the name stays centred.
                       if (d == current) const SizedBox(width: 28),
-                      Icon(
-                        designIcon(d),
-                        size: 28,
-                        color: blue,
-                        semanticLabel: designName(d, l10n),
-                      ),
+                      Icon(designIcon(d), size: 24, color: blue),
+                      const SizedBox(width: 10),
+                      Flexible(child: Text(designName(d, l10n))),
                       if (d == current) ...[
                         const SizedBox(width: 8),
                         Icon(
@@ -324,20 +316,26 @@ class _DesignSection extends StatelessWidget {
 
 /// A look's icon in Settings → Design, a picture of its layout (Roman,
 /// 22 Oct: icons, not the letters A, B and C): today's list, A's newspaper
-/// page, B's cards, C's lines of text with no pictures.
+/// page, B's cards, C's lines of text with no pictures, Garnet's stacked
+/// cards, Seal's seal.
 IconData designIcon(FeedDesign d) => switch (d) {
   FeedDesign.now => CupertinoIcons.square_list,
   FeedDesign.a => CupertinoIcons.news,
   FeedDesign.b => CupertinoIcons.rectangle_grid_1x2,
   FeedDesign.c => CupertinoIcons.text_alignleft,
+  FeedDesign.garnet => CupertinoIcons.rectangle_stack,
+  FeedDesign.seal => CupertinoIcons.checkmark_seal,
 };
 
-/// What VoiceOver says for a look's icon: "Now", or "Design B".
+/// A look's name beside its icon (Roman, 26 Oct: each one named):
+/// "Classic", "Garnet"…
 String designName(FeedDesign d, AppLocalizations l10n) => switch (d) {
-  FeedDesign.now => l10n.settingsDesignNow,
-  FeedDesign.a => '${l10n.settingsDesign} A',
-  FeedDesign.b => '${l10n.settingsDesign} B',
-  FeedDesign.c => '${l10n.settingsDesign} C',
+  FeedDesign.now => l10n.designClassic,
+  FeedDesign.a => l10n.designMagazine,
+  FeedDesign.b => l10n.designCards,
+  FeedDesign.c => l10n.designBriefing,
+  FeedDesign.garnet => l10n.designGarnet,
+  FeedDesign.seal => l10n.designSeal,
 };
 
 /// A weight's name in the app's language.

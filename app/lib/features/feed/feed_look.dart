@@ -9,14 +9,15 @@ import '../../core/theme.dart';
 import 'feed_look_a.dart';
 import 'feed_look_b.dart';
 import 'feed_look_c.dart';
+import 'feed_look_news.dart';
 import 'feed_look_now.dart';
 import 'feed_topic_tags.dart';
 
 export '../../core/feed_design.dart';
 
 /// The look shown now ([FeedDesign], #66). Settings switches it (the
-/// "Design" row); a build can start with another one:
-/// `--dart-define=FEED_DESIGN=a`.
+/// "Design" row); a new reader starts with [defaultDesign], and a build can
+/// start with another one: `--dart-define=FEED_DESIGN=a`.
 ///
 /// Everything the feed draws goes through a [FeedLook]; everything it does
 /// (loading, errors, empty states, pull to refresh, loading more, the "N new"
@@ -57,6 +58,8 @@ FeedLook lookFor(FeedDesign design) => switch (design) {
   FeedDesign.a => ALook(),
   FeedDesign.b => BLook(),
   FeedDesign.c => CLook(),
+  FeedDesign.garnet => NewsLook(NewsPalette.garnet),
+  FeedDesign.seal => NewsLook(NewsPalette.seal),
 };
 
 /// How the feed looks. The slot that holds the list returns a SLIVER, so a
