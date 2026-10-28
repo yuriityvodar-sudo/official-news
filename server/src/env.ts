@@ -31,4 +31,13 @@ export interface Env {
    * `.dev.vars`). Without it `POST /v1/chat` answers 503.
    */
   OPENAI_API_KEY?: string;
+  /**
+   * Opens the AI chat to Sandbox purchases (#146, Roman, 28 Oct). They cost
+   * nothing (TestFlight, a build run from a Mac), so the chat answers them
+   * only for a request that carries this key as `X-Chat-Sandbox-Key`, which
+   * only Roman's local builds have. A Worker secret Roman puts in himself
+   * (`npx wrangler secret put CHAT_SANDBOX_KEY`; locally in `.dev.vars`).
+   * Without it no Sandbox purchase gets an answer.
+   */
+  CHAT_SANDBOX_KEY?: string;
 }

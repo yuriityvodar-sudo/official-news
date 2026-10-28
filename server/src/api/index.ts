@@ -680,15 +680,17 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (post) {
     if (request.method !== "POST") return json({ error: "Method not allowed" }, 405, { allow: "POST" });
     const body = await request.json().catch(() => null);
+    // Only Roman's local builds send it: it opens the chat to their Sandbox purchases.
+    const options = { sandboxKey: request.headers.get("x-chat-sandbox-key") };
     if (post !== "chat") {
       const { status, body: answer } = await (post === "notifications"
         ? receiveNotification(body, env)
         : post === "status"
-          ? chatStatus(body, env)
-          : creditChatPack(body, env));
+          ? chatStatus(body, env, options)
+          : creditChatPack(body, env, options));
       return json(answer, status);
     }
-    const result = await answerChat(body, env);
+    const result = await answerChat(body, env, options);
     if ("status" in result) return json(result.body, result.status);
     // The answer as OpenAI writes it, never kept by Cloudflare's cache.
     return new Response(result.stream, {

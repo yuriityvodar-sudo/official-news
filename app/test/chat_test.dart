@@ -202,6 +202,11 @@ void main() {
   group('the chat', () {
     late List<Map<String, dynamic>> asked;
 
+    test(
+      'stays closed in builds without the demo or Roman\'s key, such as TestFlight\'s',
+      () => expect(ChatScreen.opened, isFalse),
+    );
+
     /// The server: answers in pieces, or with [status]; [left] questions
     /// left before asking, at [units] a question.
     ApiClient server({
