@@ -7,6 +7,7 @@ import 'package:flutter/rendering.dart' show PlatformViewHitTestBehavior;
 import 'package:flutter/services.dart';
 
 import '../../core/filters.dart';
+import '../../core/motion.dart';
 import '../../core/topics.dart';
 import '../../l10n/app_localizations.dart';
 
@@ -286,41 +287,66 @@ class _PulldownState extends State<_Pulldown> {
     );
   }
 
-  /// The grey chip: the choice (or its icon) and a chevron, in [fg].
-  Widget _chip(BuildContext context, Color fg) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-    decoration: BoxDecoration(
-      color: CupertinoColors.tertiarySystemFill.resolveFrom(context),
-      borderRadius: BorderRadius.circular(18),
-    ),
-    child: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // At the largest text sizes a long label ends in "…" instead
-        // of overflowing the chip. An icon sits in a line of text, so
-        // the chip is as high as one with a label, and grows with it.
-        Flexible(
-          child: Text.rich(
-            widget.icon == null
-                ? TextSpan(text: widget.label)
-                : WidgetSpan(
-                    alignment: PlaceholderAlignment.middle,
-                    child: Icon(widget.icon, size: 17, color: fg),
-                  ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
-              color: fg,
-            ),
-          ),
+  /// The grey chip: the choice (or its icon) and a chevron, in [fg]. A new
+  /// choice rolls in as the old one rolls out, and the chip's width follows
+  /// with a spring (#141); with Reduce Motion on, the words only fade.
+  Widget _chip(BuildContext context, Color fg) {
+    final reduced = Motion.reduced(context);
+    return AnimatedSize(
+      duration: reduced ? Duration.zero : Motion.slow,
+      curve: Motion.spring,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        decoration: BoxDecoration(
+          color: CupertinoColors.tertiarySystemFill.resolveFrom(context),
+          borderRadius: BorderRadius.circular(18),
         ),
-        const SizedBox(width: 4),
-        Icon(CupertinoIcons.chevron_down, size: 12, color: fg),
-      ],
-    ),
-  );
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // At the largest text sizes a long label ends in "…" instead
+            // of overflowing the chip. An icon sits in a line of text, so
+            // the chip is as high as one with a label, and grows with it.
+            Flexible(
+              child: AnimatedSwitcher(
+                duration: Motion.base,
+                transitionBuilder: (child, animation) => FadeTransition(
+                  opacity: animation,
+                  child: reduced
+                      ? child
+                      : SlideTransition(
+                          position: Tween(
+                            begin: const Offset(0, 0.4),
+                            end: Offset.zero,
+                          ).animate(animation),
+                          child: child,
+                        ),
+                ),
+                child: Text.rich(
+                  key: ValueKey((widget.label, widget.icon)),
+                  widget.icon == null
+                      ? TextSpan(text: widget.label)
+                      : WidgetSpan(
+                          alignment: PlaceholderAlignment.middle,
+                          child: Icon(widget.icon, size: 17, color: fg),
+                        ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: fg,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 4),
+            Icon(CupertinoIcons.chevron_down, size: 12, color: fg),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 /// Tests set it to check the native menus' side in Flutter.
