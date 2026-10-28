@@ -271,6 +271,34 @@ describe("runFetcher", () => {
     ]);
   });
 
+  it("keeps only the items its filters let through, by title, the feed's own headline or link", async () => {
+    // Урядовий кур'єр: the lead is the title, and some leads leave out the decision their headline names.
+    await addSource("xx-filters", "https://gov.test/filters.xml", "rss", {
+      title: "description",
+      match: { title: "^Уряд (ухвалив|затвердив)", url: "/news/razom/" },
+      exclude: { title: "(?i)попередн" },
+      itemPages: false,
+    });
+    const date = "Wed, 14 Oct 2026 09:00:00 GMT";
+    const { fetch } = fakeFetch({
+      "https://gov.test/robots.txt": { status: 404, body: "" },
+      "https://gov.test/filters.xml": {
+        body: rss([
+          { title: "Уряд ухвалив рішення для оборони", text: "Про це повідомив Прем’єр-міністр.", link: "https://gov.test/news/razom/1", date },
+          { title: "Засідання Уряду", text: "Уряд затвердив програму житла.", link: "https://gov.test/news/razom/2", date },
+          { title: "Засідання Уряду", text: "Прем’єр-міністр зустрівся з послом.", link: "https://gov.test/news/razom/3", date },
+          { title: "Уряд ухвалив план", text: "Уряд затвердив попередній план.", link: "https://gov.test/news/razom/4", date },
+          { title: "Уряд ухвалив план", text: "Уряд затвердив план комітету.", link: "https://gov.test/news/kom/5", date },
+        ]),
+      },
+    });
+    const [check] = await runFetcher(env, { fetch, now: NOW });
+    expect(check).toMatchObject({ found: 2, saved: 2 });
+    expect((await articlesOf("xx-filters")).map((a) => a.url).sort()).toEqual(["https://gov.test/news/razom/1", "https://gov.test/news/razom/2"]);
+    // The title stays the lead; the headline only lets the item through.
+    expect((await articlesOf("xx-filters")).map((a) => a.original_title).sort()).toEqual(["Про це повідомив Прем’єр-міністр.", "Уряд затвердив програму житла."]);
+  });
+
   it("never stores a time later than the fetch, and skips items without a date", async () => {
     await addSource("xx-times", "https://times.test/list.json", "api", { items: "", title: "t", link: "u", date: { field: "d" }, itemPages: false });
     const { fetch } = fakeFetch({
