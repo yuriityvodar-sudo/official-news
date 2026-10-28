@@ -15,6 +15,7 @@ import 'package:official_news/features/chat/chat_style.dart';
 import 'package:official_news/features/feed/feed_controller.dart';
 import 'package:official_news/features/feed/feed_look.dart';
 import 'package:official_news/features/feed/feed_screen.dart';
+import 'package:official_news/features/feed/feed_touches.dart';
 import 'package:official_news/features/settings/settings_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -551,6 +552,13 @@ void main() {
         expect(box.borderRadius, BorderRadius.circular(24));
         // A soft shadow in a tint of the colour.
         expect(box.boxShadow!.last.color.withValues(alpha: 1), accent);
+        // The time of a decision from the last hour in the colour too, not
+        // the app's pink (Yurii, #196).
+        final fresh = tester.widgetList<FreshTime>(find.byType(FreshTime));
+        expect(fresh, isNotEmpty);
+        for (final time in fresh) {
+          expect(time.color, accent);
+        }
       });
 
       testWidgets('the AI chat takes the look\'s colour', (tester) async {

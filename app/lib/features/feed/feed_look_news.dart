@@ -304,10 +304,8 @@ class _Card extends StatelessWidget {
         ? FreshTime(
             time,
             articleId: article.id,
-            style: meta.copyWith(
-              color: style.accent,
-              fontWeight: FontWeight.w600,
-            ),
+            style: meta.copyWith(fontWeight: FontWeight.w600),
+            color: style.accent,
           )
         : Text(time, style: meta);
     return Semantics(
