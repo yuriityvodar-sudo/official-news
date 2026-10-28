@@ -57,7 +57,7 @@ const ROUTES: [string, number, keyof typeof CACHE, string | null][] = [
   ["/en/de/", 301, "redirect", null],
   ["/en/EU", 301, "redirect", null],
   ["/.well-known/apple-app-site-association", 404, "missing", "en"],
-  ["/sitemap.xml", 404, "missing", "en"],
+  ["/sitemap.xml", 200, "sitemap", null],
   ["/favicon.ico", 404, "icon", null],
   ["/apple-touch-icon.png", 200, "icon", null],
   ["/apple-touch-icon-precomposed.png", 200, "icon", null],
@@ -124,10 +124,10 @@ describe("every route", () => {
   });
 
   it("serves robots.txt that disallows everything", async () => {
-    expect((await site("/robots.txt")).body).toBe("User-agent: *\nDisallow: /\n");
+    expect((await site("/robots.txt")).body).toBe("User-agent: *\nDisallow: /\n\nSitemap: https://site.test/sitemap.xml\n");
   });
 
-  const PAGES = ROUTES.filter(([p, s]) => (s < 300 || s >= 400) && !p.endsWith(".txt") && !p.endsWith(".ico") && !p.endsWith(".png"));
+  const PAGES = ROUTES.filter(([p, s]) => (s < 300 || s >= 400) && !p.endsWith(".txt") && !p.endsWith(".ico") && !p.endsWith(".png") && !p.endsWith(".xml"));
 
   it("says in every page's head exactly what its X-Robots-Tag says (one value, never two that disagree)", async () => {
     for (const [path] of PAGES) {
@@ -207,7 +207,7 @@ describe("one request per page view", () => {
     ];
     for (const path of paths) {
       const { body } = await site(path);
-      expect(body, path).not.toMatch(/<script|<iframe|<object|<embed|<video|<audio|<source|rel="stylesheet"|rel="preload"|rel="prefetch"|rel="preconnect"|rel="dns-prefetch"|@import|@font-face/i);
+      expect(body.replace(/<script type="application\/ld\+json">[^<]*<\/script>/g, ""), path).not.toMatch(/<script|<iframe|<object|<embed|<video|<audio|<source|rel="stylesheet"|rel="preload"|rel="prefetch"|rel="preconnect"|rel="dns-prefetch"|@import|@font-face/i);
       // CSS url() only for data:, and the tab icon a data: URL (no /favicon.ico request).
       for (const m of body.matchAll(/url\(([^)]*)\)/g)) expect(m[1], path).toMatch(/^["']?data:/);
       expect(body).toMatch(/<link rel="icon" href="data:image\/png;base64,/);
@@ -257,7 +257,9 @@ describe("text from the data and the address", () => {
     for (const path of [`/en/de/${XSS}`, "/en"]) {
       const { status, body } = await reach(path);
       expect(status).toBe(200);
-      expect(body).not.toMatch(/<script|<img|<svg onload|<b>bold/i);
+      // The article's structured data is a JSON-LD block, never run, with no "<" inside it.
+      for (const m of body.matchAll(/<script type="application\/ld\+json">([^]*?)<\/script>/g)) expect(m[1]).not.toContain("<");
+      expect(body.replace(/<script type="application\/ld\+json">[^<]*<\/script>/g, "")).not.toMatch(/<script|<img|<svg onload|<b>bold/i);
       // No tag carries an event handler: the escaped text may say "onerror=", a tag never does.
       // (Attribute values are blanked first: a meta description may quote the escaped text.)
       expect(body.replace(/"[^"]*"/g, '""')).not.toMatch(/<[^>]*\son\w+=/i);

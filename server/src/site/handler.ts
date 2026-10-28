@@ -8,13 +8,15 @@
 //   …?topic=<id>                   any list, one topic; then &before=, as the next page
 //   /{lang}/{cc}/{id}-{slug}       an article (looked up by its id; another country or slug is a 301 to its own)
 //   /{lang}/about|privacy|terms|support
-//   /robots.txt                    Disallow: /
+//   /robots.txt                    Disallow: /, and where the sitemap is
+//   /sitemap.xml                   the lists and the 7 days' articles (seo.ts)
 import { rankTopics } from "../api/filters";
 import type { Topic } from "../summarizer/schema";
-import { type ApiArticle, articleInLanguages, latest, topicsMenu, whereMenu } from "./data";
+import { type ApiArticle, allLatest, articleInLanguages, latest, topicsMenu, whereMenu } from "./data";
 import type { SiteEnv } from "./env";
 import { APPLE_TOUCH_ICON, OG_IMAGE } from "./icon";
 import { type Page, cssHash, layout } from "./layout";
+import { sitemapXml } from "./seo";
 import { articlePage, notInLanguagePage } from "./pages/article";
 import { errorPage, notFoundPage } from "./pages/errors";
 import { infoPage } from "./pages/info";
@@ -149,7 +151,14 @@ async function route(request: Request, env: SiteEnv): Promise<Reply> {
   // (the cache key is path and query): lists, the landing page and article pages send
   // it to their clean URL, with no D1 read (#88 and #89 reviews).
   if (path === "/") return url.search ? { kind: "redirect", status: 301, body: null, location: `${origin}/` } : page(landingPage(origin), 200, "fixed");
-  if (path === "/robots.txt") return { kind: "fixed", status: 200, body: ROBOTS_TXT };
+  // robots.txt names the sitemap, so a crawler finds it once indexing is allowed.
+  if (path === "/robots.txt") return { kind: "fixed", status: 200, body: `${ROBOTS_TXT}\nSitemap: ${origin}/sitemap.xml\n` };
+  if (path === "/sitemap.xml") {
+    if (url.search) return { kind: "redirect", status: 301, body: null, location: `${origin}/sitemap.xml` };
+    const lists = await Promise.all(SITE_LANGS.map((lang) => allLatest(env, lang)));
+    const shown = Object.fromEntries(SITE_LANGS.map((lang, i) => [lang, lists[i]]));
+    return { kind: "sitemap", status: 200, body: sitemapXml(origin, shown), contentType: "application/xml; charset=utf-8" };
+  }
   // The icon (icon.ts): Safari's home-screen icon under any of its names, and
   // the link preview's picture. The tab icon is inline, so /favicon.ico stays a 404.
   if (/^\/apple-touch-icon[\w-]*\.png$/.test(path)) return { kind: "icon", status: 200, body: APPLE_TOUCH_ICON };

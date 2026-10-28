@@ -122,3 +122,23 @@ export async function whereMenu(env: SiteEnv, lang: SiteLang): Promise<ApiWhere>
   if (!answer) throw new ApiError("API 404 for /countries");
   return { groups: answer.groups, countries: answer.countries };
 }
+
+/** Pages of 50 the sitemap reads at most per language (the API's 7 days are about 200 articles today). */
+const SITEMAP_PAGES = 10;
+
+/** Every article of the API's 7 days in `lang`, for the sitemap: its pages of 50, newest first. */
+export async function allLatest(env: SiteEnv, lang: SiteLang): Promise<ApiArticle[]> {
+  const out: ApiArticle[] = [];
+  let cursor: string | null = null;
+  for (let page = 0; page < SITEMAP_PAGES; page++) {
+    const params = new URLSearchParams({ limit: "50" });
+    if (lang !== "en") params.set("lang", lang);
+    if (cursor) params.set("cursor", cursor);
+    const list: ApiList | null = await api<ApiList>(env, `/articles?${params}`);
+    if (!list) throw new ApiError("API 404 for /articles");
+    out.push(...list.items);
+    cursor = list.nextCursor;
+    if (!cursor) break;
+  }
+  return out;
+}

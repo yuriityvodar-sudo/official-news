@@ -48,6 +48,8 @@ export const CACHE = {
    * as long as an article page: a later change never meets a stale redirect.
    */
   moved: { browser: "public, max-age=300", edge: "max-age=600" },
+  /** The sitemap (seo.ts): an hour, as new articles come all day; it reads up to 10 API pages per language. */
+  sitemap: { browser: "public, max-age=3600", edge: "max-age=3600, stale-if-error=86400" },
   /** 405 and 500: never stored, so an outage is never cached as a page. */
   none: { browser: "no-store", edge: "no-store" },
 } as const;
@@ -84,6 +86,8 @@ export interface Reply {
   /** For a redirect: an absolute URL made from SITE_ORIGIN. */
   location?: string;
   allow?: string;
+  /** For a text body that is not plain text: the sitemap's XML. */
+  contentType?: string;
 }
 
 /** The one place that sets the site's headers. A HEAD request gets the same headers and no body. */
@@ -97,7 +101,7 @@ export function respond(reply: Reply, method: string, styleHash: string): Respon
     "x-robots-tag": reply.robots ?? ROBOTS_DEFAULT,
     "x-content-type-options": "nosniff",
     "content-security-policy": csp(styleHash),
-    "content-type": isPng ? "image/png" : isText ? "text/plain; charset=utf-8" : "text/html; charset=utf-8",
+    "content-type": reply.contentType ?? (isPng ? "image/png" : isText ? "text/plain; charset=utf-8" : "text/html; charset=utf-8"),
   });
   if (reply.lang) headers.set("content-language", reply.lang);
   if (reply.location) headers.set("location", reply.location);

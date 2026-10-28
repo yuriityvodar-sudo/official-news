@@ -104,6 +104,13 @@ body:has(main :focus-visible:not(.filters *),footer :focus-visible) .pick[open] 
 .item .title{display:block;font-size:21px;line-height:1.2;font-weight:700;color:var(--text);text-decoration:none}
 .item .title:hover{text-decoration:underline}
 .item p{margin:6px 0 4px}
+.get-app{border-top:.5px solid var(--separator);padding:22px 0 18px}
+.get-app h2{margin:0 0 4px;font:700 22px/1.2 Georgia,"Times New Roman",serif}
+.get-app p{margin:0 0 14px;color:var(--secondary)}
+.stores{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:10px}
+.store{display:inline-flex;flex-direction:column;justify-content:center;min-width:150px;min-height:52px;padding:6px 16px;border-radius:12px;background:var(--fill);color:var(--secondary)}
+.store span{font-size:12px}
+.store .name{color:var(--text);font-size:16px;font-weight:700}
 .more{display:inline-flex;align-items:center;min-height:44px;margin-top:8px;font-weight:600}
 .info h2{margin:24px 0 6px;font-size:17px;font-weight:600}
 .info p,.info li{font-size:16px;line-height:1.5}
@@ -186,6 +193,18 @@ export interface Page {
   body: Html;
 }
 
+/**
+ * "Get the app" above the footer: the App Store and Google Play, marked
+ * "Coming soon" and not links until the app is in the stores (placeholders,
+ * Yurii 28 Oct). Plain words, not the stores' badges, whose rules need the
+ * real store links.
+ */
+const getApp = (lang: SiteLang) => html`<section class="get-app" aria-labelledby="get-app"><div class="wrap">
+<h2 id="get-app">${t(lang, "getApp")}</h2>
+<p>${t(lang, "getAppBody")}</p>
+<ul class="stores"><li><span class="store" aria-disabled="true"><span class="name">App Store</span><span>${t(lang, "comingSoon")}</span></span></li><li><span class="store" aria-disabled="true"><span class="name">Google Play</span><span>${t(lang, "comingSoon")}</span></span></li></ul>
+</div></section>`;
+
 const footer = (lang: SiteLang) => {
   const names: Record<InfoPage, string> = {
     about: text(lang, "aboutTitle"),
@@ -245,6 +264,7 @@ ${page.canonical ? html`<meta property="og:url" content="${page.canonical}">\n` 
 <main id="main"><div class="wrap">
 ${page.body}
 </div></main>
+${getApp(lang)}
 ${footer(lang)}
 </body>
 </html>

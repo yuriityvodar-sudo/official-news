@@ -31,6 +31,10 @@ interface SiteTexts {
   latest: string;
   /** The list page's h1. */
   listTitle: string;
+  /** The "Get the app" block above the footer (Yurii, 28 Oct): placeholders until the app is in the stores. */
+  getApp: string;
+  getAppBody: string;
+  comingSoon: string;
   notInLang: string;
   readIn: string;
   notFound: string;
@@ -85,6 +89,9 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     latestLink: "Latest decisions",
     latest: "Latest",
     listTitle: "Official decisions",
+    getApp: "Get the app",
+    getAppBody: "Official decisions from around the world, in a few calm sentences, on your phone.",
+    comingSoon: "Coming soon",
     notInLang: "This decision is not available in this language yet.",
     readIn: "Read it in:",
     notFound: "Page not found",
@@ -120,6 +127,9 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     latestLink: "Останні рішення",
     latest: "Останнє",
     listTitle: "Офіційні рішення",
+    getApp: "Завантажте застосунок",
+    getAppBody: "Офіційні рішення з усього світу кількома спокійними реченнями у вашому телефоні.",
+    comingSoon: "Незабаром",
     notInLang: "Цього рішення ще немає цією мовою.",
     readIn: "Читати:",
     notFound: "Сторінку не знайдено",
@@ -155,6 +165,9 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     latestLink: "Последние решения",
     latest: "Последние решения",
     listTitle: "Официальные решения",
+    getApp: "Скачайте приложение",
+    getAppBody: "Официальные решения со всего мира в нескольких спокойных предложениях в вашем телефоне.",
+    comingSoon: "Скоро",
     notInLang: "Этого решения пока нет на этом языке.",
     readIn: "Читать:",
     notFound: "Страница не найдена",
@@ -190,6 +203,9 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     latestLink: "Últimas decisiones",
     latest: "Lo último",
     listTitle: "Decisiones oficiales",
+    getApp: "Descarga la app",
+    getAppBody: "Decisiones oficiales de todo el mundo, en pocas frases serenas, en tu móvil.",
+    comingSoon: "Próximamente",
     notInLang: "Esta decisión aún no está disponible en este idioma.",
     readIn: "Leer en:",
     notFound: "Página no encontrada",
@@ -225,6 +241,9 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     latestLink: "Neueste Entscheidungen",
     latest: "Aktuell",
     listTitle: "Offizielle Entscheidungen",
+    getApp: "Hol dir die App",
+    getAppBody: "Offizielle Entscheidungen aus aller Welt, in wenigen ruhigen Sätzen, auf deinem Handy.",
+    comingSoon: "Demnächst",
     notInLang: "Diese Entscheidung gibt es in dieser Sprache noch nicht.",
     readIn: "Lesen auf:",
     notFound: "Seite nicht gefunden",
