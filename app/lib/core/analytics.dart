@@ -130,6 +130,33 @@ class Analytics {
   /// phone: with the taps on "Discuss with AI", how many readers want the chat.
   Future<void> aiChatInterest() => _event('ai_chat_interest', const {});
 
+  /// The AI chat's paywall shown over an article (#146).
+  Future<void> paywallView(Article article) =>
+      _event('paywall_view', _about(article));
+
+  /// Subscribe tapped on the paywall, and how it ended: `purchased`,
+  /// `cancelled`, `failed` or `pending` (Ask to Buy).
+  Future<void> subscribeTap() => _event('subscribe_tap', const {});
+  Future<void> subscribeResult(String result) =>
+      _event('subscribe_result', {'result': result});
+
+  /// Restore Purchases on the paywall: `restored`, `nothing` or `failed`.
+  Future<void> restoreResult(String result) =>
+      _event('restore_result', {'result': result});
+
+  /// The top-up sheet shown, once the day's questions were used up (#146).
+  Future<void> topUpView() => _event('topup_view', const {});
+
+  /// How a pack's purchase ended: `credited`, `cancelled`, `failed` or
+  /// `pending`, and which pack (`50` or `200` questions).
+  Future<void> topUpResult(String result, {required int questions}) =>
+      _event('topup_result', {'result': result, 'questions': questions});
+
+  /// A question to the AI agent: the article and the question's number in the
+  /// conversation, never its text (#146).
+  Future<void> chatQuestion(Article article, int number) =>
+      _event('chat_question', {'number': number, ..._about(article)});
+
   /// How far down the feed the reader came this visit: the first time a row
   /// of [feedDepths] is shown, `feed_scroll_10`, `feed_scroll_25` and so on.
   Future<void> feedDepth(int rows) => _event('feed_scroll_$rows', const {});

@@ -47,7 +47,7 @@ void main() {
     for (final row in [
       'Language',
       'Notifications',
-      'About Official News',
+      'About Outer News',
       'Privacy Policy',
       'Terms of Use',
       'Contact & Support',
@@ -329,8 +329,8 @@ void main() {
   });
 
   for (final (row, title, line) in [
-    ('About Official News', 'About', 'Official News is an independent app'),
-    ('Privacy Policy', 'Privacy Policy', 'Official News has no accounts'),
+    ('About Outer News', 'About', 'Outer News is an independent app'),
+    ('Privacy Policy', 'Privacy Policy', 'Outer News has no accounts'),
     (
       'Terms of Use',
       'Terms of Use',
@@ -356,7 +356,7 @@ void main() {
     await _pump(tester);
     await tester.tap(find.text('Privacy Policy'));
     await tester.pumpAndSettle();
-    expect(find.text('Last updated 16 October 2026'), findsOneWidget);
+    expect(find.text('Last updated 27 October 2026'), findsOneWidget);
     // The parts App Review and #34, #60 ask for.
     for (final heading in [
       'On your phone',
@@ -431,7 +431,7 @@ void main() {
     await _pump(tester, words: FeedLanguage.uk);
     await tester.tap(find.text('Умови використання'));
     await tester.pumpAndSettle();
-    expect(find.text('Оновлено 16 жовтня 2026\u202Fр.'), findsOneWidget);
+    expect(find.text('Оновлено 27 жовтня 2026\u202Fр.'), findsOneWidget);
     await tester.scrollUntilVisible(
       find.textContaining('RS Elite Pro s.r.o., Словаччина'),
       200,
@@ -451,7 +451,7 @@ void main() {
     await _pump(tester, words: FeedLanguage.de);
     await tester.tap(find.text('Datenschutzerklärung'));
     await tester.pumpAndSettle();
-    expect(find.text('Stand: 16. Oktober 2026'), findsOneWidget);
+    expect(find.text('Stand: 27. Oktober 2026'), findsOneWidget);
     await tester.scrollUntilVisible(
       find.text('Verantwortlicher: RS Elite Pro s.r.o., Slowakei.'),
       200,

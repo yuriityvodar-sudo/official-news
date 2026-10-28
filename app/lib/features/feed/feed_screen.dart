@@ -359,7 +359,7 @@ class _FeedScreenState extends State<FeedScreen> {
 
   Widget _page(BuildContext context, FeedLook look) {
     final l10n = AppLocalizations.of(context);
-    final foldedTitle = look.foldedTitle(context, 'Official News');
+    final foldedTitle = look.foldedTitle(context, 'Outer News');
     // A look whose masthead is a band of colour has it under the status bar
     // too, the status bar's words light or dark on it.
     final inset = look.topInset(context);
@@ -408,7 +408,7 @@ class _FeedScreenState extends State<FeedScreen> {
                         context,
                         FeedMasthead(
                           // The app's name, the same in every language.
-                          title: 'Official News',
+                          title: 'Outer News',
                           date: longDay(DateTime.now(), l10n),
                           openSettings: _openSettings,
                           filterBar: FeedFilterBar(

@@ -537,9 +537,9 @@
   "@settingsAboutHeader": {
     "description": "Settings section header (shown in capitals) over the four information pages."
   },
-  "aboutApp": "About Official News",
+  "aboutApp": "About Outer News",
   "@aboutApp": {
-    "description": "The settings row that opens the About page. Official News is the app's name: never translated."
+    "description": "The settings row that opens the About page. Outer News is the app's name: never translated."
   },
   "aboutTitle": "About",
   "@aboutTitle": {
@@ -596,7 +596,7 @@
       }
     }
   },
-  "aboutIntro": "Official News shows what governments and international bodies have decided, in a few calm sentences, with a link to the official page.",
+  "aboutIntro": "Outer News shows what governments and international bodies have decided, in a few calm sentences, with a link to the official page.",
   "@aboutIntro": {
     "description": "About page, first paragraph."
   },
@@ -616,7 +616,7 @@
   "@aboutIndependentHeading": {
     "description": "About page, heading."
   },
-  "aboutIndependent": "Official News is an independent app. It is not affiliated with, endorsed by or speaking for any government or public body.",
+  "aboutIndependent": "Outer News is an independent app. It is not affiliated with, endorsed by or speaking for any government or public body.",
   "@aboutIndependent": {
     "description": "About page, under aboutIndependentHeading."
   },
@@ -631,7 +631,7 @@
     }
   },
 
-  "privacyIntro": "Official News has no accounts: we do not ask for your name, e-mail address or phone number, and we do not sell or share personal data for advertising.",
+  "privacyIntro": "Outer News has no accounts: we do not ask for your name, e-mail address or phone number, and we do not sell or share personal data for advertising.",
   "@privacyIntro": {
     "description": "Privacy policy, first paragraph. A legal text: translate faithfully, keep the meaning exact."
   },
@@ -716,7 +716,7 @@
     "description": "Privacy policy, under privacyChangesHeading."
   },
 
-  "termsIntro1": "Official News summarizes official decisions for general information. It is not legal, financial or professional advice.",
+  "termsIntro1": "Outer News summarizes official decisions for general information. It is not legal, financial or professional advice.",
   "@termsIntro1": {
     "description": "Terms of use, first paragraph. A legal text: translate faithfully, keep the meaning exact."
   },
@@ -881,5 +881,191 @@
   "copyLink": "Copy link",
   "@copyLink": {
     "description": "An action in the menu of a long-pressed card: copies the official page's address (#141)."
+  },
+  "aiAgent": "AI agent",
+  "@aiAgent": {
+    "description": "The AI agent's name, over its chat and on the paywall (#146)."
+  },
+  "paywallSample": "example",
+  "@paywallSample": {
+    "description": "A small tag on the paywall's sample answer: it shows what an answer looks like."
+  },
+  "chatSuggestConcernsMe": "Does this concern me?",
+  "@chatSuggestConcernsMe": {
+    "description": "A suggested first question in the AI chat, and the paywall's sample question."
+  },
+  "chatSuggestWhatChanges": "What changes and when?",
+  "@chatSuggestWhatChanges": {
+    "description": "A suggested first question in the AI chat."
+  },
+  "chatSuggestWhatToDo": "What should I do?",
+  "@chatSuggestWhatToDo": {
+    "description": "A suggested first question in the AI chat."
+  },
+  "paywallTitle": "Continue the conversation with the AI agent",
+  "@paywallTitle": {
+    "description": "The paywall's title, under the sample answer that fades out."
+  },
+  "paywallPoints": "Only the official text · the source link · conversations not kept",
+  "@paywallPoints": {
+    "description": "What the AI agent does, on the paywall."
+  },
+  "paywallPrice": "{price} a month",
+  "@paywallPrice": {
+    "description": "The subscription's price as the App Store gives it, per month: the largest text of the offer (App Store guideline 3.1.2).",
+    "placeholders": {
+      "price": {
+        "type": "String"
+      }
+    }
+  },
+  "paywallRenewal": "Renews automatically. Cancel any time in your Apple ID settings.",
+  "@paywallRenewal": {
+    "description": "Under the price on the paywall: auto-renewal and where to cancel."
+  },
+  "paywallSubscribe": "Subscribe",
+  "@paywallSubscribe": {
+    "description": "The paywall's button."
+  },
+  "paywallRestore": "Restore Purchases",
+  "@paywallRestore": {
+    "description": "On the paywall: brings back a subscription bought on this Apple ID."
+  },
+  "paywallUnavailable": "Purchases aren't available right now.",
+  "@paywallUnavailable": {
+    "description": "On the paywall when the App Store does not answer."
+  },
+  "paywallPending": "Waiting for approval.",
+  "@paywallPending": {
+    "description": "On the paywall while a purchase waits (Ask to Buy)."
+  },
+  "paywallFailed": "The purchase didn't go through. Try again.",
+  "@paywallFailed": {
+    "description": "On the paywall after a failed purchase."
+  },
+  "paywallNothingToRestore": "No subscription to restore.",
+  "@paywallNothingToRestore": {
+    "description": "On the paywall after Restore Purchases found nothing."
+  },
+  "paywallClose": "Close",
+  "@paywallClose": {
+    "description": "VoiceOver's name for the paywall's close button."
+  },
+  "chatConsentTitle": "Before your first question",
+  "@chatConsentTitle": {
+    "description": "The AI chat's consent sheet, shown once (App Store guideline 5.1.2)."
+  },
+  "chatConsentBody": "Your question and this article's text are sent to OpenAI for the answer. We don't keep your conversations. If you ask Apple for a refund, we may tell Apple how much you used the chat.",
+  "@chatConsentBody": {
+    "description": "What the consent sheet says is sent, to whom, and what may be told to Apple on a refund."
+  },
+  "chatConsentAllow": "Allow",
+  "@chatConsentAllow": {
+    "description": "The consent sheet's button that allows sending."
+  },
+  "chatAsk": "Ask about this decision",
+  "@chatAsk": {
+    "description": "The AI chat's field, before anything is typed."
+  },
+  "chatSend": "Send",
+  "@chatSend": {
+    "description": "VoiceOver's name for the AI chat's send button."
+  },
+  "chatNotAdvice": "Answers come only from the official text and are not legal advice.",
+  "@chatNotAdvice": {
+    "description": "Once, at the top of the AI chat."
+  },
+  "chatUnavailable": "The AI agent isn't available right now.",
+  "@chatUnavailable": {
+    "description": "In the AI chat when the server or OpenAI does not answer."
+  },
+  "chatCutOff": "The answer was cut off.",
+  "@chatCutOff": {
+    "description": "In the AI chat when an answer stopped in the middle (offline)."
+  },
+  "privacyChatHeading": "AI chat",
+  "@privacyChatHeading": {
+    "description": "A heading of the privacy policy."
+  },
+  "privacyChat": "If you subscribe to the AI agent, your question and the article's text are sent to OpenAI to write the answer. We don't keep your conversations or send them to analytics. Apple handles the subscription: we receive a signed record of it from Apple, with an anonymous ID the app creates, never your name or payment details. We count each subscription's questions per day, for the daily limit.",
+  "@privacyChat": {
+    "description": "The privacy policy's section on the AI chat by subscription (#146)."
+  },
+  "termsSubscriptionHeading": "AI agent subscription",
+  "@termsSubscriptionHeading": {
+    "description": "A heading of the terms of use."
+  },
+  "termsSubscription": "The AI agent is a monthly subscription through the App Store. It renews automatically until you cancel it in your Apple ID settings, at least 24 hours before the end of the period. Apple handles refunds. The agent answers only from the official text, can make mistakes, and its answers are not legal, financial or medical advice. 20 questions a day; a question about a long document counts as 2 or 3; packs of questions add more.",
+  "@termsSubscription": {
+    "description": "The terms of use's section on the AI agent subscription (#146)."
+  },
+  "chatRemaining": "{count, plural, =1{1 question left today} other{{count} questions left today}}",
+  "@chatRemaining": {
+    "description": "In the AI chat once 3 or fewer of the day's questions are left.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "chatLongDocument": "Long document: a question about it counts as {count}",
+  "@chatLongDocument": {
+    "description": "In the AI chat over a long document: one question about it takes {count} of the day's questions (#146).",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "chatOutTitle": "No questions left for today",
+  "@chatOutTitle": {
+    "description": "The AI chat's card in the field's place once the day's questions are used up."
+  },
+  "chatOutBody": "New ones at {time}. Or buy more: they don't expire.",
+  "@chatOutBody": {
+    "description": "Under the card's title; {time} is when today's questions come back, in the phone's time.",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "chatTopUp": "Buy more questions",
+  "@chatTopUp": {
+    "description": "The card's button: opens the packs of questions."
+  },
+  "topUpTitle": "More questions",
+  "@topUpTitle": {
+    "description": "The top-up sheet's title."
+  },
+  "topUpSubtitle": "Used after the 20 a day, and they don't expire.",
+  "@topUpSubtitle": {
+    "description": "Under the top-up sheet's title."
+  },
+  "topUpBest": "better value",
+  "@topUpBest": {
+    "description": "A tag on the bigger pack."
+  },
+  "topUpBuy": "Buy for {price}",
+  "@topUpBuy": {
+    "description": "The top-up sheet's button; {price} as the App Store gives it.",
+    "placeholders": {
+      "price": {
+        "type": "String"
+      }
+    }
+  },
+  "topUpFine": "A one-time App Store purchase. A question about a long document can count as several.",
+  "@topUpFine": {
+    "description": "Under the top-up sheet's button."
+  },
+  "topUpPack": "{count, plural, =1{+1 question} other{+{count} questions}}",
+  "@topUpPack": {
+    "description": "A pack of questions on the top-up sheet.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
   }
 }

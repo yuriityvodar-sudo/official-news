@@ -197,7 +197,7 @@ void main() {
             language: language,
             height: 3000,
           );
-          expect(find.text('Official News'), findsOneWidget);
+          expect(find.text('Outer News'), findsOneWidget);
           for (final id in _order) {
             expect(find.text('Decision $id'), findsOneWidget, reason: id);
           }
@@ -557,7 +557,7 @@ void main() {
         tester,
       ) async {
         await pumpFeed(tester, [_article('r0', feedSeq: 1)], const []);
-        final title = find.text('Official News');
+        final title = find.text('Outer News');
         final rest = tester.getRect(title);
         final pull = await tester.startGesture(
           tester.getCenter(find.text('Decision r0')),
@@ -633,7 +633,7 @@ void main() {
             _article('n2', feedSeq: 2),
           ]),
         );
-        final title = find.text('Official News');
+        final title = find.text('Outer News');
         final rest = tester.getRect(title);
         final pull = await pullFar(tester);
         expect(find.text('Release to refresh'), findsOneWidget);
