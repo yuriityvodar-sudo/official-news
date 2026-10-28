@@ -504,8 +504,11 @@ class _CardZoomState extends State<_CardZoom>
               : route.from;
           final grown = Rect.lerp(card, Offset.zero & size, t)!;
           // The article moves so that its top card stands where the card is
-          // in the feed, then slides with it to its own place.
-          final top = _topInPage();
+          // in the feed, then slides with it to its own place. Measured only
+          // while it moves: open, a sheet coming or going over the article
+          // (the paywall) moves the page in the tree, and its card cannot be
+          // measured while it is between places.
+          final top = t < 1 ? _topInPage() : null;
           final moved = top == null
               ? Offset.zero
               : (card.topLeft - top) * (1 - t);
