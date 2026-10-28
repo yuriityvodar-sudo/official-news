@@ -12,7 +12,7 @@ import { INFO_PAGES, type InfoPage, infoPath, listPath } from "./urls";
 /** The App Store app (docs/setup.md); Safari shows its Smart App Banner. */
 export const APP_STORE_ID = "6822820350";
 
-export const SITE_NAME = "Official News";
+export const SITE_NAME = "Outer News";
 
 // Headings hyphenate only long words (12+ characters in Chrome, 5 on each
 // side in WebKit, which has no word minimum): "Datenschutzer-klärung" instead
@@ -47,7 +47,7 @@ h1,h2,.item .title{-webkit-hyphens:auto;hyphens:auto;hyphenate-limit-chars:12 5 
 .top{border-bottom:.5px solid var(--separator);padding:4px 0 10px}
 .bar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;column-gap:12px}
 .brand{display:inline-flex;align-items:center;gap:8px;min-height:44px;font:700 20px/1.1 Georgia,"Times New Roman",serif;color:var(--text);text-decoration:none}
-.brand img{width:24px;height:24px;border-radius:6px;flex:none}
+
 .langs{display:flex;flex-wrap:wrap;margin-right:-10px}
 .langs a{display:inline-flex;align-items:center;justify-content:center;min-width:44px;min-height:44px;padding:0 6px;font-size:13px;font-weight:600;letter-spacing:.3px;color:var(--secondary);text-decoration:none}
 .langs a[aria-current]{color:var(--text);text-decoration:underline 2px var(--accent);text-underline-offset:6px}
@@ -217,7 +217,7 @@ ${page.canonical ? html`<meta property="og:url" content="${page.canonical}">\n` 
 <body>
 <a class="skip" href="#main">${t(lang, "skip")}</a>
 <header class="top"><div class="wrap">
-<div class="bar"><a class="brand" href="${listPath(lang)}"><img src="${TAB_ICON}" alt="" width="24" height="24"><span>${SITE_NAME}</span></a>${switcher}</div>
+<div class="bar"><a class="brand" href="${listPath(lang)}"><span>${SITE_NAME}</span></a>${switcher}</div>
 <p class="note">${t(lang, "independentNote")}</p>
 </div></header>
 <main id="main"><div class="wrap">

@@ -80,7 +80,7 @@ ${items}
 ${next ? html`<a class="more" href="${listPath(lang, filter, next)}" rel="next">${t(lang, "older")} →</a><br>` : ""}
 ${first ? "" : html`<a class="more" href="${listPath(lang, filter)}">${t(lang, "latestLink")}</a>`}`;
 
-  // "Germany · Economy · Latest decisions · Official News", "G7 · …": the filters' full names first, for tabs and history.
+  // "Germany · Economy · Latest decisions · Outer News", "G7 · …": the filters' full names first, for tabs and history.
   const names = [filter.place ? placeName(lang, filter.place) : null, filter.topic ? topicLabel(lang, filter.topic) : null].filter((n) => n !== null);
   // Every list exists in every language, as the app's language menu offers all
   // five (feed_language.dart); German is empty while it is off on the server.

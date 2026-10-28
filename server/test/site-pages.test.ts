@@ -37,7 +37,7 @@ describe("every page in every language", () => {
     expect(article).toMatch(/<meta property="og:description" content="Стислий виклад від ШІ: /);
     // iMessage previews show only the title: it carries the label; the tab's title does not.
     expect(article).toMatch(/<meta property="og:title" content="\[uk\] Рішення \w+ про бюджет · Стислий виклад від ШІ">/);
-    expect(article).toMatch(/<title>\[uk\] Рішення \w+ про бюджет · Official News<\/title>/);
+    expect(article).toMatch(/<title>\[uk\] Рішення \w+ про бюджет · Outer News<\/title>/);
     expect((await site("/es")).body).toContain(aiNoticeText("es"));
   });
 
@@ -103,7 +103,7 @@ describe("every page in every language", () => {
     // A seed source has no row: the generic line; the AI notice still marks the AI's text as ours, and names us.
     const { body: generic } = await site(`/en/de/${testId(1)}`);
     expect(generic).toContain("Source: Federal Government</p>");
-    expect(generic).toContain("written by AI for Official News (RS Elite Pro s.r.o.)");
+    expect(generic).toContain("written by AI for Outer News (RS Elite Pro s.r.o.)");
     expect(generic).not.toContain('rel="license"');
   });
 });

@@ -37,7 +37,7 @@ interface SiteTexts {
   error: string;
   errorText: string;
   skip: string;
-  /** In the header of every page: the name "Official News" and the "Official source" mark must not read as a government's (OGL v3: no official status). */
+  /** In the header of every page: the name "Outer News" and the "Official source" mark must not read as a government's (OGL v3: no official status). */
   independentNote: string;
   siteHeading: string;
   siteData: string;
@@ -76,10 +76,10 @@ interface SiteTexts {
 const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
   en: {
     aiNotice:
-      "Headlines and summaries are written by AI for Official News ({publisher}) from the official text and are not reviewed by a person. They are not the official text and can contain mistakes: before you rely on one, read the original.",
+      "Headlines and summaries are written by AI for Outer News ({publisher}) from the official text and are not reviewed by a person. They are not the official text and can contain mistakes: before you rely on one, read the original.",
     creditSource: "Source: {source}",
     published: "Published {date}",
-    added: "In Official News since {date}",
+    added: "In Outer News since {date}",
     originalTitle: "Original title",
     older: "Older decisions",
     latestLink: "Latest decisions",
@@ -96,7 +96,7 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     siteData:
       "This website sets no cookies and runs no scripts, and everything on its pages comes from this website. Cloudflare, which hosts it, receives your IP address and basic technical details (such as the page address, browser and time) to deliver the page; your browser may also send Cloudflare an error report if a page fails to load. We can see request logs for up to 7 days to keep the site working; we do not use them to identify you.",
     siteBanner: "On iPhone and iPad, Safari may show a banner for our app, using information it loads from Apple's App Store.",
-    siteCovers: "The privacy policy and the terms of use cover both the Official News app and this website.",
+    siteCovers: "The privacy policy and the terms of use cover both the Outer News app and this website.",
     prevails: "The English version prevails ({link}).",
     filterAllCountries: "All countries",
     filterAllTopics: "All topics",
@@ -111,10 +111,10 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
   },
   uk: {
     aiNotice:
-      "Заголовки й стислі виклади пише ШІ для Official News ({publisher}) на основі офіційного тексту, і людина їх не перевіряє. Вони не є офіційним текстом і можуть містити помилки: перш ніж покладатися на них, прочитайте оригінал.",
+      "Заголовки й стислі виклади пише ШІ для Outer News ({publisher}) на основі офіційного тексту, і людина їх не перевіряє. Вони не є офіційним текстом і можуть містити помилки: перш ніж покладатися на них, прочитайте оригінал.",
     creditSource: "Джерело: {source}",
     published: "Опубліковано {date}",
-    added: "В Official News з {date}",
+    added: "В Outer News з {date}",
     originalTitle: "Оригінальна назва",
     older: "Давніші рішення",
     latestLink: "Останні рішення",
@@ -131,7 +131,7 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     siteData:
       "Цей сайт не встановлює файлів cookie і не запускає скриптів, а все на його сторінках завантажується з цього ж сайту. Cloudflare, де він розміщений, отримує вашу IP-адресу та базові технічні дані (як-от адресу сторінки, браузер і час), щоб показати сторінку; ваш браузер також може надіслати Cloudflare звіт про помилку, якщо сторінка не завантажилася. Ми бачимо журнали запитів до 7 днів, щоб сайт працював; ми не використовуємо їх, щоб вас ідентифікувати.",
     siteBanner: "На iPhone та iPad Safari може показати банер нашого застосунку з даними, які він завантажує з App Store від Apple.",
-    siteCovers: "Політика конфіденційності й умови використання стосуються і застосунку Official News, і цього сайту.",
+    siteCovers: "Політика конфіденційності й умови використання стосуються і застосунку Outer News, і цього сайту.",
     prevails: "Це переклад; у разі розбіжностей переважну силу має англійська версія ({link}).",
     filterAllCountries: "Усі країни",
     filterAllTopics: "Усі теми",
@@ -146,10 +146,10 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
   },
   ru: {
     aiNotice:
-      "Заголовки и краткие изложения пишет ИИ для Official News ({publisher}) на основе официального текста, и человек их не проверяет. Они не являются официальным текстом и могут содержать ошибки: прежде чем полагаться на них, прочитайте оригинал.",
+      "Заголовки и краткие изложения пишет ИИ для Outer News ({publisher}) на основе официального текста, и человек их не проверяет. Они не являются официальным текстом и могут содержать ошибки: прежде чем полагаться на них, прочитайте оригинал.",
     creditSource: "Источник: {source}",
     published: "Опубликовано {date}",
-    added: "В Official News с {date}",
+    added: "В Outer News с {date}",
     originalTitle: "Оригинальное название",
     older: "Более ранние решения",
     latestLink: "Последние решения",
@@ -166,7 +166,7 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     siteData:
       "Этот сайт не устанавливает файлы cookie и не запускает скрипты, а всё на его страницах загружается с этого же сайта. Cloudflare, где он размещён, получает ваш IP-адрес и базовые технические данные (например, адрес страницы, браузер и время), чтобы показать страницу; ваш браузер также может отправить Cloudflare отчёт об ошибке, если страница не загрузилась. Мы видим журналы запросов до 7 дней, чтобы сайт работал; мы не используем их, чтобы вас идентифицировать.",
     siteBanner: "На iPhone и iPad Safari может показать баннер нашего приложения с данными, которые он загружает из App Store от Apple.",
-    siteCovers: "Политика конфиденциальности и условия использования относятся и к приложению Official News, и к этому сайту.",
+    siteCovers: "Политика конфиденциальности и условия использования относятся и к приложению Outer News, и к этому сайту.",
     prevails: "Это перевод; в случае расхождений преимущественную силу имеет английская версия ({link}).",
     filterAllCountries: "Все страны",
     filterAllTopics: "Все темы",
@@ -181,10 +181,10 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
   },
   es: {
     aiNotice:
-      "Los titulares y los resúmenes los escribe una IA para Official News ({publisher}) a partir del texto oficial, y ninguna persona los revisa. No son el texto oficial y pueden contener errores: antes de fiarte de uno, lee el original.",
+      "Los titulares y los resúmenes los escribe una IA para Outer News ({publisher}) a partir del texto oficial, y ninguna persona los revisa. No son el texto oficial y pueden contener errores: antes de fiarte de uno, lee el original.",
     creditSource: "Fuente: {source}",
     published: "Publicado el {date}",
-    added: "En Official News desde el {date}",
+    added: "En Outer News desde el {date}",
     originalTitle: "Título original",
     older: "Decisiones anteriores",
     latestLink: "Últimas decisiones",
@@ -201,7 +201,7 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     siteData:
       "Este sitio no usa cookies ni ejecuta scripts, y todo lo que aparece en sus páginas viene de este mismo sitio. Cloudflare, que lo aloja, recibe tu dirección IP y datos técnicos básicos (como la dirección de la página, el navegador y la hora) para mostrar la página; tu navegador también puede enviar a Cloudflare un informe de error si una página no carga. Vemos los registros de solicitudes durante un máximo de 7 días para que el sitio funcione; no los usamos para identificarte.",
     siteBanner: "En iPhone y iPad, Safari puede mostrar un banner de nuestra app con información que obtiene del App Store de Apple.",
-    siteCovers: "La política de privacidad y los términos de uso se aplican tanto a la app Official News como a este sitio web.",
+    siteCovers: "La política de privacidad y los términos de uso se aplican tanto a la app Outer News como a este sitio web.",
     prevails: "Esto es una traducción; en caso de discrepancia, prevalece la versión en inglés ({link}).",
     filterAllCountries: "Todos los países",
     filterAllTopics: "Todos los temas",
@@ -216,10 +216,10 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
   },
   de: {
     aiNotice:
-      "Überschriften und Zusammenfassungen schreibt eine KI für Official News ({publisher}) auf Grundlage des offiziellen Textes, und kein Mensch prüft sie. Sie sind nicht der offizielle Text und können Fehler enthalten: Lesen Sie das Original, bevor Sie sich darauf verlassen.",
+      "Überschriften und Zusammenfassungen schreibt eine KI für Outer News ({publisher}) auf Grundlage des offiziellen Textes, und kein Mensch prüft sie. Sie sind nicht der offizielle Text und können Fehler enthalten: Lesen Sie das Original, bevor Sie sich darauf verlassen.",
     creditSource: "Quelle: {source}",
     published: "Veröffentlicht am {date}",
-    added: "Bei Official News seit dem {date}",
+    added: "Bei Outer News seit dem {date}",
     originalTitle: "Originaltitel",
     older: "Ältere Entscheidungen",
     latestLink: "Neueste Entscheidungen",
@@ -236,7 +236,7 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     siteData:
       "Diese Website setzt keine Cookies und führt keine Skripte aus; alles auf ihren Seiten kommt von dieser Website selbst. Cloudflare, wo sie gehostet wird, erhält Ihre IP-Adresse und grundlegende technische Angaben (etwa Seitenadresse, Browser und Uhrzeit), um die Seite auszuliefern; Ihr Browser kann Cloudflare außerdem einen Fehlerbericht senden, wenn eine Seite nicht lädt. Wir sehen die Anfrageprotokolle bis zu 7 Tage lang, damit die Website funktioniert; wir nutzen sie nicht, um Sie zu identifizieren.",
     siteBanner: "Auf iPhone und iPad kann Safari ein Banner für unsere App zeigen, mit Angaben, die es aus Apples App Store lädt.",
-    siteCovers: "Die Datenschutzerklärung und die Nutzungsbedingungen gelten für die App Official News und für diese Website.",
+    siteCovers: "Die Datenschutzerklärung und die Nutzungsbedingungen gelten für die App Outer News und für diese Website.",
     prevails: "Dies ist eine Übersetzung; bei Abweichungen ist die englische Fassung maßgeblich ({link}).",
     filterAllCountries: "Alle Länder",
     filterAllTopics: "Alle Themen",

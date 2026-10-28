@@ -454,9 +454,9 @@ describe("paging and languages keep the filters", () => {
 
   it("a filtered first page names the filtered list everywhere: canonical, alternates, x-default, title", async () => {
     for (const [path, title] of [
-      ["/de?topic=health", "Німеччина · Здоров’я · Останні рішення · Official News"],
-      ["/g7?topic=health", "G7 · Здоров’я · Останні рішення · Official News"],
-      ["/eu", "Європейський Союз · Останні рішення · Official News"],
+      ["/de?topic=health", "Німеччина · Здоров’я · Останні рішення · Outer News"],
+      ["/g7?topic=health", "G7 · Здоров’я · Останні рішення · Outer News"],
+      ["/eu", "Європейський Союз · Останні рішення · Outer News"],
     ] as const) {
       const { body } = await site(`/uk${path}`);
       expect(body).toContain(`<link rel="canonical" href="${ORIGIN}/uk${path}">`);
@@ -524,7 +524,7 @@ describe("every new page", () => {
       expect(status, path).toBe(200);
       expect(headers.get("x-robots-tag"), path).toBe("noindex");
       expect(body, path).toContain('<meta name="robots" content="noindex">');
-      expect(body, path).not.toMatch(/<script|<img(?! src="data:image\/png;base64,)|<iframe|rel="stylesheet"|rel="preload"|rel="prefetch"/i);
+      expect(body, path).not.toMatch(/<script|<img|<iframe|rel="stylesheet"|rel="preload"|rel="prefetch"/i);
       expect(headers.get("cloudflare-cdn-cache-control"), path).toBe(CACHE.list.edge);
     }
   });
