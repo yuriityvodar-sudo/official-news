@@ -26,7 +26,7 @@ export const CACHE = {
    * lists 10 minutes and measure real traffic before anything stricter).
    */
   list: { browser: "public, max-age=60", edge: "max-age=600, stale-while-revalidate=600, stale-if-error=86400" },
-  /** The landing page, information pages, robots.txt: change only with a deploy. */
+  /** Information pages, robots.txt: change only with a deploy. */
   fixed: { browser: "public, max-age=3600", edge: "max-age=86400" },
   /** An unknown page, or an article not released yet: short, it may appear soon. */
   missing: { browser: "public, max-age=60", edge: "max-age=60" },
@@ -35,7 +35,7 @@ export const CACHE = {
   /** /apple-touch-icon*.png and /icon-512.png (icon.ts), and the 404 for /favicon.ico: kept a day. */
   icon: { browser: "public, max-age=86400", edge: "max-age=86400" },
   /**
-   * Another spelling of a list or the landing page (a query it does not use,
+   * Another spelling of a list or of `/` (a query it does not use,
    * a trailing slash, a place in capitals), or an article URL with a query
    * (`fbclid`, `utm_*`), sent to its clean URL with no D1 read. The mapping
    * never changes, so it is kept a day.
@@ -50,6 +50,8 @@ export const CACHE = {
   moved: { browser: "public, max-age=300", edge: "max-age=600" },
   /** The sitemap (seo.ts): an hour, as new articles come all day; it reads up to 10 API pages per language. */
   sitemap: { browser: "public, max-age=3600", edge: "max-age=3600, stale-if-error=86400" },
+  /** `/`, sent to the visitor's own language: per visitor, so never stored anywhere. */
+  chooser: { browser: "private, no-store", edge: "no-store" },
   /** 405 and 500: never stored, so an outage is never cached as a page. */
   none: { browser: "no-store", edge: "no-store" },
 } as const;

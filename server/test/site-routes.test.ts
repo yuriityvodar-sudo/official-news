@@ -25,7 +25,7 @@ beforeEach(async () => {
 
 /** [path, status, cache kind, content-language] for every kind of response. */
 const ROUTES: [string, number, keyof typeof CACHE, string | null][] = [
-  ["/", 200, "fixed", "en"],
+  ["/", 302, "chooser", null],
   ["/robots.txt", 200, "fixed", null],
   ["/en", 200, "list", "en"],
   ["/uk?before=5", 200, "list", "uk"],
@@ -202,7 +202,7 @@ describe("one request per page view", () => {
   it("no page refers to anything it would have to load: no script, image, stylesheet, font or frame", async () => {
     await env.DB.prepare("UPDATE articles SET image_url = 'https://www.bundesregierung.de/picture.jpg' WHERE id = ?").bind(ID).run();
     const paths = [
-      "/", "/en", "/uk", EN, UK, "/en/de", "/uk/de?topic=economy", "/en/g7", "/uk/nato?topic=health", "/en/ua",
+      "/en", "/uk", EN, UK, "/en/de", "/uk/de?topic=economy", "/en/g7", "/uk/nato?topic=health", "/en/ua",
       ...SITE_LANGS.flatMap((l) => INFO_PAGES.map((p) => `/${l}/${p}`)),
     ];
     for (const path of paths) {

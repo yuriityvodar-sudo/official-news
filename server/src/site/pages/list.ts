@@ -159,7 +159,7 @@ ${first ? "" : html`<a class="more" href="${listPath(lang, filter)}">${t(lang, "
     canonical: origin + listPath(lang, filter, before),
     alternates: [
       ...SITE_LANGS.map((l) => ({ hreflang: l, href: origin + listPath(l, filter, before) })),
-      // The landing page chooses a language; a filtered or later page has no landing page of its own.
+      // `/` picks the visitor's language (lang.ts); a filtered or later page has no such address of its own.
       { hreflang: "x-default", href: origin + (first && !filtered ? "/" : listPath("en", filter, before)) },
     ],
     switcher: SITE_LANGS.map((l) => ({ lang: l, path: listPath(l, filter, before) })),

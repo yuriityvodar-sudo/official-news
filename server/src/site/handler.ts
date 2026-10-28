@@ -1,7 +1,7 @@
 // The website (#88), the Worker `site` (wrangler.site.jsonc; index.ts). Plain HTML
 // rendered from what the app's API shows, one request per page view, nothing
 // indexed before the domain. URLs (docs/contract.md, "Website"):
-//   /                              landing page, 0 D1 rows
+//   /                              302 to the visitor's language (lang.ts), 0 D1 rows, never cached
 //   /{lang}                        latest list (all countries); ?before=<feedSeq> for the next page
 //   /{lang}/{cc}                   one country's list (#67, #68: only that country's sources)
 //   /{lang}/{group}                a group of countries (eu, g7, g20, nato: its members' sources together)
@@ -17,10 +17,10 @@ import type { SiteEnv } from "./env";
 import { APPLE_TOUCH_ICON, OG_IMAGE } from "./icon";
 import { type Page, cssHash, layout } from "./layout";
 import { sitemapXml } from "./seo";
+import { visitorLang } from "./lang";
 import { articlePage, notInLanguagePage } from "./pages/article";
 import { errorPage, notFoundPage } from "./pages/errors";
 import { infoPage } from "./pages/info";
-import { landingPage } from "./pages/landing";
 import { type ListView, listPage } from "./pages/list";
 import { type CacheKind, type Reply, respond, robotsFor } from "./respond";
 import { SITE_LANGS, type SiteLang, isSiteLang } from "./texts";
@@ -150,7 +150,14 @@ async function route(request: Request, env: SiteEnv): Promise<Reply> {
   // A query a page does not use would be a new cache entry and a new render each time
   // (the cache key is path and query): lists, the landing page and article pages send
   // it to their clean URL, with no D1 read (#88 and #89 reviews).
-  if (path === "/") return url.search ? { kind: "redirect", status: 301, body: null, location: `${origin}/` } : page(landingPage(origin), 200, "fixed");
+  // `/` opens the visitor's own language (Yurii, 28 Oct: no page to choose one),
+  // from the browser's languages, else the country Cloudflare sees; never cached.
+  if (path === "/") {
+    if (url.search) return { kind: "redirect", status: 301, body: null, location: `${origin}/` };
+    const country = (request.cf as { country?: unknown } | undefined)?.country;
+    const lang = visitorLang(request.headers.get("accept-language"), typeof country === "string" ? country : null);
+    return { kind: "chooser", status: 302, body: null, location: `${origin}${listPath(lang)}` };
+  }
   // robots.txt names the sitemap, so a crawler finds it once indexing is allowed.
   if (path === "/robots.txt") return { kind: "fixed", status: 200, body: `${ROBOTS_TXT}\nSitemap: ${origin}/sitemap.xml\n` };
   if (path === "/sitemap.xml") {

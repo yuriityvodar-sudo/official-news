@@ -18,7 +18,7 @@ describe("every page in every language", () => {
   });
 
   it("renders with no placeholder, undefined or null left", async () => {
-    const paths = ["/", ...SITE_LANGS.flatMap((l) => [`/${l}`, `/${l}/de/${testId(1)}`, `/${l}/nowhere`, ...INFO_PAGES.map((p) => `/${l}/${p}`)])];
+    const paths = [...SITE_LANGS.flatMap((l) => [`/${l}`, `/${l}/de/${testId(1)}`, `/${l}/nowhere`, ...INFO_PAGES.map((p) => `/${l}/${p}`)])];
     paths.push(`/en/de/${testId(2)}`, `/uk/de/${testId(2)}`);
     for (const path of paths) {
       const { status, body } = await site(path);
