@@ -9,6 +9,7 @@ import 'package:flutter/material.dart' show Material, MaterialType;
 import '../../core/analytics.dart';
 import '../../core/api_client.dart';
 import '../../core/article.dart';
+import '../../core/config.dart';
 import '../../core/motion.dart';
 import '../../core/subscription.dart';
 import '../../core/theme.dart';
@@ -56,8 +57,15 @@ class ChatScreen extends StatefulWidget {
   final Future<void> Function(Uri) openLink;
 
   /// Where the chat is: the iOS app (StoreKit), not Android or tests, unless a
-  /// test sets [debugAvailable].
-  static bool get available => debugAvailable ?? (!kIsWeb && Platform.isIOS);
+  /// test sets [debugAvailable], and until its release only the builds that
+  /// open it ([opened]).
+  static bool get available =>
+      debugAvailable ?? (!kIsWeb && Platform.isIOS && opened);
+
+  /// Until the chat is released, only Roman's own builds have it (Roman,
+  /// 28 Oct): the demo, or a build with his key for Sandbox purchases
+  /// ([chatSandboxKey]). TestFlight's have neither and keep the note.
+  static const opened = chatDemo || chatSandboxKey != '';
 
   @visibleForTesting
   static bool? debugAvailable;

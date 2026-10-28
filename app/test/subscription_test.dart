@@ -168,5 +168,35 @@ void main() {
         );
       },
     );
+
+    test(
+      'sends Roman\'s key with the chat\'s requests on his own builds, and none on others',
+      () async {
+        final sent = <http.Request>[];
+        ApiClient keyed(String? key) => ApiClient(
+          client: MockClient((request) async {
+            sent.add(request);
+            return request.url.path == '/v1/chat'
+                ? http.Response('Yes.', 200)
+                : http.Response(
+                    '{"questionsLeft":20,"boughtQuestions":0,"units":1}',
+                    200,
+                  );
+          }),
+          baseUrl: 'https://api.test',
+          sandboxKey: key,
+        );
+        await (await ask(keyed('roman-local-key'))).text.join();
+        await keyed(
+          'roman-local-key',
+        ).chatStatus(articleId: 'c1', transaction: 'jws');
+        await (await ask(keyed(null))).text.join();
+        expect(sent.map((r) => r.headers['x-chat-sandbox-key']), [
+          'roman-local-key',
+          'roman-local-key',
+          null,
+        ]);
+      },
+    );
   });
 }

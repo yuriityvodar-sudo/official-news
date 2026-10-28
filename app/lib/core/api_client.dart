@@ -67,14 +67,24 @@ class ApiClient {
   ApiClient({
     http.Client? client,
     String? baseUrl,
+    String? sandboxKey,
     this.timeout = const Duration(seconds: 15),
   }) : _client = client ?? http.Client(),
-       _baseUrl = baseUrl ?? apiUrl;
+       _baseUrl = baseUrl ?? apiUrl,
+       _sandboxKey = sandboxKey ?? chatSandboxKey;
 
   final Duration timeout;
 
   final http.Client _client;
   final String _baseUrl;
+  final String _sandboxKey;
+
+  /// The chat's requests are JSON, with Roman's key on his own builds
+  /// ([chatSandboxKey]).
+  Map<String, String> get _chatHeaders => {
+    'content-type': 'application/json',
+    if (_sandboxKey.isNotEmpty) 'x-chat-sandbox-key': _sandboxKey,
+  };
 
   /// `GET /articles`: news from the last 7 days, newest first, 20 per page.
   /// With `lang` (`uk`, `ru`, `es`, `de`) only the articles translated into it, in
@@ -216,7 +226,7 @@ class ApiClient {
     required String transaction,
   }) async {
     final request = http.Request('POST', Uri.parse('$_baseUrl/v1/chat'))
-      ..headers['content-type'] = 'application/json'
+      ..headers.addAll(_chatHeaders)
       ..body = jsonEncode({
         'articleId': articleId,
         'lang': lang,
@@ -264,7 +274,7 @@ class ApiClient {
     final response = await _client
         .post(
           Uri.parse('$_baseUrl$path'),
-          headers: {'content-type': 'application/json'},
+          headers: _chatHeaders,
           body: jsonEncode(body),
         )
         .timeout(timeout);
