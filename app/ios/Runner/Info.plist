@@ -9,7 +9,7 @@
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>CFBundleDisplayName</key>
-	<string>Official News</string>
+	<string>Outer News</string>
 	<key>CFBundleLocalizations</key>
 	<array>
 		<string>en</string>

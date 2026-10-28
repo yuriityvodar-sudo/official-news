@@ -100,7 +100,7 @@ Future<void> _pumpScreen(WidgetTester tester, FeedController controller) async {
 
 /// The app's name as the folded title shows it, small.
 final _smallTitle = find.byWidgetPredicate(
-  (w) => w is Text && w.data == 'Official News' && w.style?.fontSize == 17,
+  (w) => w is Text && w.data == 'Outer News' && w.style?.fontSize == 17,
 );
 
 Future<void> _pumpFeed(

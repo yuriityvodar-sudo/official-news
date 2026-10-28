@@ -55,7 +55,7 @@ class OfficialNewsApp extends StatelessWidget {
         // The headline weight from Settings → Design (#66) is in the theme.
         valueListenable: headlineWeight,
         builder: (context, weight, _) => MaterialApp(
-          title: 'Official News',
+          title: 'Outer News',
           debugShowCheckedModeBanner: false,
           locale: language.locale,
           localizationsDelegates: AppLocalizations.localizationsDelegates,
