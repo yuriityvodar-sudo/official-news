@@ -144,6 +144,11 @@ class Analytics {
   Future<void> restoreResult(String result) =>
       _event('restore_result', {'result': result});
 
+  /// A question to the AI agent: the article and the question's number in the
+  /// conversation, never its text (#146).
+  Future<void> chatQuestion(Article article, int number) =>
+      _event('chat_question', {'number': number, ..._about(article)});
+
   /// How far down the feed the reader came this visit: the first time a row
   /// of [feedDepths] is shown, `feed_scroll_10`, `feed_scroll_25` and so on.
   Future<void> feedDepth(int rows) => _event('feed_scroll_$rows', const {});
