@@ -123,10 +123,10 @@ class _PictureViewerState extends State<PictureViewer>
               opacity: 1 - away,
               child: CupertinoButton(
                 padding: EdgeInsets.zero,
-                minimumSize: const Size(44, 44),
+                minimumSize: const Size(48, 48),
                 onPressed: _close,
                 child: GlassCircle(
-                  size: 44,
+                  size: 48,
                   child: Icon(
                     CupertinoIcons.xmark,
                     size: 18,
