@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'core/analytics.dart';
 import 'core/push.dart';
 import 'core/router.dart';
+import 'core/subscription.dart';
 import 'core/theme.dart';
 import 'features/feed/feed_controller.dart';
 import 'features/splash/splash.dart';
@@ -18,6 +19,9 @@ Future<void> main() async {
   await feed.open();
   // Not awaited: the feed shows at once; events before Firebase is up are not sent.
   unawaited(_startFirebase(feed));
+  // The AI chat's subscription (#146): for now only in the simulator's demo
+  // build, which shows the paywall; on iOS once the chat screen comes.
+  if (chatDemo) unawaited(chatSubscription.start());
   runApp(OfficialNewsApp(feed: feed));
 }
 

@@ -296,6 +296,6 @@ class DemoStore implements Store {
   Future<void> finish(PurchaseDetails purchase) async {}
 }
 
-/// The app's subscription. On iOS `main.dart` starts it with the app, once the
-/// paywall comes (#146).
+/// The app's subscription, started with the app (`main.dart`): for now only in
+/// the simulator's demo build, on iOS once the chat screen comes (#146).
 final chatSubscription = ChatSubscription();
