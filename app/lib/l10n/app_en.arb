@@ -824,19 +824,11 @@
   },
   "aiChatNotify": "Tell me when it's ready",
   "@aiChatNotify": {
-    "description": "The switch in the note: one notification when the chat is ready."
+    "description": "The button in the note (#160): one tap counts the reader as wanting the chat and turns into aiChatInterested."
   },
-  "aiChatNotifyOnce": "One notification, when the chat is ready.",
-  "@aiChatNotifyOnce": {
-    "description": "Under the switch while notifications are allowed."
-  },
-  "aiChatNotifyAsk": "This turns on notifications: you'll also get the most important decisions as they come, never at night.",
-  "@aiChatNotifyAsk": {
-    "description": "Under the switch while iOS has not asked about notifications yet: turning it on allows them, breaking decisions included."
-  },
-  "aiChatNotifyOff": "Notifications are off for this app. Turn them on in the Settings app, then come back.",
-  "@aiChatNotifyOff": {
-    "description": "Under the switch while notifications are not allowed; the switch opens the iOS Settings app."
+  "aiChatInterested": "We'll let you know when it's ready",
+  "@aiChatInterested": {
+    "description": "Where the button was, after the tap: the reader is counted as wanting the chat (#160). Nothing to do with notifications."
   },
   "pictureFullScreen": "Show the picture full screen",
   "@pictureFullScreen": {
