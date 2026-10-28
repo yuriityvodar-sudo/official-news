@@ -172,7 +172,12 @@
 
   "languageCs": "чеської",
   "settingsDesign": "Дизайн",
-  "settingsDesignNow": "Поточний",
+  "designClassic": "Класика",
+  "designMagazine": "Журнал",
+  "designCards": "Картки",
+  "designBriefing": "Зведення",
+  "designGarnet": "Гранат",
+  "designSeal": "Печатка",
   "settingsHeadlineWeight": "Товщина заголовків",
   "headlineWeightLight": "Тонкий",
   "headlineWeightRegular": "Звичайний",
