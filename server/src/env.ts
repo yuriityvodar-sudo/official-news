@@ -24,4 +24,11 @@ export interface Env {
    * `push skipped`.
    */
   FCM_SERVICE_ACCOUNT?: string;
+  /**
+   * OpenAI API key, for the AI chat by subscription (#146), the one paid AI.
+   * A Worker secret Roman puts in himself, with a monthly spending limit in
+   * the OpenAI account (`npx wrangler secret put OPENAI_API_KEY`; locally in
+   * `.dev.vars`). Without it `POST /v1/chat` answers 503.
+   */
+  OPENAI_API_KEY?: string;
 }

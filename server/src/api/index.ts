@@ -1,5 +1,5 @@
 import { receiveNotification } from "../appstore";
-import { chatStatus, creditChatPack } from "../chat";
+import { answerChat, chatStatus, creditChatPack } from "../chat";
 import type { Env } from "../env";
 import { REAL_SOURCE, health } from "../health";
 import { TOPICS, type Topic } from "../summarizer/schema";
@@ -666,7 +666,8 @@ function requestCountry(request: Request): string | null {
 }
 
 /** The POST paths (#146). */
-const POSTS: Record<string, "status" | "credits" | "notifications"> = {
+const POSTS: Record<string, "chat" | "status" | "credits" | "notifications"> = {
+  "/v1/chat": "chat",
   "/v1/chat/status": "status",
   "/v1/chat/credits": "credits",
   "/v1/appstore/notifications": "notifications",
@@ -679,12 +680,25 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (post) {
     if (request.method !== "POST") return json({ error: "Method not allowed" }, 405, { allow: "POST" });
     const body = await request.json().catch(() => null);
-    const { status, body: answer } = await (post === "notifications"
-      ? receiveNotification(body, env)
-      : post === "status"
-        ? chatStatus(body, env)
-        : creditChatPack(body, env));
-    return json(answer, status);
+    if (post !== "chat") {
+      const { status, body: answer } = await (post === "notifications"
+        ? receiveNotification(body, env)
+        : post === "status"
+          ? chatStatus(body, env)
+          : creditChatPack(body, env));
+      return json(answer, status);
+    }
+    const result = await answerChat(body, env);
+    if ("status" in result) return json(result.body, result.status);
+    // The answer as OpenAI writes it, never kept by Cloudflare's cache.
+    return new Response(result.stream, {
+      headers: {
+        "content-type": "text/plain; charset=utf-8",
+        "cache-control": "no-store",
+        "x-chat-remaining": String(result.remaining),
+        "x-chat-units": String(result.units),
+      },
+    });
   }
 
   if (request.method !== "GET") return json({ error: "Method not allowed" }, 405, { allow: "GET" });
