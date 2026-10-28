@@ -173,6 +173,77 @@ class _ArriveState extends State<Arrive> {
   }
 }
 
+/// [child] grows from nothing to its height with a spring and fades in,
+/// [delay] after [animate] turns true: a decision that has just come in
+/// springs into the top of the feed and pushes the others down (#141). With
+/// Reduce Motion on, it only fades. Always in the tree, like [Arrive]; off
+/// in tests with it ([Arrive.enabled]).
+class GrowIn extends StatefulWidget {
+  const GrowIn({
+    super.key,
+    required this.child,
+    this.animate = false,
+    this.delay = Duration.zero,
+  });
+
+  final Widget child;
+  final bool animate;
+  final Duration delay;
+
+  @override
+  State<GrowIn> createState() => _GrowInState();
+}
+
+class _GrowInState extends State<GrowIn> with SingleTickerProviderStateMixin {
+  late final _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 520),
+    value: 1,
+  );
+  late final _size = CurvedAnimation(parent: _controller, curve: Motion.spring);
+  late final _fade = CurvedAnimation(parent: _controller, curve: Motion.ease);
+  Timer? _wait;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.animate) _start();
+  }
+
+  @override
+  void didUpdateWidget(GrowIn old) {
+    super.didUpdateWidget(old);
+    // Rows have no keys: a row already built can be given a new decision.
+    if (widget.animate && !old.animate) _start();
+  }
+
+  void _start() {
+    if (!Arrive.enabled) return;
+    _wait?.cancel();
+    _controller.value = 0;
+    _wait = Timer(widget.delay, () {
+      if (mounted) unawaited(_controller.forward());
+    });
+  }
+
+  @override
+  void dispose() {
+    _wait?.cancel();
+    _size.dispose();
+    _fade.dispose();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => SizeTransition(
+    sizeFactor: Motion.reduced(context) ? kAlwaysCompleteAnimation : _size,
+    // Its bottom first, as if it slid down from above the others.
+    alignment: Alignment.bottomCenter,
+    child: FadeTransition(opacity: _fade, child: widget.child),
+  );
+}
+
 /// For `Image.frameBuilder`: a picture that has to be loaded fades in
 /// instead of popping up; one already in memory shows at once.
 Widget fadeInPicture(

@@ -21,6 +21,10 @@ import firebase_messaging
     engineBridge.pluginRegistry
       .registrar(forPlugin: "official_news/glass")?
       .register(GlassViewFactory(), withId: "official_news/glass")
+    // iOS's own pull-down menus for the feed's filter chips (#141).
+    if let menus = engineBridge.pluginRegistry.registrar(forPlugin: "official_news/menu") {
+      menus.register(MenuViewFactory(messenger: menus.messenger()), withId: "official_news/menu")
+    }
   }
 }
 
@@ -79,4 +83,66 @@ class CircleView: UIView {
     super.layoutSubviews()
     layer.cornerRadius = min(bounds.width, bounds.height) / 2
   }
+}
+
+/// A clear button over a filter chip that opens iOS's own pull-down menu
+/// (#141): Liquid Glass from iOS 26, the system's animation and haptics.
+/// Flutter draws the chip under it and sends the items; the chosen item goes
+/// back as [section, row] on the channel `official_news/menu_<id>`.
+class MenuViewFactory: NSObject, FlutterPlatformViewFactory {
+  private let messenger: FlutterBinaryMessenger
+
+  init(messenger: FlutterBinaryMessenger) {
+    self.messenger = messenger
+    super.init()
+  }
+
+  func createArgsCodec() -> FlutterMessageCodec & NSObjectProtocol {
+    FlutterStandardMessageCodec.sharedInstance()
+  }
+
+  func create(
+    withFrame frame: CGRect,
+    viewIdentifier viewId: Int64,
+    arguments args: Any?
+  ) -> FlutterPlatformView {
+    MenuView(
+      frame: frame,
+      channel: FlutterMethodChannel(
+        name: "official_news/menu_\(viewId)", binaryMessenger: messenger),
+      arguments: args as? [String: Any] ?? [:])
+  }
+}
+
+class MenuView: NSObject, FlutterPlatformView {
+  private let button: UIButton
+  private let channel: FlutterMethodChannel
+
+  init(frame: CGRect, channel: FlutterMethodChannel, arguments: [String: Any]) {
+    self.channel = channel
+    button = UIButton(type: .custom)
+    button.frame = frame
+    button.backgroundColor = .clear
+    button.showsMenuAsPrimaryAction = true
+    button.accessibilityLabel = arguments["label"] as? String
+    super.init()
+    let sections = arguments["sections"] as? [[[String: Any]]] ?? []
+    // Each group of items inline, with the system's wide divider between.
+    let groups = sections.enumerated().map { section, items in
+      UIMenu(
+        title: "", options: .displayInline,
+        children: items.enumerated().map { row, item in
+          UIAction(
+            title: item["title"] as? String ?? "",
+            image: (item["symbol"] as? String).flatMap { UIImage(systemName: $0) },
+            state: item["selected"] as? Bool == true ? .on : .off
+          ) { [weak self] _ in
+            self?.channel.invokeMethod("select", arguments: [section, row])
+          }
+        })
+    }
+    button.menu = UIMenu(title: "", children: groups)
+  }
+
+  func view() -> UIView { button }
 }

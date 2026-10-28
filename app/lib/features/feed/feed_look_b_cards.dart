@@ -500,7 +500,6 @@ class _BCardState extends State<BCard> {
               if (a.imageUrl != null)
                 BCardPicture(
                   url: a.imageUrl!,
-                  heroId: a.id,
                   dimmed: read,
                   ratio: _Size.pictureRatio,
                 ),
@@ -560,20 +559,12 @@ class BCardPicture extends StatelessWidget {
   const BCardPicture({
     super.key,
     required this.url,
-    this.heroId,
     this.dimmed = false,
     this.ratio = _pictureRatio,
   });
 
   final String url;
   final bool dimmed;
-
-  /// The article's id: the picture then flies into the article (#141).
-  final String? heroId;
-
-  Widget _flies(Widget picture) => heroId == null
-      ? picture
-      : PictureHero(articleId: heroId!, url: url, child: picture);
 
   /// Width to height.
   final double ratio;
@@ -589,26 +580,24 @@ class BCardPicture extends StatelessWidget {
       child: ColoredBox(color: s.fill, child: child),
     );
     return LayoutBuilder(
-      builder: (context, constraints) => _flies(
-        ClipRSuperellipse(
-          borderRadius: const BorderRadius.vertical(
-            top: Radius.circular(bRadius),
+      builder: (context, constraints) => ClipRSuperellipse(
+        borderRadius: const BorderRadius.vertical(
+          top: Radius.circular(bRadius),
+        ),
+        child: Image(
+          // Decoded near the size shown, so a long feed keeps little in memory.
+          image: picture(
+            url,
+            width: constraints.maxWidth.isFinite
+                ? (constraints.maxWidth * pixels).round()
+                : null,
           ),
-          child: Image(
-            // Decoded near the size shown, so a long feed keeps little in memory.
-            image: picture(
-              url,
-              width: constraints.maxWidth.isFinite
-                  ? (constraints.maxWidth * pixels).round()
-                  : null,
-            ),
-            fit: BoxFit.cover,
-            opacity: keep < 1 ? AlwaysStoppedAnimation(keep) : null,
-            frameBuilder: (context, child, frame, sync) =>
-                box(fadeInPicture(context, child, frame, sync)),
-            // Flutter skips frameBuilder on an error, so the box is drawn here too.
-            errorBuilder: (_, _, _) => box(),
-          ),
+          fit: BoxFit.cover,
+          opacity: keep < 1 ? AlwaysStoppedAnimation(keep) : null,
+          frameBuilder: (context, child, frame, sync) =>
+              box(fadeInPicture(context, child, frame, sync)),
+          // Flutter skips frameBuilder on an error, so the box is drawn here too.
+          errorBuilder: (_, _, _) => box(),
         ),
       ),
     );

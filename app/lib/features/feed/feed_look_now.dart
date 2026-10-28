@@ -92,6 +92,12 @@ class NowLook extends FeedLook {
     required VoidCallback onTap,
   }) => NowNewPill(count: count, onTap: onTap);
 
+  /// The masthead scrolls away whole, so the name folds into a small title
+  /// at the top (#141).
+  @override
+  Widget? foldedTitle(BuildContext context, String title) =>
+      FeedLook.smallTitle(context, title);
+
   /// [child] with the feed's 20-pt margins, as a sliver.
   Widget padded(Widget child) => SliverPadding(
     padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -104,7 +110,7 @@ class NowLook extends FeedLook {
     padding: const EdgeInsets.symmetric(horizontal: 20),
     sliver: SliverList.separated(
       itemCount: list.length,
-      separatorBuilder: (_, _) => const Divider(),
+      separatorBuilder: (_, i) => list.line(i, const Divider()),
       itemBuilder: (context, i) {
         final a = list.articles[i];
         list.shown(i);
@@ -216,6 +222,7 @@ class NowArticleRow extends StatelessWidget {
               if (!read && isFresh(article))
                 FreshTime(
                   feedTime(article, AppLocalizations.of(context)),
+                  articleId: article.id,
                   style: text.meta,
                 )
               else
@@ -236,7 +243,6 @@ class NowArticleRow extends StatelessWidget {
         const SizedBox(width: 14),
         FeedPicture(
           url: article.imageUrl!,
-          heroId: article.id,
           width: 84,
           height: 84,
           dimmed: read,
@@ -253,7 +259,6 @@ class FeedPicture extends StatelessWidget {
   const FeedPicture({
     super.key,
     required this.url,
-    this.heroId,
     this.width,
     this.height,
     this.dimmed = false,
@@ -261,9 +266,6 @@ class FeedPicture extends StatelessWidget {
   });
 
   final String url;
-
-  /// The article's id: the picture then flies into the article (#141).
-  final String? heroId;
   final double? width;
   final double? height;
   final bool dimmed;
@@ -274,7 +276,7 @@ class FeedPicture extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ratio = MediaQuery.devicePixelRatioOf(context);
-    final clipped = ClipRRect(
+    return ClipRRect(
       borderRadius: BorderRadius.circular(radius),
       child: Container(
         width: width,
@@ -312,9 +314,6 @@ class FeedPicture extends StatelessWidget {
         ),
       ),
     );
-    return heroId == null
-        ? clipped
-        : PictureHero(articleId: heroId!, url: url, child: clipped);
   }
 }
 
@@ -331,8 +330,9 @@ class NowSettingsButton extends StatelessWidget {
     padding: EdgeInsets.zero,
     minimumSize: const Size(44, 44),
     onPressed: onPressed,
+    // A little larger than before (36), so the glass reads as glass (Yurii, #160).
     child: GlassCircle(
-      size: 36,
+      size: 40,
       child: Icon(
         CupertinoIcons.gear_alt,
         size: 21,

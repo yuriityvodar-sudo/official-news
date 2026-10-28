@@ -78,6 +78,17 @@ Future<void> _pumpFeed(WidgetTester tester, ApiClient api) async {
   await tester.pump();
 }
 
+/// How visible the fresh time is now.
+double _opacity(WidgetTester tester) => tester
+    .widget<FadeTransition>(
+      find.descendant(
+        of: find.byType(FreshTime),
+        matching: find.byType(FadeTransition),
+      ),
+    )
+    .opacity
+    .value;
+
 /// What the app asked the platform for: haptics and the clipboard.
 List<MethodCall> _recordPlatform(WidgetTester tester) {
   final calls = <MethodCall>[];
@@ -100,7 +111,10 @@ List<MethodCall> _recordPlatform(WidgetTester tester) {
 }
 
 void main() {
-  setUp(() => SharedPreferences.setMockInitialValues({}));
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+    FreshTime.forgetPulses();
+  });
 
   testWidgets('a long press on a card offers share, the official page and '
       'its link, without opening it', (tester) async {
@@ -162,17 +176,26 @@ void main() {
           ?.color,
       AppColors.accent,
     );
-    // Settles: the pulse is not endless.
+    // Fades during the pulse, and settles: the pulse is not endless.
+    await tester.pump(const Duration(milliseconds: 350));
+    expect(_opacity(tester), lessThan(1));
     await tester.pumpAndSettle();
-    expect(
-      tester
-          .widget<FadeTransition>(
-            find.descendant(of: time, matching: find.byType(FadeTransition)),
-          )
-          .opacity
-          .value,
-      1,
-    );
+    expect(_opacity(tester), 1);
+  });
+
+  testWidgets('a fresh time pulses once: its row built again (scrolled away '
+      'and back) is still', (tester) async {
+    final api = _api([_article('a1')]);
+    await _pumpFeed(tester, api);
+    await tester.pumpAndSettle();
+
+    // The row goes, and is built again.
+    await tester.pumpWidget(const SizedBox());
+    await _pumpFeed(tester, api);
+    expect(find.byType(FreshTime), findsOneWidget);
+    await tester.pump(const Duration(milliseconds: 350));
+    expect(_opacity(tester), 1);
+    expect(tester.hasRunningAnimations, isFalse);
   });
 
   testWidgets('an older decision keeps the plain time', (tester) async {

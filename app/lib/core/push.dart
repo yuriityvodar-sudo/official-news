@@ -64,12 +64,6 @@ abstract class Messaging {
   /// token: an FCM token made without it never reaches the phone.
   Future<bool> ready();
 
-  /// Whether Apple has given this phone its APNs token, checked once (#149).
-  Future<bool> hasApnsToken();
-
-  /// This phone's FCM token, or null while it has none (#149).
-  Future<String?> fcmToken();
-
   Future<void> subscribe(String topic);
 
   Future<void> unsubscribe(String topic);
@@ -126,17 +120,6 @@ class FirebaseMessagingLayer implements Messaging {
     }
     return false;
   }
-
-  @override
-  Future<bool> hasApnsToken() async =>
-      defaultTargetPlatform != TargetPlatform.iOS ||
-      await _fcm.getAPNSToken() != null;
-
-  /// The token `onTokenRefresh` follows ([tokenChanges]): `register()`
-  /// replaces it only with `FirebaseMessagingInstallationIdEnabled` on.
-  @override
-  // ignore: deprecated_member_use
-  Future<String?> fcmToken() => _fcm.getToken();
 
   @override
   Future<void> subscribe(String topic) => _fcm.subscribeToTopic(topic);
@@ -205,8 +188,6 @@ Future<void> openAppSettings() async {
 ///   after "Turn On". Whatever the answer, it never asks by itself again.
 /// - Allowed: subscribed to `breaking_<feed language>`, moved with the
 ///   language; the topic is saved, so a start corrects it.
-/// - "Tell me when it's ready" under the AI chat's note ([notifyAiChat],
-///   #141): `ai_chat_<feed language>` too, moved and saved the same way.
 /// - A tap opens the article in the notification's language, or the feed.
 ///
 /// The Settings row (`SettingsScreen`) shows [permission], live, and asks with
@@ -223,7 +204,7 @@ class Push with WidgetsBindingObserver {
   static const _readsKey = 'push.readIds';
   static const _offeredKey = 'push.offered';
   static const _topicKey = 'push.topic';
-  static const _aiChatKey = 'push.aiChat';
+  /// The topic of the AI chat note's earlier switch (#141), dropped (#160).
   static const _aiChatTopicKey = 'push.aiChatTopic';
 
   /// How long the app waits for a topic change; then it is tried again at the
@@ -257,37 +238,8 @@ class Push with WidgetsBindingObserver {
   /// The topic of a feed language: `breaking_uk`.
   static String topicFor(FeedLanguage language) => 'breaking_${language.code}';
 
-  /// The topic for the news that the AI chat is ready, in a feed language:
-  /// `ai_chat_uk` (#141).
-  static String aiChatTopicFor(FeedLanguage language) =>
-      'ai_chat_${language.code}';
-
-  /// Whether the reader asked to hear when the AI chat is ready.
-  ValueListenable<bool> get aiChat => _aiChat;
-  final _aiChat = ValueNotifier(false);
-
   /// What the phone allows; [PushPermission.unavailable] while push is off.
   ValueListenable<PushPermission> get permission => _permission;
-
-  /// The last thing that failed (a topic change, the token, the permission),
-  /// for [check]; null while nothing has failed in this run.
-  String? _lastError;
-
-  /// Each step between "On" and a notification on this phone, for the check
-  /// line in Settings (#149): "On" only says that iOS allows notifications,
-  /// while the topic needs Apple's token, then the FCM token, then Firebase's
-  /// answer, and a failed step is otherwise silent. Null while push is off.
-  Future<PushCheck?> check() async {
-    final messaging = _messaging;
-    final prefs = _prefs;
-    if (messaging == null || prefs == null) return null;
-    return PushCheck(
-      apnsToken: await _try('APNs token', messaging.hasApnsToken) ?? false,
-      fcmToken: await _try<String?>('FCM token', messaging.fcmToken),
-      topic: prefs.getString(_topicKey),
-      lastError: _lastError,
-    );
-  }
 
   /// Notifies each time a tapped notification has been opened ([open]): the
   /// splash at start gives way to it at once (#66, `SplashHost.endOn`).
@@ -348,7 +300,6 @@ class Push with WidgetsBindingObserver {
     _messaging = messaging;
     _prefs = prefs;
     _language = language;
-    _aiChat.value = prefs.getBool(_aiChatKey) ?? false;
     WidgetsBinding.instance.addObserver(this);
     _subscriptions
       ..add(messaging.taps.listen((tap) => unawaited(open(tap))))
@@ -378,8 +329,6 @@ class Push with WidgetsBindingObserver {
     _prefs = null;
     _confirmed.clear();
     _enabling = null;
-    _aiChat.value = false;
-    _lastError = null;
     // A new chain: the old one may belong to an earlier test's fake clock.
     _syncing = Future.value();
     _permission.value = PushPermission.unavailable;
@@ -421,25 +370,7 @@ class Push with WidgetsBindingObserver {
     }
   }
 
-  /// "Tell me when it's ready" under the AI chat's note (#141): [on] subscribes
-  /// to [aiChatTopicFor] the feed's language while notifications are allowed.
-  /// While iOS has not asked, it asks first ([enable], `trigger` `ai_chat`);
-  /// allowed notifications bring the breaking decisions too, as the note says.
-  /// The wish is kept when they are not allowed, so turning them on in the
-  /// iOS Settings app subscribes. Returns the permission after it.
-  Future<PushPermission> notifyAiChat(bool on) async {
-    final prefs = _prefs;
-    if (prefs == null) return _permission.value;
-    await prefs.setBool(_aiChatKey, on);
-    _aiChat.value = on;
-    if (on && _permission.value == PushPermission.notAsked) {
-      return enable(trigger: 'ai_chat');
-    }
-    await _sync();
-    return _permission.value;
-  }
-
-  /// The feed's language changed: the topics move with it.
+  /// The feed's language changed: the topic moves with it.
   Future<void> setLanguage(FeedLanguage language) async {
     if (language == _language) return;
     _language = language;
@@ -509,10 +440,9 @@ class Push with WidgetsBindingObserver {
   /// One topic change at a time, in order; a failure waits for the next
   /// trigger (a language change, the app coming back, a new token, a start).
   Future<void> _sync() {
-    _syncing = _syncing.then((_) => _syncNow()).catchError((Object error) {
-      _lastError = 'topic: $error';
-      debugPrint('push: topic: $error');
-    });
+    _syncing = _syncing
+        .then((_) => _syncNow())
+        .catchError((Object error) => debugPrint('push: topic: $error'));
     return _syncing;
   }
 
@@ -529,12 +459,8 @@ class Push with WidgetsBindingObserver {
       _topicKey,
       allowed ? topicFor(_language) : null,
     );
-    await _syncTopic(
-      messaging,
-      prefs,
-      _aiChatTopicKey,
-      allowed && _aiChat.value ? aiChatTopicFor(_language) : null,
-    );
+    // The earlier switch's topic, gone from the phones that took it (#160).
+    await _syncTopic(messaging, prefs, _aiChatTopicKey, null);
   }
 
   /// Makes the topic saved under [key] the one wanted, or none.
@@ -573,48 +499,15 @@ class Push with WidgetsBindingObserver {
     return _navigator.currentState!;
   }
 
-  Future<T?> _try<T>(String what, Future<T> Function() call) async {
+  static Future<T?> _try<T>(String what, Future<T> Function() call) async {
     try {
       return await call();
     } catch (error) {
       // Push never breaks the app.
-      _lastError = '$what: $error';
       debugPrint('push: $what failed: $error');
       return null;
     }
   }
-}
-
-/// What [Push.check] found (#149).
-class PushCheck {
-  const PushCheck({
-    required this.apnsToken,
-    required this.fcmToken,
-    required this.topic,
-    required this.lastError,
-  });
-
-  /// Apple has given this phone its APNs token.
-  final bool apnsToken;
-
-  /// This phone's FCM token; null while it has none.
-  final String? fcmToken;
-
-  /// The topic saved as subscribed (`push.topic`): sent to Firebase, and
-  /// confirmed unless [lastError] says the change failed.
-  final String? topic;
-
-  /// The last failure in this run, if any.
-  final String? lastError;
-
-  /// One short line per step, in English: only TestFlight and debug builds
-  /// show it.
-  String get text => [
-    'Apple token: ${apnsToken ? 'yes' : 'no'} · '
-        'FCM token: ${fcmToken == null ? 'no' : 'yes'} · '
-        'Topic: ${topic ?? 'none'}',
-    if (lastError != null) 'Last error: $lastError',
-  ].join('\n');
 }
 
 /// The app's push notifications; off until [startPush].

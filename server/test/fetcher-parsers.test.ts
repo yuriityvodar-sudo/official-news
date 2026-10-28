@@ -99,6 +99,13 @@ describe("parseDate", () => {
     expect(parseDate("Засідання Уряду", kyiv, now)).toBeNull();
   });
 
+  it("reads the month's own name too, as the Verkhovna Rada's feed writes it", () => {
+    const kyiv = { format: "uk", utcOffset: "+02:00" };
+    expect(parseDate("26 Жовтень  2026, Понеділок 16:21", kyiv, NOW)).toEqual({ publishedAt: "2026-10-26T14:21:00Z", dateOnly: false });
+    expect(parseDate("2 Листопад  2026, Понеділок 09:05", kyiv, NOW)?.publishedAt).toBe("2026-11-02T07:05:00Z");
+    expect(parseDate("26 Жовтнь  2026", kyiv, NOW)).toBeNull();
+  });
+
   it("drops a meaningless midnight when asked", () => {
     expect(parseDate("2026-08-10 00:00:00.0", { dateOnly: true }, NOW)).toEqual({ publishedAt: "2026-08-10T12:00:00Z", dateOnly: true });
   });
@@ -190,7 +197,7 @@ describe("parseFeed", () => {
     const xml = `<rss><channel><item><title>PRESIDENCIA</title><description><![CDATA[Decreto por el que se expropia&#8230;]]></description>
       <link>https://dof.gob.mx/nota_detalle.php?codigo=5801157</link><valueDate>14/10/2026</valueDate></item></channel></rss>`;
     const [item] = parseFeed(xml, "https://dof.gob.mx/sumario.xml", { title: "description", date: { field: "valueDate", format: "dd/mm/yyyy" } }, NOW);
-    expect(item).toMatchObject({ title: "Decreto por el que se expropia…", publishedAt: "2026-10-14T12:00:00Z", dateOnly: true });
+    expect(item).toMatchObject({ title: "Decreto por el que se expropia…", headline: "PRESIDENCIA", publishedAt: "2026-10-14T12:00:00Z", dateOnly: true });
   });
 });
 
