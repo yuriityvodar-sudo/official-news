@@ -435,9 +435,9 @@ void main() {
     expect(native('Gear'), 0);
     expect(native('Back'), 1);
 
-    // Open, the article is over the feed: the feed's glass stays plain.
     await tester.pumpAndSettle();
     expect(CardZoomRoute.moving.value, isFalse);
+    // Covered by the article, the feed's glass stays plain (#160).
     expect(native('Gear'), 0);
     expect(native('Back'), 1);
 
