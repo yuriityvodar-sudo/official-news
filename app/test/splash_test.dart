@@ -96,7 +96,7 @@ void main() {
   });
 
   test('the three words, in one place, lower case as written', () {
-    expect(splashLines, ['only', 'official', 'news']);
+    expect(splashLines, ['Outer', 'News']);
   });
 
   testWidgets(
@@ -194,30 +194,27 @@ void main() {
       .getTranslation()
       .y;
 
-  testWidgets('1 rise brings "only" up first; 1b, "news" first', (
+  testWidgets('1 rise brings "Outer" up first; 1b, "News" first', (
     tester,
   ) async {
     splashStyle.value = SplashStyle.rise;
     await tester.pumpWidget(_host());
     await _play(tester, seconds(0.4));
-    expect(drop(tester, 'only'), lessThan(drop(tester, 'official')));
-    expect(drop(tester, 'official'), lessThan(drop(tester, 'news')));
+    expect(drop(tester, 'Outer'), lessThan(drop(tester, 'News')));
     await _play(tester, _total(SplashStyle.rise));
 
     splashStyle.value = SplashStyle.riseUp;
     await tester.pumpWidget(KeyedSubtree(key: UniqueKey(), child: _host()));
     await _play(tester, seconds(0.4));
-    expect(drop(tester, 'news'), lessThan(drop(tester, 'official')));
-    expect(drop(tester, 'official'), lessThan(drop(tester, 'only')));
+    expect(drop(tester, 'News'), lessThan(drop(tester, 'Outer')));
     await _play(tester, _total(SplashStyle.riseUp));
   });
 
-  test('3 fill: "news" fills first, and from the first fill to the last, '
+  test('3 fill: "News" fills first, and from the first fill to the last, '
       'some line is always filling (no stop between the lines)', () {
-    // In the order of the words: only, official, news.
+    // In the order of the words: Outer, News.
     final early = splashFillLevels(300);
-    expect(early[2], greaterThan(early[1]));
-    expect(early[1], greaterThanOrEqualTo(early[0]));
+    expect(early[1], greaterThan(early[0]));
     for (var ms = 200.0; ms <= 1500; ms += 8) {
       expect(
         splashFillLevels(ms).any((level) => level > 0.02 && level < 0.98),
@@ -258,7 +255,7 @@ void main() {
     final word = tester.widget<DefaultTextStyle>(
       find
           .ancestor(
-            of: find.text('only'),
+            of: find.text('Outer'),
             matching: find.byType(DefaultTextStyle),
           )
           .first,
@@ -274,22 +271,22 @@ void main() {
     tester.view.devicePixelRatio = 3;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(_host());
-    final normal = tester.getSize(find.text('official'));
+    final normal = tester.getSize(find.text('Outer'));
     // On the screen, after the fit that keeps a long word on it.
-    final shown = tester.getRect(find.text('official'));
+    final shown = tester.getRect(find.text('Outer'));
     await _play(tester, _total(SplashStyle.rise));
 
     tester.platformDispatcher.textScaleFactorTestValue = 3;
     addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
     // A new start of the app, with the large text size.
     await tester.pumpWidget(KeyedSubtree(key: UniqueKey(), child: _host()));
-    expect(tester.getSize(find.text('official')), normal);
-    expect(tester.getRect(find.text('official')), shown);
+    expect(tester.getSize(find.text('Outer')), normal);
+    expect(tester.getRect(find.text('Outer')), shown);
     expect(shown.width, lessThan(390));
     await _play(tester, _total(SplashStyle.rise));
   });
 
-  testWidgets('the words are English in every language (Yurii, 28 Oct)', (
+  testWidgets('the words are the app\'s name in every language (Yurii, 28 Oct)', (
     tester,
   ) async {
     final semantics = tester.ensureSemantics();
@@ -303,7 +300,7 @@ void main() {
       for (final word in splashLines) {
         expect(find.text(word), findsOneWidget);
       }
-      expect(find.bySemanticsLabel('only official news'), findsOneWidget);
+      expect(find.bySemanticsLabel('Outer News'), findsOneWidget);
       await _play(tester, _total(SplashStyle.riseUp));
     }
     semantics.dispose();
@@ -428,13 +425,13 @@ void main() {
     }
   }
 
-  testWidgets('VoiceOver reads the three words while it shows', (tester) async {
+  testWidgets('VoiceOver reads the name while it shows', (tester) async {
     final semantics = tester.ensureSemantics();
     await tester.pumpWidget(_host());
-    expect(find.bySemanticsLabel('only official news'), findsOneWidget);
+    expect(find.bySemanticsLabel('Outer News'), findsOneWidget);
     expect(find.bySemanticsLabel('the app'), findsNothing);
     await _play(tester, _total(SplashStyle.rise));
-    expect(find.bySemanticsLabel('only official news'), findsNothing);
+    expect(find.bySemanticsLabel('Outer News'), findsNothing);
     expect(find.bySemanticsLabel('the app'), findsOneWidget);
     semantics.dispose();
   });
