@@ -312,30 +312,30 @@ describe("GET /articles with filters: paging, after= and top", () => {
       { id: "fr-4", country: "FR", importance: 4, topics: ["health"] },
       { id: "ua-2", country: "UA", importance: 2, topics: ["economy"] },
     );
-    // Global: by importance, at most 2 per country, 5 in all, shown newest first.
-    expect(await topIds("/articles")).toEqual(["fr-4", "us-5", "eu-3", "de-4", "de-5"]);
-    // One country: its own only; Ukraine has a top story of its own, however low its importance.
-    expect(await topIds("/articles?country=DE")).toEqual(["de-4", "de-5"]);
+    // Global: the best scores (all published at once here, so by importance; on equal scores the later id),
+    // at most 1 per country, 3 in all, best first.
+    expect(await topIds("/articles")).toEqual(["us-5", "de-5", "fr-4"]);
+    // One country: its own only, all 3 from it; Ukraine has a top story of its own, however low its importance.
+    expect(await topIds("/articles?country=DE")).toEqual(["de-5", "de-4", "de-3"]);
     expect(await topIds("/articles?country=UA")).toEqual(["ua-2"]);
     expect(await topIds("/articles?topic=health")).toEqual(["fr-4", "de-4"]);
-    // At most 2 per country: de-3 makes it here, below de-5.
-    expect(await topIds("/articles?country=DE&topic=economy")).toEqual(["de-3", "de-5"]);
+    expect(await topIds("/articles?country=DE&topic=economy")).toEqual(["de-5", "de-3"]);
     expect(await topIds("/articles?country=US&topic=health")).toEqual([]);
-    // A group: among its members' (and the EU institutions'), still at most 2 per country, the EU counted as its own.
-    expect(await topIds("/articles?group=eu")).toEqual(["fr-4", "eu-3", "de-4", "de-5"]);
-    expect(await topIds("/articles?group=nato")).toEqual(["fr-4", "us-5", "de-4", "de-5"]);
-    expect(await topIds("/articles?group=g7&topic=economy")).toEqual(["us-5", "eu-3", "de-3", "de-5"]);
+    // A group: among its members' (and the EU institutions'), still at most 1 per country, the EU counted as its own.
+    expect(await topIds("/articles?group=eu")).toEqual(["de-5", "fr-4", "eu-3"]);
+    expect(await topIds("/articles?group=nato")).toEqual(["us-5", "de-5", "fr-4"]);
+    expect(await topIds("/articles?group=g7&topic=economy")).toEqual(["us-5", "de-5", "eu-3"]);
     // Top stories are in items too.
     const p = await page("/articles?group=eu&topic=economy");
     expect(p.items.map((a) => a.id)).toEqual(["eu-3", "de-3", "de-5"]);
-    expect(p.top.map((a) => a.id)).toEqual(["eu-3", "de-3", "de-5"]);
+    expect(p.top.map((a) => a.id)).toEqual(["de-5", "eu-3"]);
 
-    // In Ukrainian: the same top stories that are translated.
+    // In Ukrainian: the same top stories that are translated, in the same order.
     await translated("de-5", "us-5", "fr-4");
     expect(await topIds("/articles?lang=uk&country=DE")).toEqual(["de-5"]);
-    expect(await topIds("/articles?lang=uk&group=nato")).toEqual(["fr-4", "us-5", "de-5"]);
+    expect(await topIds("/articles?lang=uk&group=nato")).toEqual(["us-5", "de-5", "fr-4"]);
     expect(await topIds("/articles?lang=uk&topic=health")).toEqual(["fr-4"]);
-    expect(await topIds("/articles?lang=uk")).toEqual(["fr-4", "us-5", "de-5"]);
+    expect(await topIds("/articles?lang=uk")).toEqual(["us-5", "de-5", "fr-4"]);
   });
 
   it("walks the feed index from the 7-day edge with filters too, also with table statistics", async () => {
@@ -443,7 +443,7 @@ describe("GET /articles with filters: paging, after= and top", () => {
           .all<{ detail: string }>();
         const plan = results.map((r) => r.detail).join("; ");
         const label = `${step} ${i}: ${plan}`;
-        // The (is_news, published_at) index over the 24 hours; the window and its order then sort what it read.
+        // The (is_news, published_at) index over the 72 hours; the window and its order then sort what it read.
         expect(plan, label).toMatch(/SEARCH a USING INDEX articles_feed \(is_news=\? AND published_at>\?\)/);
         expect(plan, label).not.toMatch(/articles_feed_seq|SCAN (a|s|t)\b|AUTOMATIC/);
         expect(plan, label).toMatch(/SEARCH s USING (COVERING )?INDEX sqlite_autoindex_sources_1 \(id=\?\)/);
@@ -452,14 +452,14 @@ describe("GET /articles with filters: paging, after= and top", () => {
       }
     }
 
-    // The 110 articles of the last 24 hours and the sources table, not the 300 older articles.
+    // The 110 articles of the last 72 hours and the sources table, not the 300 older articles.
     const sources = (await env.DB.prepare("SELECT COUNT(*) AS n FROM sources").first<{ n: number }>())?.n ?? 0;
     for (const [i, query] of queries.entries()) {
       const { meta } = await env.DB.prepare(query.sql).bind(...query.binds).all();
       expect(meta.rows_read, `${i}`).toBeLessThan(recent.length + 3 * sources + 40);
     }
     // And still the right ones.
-    expect(await topIds("/articles")).toEqual(["top-8", "top-7", "top-5", "top-4", "top-2"]);
+    expect(await topIds("/articles")).toEqual(["top-8", "top-5", "top-2"]);
     expect(await topIds("/articles?lang=uk")).toEqual(["top-2"]);
   });
 });
