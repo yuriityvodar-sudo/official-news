@@ -10,6 +10,8 @@
   "feedLoadMoreFailed": "No se pudieron cargar más noticias. Toca para reintentar.",
   "feedEnd": "Ya estás al día",
   "feedEmpty": "Aún no hay decisiones hoy.",
+  "topStoriesTitle": "Lo más importante",
+  "topStoriesCaption": "Por importancia en tres días, una por país",
   "feedNoTranslations": "Aún no hay decisiones traducidas.",
   "feedTranslationsComing": "Las traducciones aparecerán aquí a medida que estén listas.",
   "newDecisions": "{count, plural, one{{count} decisión nueva} other{{count} decisiones nuevas}}",
