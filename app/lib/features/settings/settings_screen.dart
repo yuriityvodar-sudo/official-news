@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import '../../core/feed_language.dart';
 import '../../core/motion.dart';
 import '../../core/push.dart';
+import '../../core/analytics.dart';
 import '../../core/theme.dart';
 import '../../l10n/app_localizations.dart';
 import '../detail/detail_screen.dart' show OpenLink, openOfficialPage;
@@ -247,6 +248,7 @@ class _DesignSection extends StatelessWidget {
                   Haptics.selection();
                   feedDesign.value = d;
                   saveDesign?.call(d);
+                  unawaited(analytics.designChosen(d));
                   Navigator.of(context).popUntil((route) => route.isFirst);
                 },
                 child: Semantics(
@@ -298,6 +300,7 @@ class _DesignSection extends StatelessWidget {
                 Haptics.selection();
                 headlineWeight.value = w;
                 saveHeadlineWeight?.call(w);
+                unawaited(analytics.headlineWeightChosen(w));
               },
               child: Text(
                 headlineWeightName(w, l10n),

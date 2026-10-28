@@ -7,7 +7,9 @@ import 'package:http/testing.dart';
 import 'package:official_news/core/analytics.dart';
 import 'package:official_news/core/api_client.dart';
 import 'package:official_news/core/article.dart';
+import 'package:official_news/core/feed_design.dart';
 import 'package:official_news/core/router.dart';
+import 'package:official_news/core/theme.dart' show HeadlineWeight;
 import 'package:official_news/features/detail/detail_screen.dart';
 import 'package:official_news/features/feed/feed_controller.dart';
 import 'package:official_news/features/feed/feed_screen.dart';
@@ -290,5 +292,46 @@ void main() {
     await tester.pump();
     await tester.pump();
     expect(events.where((e) => e.$1 == 'feed_load_failed'), hasLength(1));
+  });
+
+  group('design choices (Yurii, 28 Oct)', () {
+    test(
+      'a look or a headline weight chosen is an event with it in the name',
+      () async {
+        final events = <String>[];
+        final a = Analytics((name, parameters) async => events.add(name));
+        await a.designChosen(FeedDesign.garnet);
+        await a.designChosen(FeedDesign.now);
+        await a.headlineWeightChosen(HeadlineWeight.bold);
+        expect(events, ['design_garnet', 'design_now', 'headline_bold']);
+      },
+    );
+
+    test(
+      'the look and the weight in use are user properties, kept current',
+      () async {
+        final props = <String, String>{};
+        final design = ValueNotifier(FeedDesign.garnet);
+        final weight = ValueNotifier(HeadlineWeight.regular);
+        final feed = FeedController(
+          api: _api(),
+          phoneLanguages: () => const [Locale('en')],
+        );
+        await feed.open();
+        await useAnalytics(
+          Analytics(null, (name, value) async => props[name] = value),
+          language: feed.languageChanges,
+          design: design,
+          weight: weight,
+        );
+        expect(props['feed_design'], 'garnet');
+        expect(props['headline_weight'], 'regular');
+        design.value = FeedDesign.seal;
+        weight.value = HeadlineWeight.light;
+        await Future<void>.delayed(Duration.zero);
+        expect(props['feed_design'], 'seal');
+        expect(props['headline_weight'], 'light');
+      },
+    );
   });
 }

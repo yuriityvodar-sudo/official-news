@@ -6,8 +6,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
 import 'article.dart';
+import 'feed_design.dart';
 import 'feed_language.dart';
 import 'filters.dart';
+import 'theme.dart' show HeadlineWeight;
 
 /// Sends one event: its name and parameters (Google Analytics limits: names
 /// up to 40 characters, text values up to 100).
@@ -159,6 +161,18 @@ class Analytics {
 
   /// How far down the feed the reader came this visit: the first time a row
   /// of [feedDepths] is shown, `feed_scroll_10`, `feed_scroll_25` and so on.
+  /// A look chosen in Settings → Design (Yurii, 28 Oct: which design options
+  /// readers prefer), the look in the event's name (`design_garnet`), so it
+  /// counts without a custom dimension. The look in use is the user property
+  /// `feed_design` ([useAnalytics]).
+  Future<void> designChosen(FeedDesign design) =>
+      _event('design_${design.name}', const {});
+
+  /// A headline weight chosen in Settings (`headline_bold`); the one in use is
+  /// the user property `headline_weight`.
+  Future<void> headlineWeightChosen(HeadlineWeight weight) =>
+      _event('headline_${weight.name}', const {});
+
   Future<void> feedDepth(int rows) => _event('feed_scroll_$rows', const {});
 
   /// The feed's first page did not load (offline, or the server failed).
@@ -275,6 +289,8 @@ const _build = String.fromEnvironment('APP_BUILD', defaultValue: 'dev');
 /// True when Firebase started, so push notifications can start too (#62).
 Future<bool> startAnalytics({
   required ValueListenable<FeedLanguage> language,
+  ValueListenable<FeedDesign>? design,
+  ValueListenable<HeadlineWeight>? weight,
 }) async {
   if ([_apiKey, _appId, _senderId, _projectId].any((v) => v.isEmpty)) {
     return false;
@@ -307,6 +323,8 @@ Future<bool> startAnalytics({
         (name, value) => ga.setUserProperty(name: name, value: value),
       ),
       language: language,
+      design: design,
+      weight: weight,
     );
   } catch (error) {
     debugPrint('analytics: not fully started: $error');
@@ -318,12 +336,29 @@ Future<bool> startAnalytics({
 /// the build, and the language the feed is read in now. That is the feed's own
 /// value, not the saved one: with nothing saved the app follows the phone (#52),
 /// and a language chosen while Firebase was starting is counted too.
-/// [Analytics.languageChosen] keeps it current from then on.
+/// [Analytics.languageChosen] keeps it current from then on. With [design]
+/// and [weight], also the look the feed is read in and the headlines' weight
+/// (`feed_design`, `headline_weight`), kept current as they change, also when
+/// the saved ones are restored at start, so every event can be split by them.
 Future<void> useAnalytics(
   Analytics instance, {
   required ValueListenable<FeedLanguage> language,
+  ValueListenable<FeedDesign>? design,
+  ValueListenable<HeadlineWeight>? weight,
 }) async {
   analytics = instance;
   await instance._user('build', _build);
   await instance.feedLanguage(language.value);
+  if (design != null) {
+    await instance._user('feed_design', design.value.name);
+    design.addListener(
+      () => unawaited(instance._user('feed_design', design.value.name)),
+    );
+  }
+  if (weight != null) {
+    await instance._user('headline_weight', weight.value.name);
+    weight.addListener(
+      () => unawaited(instance._user('headline_weight', weight.value.name)),
+    );
+  }
 }

@@ -9,6 +9,7 @@ import 'core/subscription.dart';
 import 'core/theme.dart';
 import 'features/chat/chat_screen.dart';
 import 'features/feed/feed_controller.dart';
+import 'features/feed/feed_look.dart' show feedDesign;
 import 'features/splash/splash.dart';
 import 'l10n/app_localizations.dart';
 
@@ -28,7 +29,11 @@ Future<void> main() async {
 /// Analytics, then push notifications, which need Firebase too (#62). Both
 /// take the feed's language, so a first launch uses the phone's.
 Future<void> _startFirebase(FeedController feed) async {
-  if (await startAnalytics(language: feed.languageChanges)) {
+  if (await startAnalytics(
+    language: feed.languageChanges,
+    design: feedDesign,
+    weight: headlineWeight,
+  )) {
     await startPush(language: feed.languageChanges);
   }
 }
