@@ -223,5 +223,12 @@
   "chatRemaining": "{count, plural, one{Сегодня остался {count} вопрос} few{Сегодня осталось {count} вопроса} many{Сегодня осталось {count} вопросов} other{Сегодня осталось {count} вопроса}}",
   "chatLongDocument": "Длинный документ: вопрос о нём считается за {count}",
   "chatOutTitle": "Вопросы на сегодня закончились",
-  "chatOutBody": "Новые — в {time}."
+  "chatOutBody": "Новые — в {time}. Или докупите: они не сгорают.",
+  "chatTopUp": "Докупить вопросы",
+  "topUpTitle": "Ещё вопросы",
+  "topUpSubtitle": "Тратятся после 20 дневных и не сгорают.",
+  "topUpBest": "выгоднее",
+  "topUpBuy": "Купить за {price}",
+  "topUpFine": "Разовая покупка через App Store. Вопрос о длинном документе может считаться за несколько.",
+  "topUpPack": "{count, plural, one{+{count} вопрос} few{+{count} вопроса} many{+{count} вопросов} other{+{count} вопроса}}"
 }

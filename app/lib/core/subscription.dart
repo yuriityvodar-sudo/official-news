@@ -6,6 +6,8 @@ import 'package:flutter/foundation.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'api_client.dart';
+
 /// The App Store as the subscription sees it; tests bring their own.
 abstract class Store {
   /// Purchases and restores as StoreKit reports them, also ones made while
@@ -16,6 +18,9 @@ abstract class Store {
 
   /// Starts a purchase; its result comes through [purchases].
   Future<void> buy(ProductDetails product, {required String accountToken});
+
+  /// Starts the purchase of a pack of questions, a consumable.
+  Future<void> buyPack(ProductDetails pack, {required String accountToken});
   Future<void> restore();
   Future<void> finish(PurchaseDetails purchase);
 }
@@ -46,6 +51,17 @@ class AppStore implements Store {
         ),
       );
 
+  /// Finished by hand once the server has credited it ([ChatSubscription]).
+  @override
+  Future<void> buyPack(ProductDetails pack, {required String accountToken}) =>
+      _store.buyConsumable(
+        purchaseParam: PurchaseParam(
+          productDetails: pack,
+          applicationUserName: accountToken,
+        ),
+        autoConsume: false,
+      );
+
   @override
   Future<void> restore() => _store.restorePurchases();
 
@@ -54,7 +70,7 @@ class AppStore implements Store {
       _store.completePurchase(purchase);
 }
 
-/// Where a purchase or a restore stands, for the paywall.
+/// Where a purchase or a restore stands, for the paywall and the top-up sheet.
 enum PurchaseState {
   idle,
   buying,
@@ -70,11 +86,23 @@ enum PurchaseState {
 /// latest signed transaction, which every question sends; the server decides
 /// whether it is still paid (a refund closes it there at once), and its 402
 /// closes it here too ([lapsed]).
+///
+/// Packs of questions on top (Roman, 27 Oct): consumables, which StoreKit
+/// does not restore and we have no account to keep, so the server keeps them
+/// for the subscription. A bought pack is credited there first ([_credit])
+/// and only then finished, so one the phone could not hand over comes back
+/// from StoreKit at the next start and is credited then, once.
 class ChatSubscription extends ChangeNotifier {
-  ChatSubscription({this._store, DateTime Function()? clock})
+  ChatSubscription({this._store, this._credit, DateTime Function()? clock})
     : _clock = clock ?? DateTime.now;
 
   static const productId = 'com.officialnews.app.agent.monthly';
+
+  /// The packs, by how many questions each adds: $0.99 and $2.99.
+  static const packs = {
+    'com.officialnews.app.agent.questions50': 50,
+    'com.officialnews.app.agent.questions200': 200,
+  };
   static const _transactionKey = 'chat.transaction';
   static const _tokenKey = 'chat.accountToken';
 
@@ -82,6 +110,7 @@ class ChatSubscription extends ChangeNotifier {
   static const restoreWait = Duration(seconds: 10);
 
   Store? _store;
+  final Future<int> Function(String pack, String transaction)? _credit;
   final DateTime Function() _clock;
   SharedPreferences? _prefs;
   StreamSubscription<List<PurchaseDetails>>? _listening;
@@ -97,6 +126,18 @@ class ChatSubscription extends ChangeNotifier {
   /// The product as the App Store prices it for this reader ("4,99 $").
   ProductDetails? get product => _product;
   ProductDetails? _product;
+
+  /// The packs as the App Store prices them, smallest first.
+  List<ProductDetails> get packProducts => _packs;
+  List<ProductDetails> _packs = const [];
+
+  /// Packs credited since the app started: the top-up sheet closes on a new one.
+  int get credited => _creditedCount;
+  int _creditedCount = 0;
+
+  /// The bought questions the server holds, as it last said after a pack.
+  int? get boughtQuestions => _bought;
+  int? _bought;
 
   /// Paid until later than now, as far as the phone knows.
   bool get active =>
@@ -123,6 +164,35 @@ class ChatSubscription extends ChangeNotifier {
       // No App Store (offline, a simulator without StoreKit): the paywall says so.
     }
     return _product;
+  }
+
+  /// The packs' prices, asked once the top-up sheet shows.
+  Future<List<ProductDetails>> loadPacks() async {
+    final store = _store;
+    if (store == null || _packs.isNotEmpty) return _packs;
+    try {
+      if (!await store.available()) return _packs;
+      final found = [for (final id in packs.keys) ?await store.product(id)];
+      _packs = found;
+      notifyListeners();
+    } catch (_) {
+      // No App Store: the sheet says so.
+    }
+    return _packs;
+  }
+
+  Future<void> buyPack(ProductDetails pack) async {
+    final store = _store;
+    if (store == null || _transaction == null) {
+      state.value = PurchaseState.failed;
+      return;
+    }
+    state.value = PurchaseState.buying;
+    try {
+      await store.buyPack(pack, accountToken: await accountToken());
+    } catch (_) {
+      state.value = PurchaseState.failed;
+    }
   }
 
   Future<void> buy() async {
@@ -185,6 +255,10 @@ class ChatSubscription extends ChangeNotifier {
 
   Future<void> _purchased(List<PurchaseDetails> purchases) async {
     for (final purchase in purchases) {
+      if (packs.containsKey(purchase.productID)) {
+        await _packPurchased(purchase);
+        continue;
+      }
       if (purchase.productID != productId) continue;
       switch (purchase.status) {
         case PurchaseStatus.purchased || PurchaseStatus.restored:
@@ -205,6 +279,43 @@ class ChatSubscription extends ChangeNotifier {
       if (purchase.pendingCompletePurchase) await _store?.finish(purchase);
     }
   }
+
+  Future<void> _packPurchased(PurchaseDetails purchase) async {
+    switch (purchase.status) {
+      case PurchaseStatus.purchased || PurchaseStatus.restored:
+        final pack = purchase.verificationData.serverVerificationData;
+        final transaction = _transaction;
+        if (pack.isEmpty || transaction == null) {
+          state.value = PurchaseState.failed;
+          return;
+        }
+        try {
+          _bought = await (_credit ?? _serverCredit)(pack, transaction);
+        } catch (_) {
+          // Not credited: left unfinished, StoreKit gives it again at the next start.
+          state.value = PurchaseState.failed;
+          return;
+        }
+        // Credited first, so the top-up sheet closes before the purchase ends.
+        _creditedCount++;
+        notifyListeners();
+        state.value = PurchaseState.idle;
+        await _store?.finish(purchase);
+        return;
+      case PurchaseStatus.pending:
+        state.value = PurchaseState.pending;
+        return;
+      case PurchaseStatus.error:
+        state.value = PurchaseState.failed;
+      case PurchaseStatus.canceled:
+        state.value = PurchaseState.idle;
+    }
+    if (purchase.pendingCompletePurchase) await _store?.finish(purchase);
+  }
+
+  static Future<int> _serverCredit(String pack, String transaction) => chatDemo
+      ? Future.value(packs.values.first)
+      : ApiClient().creditPack(pack: pack, transaction: transaction);
 
   /// Keeps a transaction and reads its expiry from the payload (the server
   /// checks the signature; the phone only needs the date).
@@ -255,14 +366,21 @@ class DemoStore implements Store {
   Future<bool> available() async => true;
 
   @override
-  Future<ProductDetails?> product(String id) async => ProductDetails(
-    id: id,
-    title: 'AI agent',
-    description: 'Monthly',
-    price: r'$4.99',
-    rawPrice: 4.99,
-    currencyCode: 'USD',
-  );
+  Future<ProductDetails?> product(String id) async {
+    final price = switch (ChatSubscription.packs[id]) {
+      50 => 0.99,
+      200 => 2.99,
+      _ => 4.99,
+    };
+    return ProductDetails(
+      id: id,
+      title: 'AI agent',
+      description: 'Monthly',
+      price: '\$$price',
+      rawPrice: price,
+      currencyCode: 'USD',
+    );
+  }
 
   @override
   Future<void> buy(
@@ -291,6 +409,24 @@ class DemoStore implements Store {
       ),
     ]);
   }
+
+  @override
+  Future<void> buyPack(
+    ProductDetails pack, {
+    required String accountToken,
+  }) async => _purchases.add([
+    PurchaseDetails(
+      purchaseID: 'demo-pack',
+      productID: pack.id,
+      verificationData: PurchaseVerificationData(
+        localVerificationData: '',
+        serverVerificationData: 'demo.pack.demo',
+        source: 'demo',
+      ),
+      transactionDate: '${DateTime.now().millisecondsSinceEpoch}',
+      status: PurchaseStatus.purchased,
+    ),
+  ]);
 
   @override
   Future<void> restore() async {}

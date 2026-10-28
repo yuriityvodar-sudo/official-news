@@ -51,15 +51,29 @@ void main() {
   late FakeStore store;
   late ChatSubscription subscription;
 
+  /// What the server was asked to credit, and whether it can.
+  late List<(String, String)> credits;
+  late bool serverUp;
+
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
+    credits = [];
+    serverUp = true;
     events = [];
     analytics = Analytics(
       (name, parameters) async => events.add((name, parameters)),
       (_, _) async {},
     );
     store = FakeStore();
-    subscription = ChatSubscription(store: store, clock: () => _now);
+    subscription = ChatSubscription(
+      store: store,
+      credit: (pack, transaction) async {
+        if (!serverUp) throw Exception('offline');
+        credits.add((pack, transaction));
+        return 50;
+      },
+      clock: () => _now,
+    );
     await subscription.start();
   });
   tearDown(() => analytics = Analytics());
@@ -321,6 +335,7 @@ void main() {
         await tester.pumpAndSettle();
         // The card in the field's place, and the question kept for later.
         expect(find.text('No questions left for today'), findsOneWidget);
+        expect(find.text('Buy more questions'), findsOneWidget);
         expect(find.byType(CupertinoTextField), findsNothing);
         expect(find.text('Does this concern me?'), findsOneWidget);
 
@@ -336,12 +351,50 @@ void main() {
     );
 
     testWidgets(
-      'nothing left on opening: the card in the field\'s place, with when new ones come',
+      'nothing left on opening: the card, the packs, and a pack bought '
+      'brings the field back',
       (tester) async {
-        await openChat(tester, server(left: [0]));
+        await openChat(tester, server(left: [0, 50]));
         expect(find.text('No questions left for today'), findsOneWidget);
-        expect(find.textContaining('New ones at'), findsOneWidget);
-        expect(find.byType(CupertinoTextField), findsNothing);
+        expect(find.textContaining('Or buy more'), findsOneWidget);
+        await tester.tap(find.text('Buy more questions'));
+        await tester.pumpAndSettle();
+        expect(find.text('More questions'), findsOneWidget);
+        expect(find.text('+50 questions'), findsOneWidget);
+        expect(find.text('+200 questions'), findsOneWidget);
+        expect(find.text('better value'), findsOneWidget);
+        expect(find.text(r'Buy for $0.99'), findsOneWidget);
+        expect(sent(), contains('topup_view'));
+
+        await tester.tap(find.text('+200 questions'));
+        await tester.pump();
+        expect(find.text(r'Buy for $2.99'), findsOneWidget);
+        await tester.tap(find.text('+50 questions'));
+        await tester.pump();
+        await tester.tap(find.text(r'Buy for $0.99'));
+        await tester.pump();
+        expect(store.boughtPacks, ['com.officialnews.app.agent.questions50']);
+
+        // The subscription listens to StoreKit outside the test's fake time.
+        await tester.runAsync(() async {
+          store.reportPack(PurchaseStatus.purchased);
+          await Future<void>.delayed(const Duration(milliseconds: 20));
+        });
+        await tester.pumpAndSettle();
+        expect(credits, hasLength(1));
+        expect(find.text('More questions'), findsNothing);
+        expect(find.byType(CupertinoTextField), findsOneWidget);
+        expect(find.text('No questions left for today'), findsNothing);
+        expect(
+          events
+              .where((e) => e.$1 == 'topup_result')
+              .map((e) => e.$2['result']),
+          ['credited'],
+        );
+        expect(events.lastWhere((e) => e.$1 == 'topup_result').$2, {
+          'result': 'credited',
+          'questions': 50,
+        });
       },
     );
 

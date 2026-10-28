@@ -16,6 +16,7 @@ import '../../l10n/app_localizations.dart';
 import '../detail/detail_screen.dart' show openOfficialPage;
 import 'chat_style.dart';
 import 'paywall_sheet.dart';
+import 'topup_sheet.dart';
 
 /// One question or answer.
 class _Turn {
@@ -32,9 +33,10 @@ class _Turn {
 /// each answer. The limit as Claude shows it (variant A of Roman's mockup,
 /// 27 Oct): nothing until it is near, then "3 questions left today" over the
 /// field; once none are left, a card in the field's place, with when new ones
-/// come. A long document's question takes more of the limit, and the chat
-/// says so. Not paid any more (the server's 402): the paywall shows again.
-/// Nothing of the conversation is kept: it is gone with the screen.
+/// come and "Buy more questions" ([TopUpSheet]). A long document's question
+/// takes more of the limit, and the chat says so. Not paid any more (the
+/// server's 402): the paywall shows again. Nothing of the conversation is
+/// kept: it is gone with the screen.
 class ChatScreen extends StatefulWidget {
   const ChatScreen({
     super.key,
@@ -113,6 +115,15 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  Future<void> _topUp() async {
+    if (await TopUpSheet.show(context, subscription: widget.subscription) &&
+        mounted) {
+      // [chatDemo] asks no server: what is left is the pack it bought.
+      setState(() => _left = chatDemo ? _subscription.boughtQuestions : null);
+      await _loadStatus();
+    }
+  }
+
   @override
   void dispose() {
     _field.dispose();
@@ -164,7 +175,7 @@ class _ChatScreenState extends State<ChatScreen> {
       }
       answer.done = true;
     } on ChatLimit catch (limit) {
-      // Not asked: the question goes back into the field, for when there are more.
+      // Not asked: the question goes back into the field, for after a top-up.
       _turns
         ..remove(answer)
         ..remove(asked);
@@ -196,8 +207,8 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   /// [chatDemo]: the summary, word by word, as an answer would come, with one
-  /// question fewer left each time from 3, so the line over the field and the
-  /// card can be seen too.
+  /// question fewer left each time from 3, so the line over the field, the
+  /// card and the top-up sheet can be seen too.
   ChatAnswer _demoAnswer() {
     final words = (widget.article.summary ?? widget.article.headline).split(
       ' ',
@@ -252,10 +263,13 @@ class _ChatScreenState extends State<ChatScreen> {
       '',
     );
     final left = _left;
-    final at = (_resetsAt ?? DateTime.now().toUtc()).toLocal();
-    final resets = _resetsAt == null
-        ? '00:00'
-        : '${at.hour.toString().padLeft(2, '0')}:${at.minute.toString().padLeft(2, '0')}';
+    // Today's questions come back at midnight UTC, the server's day, in the
+    // phone's time; without the server's word (the demo), the next one.
+    final now = DateTime.now().toUtc();
+    final at = (_resetsAt ?? DateTime.utc(now.year, now.month, now.day + 1))
+        .toLocal();
+    final resets =
+        '${at.hour.toString().padLeft(2, '0')}:${at.minute.toString().padLeft(2, '0')}';
     // The app's type (theme.dart), as the paywall: the serif for the
     // decision's headline and the answers, the sans for the reader's
     // questions, buttons, links and labels (Yurii, review of #188).
@@ -440,7 +454,11 @@ class _ChatScreenState extends State<ChatScreen> {
                 // Nothing left: the card takes the field's place.
                 Padding(
                   padding: const EdgeInsets.fromLTRB(12, 6, 12, 10),
-                  child: _OutCard(style: style, resets: resets),
+                  child: _OutCard(
+                    style: style,
+                    resets: resets,
+                    onTopUp: _topUp,
+                  ),
                 )
               else ...[
                 if (left != null && left <= 3)
@@ -507,12 +525,17 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 }
 
-/// No questions left for today: when new ones come.
+/// No questions left for today: when new ones come, or buy more.
 class _OutCard extends StatelessWidget {
-  const _OutCard({required this.style, required this.resets});
+  const _OutCard({
+    required this.style,
+    required this.resets,
+    required this.onTopUp,
+  });
 
   final ChatStyle style;
   final String resets;
+  final VoidCallback onTopUp;
 
   @override
   Widget build(BuildContext context) {
@@ -557,6 +580,28 @@ class _OutCard extends StatelessWidget {
             l10n.chatOutBody(resets),
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 13, height: 1.35, color: muted),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: CupertinoButton(
+              padding: EdgeInsets.zero,
+              color: style.fill,
+              borderRadius: BorderRadius.circular(24),
+              onPressed: () {
+                Haptics.light();
+                onTopUp();
+              },
+              child: Text(
+                l10n.chatTopUp,
+                style: const TextStyle(
+                  fontSize: 16.5,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFFFFFFFF),
+                ),
+              ),
+            ),
           ),
         ],
       ),
