@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 
 import '../../core/article.dart';
+import '../../core/card_zoom.dart';
 import '../../core/feed_design.dart';
 import '../../core/motion.dart';
 import '../../core/read_mark.dart';
+import '../../core/theme.dart';
 import 'feed_look_a.dart';
 import 'feed_look_b.dart';
 import 'feed_look_c.dart';
@@ -72,6 +74,12 @@ abstract class FeedLook {
   /// The colour behind the whole feed.
   Color background(BuildContext context);
 
+  /// A card's own colour and corners (#141): its article opens out of it
+  /// and takes its colour as the page. Rows drawn straight on the feed (the
+  /// default) have the feed's colour.
+  Color cardColor(BuildContext context) => background(context);
+  double get cardRadius => 12;
+
   /// The theme the feed is drawn with: [base] is the app's. Returning another
   /// one changes the shared pieces at once (NewsText styles used by
   /// PublisherLine and the loading, error and empty texts; the divider colour).
@@ -95,6 +103,19 @@ abstract class FeedLook {
   /// The bottom of the feed: a spinner while more is loading, a retry when
   /// that failed, or the end of the feed. One sliver.
   Widget feedEnd(BuildContext context, FeedEnd end);
+
+  /// The app's name, small, at the top of the screen once [masthead] has
+  /// scrolled away (#141), as iOS folds a large title into its bar; null
+  /// (the default) for a look whose masthead keeps a bar pinned itself.
+  /// [smallTitle] is the usual one.
+  Widget? foldedTitle(BuildContext context, String title) => null;
+
+  /// [title] in the masthead's style, at a bar title's size.
+  static Widget smallTitle(BuildContext context, String title) => Text(
+    title,
+    maxLines: 1,
+    style: NewsText.from(context).masthead.copyWith(fontSize: 17, height: 1.2),
+  );
 
   /// "3 new decisions": a plain widget, as small as it looks (taps beside it
   /// reach the feed). The screen places it under the masthead, never on the
@@ -145,6 +166,7 @@ class FeedList {
     this.topic,
     this.maxTopics = maxCardTopics,
     this.arriving = false,
+    this.entering = const {},
     this.actions = _nothing,
   });
 
@@ -153,6 +175,10 @@ class FeedList {
   /// The feed has just loaded (#141): its first rows arrive one after
   /// another ([tile]); rows built later, by scrolling, are there at once.
   final bool arriving;
+
+  /// Decisions that have just come in at the top, by id (#141): their rows
+  /// spring in one after another and push the others down ([tile]).
+  final Set<String> entering;
 
   /// A long press on `articles[index]`: what can be done without opening it
   /// (share, the official page, copy the link; #141). [tile] wires it up.
@@ -193,14 +219,34 @@ class FeedList {
   int get length => articles.length;
 
   /// The row of `articles[index]` as every look shows it (#141): it shrinks
-  /// a little while held and springs back, and, just after the feed has
-  /// loaded, the first rows arrive one after another. Wrap each row in the
-  /// item builder: `list.tile(i, MyRow(...))`.
-  Widget tile(int index, Widget row) => Arrive(
-    animate: arriving && index < arrivingRows,
-    delay: Duration(milliseconds: 45 * index),
-    child: PressScale(onLongPress: () => actions(index), child: row),
+  /// a little while held and springs back; just after the feed has loaded,
+  /// the first rows arrive one after another, and a decision that has just
+  /// come in springs in ([entering]). Its article grows out of it when
+  /// opened ([ZoomSource]). Wrap each row in the item builder:
+  /// `list.tile(i, MyRow(...))`.
+  Widget tile(int index, Widget row) => ZoomSource(
+    id: articles[index].id,
+    card: row,
+    child: Arrive(
+      animate: arriving && index < arrivingRows,
+      delay: Duration(milliseconds: 45 * index),
+      child: GrowIn(
+        animate: entering.contains(articles[index].id),
+        delay: Duration(milliseconds: 70 * index),
+        child: PressScale(onLongPress: () => actions(index), child: row),
+      ),
+    ),
   );
+
+  /// The line after the row of `articles[index]`, in a list with lines
+  /// between rows: it springs in with its row ([entering]), so the rows
+  /// under it do not jump. `separatorBuilder: (_, i) => list.line(i, line)`.
+  Widget line(int index, Widget line) => GrowIn(
+    animate: entering.contains(articles[index].id),
+    delay: Duration(milliseconds: 70 * index),
+    child: line,
+  );
+
   bool isRead(Article article) => readIds.contains(article.id);
 
   /// What the row of [article] shows of it being read: faded (Dim), or the

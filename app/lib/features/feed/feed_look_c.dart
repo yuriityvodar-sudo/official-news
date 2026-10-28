@@ -109,10 +109,13 @@ class CLook extends FeedLook {
   /// Rows reach the screen's edges, so a pressed row is shaded edge to edge.
   Widget _list(FeedList list) => SliverList.separated(
     itemCount: list.length,
-    separatorBuilder: (context, _) => Padding(
-      // The line starts at the text, not at the time.
-      padding: EdgeInsets.only(left: 20 + _column(context), right: 20),
-      child: const Divider(),
+    separatorBuilder: (context, i) => list.line(
+      i,
+      Padding(
+        // The line starts at the text, not at the time.
+        padding: EdgeInsets.only(left: 20 + _column(context), right: 20),
+        child: const Divider(),
+      ),
     ),
     itemBuilder: (context, i) {
       final a = list.articles[i];

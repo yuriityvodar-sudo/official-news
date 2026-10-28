@@ -1,8 +1,10 @@
+import 'dart:math' as math;
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollDirection;
+import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -13,6 +15,7 @@ import '../../core/glass.dart';
 import '../../core/languages.dart';
 import '../../core/motion.dart';
 import '../../core/news_widgets.dart';
+import '../../core/card_zoom.dart';
 import '../../core/pictures.dart';
 import '../../core/push.dart';
 import '../../core/theme.dart';
@@ -80,11 +83,25 @@ class DetailScreen extends StatefulWidget {
   const DetailScreen({
     super.key,
     required this.article,
+    this.top,
+    this.topFrom,
+    this.background,
     this.openLink = openOfficialPage,
     this.share = shareArticle,
   });
 
   final Article article;
+
+  /// The card the article opened out of (#141), as its top in place of the
+  /// publisher, headline, date and picture: the same card, at the same width
+  /// and the same distance from the left as in the feed ([topFrom]), so the
+  /// card grows into the article without anything in it changing.
+  final Widget? top;
+  final Rect? topFrom;
+
+  /// The page's colour: the card's, when the article opened out of one.
+  final Color? background;
+
   final OpenLink openLink;
   final ShareArticle share;
 
@@ -132,9 +149,20 @@ class _DetailScreenState extends State<DetailScreen> {
     final padding = MediaQuery.paddingOf(context);
     final summary = article.summary?.trim();
     final hasSummary = summary != null && summary.isNotEmpty;
+    final top = widget.top;
+    final from = widget.topFrom;
+    final page = widget.background ?? scheme.surface;
+    // Everything but the card at the top: at the page's margins, coming in
+    // around the card as it grows into the article (#141).
+    Widget rest(Widget child) => ZoomRest(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        child: child,
+      ),
+    );
 
     return Scaffold(
-      backgroundColor: scheme.surface,
+      backgroundColor: page,
       body: Stack(
         children: [
           _CountsRead(
@@ -142,43 +170,68 @@ class _DetailScreenState extends State<DetailScreen> {
             child: ListView(
               controller: _scroll,
               padding: EdgeInsets.fromLTRB(
-                20,
+                0,
                 padding.top + _bar,
-                20,
+                0,
                 48 + padding.bottom,
               ),
               children: [
-                _Publisher(article),
-                const SizedBox(height: 18),
-                KindLabel(article),
-                Text(article.headline, style: text.articleHeadline),
-                const SizedBox(height: 10),
-                Text(_published(article, l10n), style: text.meta),
-                if (article.imageUrl != null)
-                  _Picture(article.imageUrl!, articleId: article.id),
-                const SizedBox(height: 22),
-                if (hasSummary) ...[
-                  _AiLabel(article),
-                  const SizedBox(height: 10),
-                  for (final paragraph in _paragraphs(summary)) ...[
-                    Text(paragraph, style: text.body),
+                if (top != null && from != null) ...[
+                  // The card itself, where it stands in the feed.
+                  Padding(
+                    padding: EdgeInsets.only(left: math.max(0, from.left)),
+                    child: Align(
+                      alignment: Alignment.topLeft,
+                      child: SizedBox(
+                        width: from.width,
+                        child: ZoomTop(child: top),
+                      ),
+                    ),
+                  ),
+                  ...[
+                    const SizedBox(height: 12),
+                    _Official(article),
                     const SizedBox(height: 14),
-                  ],
-                  const SizedBox(height: 4),
-                  _DiscussWithAi(article),
-                  const SizedBox(height: 18),
+                    KindLabel(article),
+                    Text(_published(article, l10n), style: text.meta),
+                    const SizedBox(height: 22),
+                  ].map(rest),
                 ] else
-                  const _SummaryComing(),
-                const SizedBox(height: 14),
-                _OfficialLink(
-                  article: article,
-                  onTap: () {
-                    final page = officialPage(article.originalUrl);
-                    if (page == null) return;
-                    unawaited(analytics.officialLinkOpened(article));
-                    widget.openLink(page);
-                  },
-                ),
+                  ...[
+                    _Publisher(article),
+                    const SizedBox(height: 18),
+                    KindLabel(article),
+                    Text(article.headline, style: text.articleHeadline),
+                    const SizedBox(height: 10),
+                    Text(_published(article, l10n), style: text.meta),
+                    if (article.imageUrl != null)
+                      _Picture(article.imageUrl!, articleId: article.id),
+                    const SizedBox(height: 22),
+                  ].map(rest),
+                ...[
+                  if (hasSummary) ...[
+                    _AiLabel(article),
+                    const SizedBox(height: 10),
+                    for (final paragraph in _paragraphs(summary)) ...[
+                      Text(paragraph, style: text.body),
+                      const SizedBox(height: 14),
+                    ],
+                    const SizedBox(height: 4),
+                    _DiscussWithAi(article),
+                    const SizedBox(height: 18),
+                  ] else
+                    const _SummaryComing(),
+                  const SizedBox(height: 14),
+                  _OfficialLink(
+                    article: article,
+                    onTap: () {
+                      final page = officialPage(article.originalUrl);
+                      if (page == null) return;
+                      unawaited(analytics.officialLinkOpened(article));
+                      widget.openLink(page);
+                    },
+                  ),
+                ].map(rest),
               ],
             ),
           ),
@@ -186,55 +239,67 @@ class _DetailScreenState extends State<DetailScreen> {
             top: 0,
             left: 0,
             right: 0,
-            child: ScrollEdgeFade(
-              height: padding.top + _bar + 8,
-              color: scheme.surface,
+            // The status bar's words for the page, set here: a sheet over
+            // the article (the paywall) leaves its light ones otherwise.
+            child: AnnotatedRegion<SystemUiOverlayStyle>(
+              value:
+                  ThemeData.estimateBrightnessForColor(page) == Brightness.dark
+                  ? SystemUiOverlayStyle.light
+                  : SystemUiOverlayStyle.dark,
+              child: ZoomRest(
+                child: ScrollEdgeFade(
+                  height: padding.top + _bar + 8,
+                  color: page,
+                ),
+              ),
             ),
           ),
           Positioned(
             top: padding.top + 6,
             left: 12,
             right: 12,
-            child: Row(
-              children: [
-                if (ModalRoute.of(context)?.canPop ?? false)
-                  _BarButton(
-                    compact: _compact,
-                    onPressed: () => Navigator.of(context).maybePop(),
-                    // Its name for VoiceOver (and tests), never shown.
-                    child: Tooltip(
-                      message: MaterialLocalizations.of(
-                        context,
-                      ).backButtonTooltip,
-                      triggerMode: TooltipTriggerMode.manual,
+            child: ZoomRest(
+              child: Row(
+                children: [
+                  if (ModalRoute.of(context)?.canPop ?? false)
+                    _BarButton(
+                      compact: _compact,
+                      onPressed: () => Navigator.of(context).maybePop(),
+                      // Its name for VoiceOver (and tests), never shown.
+                      child: Tooltip(
+                        message: MaterialLocalizations.of(
+                          context,
+                        ).backButtonTooltip,
+                        triggerMode: TooltipTriggerMode.manual,
+                        child: Icon(
+                          CupertinoIcons.chevron_left,
+                          size: 20,
+                          color: CupertinoColors.label.resolveFrom(context),
+                        ),
+                      ),
+                    ),
+                  const Spacer(),
+                  Builder(
+                    builder: (buttonContext) => _BarButton(
+                      compact: _compact,
+                      onPressed: () {
+                        unawaited(analytics.shared(article));
+                        widget.share(
+                          article,
+                          shareText(article, l10n),
+                          _originOf(buttonContext),
+                        );
+                      },
                       child: Icon(
-                        CupertinoIcons.chevron_left,
+                        CupertinoIcons.share,
                         size: 20,
                         color: CupertinoColors.label.resolveFrom(context),
+                        semanticLabel: l10n.share,
                       ),
                     ),
                   ),
-                const Spacer(),
-                Builder(
-                  builder: (buttonContext) => _BarButton(
-                    compact: _compact,
-                    onPressed: () {
-                      unawaited(analytics.shared(article));
-                      widget.share(
-                        article,
-                        shareText(article, l10n),
-                        _originOf(buttonContext),
-                      );
-                    },
-                    child: Icon(
-                      CupertinoIcons.share,
-                      size: 20,
-                      color: CupertinoColors.label.resolveFrom(context),
-                      semanticLabel: l10n.share,
-                    ),
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ],
@@ -243,7 +308,7 @@ class _DetailScreenState extends State<DetailScreen> {
   }
 }
 
-/// A round Liquid Glass button floating over the article, with a 44-pt
+/// A round Liquid Glass button floating over the article, with a 48-pt
 /// target and a light tap back (#141); smaller while [compact].
 class _BarButton extends StatelessWidget {
   const _BarButton({
@@ -263,12 +328,13 @@ class _BarButton extends StatelessWidget {
     curve: Motion.spring,
     child: CupertinoButton(
       padding: EdgeInsets.zero,
-      minimumSize: const Size(44, 44),
+      minimumSize: const Size(48, 48),
       onPressed: () {
         Haptics.light();
         onPressed();
       },
-      child: GlassCircle(size: 44, child: child),
+      // A little larger than 44, as iOS 26's own glass buttons (Yurii, #160).
+      child: GlassCircle(size: 48, child: child),
     ),
   );
 }
@@ -384,7 +450,6 @@ class _Publisher extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final text = NewsText.from(context);
-    final l10n = AppLocalizations.of(context);
     final scheme = Theme.of(context).colorScheme;
     return Row(
       children: [
@@ -413,31 +478,7 @@ class _Publisher extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
               ),
               const SizedBox(height: 2),
-              // Wraps instead of overflowing: "Official source" is longer in
-              // some languages ("Официальный источник"), and at large text sizes.
-              Wrap(
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  Text(
-                    '${countryName(article.country, l10n)} · ',
-                    style: text.meta,
-                  ),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(
-                        CupertinoIcons.checkmark_seal,
-                        size: 15,
-                        color: AppColors.verified,
-                      ),
-                      const SizedBox(width: 3),
-                      Flexible(
-                        child: Text(l10n.officialSource, style: text.meta),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
+              _Official(article),
             ],
           ),
         ),
@@ -446,8 +487,42 @@ class _Publisher extends StatelessWidget {
   }
 }
 
-/// The preview image of the official page, with where it comes from. It
-/// flew in from the feed's card (#141); a tap shows it full screen.
+/// "Germany · ✓ Official source", under the publisher, or under the card an
+/// article opened out of (#141). Wraps instead of overflowing: "Official
+/// source" is longer in some languages ("Официальный источник"), and at
+/// large text sizes.
+class _Official extends StatelessWidget {
+  const _Official(this.article);
+
+  final Article article;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = NewsText.from(context);
+    final l10n = AppLocalizations.of(context);
+    return Wrap(
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        Text('${countryName(article.country, l10n)} · ', style: text.meta),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              CupertinoIcons.checkmark_seal,
+              size: 15,
+              color: AppColors.verified,
+            ),
+            const SizedBox(width: 3),
+            Flexible(child: Text(l10n.officialSource, style: text.meta)),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// The preview image of the official page, with where it comes from. A tap
+/// shows it full screen, flying there (#141).
 class _Picture extends StatelessWidget {
   const _Picture(this.url, {required this.articleId});
 
