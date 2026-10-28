@@ -77,10 +77,11 @@ bool isFresh(Article article, {DateTime? now}) {
   return !age.isNegative && age < const Duration(hours: 1);
 }
 
-/// The time of a decision from the last hour (#141), in the accent colour,
-/// fading out and in three times as the card appears and then still, so a
-/// fresh decision catches the eye without the feed blinking (a dot would
-/// read as the unread mark). Each decision pulses once while the app runs:
+/// The time of a decision from the last hour (#141), in the accent colour
+/// ([color]: Garnet and Seal give their own), fading out and in three times
+/// as the card appears and then still, so a fresh decision catches the eye
+/// without the feed blinking (a dot would read as the unread mark). Each
+/// decision pulses once while the app runs:
 /// a row built again (scrolled away and back, back from the article) is
 /// still. With Reduce Motion on, it is still from the start.
 class FreshTime extends StatefulWidget {
@@ -89,11 +90,13 @@ class FreshTime extends StatefulWidget {
     super.key,
     required this.articleId,
     required this.style,
+    this.color = AppColors.accent,
   });
 
   final String time;
   final String articleId;
   final TextStyle style;
+  final Color color;
 
   /// The articles whose time has pulsed in this run of the app.
   static final _pulsed = <String>{};
@@ -146,10 +149,7 @@ class _FreshTimeState extends State<FreshTime>
   @override
   Widget build(BuildContext context) => FadeTransition(
     opacity: _pulse,
-    child: Text(
-      widget.time,
-      style: widget.style.copyWith(color: AppColors.accent),
-    ),
+    child: Text(widget.time, style: widget.style.copyWith(color: widget.color)),
   );
 }
 
