@@ -25,10 +25,24 @@ void main() {
   late FakeStore store;
   late ChatSubscription subscription;
 
+  /// What the server was asked to credit, and whether it can.
+  late List<(String, String)> credits;
+  late bool serverUp;
+
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
+    credits = [];
+    serverUp = true;
     store = FakeStore();
-    subscription = ChatSubscription(store: store, clock: () => _now);
+    subscription = ChatSubscription(
+      store: store,
+      credit: (pack, transaction) async {
+        if (!serverUp) throw Exception('offline');
+        credits.add((pack, transaction));
+        return 50;
+      },
+      clock: () => _now,
+    );
     await subscription.start();
   });
 
@@ -86,6 +100,31 @@ void main() {
       store.report(PurchaseStatus.error);
       await pumpEventQueue();
       expect(subscription.state.value, PurchaseState.failed);
+    });
+
+    test('a pack is credited on the server before it is finished; one not '
+        'credited stays unfinished, for StoreKit to give again', () async {
+      store.report(
+        PurchaseStatus.purchased,
+        jws: _jws(_now.add(const Duration(days: 30))),
+      );
+      await pumpEventQueue();
+      store.finished.clear();
+
+      serverUp = false;
+      store.reportPack(PurchaseStatus.purchased);
+      await pumpEventQueue();
+      expect(store.finished, isEmpty);
+      expect(subscription.state.value, PurchaseState.failed);
+
+      // The next start: StoreKit gives the unfinished pack again.
+      serverUp = true;
+      store.reportPack(PurchaseStatus.purchased);
+      await pumpEventQueue();
+      expect(credits, [('pack.jws', subscription.transaction!)]);
+      expect(store.finished, hasLength(1));
+      expect(subscription.credited, 1);
+      expect(subscription.boughtQuestions, 50);
     });
 
     testWidgets('a restore that finds nothing says so', (tester) async {

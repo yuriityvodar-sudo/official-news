@@ -144,6 +144,14 @@ class Analytics {
   Future<void> restoreResult(String result) =>
       _event('restore_result', {'result': result});
 
+  /// The top-up sheet shown, once the day's questions were used up (#146).
+  Future<void> topUpView() => _event('topup_view', const {});
+
+  /// How a pack's purchase ended: `credited`, `cancelled`, `failed` or
+  /// `pending`, and which pack (`50` or `200` questions).
+  Future<void> topUpResult(String result, {required int questions}) =>
+      _event('topup_result', {'result': result, 'questions': questions});
+
   /// A question to the AI agent: the article and the question's number in the
   /// conversation, never its text (#146).
   Future<void> chatQuestion(Article article, int number) =>
