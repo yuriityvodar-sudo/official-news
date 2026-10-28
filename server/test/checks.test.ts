@@ -1,17 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { checkSummary } from "../src/summarizer/checks";
+import { COPIED_WORDS, checkSummary } from "../src/summarizer/checks";
 import type { Summary } from "../src/summarizer/schema";
 
-const summary = (text: string, impact: Summary["impact"] = null): Summary => ({
+const summary = (text: string, shortSummary = "Short."): Summary => ({
   isNews: true,
   decisionType: "decision",
   headline: "Headline",
-  shortSummary: "Short.",
+  headlineType: "consequence",
+  shortSummary,
   summary: text,
   topics: ["economy"],
-  tags: [],
   importance: 3,
-  impact,
 });
 
 describe("checkSummary", () => {
@@ -20,9 +19,8 @@ describe("checkSummary", () => {
     expect(checkSummary(summary("2,500MW from 1 July 2028; 86% agree; 2000 plants."), source, 2026).invented).toEqual([]);
   });
 
-  it("finds a number the article does not give, also in the impact lines", () => {
-    const s = summary("Nothing new.", { general: "Costs rise by 15%.", byTopic: [], residents: null, abroad: null });
-    expect(checkSummary(s, "The ministry published a notice.", 2026).invented).toEqual(["15"]);
+  it("finds a number the article does not give, also in the short summary", () => {
+    expect(checkSummary(summary("Nothing new.", "Costs rise by 15%."), "The ministry published a notice.", 2026).invented).toEqual(["15"]);
   });
 
   it("accepts the year the article was fetched and the years next to it (令和8年 is 2026)", () => {
@@ -84,6 +82,40 @@ describe("checkSummary", () => {
     expect(checkSummary(summary("US$12.5 billion"), rigi, 2026).invented).toEqual(["125"]);
     // A single capital letter is not a numeral: "C.V." gives no 100.
     expect(checkSummary(summary("a fine of 100 pesos"), "Geosa, S. de R.L. de C.V.", 2026).invented).toEqual(["100"]);
+  });
+
+  it("reads Italian numbers written out and Turkish numbers in parts (#99: two decisions hidden on 21 Oct)", () => {
+    const ok = (source: string, text: string) => expect(checkSummary(summary(text), source, 2026).invented, text).toEqual([]);
+    const minors =
+      "2026-10-20\nPer i minori che hanno compiuto i quattordici anni è introdotta una presunzione di imputabilità: " +
+      "la capacità di intendere e di volere si presume fino a prova contraria.";
+    ok(minors, "For minors aged 14 and older, the law introduces a presumption of criminal responsibility.");
+    ok("un termine di ventitré giorni", "a deadline of 23 days");
+    ok("i giovani di ventun anni", "young people aged 21");
+    ok("per trentotto mesi", "for 38 months");
+    const funds =
+      "2026-10-21\nCHP Karabük Milletvekili Cevdet Akay da fon soruşturmalarına değinerek, 455 bin 758 tekil kişiyi " +
+      "ilgilendiren bir mağduriyetin yaşandığını dile getirdi. Alan, \"Fon piyasamızda 2 bini aşkın yatırım fonu bulunmaktadır.";
+    ok(funds, "The proposal protects the rights of approximately 455,758 individual investors.");
+    ok(funds, "The market has more than 2,000 investment funds.");
+    ok("1 milyon 250 bin lira", "1,250,000 lira");
+    ok("1 milyon 250 bin lira", "1.25 million lira");
+
+    // Still caught: another number than the one written out, or a part read alone.
+    expect(checkSummary(summary("For minors aged 15 and older."), minors, 2026).invented).toEqual(["15"]);
+    expect(checkSummary(summary("about 455,759 investors"), funds, 2026).invented).toEqual(["455759"]);
+    expect(checkSummary(summary("about 758,000 investors"), funds, 2026).invented).toEqual(["758000"]);
+  });
+
+  it("accepts a large amount rounded correctly in millions or billions, not a wrong rounding (#99)", () => {
+    const credit = "MPV 1397/2026: Abre crédito extraordinário, em favor de Encargos Financeiros da União, no valor de R$6.494.296.446,00";
+    const invented = (text: string) => checkSummary(summary(text), credit, 2026).invented;
+    expect(invented("an extraordinary credit of R$6.49 billion")).toEqual([]);
+    expect(invented("an extraordinary credit of R$6.5 billion")).toEqual([]);
+    expect(invented("an extraordinary credit of R$6,494,296,446")).toEqual([]);
+    expect(invented("an extraordinary credit of R$6.4 billion")).toEqual(["64"]);
+    expect(invented("an extraordinary credit of R$6.59 billion")).toEqual(["659"]);
+    expect(invented("an extraordinary credit of R$6.49 million")).toEqual(["649"]);
   });
 
   it("still finds a number made from parts of another one", () => {
@@ -154,5 +186,26 @@ describe("checkSummary", () => {
       "Savers with low incomes get a yearly allowance, paid by the Deutsche Rentenversicherung from 2027.";
     expect(checkSummary(summary(english), english, 2026).notEnglish).toBe(false);
     expect(checkSummary(summary("Kabinett beschließt Haushalt."), "", 2026).notEnglish).toBe(false);
+  });
+});
+
+describe("copied text (#133)", () => {
+  const source =
+    "The Commission has opened formal proceedings to assess whether Booking.com breached the Digital Services Act in the areas linked to fraud.";
+
+  it(`finds a run of ${COPIED_WORDS} or more words taken from the article, in the summary or the short summary`, () => {
+    const copied = summary("If you book a room, the Commission has opened formal proceedings to assess whether Booking.com breached the rules.");
+    expect(checkSummary(copied, source, 2026).copied).toEqual([
+      "the commission has opened formal proceedings to assess whether booking com breached the",
+    ]);
+    const short = summary("Nothing new.", "The Commission has opened formal proceedings to assess whether Booking.com breached the act.");
+    expect(checkSummary(short, source, 2026).copied).toHaveLength(1);
+  });
+
+  it(`accepts fewer than ${COPIED_WORDS} words in a row, a copied headline, and a source in another language`, () => {
+    const own = { ...summary("If you book a room, it opened formal proceedings to assess whether Booking.com breached the rules."), headline: source };
+    expect(checkSummary(own, source, 2026).copied).toEqual([]);
+    const german = "Die Kommission hat ein förmliches Verfahren eingeleitet, um zu prüfen, ob Booking.com gegen das Gesetz verstoßen hat.";
+    expect(checkSummary(summary("The Commission has opened formal proceedings to check Booking.com."), german, 2026).copied).toEqual([]);
   });
 });

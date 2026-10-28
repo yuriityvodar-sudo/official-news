@@ -925,7 +925,7 @@ describe("GET /articles with lang", () => {
     it("leaves English as it was, with or without lang=en", async () => {
       for (const lang of ["", "en"]) {
         const english = await sources(lang);
-        expect(english.length, lang).toBe(5); // english-only and translated in items and in top, and the article
+        expect(english.length, lang).toBe(4); // english-only and translated in items, translated in top (one per country), and the article
         for (const source of english) expect(source.name, lang).toBe("Federal Government");
       }
     });
@@ -1000,15 +1000,15 @@ describe("GET /articles with lang", () => {
   it("gives a language the English top stories that are translated into it, in the same order", async () => {
     await env.DB.batch([
       env.DB.prepare("UPDATE articles SET importance = 5 WHERE id = 'english-only'"),
-      env.DB.prepare("UPDATE articles SET importance = 3 WHERE id = 'translated'"),
+      env.DB.prepare("UPDATE articles SET importance = 3, source_id = 'us-white-house' WHERE id = 'translated'"),
     ]);
     await insertNews("third", hoursAgo(3), 1, { released: true });
     await env.DB.batch([finished("third", "uk", 2, "Третє"), env.DB.prepare("UPDATE articles SET importance = 2, source_id = 'fr-foreign-ministry' WHERE id = 'third'")]);
     const english = ((await get("/articles")).body as ArticlesPage).top.map((a) => a.id);
-    // Picked by importance, shown in feed order (newest first).
-    expect(english).toEqual(["third", "translated", "english-only"]);
+    // Best score first (#164), one per country.
+    expect(english).toEqual(["english-only", "translated", "third"]);
     const uk = ((await get("/articles?lang=uk")).body as ArticlesPage).top;
-    expect(uk.map((a) => [a.id, a.headline])).toEqual([["third", "Третє"], ["translated", "Заголовок"]]);
+    expect(uk.map((a) => [a.id, a.headline])).toEqual([["translated", "Заголовок"], ["third", "Третє"]]);
     expect(((await get("/articles?lang=ru")).body as ArticlesPage).top.map((a) => a.id)).toEqual(["translated"]);
   });
 

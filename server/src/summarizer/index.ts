@@ -1,8 +1,8 @@
 import type { Env } from "../env";
 import { toStoredTime } from "../fetcher/text";
 import { checkSummary } from "./checks";
-import { type ArticleInput, MAX_TEXT, SYSTEM_PROMPT, publishedDate, userMessage } from "./prompt";
-import { SUMMARY_SCHEMA, type Summary, parseJson, toSummary } from "./schema";
+import { type ArticleInput, MAX_TEXT, headlineKind, publishedDate, systemPrompt, userMessage } from "./prompt";
+import { SUMMARY_SCHEMA, type Summary, clipped, overLimits, parseJson, toSummary } from "./schema";
 
 /**
  * The Workers AI model that writes the summaries (docs/decisions.md). Gemma 4
@@ -17,7 +17,7 @@ export const MODEL = "@cf/google/gemma-4-26b-a4b-it";
 /** An article gets this many tries with an unusable answer, then it stays hidden. */
 export const MAX_ATTEMPTS = 3;
 
-/** The answer with its impact part is about 300 to 450 tokens. */
+/** The answer is about 150 to 300 tokens (#133); the limit leaves room for a long one. */
 const MAX_COMPLETION_TOKENS = 2000;
 
 /** A claim older than this is from a run that was cut off, so its articles are free again. */
@@ -57,7 +57,7 @@ function workersAi(env: Env): Summarize {
   return async (article) => {
     const output = await env.AI.run(MODEL, {
       messages: [
-        { role: "system", content: SYSTEM_PROMPT },
+        { role: "system", content: systemPrompt(article.headlineKind) },
         { role: "user", content: userMessage(article) },
       ],
       response_format: { type: "json_schema", json_schema: { name: "article_summary", schema: SUMMARY_SCHEMA, strict: true } },
@@ -77,22 +77,22 @@ function workersAi(env: Env): Summarize {
 function store(env: Env, id: string, s: Summary, now: string): D1PreparedStatement {
   // No feed_seq here: an article enters the feed when it is released, in English
   // and every language at once (release together, #46: translator/release.ts).
+  // Since #133 no impact and no tags: what it means is in the summary.
   return env.DB.prepare(
-    `UPDATE articles SET headline = ?, short_summary = ?, summary = ?, decision_type = ?, topics = ?, tags = ?,
-            importance = ?, is_news = ?, summarized_at = ?, model = ?, impact = ?
+    `UPDATE articles SET headline = ?, headline_type = ?, short_summary = ?, summary = ?, decision_type = ?, topics = ?,
+            tags = '[]', importance = ?, is_news = ?, summarized_at = ?, model = ?, impact = NULL
      WHERE id = ?`,
   ).bind(
     s.headline,
+    s.headlineType,
     s.shortSummary,
     s.summary,
     s.decisionType,
     JSON.stringify(s.topics),
-    JSON.stringify(s.tags),
     s.importance,
     s.isNews ? 1 : 0,
     now,
     MODEL,
-    s.impact ? JSON.stringify(s.impact) : null,
     id,
   );
 }
@@ -156,6 +156,7 @@ export async function runSummarizer(
       title: row.original_title,
       text: row.text,
       published: publishedDate(row.published_at, row.country),
+      headlineKind: headlineKind(row.id, row.text),
     };
     try {
       const answer = await summarize(article);
@@ -165,34 +166,31 @@ export async function runSummarizer(
       } catch {
         throw new UnusableAnswer("the answer is not valid JSON");
       }
-      const checked = toSummary(parsed);
+      const checked = toSummary(parsed, article.headlineKind);
       if ("problems" in checked) throw new UnusableAnswer(checked.problems.join("; "));
       // A number the article does not give, or a summary not in English, is never
-      // stored (#63); ruled-out words get another try, and on the last one the summary
-      // is stored anyway, so a decision is not hidden for a word. Readers never see an
-      // article that is not news, so its answer is not checked: a retry would only cost Neurons.
+      // stored (#63). A ruled-out word, text copied from the article or a field over
+      // its limit (#133) gets another try, and on the last one the summary is stored
+      // anyway (clipped to the limits), so a decision is not hidden for a word. Readers
+      // never see an article that is not news, so its answer is not checked: a retry
+      // would only cost Neurons.
       let summary = checked.summary;
       const warnings: string[] = [];
       if (summary.isNews) {
         // What the model read, the publication date included: a date taken from it is not invented.
         const source = `${article.published}\n${row.original_title}\n${(row.text ?? "").slice(0, MAX_TEXT)}`;
-        const year = Number(row.fetched_at.slice(0, 4));
-        const lastTry = row.summary_attempts >= MAX_ATTEMPTS - 1;
-        let found = checkSummary(summary, source, year);
-        // On the last try, numbers only in "what it means" cost that part, not the decision.
-        if (found.invented.length && lastTry && summary.impact) {
-          const withoutImpact = checkSummary({ ...summary, impact: null }, source, year);
-          if (!withoutImpact.invented.length) {
-            warnings.push(`impact dropped: numbers not in the article: ${found.invented.join(", ")}`);
-            summary = { ...summary, impact: null };
-            found = withoutImpact;
-          }
-        }
+        const found = checkSummary(summary, source, Number(row.fetched_at.slice(0, 4)));
         if (found.invented.length) throw new UnusableAnswer(`numbers not in the article: ${found.invented.join(", ")}`);
         if (found.notEnglish) throw new UnusableAnswer("the summary is not in English");
-        if (found.banned.length && !lastTry) throw new UnusableAnswer(`ruled-out words: ${found.banned.join(", ")}`);
-        if (found.banned.length) warnings.push(`stored on its last try with: ${found.banned.join(", ")}`);
+        const soft = [
+          ...(found.banned.length ? [`ruled-out words: ${found.banned.join(", ")}`] : []),
+          ...(found.copied.length ? [`copied from the article: ${found.copied.map((r) => `"${r}"`).join(", ")}`] : []),
+          ...overLimits(summary),
+        ];
+        if (soft.length && row.summary_attempts < MAX_ATTEMPTS - 1) throw new UnusableAnswer(soft.join("; "));
+        if (soft.length) warnings.push(`stored on its last try with: ${soft.join("; ")}`);
       }
+      summary = clipped(summary);
       await store(env, row.id, summary, toStoredTime(new Date())).run();
       results.push({
         articleId: row.id,

@@ -50,7 +50,7 @@ Map<String, dynamic> _article(
   'decisionType': 'cabinet-decision',
   'originalTitle': 'Original $id',
   'originalLanguage': 'de',
-  'topics': <String>[],
+  'topics': ['economy'],
   'tags': <String>[],
   'importance': 3,
   'imageUrl': null,
@@ -143,6 +143,8 @@ Future<FeedController> _launch(
   await tester.pumpWidget(OfficialNewsApp(feed: feed));
   await tester.pump();
   await tester.pump();
+  // Past the splash (prototype), which plays over the feed at start.
+  await tester.pumpAndSettle();
   return feed;
 }
 
@@ -168,6 +170,17 @@ Map<String, dynamic> _arb(String code) =>
 Set<String> _placeholders(String message) => RegExp(
   r'\{(\w+)\s*[},]',
 ).allMatches(message).map((m) => m.group(1)!).toSet();
+
+/// The feed's former section titles, "Top stories" and "Latest", as each
+/// language had them until the feed became one list (Yurii, 16 Oct; their
+/// messages are gone from the ARB files).
+const _sectionTitles = {
+  FeedLanguage.en: ['Top stories', 'Latest'],
+  FeedLanguage.uk: ['Головне', 'Останнє'],
+  FeedLanguage.ru: ['Главное', 'Последние решения'],
+  FeedLanguage.es: ['Destacadas', 'Lo último'],
+  FeedLanguage.de: ['Topmeldungen', 'Aktuell'],
+};
 
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
@@ -379,13 +392,15 @@ void main() {
       tester,
     ) async {
       await _launch(tester, phone: const [Locale('uk', 'UA')]);
-      expect(find.text('Головне'), findsOneWidget);
-      expect(find.text('Останнє'), findsOneWidget);
+      expect(find.text('Усі теми'), findsOneWidget);
       expect(
         find.text(longDay(DateTime.now(), l10nFor(FeedLanguage.uk))),
         findsOneWidget,
       );
-      expect(find.text('Top stories'), findsNothing);
+      expect(find.text('All topics'), findsNothing);
+      // One list, no section titles (Yurii, 16 Oct), in Ukrainian too.
+      expect(find.text('Головне'), findsNothing);
+      expect(find.text('Останнє'), findsNothing);
     });
 
     testWidgets('choosing the language it already shows saves it', (
@@ -411,8 +426,8 @@ void main() {
       tester,
     ) async {
       await _launch(tester, phone: const [Locale('fr', 'FR')]);
-      expect(find.text('Top stories'), findsOneWidget);
-      expect(find.text('Latest'), findsOneWidget);
+      expect(find.text('All topics'), findsOneWidget);
+      expect(find.text(longDay(DateTime.now(), l10nFor())), findsOneWidget);
     });
   });
 
@@ -422,8 +437,10 @@ void main() {
       final semantics = tester.ensureSemantics();
       final log = <Uri>[];
       await _launch(tester, log: log);
-      expect(find.text('Top stories'), findsOneWidget);
-      expect(find.text('CABINET DECISION'), findsNWidgets(2));
+      expect(find.text('All topics'), findsOneWidget);
+      // The cards' topic tags (the decision type is on the article screen).
+      expect(find.text('Economy'), findsNWidgets(2));
+      expect(find.text('CABINET DECISION'), findsNothing);
       expect(find.text(longDay(DateTime.now(), l10nFor())), findsOneWidget);
 
       await _chooseInSettings(tester, 'Українська', 'Language');
@@ -448,7 +465,7 @@ void main() {
         'Сповіщення',
         'Недоступно', // no push in tests (#62)
         'ІНФОРМАЦІЯ',
-        'Про Official News',
+        'Про Outer News',
         'Політика конфіденційності',
         'Умови використання',
         'Контакти й підтримка',
@@ -460,24 +477,29 @@ void main() {
       await tester.pageBack();
       await tester.pumpAndSettle();
       expect(log.last.queryParameters['lang'], 'uk');
-      expect(find.text('Головне'), findsOneWidget);
-      expect(find.text('Останнє'), findsOneWidget);
-      expect(find.text('Top stories'), findsNothing);
+      expect(find.text('Усі теми'), findsOneWidget);
+      expect(find.text('All topics'), findsNothing);
+      expect(find.text('Головне'), findsNothing);
+      expect(find.text('Останнє'), findsNothing);
       expect(
         find.text(longDay(DateTime.now(), l10nFor(FeedLanguage.uk))),
         findsOneWidget,
       );
-      expect(find.text('РІШЕННЯ УРЯДУ'), findsNWidgets(2));
+      expect(find.text('Економіка'), findsNWidgets(2));
+      expect(find.text('РІШЕННЯ УРЯДУ'), findsNothing);
       expect(find.text('Federal Government · Німеччина'), findsNWidgets(2));
       expect(find.text('5 хв тому'), findsNWidgets(2));
       expect(find.bySemanticsLabel('Параметри'), findsOneWidget);
 
-      // An article opened now has "< Сьогодні" as its back button.
+      // An article opened now has its back button named in Ukrainian for
+      // VoiceOver (a Liquid Glass circle with no title since #141).
       await tester.tap(find.text('Закон uk'));
       await tester.pumpAndSettle();
-      expect(find.text('Сьогодні'), findsOneWidget);
+      expect(find.byTooltip('Назад'), findsOneWidget);
       expect(find.text('Офіційне джерело'), findsOneWidget);
-      await tester.pageBack();
+      // The decision type, in Ukrainian, inside the article.
+      expect(find.text('РІШЕННЯ УРЯДУ'), findsOneWidget);
+      await tester.tap(find.byTooltip('Назад'));
       await tester.pumpAndSettle();
 
       final prefs = await SharedPreferences.getInstance();
@@ -490,8 +512,8 @@ void main() {
       await tester.pumpAndSettle();
       await tester.pageBack();
       await tester.pumpAndSettle();
-      expect(find.text('Top stories'), findsOneWidget);
-      expect(find.text('Головне'), findsNothing);
+      expect(find.text('All topics'), findsOneWidget);
+      expect(find.text('Усі теми'), findsNothing);
       semantics.dispose();
     },
   );
@@ -505,14 +527,19 @@ void main() {
       SharedPreferences.setMockInitialValues({'feed.lang': lang.code});
       final l10n = l10nFor(lang);
       await _launch(tester);
-      expect(find.text(l10n.topStories), findsOneWidget);
+      expect(find.text(l10n.filterAllTopics), findsOneWidget);
+      // One list in every language: no section titles.
+      for (final title in _sectionTitles[lang] ?? const <String>[]) {
+        expect(find.text(title), findsNothing, reason: title);
+      }
       await tester.tap(
         find.textContaining(lang == FeedLanguage.en ? 'Law' : 'Закон'),
       );
       await tester.pumpAndSettle();
-      expect(find.text(l10n.today), findsOneWidget); // the back button
+      expect(find.text(l10n.discussWithAi), findsOneWidget);
       expect(find.text(l10n.officialSource), findsOneWidget);
-      await tester.pageBack();
+      // The back button has no title since #141, only its name for VoiceOver.
+      await tester.tap(find.byIcon(CupertinoIcons.chevron_left));
       await tester.pumpAndSettle();
 
       // The filters (#67, #68): both menus with their longest names, then

@@ -66,6 +66,27 @@ const topicIcons = <String, IconData>{
   'justice': CupertinoIcons.hammer_fill,
 };
 
+/// The same glyphs as SF Symbols' names, for the native Topics menu on iOS
+/// (#141); a name the phone's iOS lacks shows no glyph there.
+const topicSymbols = <String, String>{
+  'foreign-affairs': 'globe',
+  'economy': 'chart.bar.fill',
+  'security-defence': 'shield.fill',
+  'health': 'staroflife.fill',
+  'climate': 'leaf.arrow.circlepath',
+  'trade': 'arrow.right.arrow.left',
+  'technology': 'desktopcomputer',
+  'energy': 'bolt.fill',
+  'migration': 'person.2.fill',
+  'elections': 'checklist',
+  'human-rights': 'hand.raised.fill',
+  'science': 'flask.fill',
+  'education': 'book.fill',
+  'justice': 'hammer.fill',
+};
+
+String topicSymbol(String id) => topicSymbols[id] ?? 'square.grid.2x2';
+
 /// The chip's glyph for a topic the app has no icon for yet (one the server
 /// added after this build).
 const otherTopicIcon = CupertinoIcons.square_grid_2x2;

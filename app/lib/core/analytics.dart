@@ -91,7 +91,9 @@ class Analytics {
         'topic': topic ?? 'all',
       });
 
-  /// An article opened from the feed: from `top` (Top stories) or `latest`.
+  /// An article opened from the feed: [section] is `feed`, the one list
+  /// (Yurii, 16 Oct; builds before it sent `top` or `latest`), and
+  /// [position] its place in the list as shown, filters applied, from 0.
   Future<void> articleOpened(
     Article article, {
     required String section,
@@ -118,6 +120,42 @@ class Analytics {
     'item_id': article.id,
     ..._about(article),
   });
+
+  /// "Discuss with AI" tapped under a summary (#141, #133): until the chat is
+  /// built it opens a note about it, so the taps measure whether it is wanted.
+  Future<void> discussAiTapped(Article article) =>
+      _event('discuss_ai_tap', _about(article));
+
+  /// "Tell me when it's ready" tapped in the AI chat's note (#160), once per
+  /// phone: with the taps on "Discuss with AI", how many readers want the chat.
+  Future<void> aiChatInterest() => _event('ai_chat_interest', const {});
+
+  /// The AI chat's paywall shown over an article (#146).
+  Future<void> paywallView(Article article) =>
+      _event('paywall_view', _about(article));
+
+  /// Subscribe tapped on the paywall, and how it ended: `purchased`,
+  /// `cancelled`, `failed` or `pending` (Ask to Buy).
+  Future<void> subscribeTap() => _event('subscribe_tap', const {});
+  Future<void> subscribeResult(String result) =>
+      _event('subscribe_result', {'result': result});
+
+  /// Restore Purchases on the paywall: `restored`, `nothing` or `failed`.
+  Future<void> restoreResult(String result) =>
+      _event('restore_result', {'result': result});
+
+  /// The top-up sheet shown, once the day's questions were used up (#146).
+  Future<void> topUpView() => _event('topup_view', const {});
+
+  /// How a pack's purchase ended: `credited`, `cancelled`, `failed` or
+  /// `pending`, and which pack (`50` or `200` questions).
+  Future<void> topUpResult(String result, {required int questions}) =>
+      _event('topup_result', {'result': result, 'questions': questions});
+
+  /// A question to the AI agent: the article and the question's number in the
+  /// conversation, never its text (#146).
+  Future<void> chatQuestion(Article article, int number) =>
+      _event('chat_question', {'number': number, ..._about(article)});
 
   /// How far down the feed the reader came this visit: the first time a row
   /// of [feedDepths] is shown, `feed_scroll_10`, `feed_scroll_25` and so on.
@@ -151,7 +189,7 @@ class Analytics {
   };
 }
 
-/// The feed depths [Analytics.feedDepth] reports, in rows of the Latest list.
+/// The feed depths [Analytics.feedDepth] reports, in rows of the feed.
 const feedDepths = [10, 25, 50, 100];
 
 /// The app's analytics; off until [startAnalytics] turns it on.

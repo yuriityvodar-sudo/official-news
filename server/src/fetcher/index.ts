@@ -4,7 +4,7 @@ import { parseFeed } from "./feed";
 import { extractContent, findLink, parsePage } from "./page";
 import { type Robots, isAllowed, robotsFromResponse } from "./robots";
 import { decodeBody, getStrings, htmlToText, toStoredTime, ulid } from "./text";
-import { type FoundItem, type SourceConfig, type SourceRow, configRegex, readConfig } from "./types";
+import { type FilterField, type FoundItem, type SourceConfig, type SourceRow, configRegex, readConfig } from "./types";
 
 export const USER_AGENT = "OfficialNewsBot/0.1 (+https://github.com/yuriityvodar-sudo/official-news)";
 
@@ -164,10 +164,13 @@ function onSourceSite(item: FoundItem, sourceUrl: string, config: SourceConfig):
 
 function passesFilters(item: FoundItem, config: SourceConfig): boolean {
   for (const [field, pattern] of Object.entries(config.match ?? {})) {
-    if (!configRegex(pattern).test(item[field as "title" | "category"] ?? "")) return false;
+    const regex = configRegex(pattern);
+    // A newspaper's lead may leave out the decision its headline names (Урядовий кур'єр).
+    const headline = field === "title" && item.headline !== undefined && regex.test(item.headline);
+    if (!headline && !regex.test(item[field as FilterField] ?? "")) return false;
   }
   for (const [field, pattern] of Object.entries(config.exclude ?? {})) {
-    if (configRegex(pattern).test(item[field as "title" | "category"] ?? "")) return false;
+    if (configRegex(pattern).test(item[field as FilterField] ?? "")) return false;
   }
   return true;
 }
@@ -180,12 +183,21 @@ interface ListResult {
   lastModified: string | null;
 }
 
-async function readList(run: Run, source: SourceRow, config: SourceConfig): Promise<ListResult> {
+/**
+ * The list's address: `{year}` becomes the current year (UTC), for lists that
+ * can only be asked for one year (Brazil's Senate), so the URL needs no change
+ * on 1 January.
+ */
+function listUrl(url: string, now: Date): string {
+  return url.replaceAll("{year}", String(now.getUTCFullYear()));
+}
+
+async function readList(run: Run, source: SourceRow, config: SourceConfig, url: string): Promise<ListResult> {
   // Servers often match these exactly, so we send back what they sent, never a time of our own.
   const conditional: Record<string, string> = {};
   if (config.conditionalGet && source.list_etag) conditional["if-none-match"] = source.list_etag;
   if (config.conditionalGet && source.list_last_modified) conditional["if-modified-since"] = source.list_last_modified;
-  const res = await request(run, source.url, source.kind === "api" ? "application/json" : "*/*", config.crawlDelaySeconds, conditional);
+  const res = await request(run, url, source.kind === "api" ? "application/json" : "*/*", config.crawlDelaySeconds, conditional);
   const etag = res.headers.get("etag");
   const lastModified = res.headers.get("last-modified");
   // 304: nothing changed since the last check.
@@ -195,10 +207,10 @@ async function readList(run: Run, source: SourceRow, config: SourceConfig): Prom
   const body = decodeBody(bytes, charsetOf(res, config, bytes));
   const items =
     source.kind === "rss"
-      ? parseFeed(body, res.url || source.url, config, run.now)
+      ? parseFeed(body, res.url || url, config, run.now)
       : source.kind === "page"
-        ? await parsePage(body, res.url || source.url, config, run.now)
-        : parseApi(JSON.parse(body), res.url || source.url, config, run.now);
+        ? await parsePage(body, res.url || url, config, run.now)
+        : parseApi(JSON.parse(body), res.url || url, config, run.now);
   return { items, status: res.status, etag, lastModified };
 }
 
@@ -260,6 +272,13 @@ async function mayRead(run: Run, url: string): Promise<"read" | "blocked" | "lat
   return isAllowed(robots, u.pathname + u.search) ? "read" : "blocked";
 }
 
+/**
+ * What a `fullText` JSON read asks for. Mexico's SIDOF answers a bare
+ * "application/json" with 406 and sends JSON for this (checked 21 Oct, as did
+ * the Commission's and SAIJ's endpoints).
+ */
+const JSON_ACCEPT = "application/json, */*;q=0.1";
+
 /** One page of a site failed; after `failedPagesPerHost` of them the site counts as busy for the rest of the run. */
 function pageFailed(run: Run, host: string): "later" {
   const failed = (run.failed.get(host) ?? 0) + 1;
@@ -288,7 +307,7 @@ async function getText(
   if (run.requests >= LIMITS.requestsPerRun) return "later";
   let res: Response;
   try {
-    res = await request(run, url, kind === "json" ? "application/json" : "text/html", config.crawlDelaySeconds);
+    res = await request(run, url, kind === "json" ? JSON_ACCEPT : "text/html", config.crawlDelaySeconds);
   } catch (error) {
     if ((error as { name?: unknown } | null)?.name === "TimeoutError") return pageFailed(run, host);
     run.busy.add(host);
@@ -397,12 +416,13 @@ async function checkSource(run: Run, source: SourceRow): Promise<SourceCheck> {
   const check: SourceCheck = { sourceId: source.id, ok: false, httpStatus: null, found: 0, saved: 0, waiting: 0, undated: 0, offSite: 0, error: null };
   const config = readConfig(source);
   try {
-    const blocked = await blockedBy(run, source.url);
+    const url = listUrl(source.url, run.now);
+    const blocked = await blockedBy(run, url);
     if (blocked) {
       check.error = blocked;
       return check;
     }
-    const { items, status, etag, lastModified } = await readList(run, source, config);
+    const { items, status, etag, lastModified } = await readList(run, source, config, url);
     check.httpStatus = status;
     if (status !== 304 && (status < 200 || status >= 300)) {
       check.error = `HTTP ${status}`;

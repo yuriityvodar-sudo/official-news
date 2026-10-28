@@ -8,7 +8,9 @@ import 'article.dart';
 
 /// Route names. The detail route receives the Article already loaded in the
 /// feed, so opening an article needs no extra API call. iOS-style routes on
-/// both platforms: slide in, swipe from the left edge to go back.
+/// both platforms: slide in, swipe from the left edge to go back. An article
+/// opened from its card in the feed grows out of it instead
+/// (`CardZoomRoute`, #141).
 abstract final class Routes {
   static const feed = '/';
   static const detail = '/article';

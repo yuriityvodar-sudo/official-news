@@ -1,19 +1,31 @@
+import 'dart:math' as math;
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollDirection;
+import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/analytics.dart';
 import '../../core/article.dart';
 import '../../core/countries.dart';
+import '../../core/glass.dart';
 import '../../core/languages.dart';
+import '../../core/motion.dart';
 import '../../core/news_widgets.dart';
+import '../../core/card_zoom.dart';
 import '../../core/pictures.dart';
 import '../../core/push.dart';
+import '../../core/subscription.dart';
 import '../../core/theme.dart';
 import '../../l10n/app_localizations.dart';
+import '../chat/chat_consent.dart';
+import '../chat/chat_screen.dart';
+import '../chat/paywall_sheet.dart';
+import 'ai_chat_note.dart';
+import 'picture_viewer.dart';
 
 /// Opens the official page; tests pass their own.
 typedef OpenLink = Future<void> Function(Uri uri);
@@ -51,96 +63,342 @@ String shareText(Article article, AppLocalizations l10n) {
   ].join('\n\n');
 }
 
-/// Shares [text] with the headline as its subject.
+/// Shares [text] with the headline as its subject; a tap back once it has
+/// gone (#141).
 Future<void> shareArticle(Article article, String text, Rect? origin) async {
-  await SharePlus.instance.share(
+  final result = await SharePlus.instance.share(
     ShareParams(
       subject: article.headline,
       text: text,
       sharePositionOrigin: origin,
     ),
   );
+  if (result.status == ShareResultStatus.success) Haptics.success();
 }
 
 /// Item 4: one official decision (docs/design/mvp.png). The ministry as
 /// publisher, the decision type, the headline, the AI summary and the way to
 /// the official page. It shows the Article the feed already has; no API call.
-class DetailScreen extends StatelessWidget {
+///
+/// The text scrolls under two floating Liquid Glass buttons, back and share
+/// (#141), as in iOS 26's own apps; they get a little smaller while the
+/// reader scrolls down, and back to size when they scroll up.
+class DetailScreen extends StatefulWidget {
   const DetailScreen({
     super.key,
     required this.article,
+    this.top,
+    this.topFrom,
+    this.background,
     this.openLink = openOfficialPage,
     this.share = shareArticle,
   });
 
   final Article article;
+
+  /// The card the article opened out of (#141), as its top in place of the
+  /// publisher, headline, date and picture: the same card, at the same width
+  /// and the same distance from the left as in the feed ([topFrom]), so the
+  /// card grows into the article without anything in it changing.
+  final Widget? top;
+  final Rect? topFrom;
+
+  /// The page's colour: the card's, when the article opened out of one.
+  final Color? background;
+
   final OpenLink openLink;
   final ShareArticle share;
 
   @override
+  State<DetailScreen> createState() => _DetailScreenState();
+}
+
+class _DetailScreenState extends State<DetailScreen> {
+  final _scroll = ScrollController();
+
+  /// The buttons are smaller: the reader is scrolling down the text.
+  bool _compact = false;
+
+  /// The height the buttons take at the top, under the status bar.
+  static const _bar = 56.0;
+
+  @override
+  void initState() {
+    super.initState();
+    _scroll.addListener(_scrolled);
+  }
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  void _scrolled() {
+    final position = _scroll.position;
+    final compact = switch (position.userScrollDirection) {
+      ScrollDirection.reverse => position.pixels > 40,
+      ScrollDirection.forward => false,
+      ScrollDirection.idle => _compact && position.pixels > 40,
+    };
+    if (compact != _compact) setState(() => _compact = compact);
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final article = widget.article;
     final text = NewsText.from(context);
     final l10n = AppLocalizations.of(context);
     final scheme = Theme.of(context).colorScheme;
+    final padding = MediaQuery.paddingOf(context);
     final summary = article.summary?.trim();
     final hasSummary = summary != null && summary.isNotEmpty;
+    final top = widget.top;
+    final from = widget.topFrom;
+    final page = widget.background ?? scheme.surface;
+    // Everything but the card at the top: at the page's margins, coming in
+    // around the card as it grows into the article (#141).
+    Widget rest(Widget child) => ZoomRest(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        child: child,
+      ),
+    );
 
     return Scaffold(
-      appBar: CupertinoNavigationBar(
-        backgroundColor: scheme.surface,
-        border: null,
-        trailing: Builder(
-          builder: (buttonContext) => CupertinoButton(
-            padding: EdgeInsets.zero,
-            onPressed: () {
-              unawaited(analytics.shared(article));
-              share(
-                article,
-                shareText(article, l10n),
-                _originOf(buttonContext),
-              );
-            },
-            child: Icon(
-              CupertinoIcons.share,
-              color: AppColors.accent,
-              semanticLabel: l10n.share,
+      backgroundColor: page,
+      body: Stack(
+        children: [
+          _CountsRead(
+            article: article,
+            child: ListView(
+              controller: _scroll,
+              padding: EdgeInsets.fromLTRB(
+                0,
+                padding.top + _bar,
+                0,
+                48 + padding.bottom,
+              ),
+              children: [
+                if (top != null && from != null) ...[
+                  // The card itself, where it stands in the feed.
+                  Padding(
+                    padding: EdgeInsets.only(left: math.max(0, from.left)),
+                    child: Align(
+                      alignment: Alignment.topLeft,
+                      child: SizedBox(
+                        width: from.width,
+                        child: ZoomTop(child: top),
+                      ),
+                    ),
+                  ),
+                  ...[
+                    const SizedBox(height: 12),
+                    _Official(article),
+                    const SizedBox(height: 14),
+                    KindLabel(article),
+                    Text(_published(article, l10n), style: text.meta),
+                    const SizedBox(height: 22),
+                  ].map(rest),
+                ] else
+                  ...[
+                    _Publisher(article),
+                    const SizedBox(height: 18),
+                    KindLabel(article),
+                    Text(article.headline, style: text.articleHeadline),
+                    const SizedBox(height: 10),
+                    Text(_published(article, l10n), style: text.meta),
+                    if (article.imageUrl != null)
+                      _Picture(article.imageUrl!, articleId: article.id),
+                    const SizedBox(height: 22),
+                  ].map(rest),
+                ...[
+                  if (hasSummary) ...[
+                    _AiLabel(article),
+                    const SizedBox(height: 10),
+                    for (final paragraph in _paragraphs(summary)) ...[
+                      Text(paragraph, style: text.body),
+                      const SizedBox(height: 14),
+                    ],
+                    const SizedBox(height: 4),
+                    _DiscussWithAi(article),
+                    const SizedBox(height: 18),
+                  ] else
+                    const _SummaryComing(),
+                  const SizedBox(height: 14),
+                  _OfficialLink(
+                    article: article,
+                    onTap: () {
+                      final page = officialPage(article.originalUrl);
+                      if (page == null) return;
+                      unawaited(analytics.officialLinkOpened(article));
+                      widget.openLink(page);
+                    },
+                  ),
+                ].map(rest),
+              ],
             ),
           ),
-        ),
-      ),
-      body: _CountsRead(
-        article: article,
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 48),
-          children: [
-            _Publisher(article),
-            const SizedBox(height: 18),
-            KindLabel(article),
-            Text(article.headline, style: text.articleHeadline),
-            const SizedBox(height: 10),
-            Text(_published(article, l10n), style: text.meta),
-            if (article.imageUrl != null) _Picture(article.imageUrl!),
-            const SizedBox(height: 22),
-            if (hasSummary) ...[
-              _AiLabel(article),
-              const SizedBox(height: 10),
-              for (final paragraph in _paragraphs(summary)) ...[
-                Text(paragraph, style: text.body),
-                const SizedBox(height: 14),
-              ],
-            ] else
-              const _SummaryComing(),
-            const SizedBox(height: 14),
-            _OfficialLink(
-              article: article,
-              onTap: () {
-                final page = officialPage(article.originalUrl);
-                if (page == null) return;
-                unawaited(analytics.officialLinkOpened(article));
-                openLink(page);
-              },
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            // The status bar's words for the page, set here: a sheet over
+            // the article (the paywall) leaves its light ones otherwise.
+            child: AnnotatedRegion<SystemUiOverlayStyle>(
+              value:
+                  ThemeData.estimateBrightnessForColor(page) == Brightness.dark
+                  ? SystemUiOverlayStyle.light
+                  : SystemUiOverlayStyle.dark,
+              child: ZoomRest(
+                child: ScrollEdgeFade(
+                  height: padding.top + _bar + 8,
+                  color: page,
+                ),
+              ),
             ),
-          ],
+          ),
+          Positioned(
+            top: padding.top + 6,
+            left: 12,
+            right: 12,
+            child: ZoomRest(
+              child: Row(
+                children: [
+                  if (ModalRoute.of(context)?.canPop ?? false)
+                    _BarButton(
+                      compact: _compact,
+                      onPressed: () => Navigator.of(context).maybePop(),
+                      // Its name for VoiceOver (and tests), never shown.
+                      child: Tooltip(
+                        message: MaterialLocalizations.of(
+                          context,
+                        ).backButtonTooltip,
+                        triggerMode: TooltipTriggerMode.manual,
+                        child: Icon(
+                          CupertinoIcons.chevron_left,
+                          size: 20,
+                          color: CupertinoColors.label.resolveFrom(context),
+                        ),
+                      ),
+                    ),
+                  const Spacer(),
+                  Builder(
+                    builder: (buttonContext) => _BarButton(
+                      compact: _compact,
+                      onPressed: () {
+                        unawaited(analytics.shared(article));
+                        widget.share(
+                          article,
+                          shareText(article, l10n),
+                          _originOf(buttonContext),
+                        );
+                      },
+                      child: Icon(
+                        CupertinoIcons.share,
+                        size: 20,
+                        color: CupertinoColors.label.resolveFrom(context),
+                        semanticLabel: l10n.share,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A round Liquid Glass button floating over the article, with a 48-pt
+/// target and a light tap back (#141); smaller while [compact].
+class _BarButton extends StatelessWidget {
+  const _BarButton({
+    required this.compact,
+    required this.onPressed,
+    required this.child,
+  });
+
+  final bool compact;
+  final VoidCallback onPressed;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => AnimatedScale(
+    scale: compact && !Motion.reduced(context) ? 0.86 : 1,
+    duration: Motion.slow,
+    curve: Motion.spring,
+    child: CupertinoButton(
+      padding: EdgeInsets.zero,
+      minimumSize: const Size(48, 48),
+      onPressed: () {
+        Haptics.light();
+        onPressed();
+      },
+      // A little larger than 44, as iOS 26's own glass buttons (Yurii, #160).
+      child: GlassCircle(size: 48, child: child),
+    ),
+  );
+}
+
+/// "Discuss with AI" under the summary (#133, #141, #146): on iOS the AI chat
+/// about this decision, behind its paywall (a subscriber goes straight in);
+/// once just bought, the consent and the paywall's sample question follow.
+/// Where there is no App Store purchase yet (Android), the note about the
+/// chat ([AiChatNote]), with "Tell me when it's ready". Each tap is counted.
+class _DiscussWithAi extends StatelessWidget {
+  const _DiscussWithAi(this.article);
+
+  final Article article;
+
+  Future<void> _open(BuildContext context) async {
+    if (!ChatScreen.available) return AiChatNote.show(context);
+    final l10n = AppLocalizations.of(context);
+    String? first;
+    if (!chatSubscription.active) {
+      if (!await PaywallSheet.show(context, article)) return;
+      first = l10n.chatSuggestConcernsMe;
+    }
+    if (!context.mounted || !await ChatConsent.ask(context)) return;
+    if (!context.mounted) return;
+    await Navigator.of(context).push(
+      CupertinoPageRoute<void>(
+        builder: (_) => ChatScreen(article: article, firstQuestion: first),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final text = NewsText.from(context);
+    final label = CupertinoColors.label.resolveFrom(context);
+    return CupertinoButton(
+      padding: EdgeInsets.zero,
+      onPressed: () {
+        Haptics.light();
+        unawaited(analytics.discussAiTapped(article));
+        unawaited(_open(context));
+      },
+      child: SizedBox(
+        width: double.infinity,
+        child: GlassCapsule(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(CupertinoIcons.sparkles, size: 18, color: label),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  l10n.discussWithAi,
+                  style: text.publisher.copyWith(color: label),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -215,7 +473,6 @@ class _Publisher extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final text = NewsText.from(context);
-    final l10n = AppLocalizations.of(context);
     final scheme = Theme.of(context).colorScheme;
     return Row(
       children: [
@@ -244,31 +501,7 @@ class _Publisher extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
               ),
               const SizedBox(height: 2),
-              // Wraps instead of overflowing: "Official source" is longer in
-              // some languages ("Официальный источник"), and at large text sizes.
-              Wrap(
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  Text(
-                    '${countryName(article.country, l10n)} · ',
-                    style: text.meta,
-                  ),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(
-                        CupertinoIcons.checkmark_seal,
-                        size: 15,
-                        color: AppColors.verified,
-                      ),
-                      const SizedBox(width: 3),
-                      Flexible(
-                        child: Text(l10n.officialSource, style: text.meta),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
+              _Official(article),
             ],
           ),
         ),
@@ -277,34 +510,85 @@ class _Publisher extends StatelessWidget {
   }
 }
 
-/// The preview image of the official page, with where it comes from.
-class _Picture extends StatelessWidget {
-  const _Picture(this.url);
+/// "Germany · ✓ Official source", under the publisher, or under the card an
+/// article opened out of (#141). Wraps instead of overflowing: "Official
+/// source" is longer in some languages ("Официальный источник"), and at
+/// large text sizes.
+class _Official extends StatelessWidget {
+  const _Official(this.article);
 
-  final String url;
+  final Article article;
 
   @override
   Widget build(BuildContext context) {
     final text = NewsText.from(context);
-    final media = MediaQuery.of(context);
+    final l10n = AppLocalizations.of(context);
+    return Wrap(
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        Text('${countryName(article.country, l10n)} · ', style: text.meta),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              CupertinoIcons.checkmark_seal,
+              size: 15,
+              color: AppColors.verified,
+            ),
+            const SizedBox(width: 3),
+            Flexible(child: Text(l10n.officialSource, style: text.meta)),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// The preview image of the official page, with where it comes from. A tap
+/// shows it full screen, flying there (#141).
+class _Picture extends StatelessWidget {
+  const _Picture(this.url, {required this.articleId});
+
+  final String url;
+  final String articleId;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = NewsText.from(context);
     return Padding(
       padding: const EdgeInsets.only(top: 18),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: AspectRatio(
-              aspectRatio: 16 / 9,
-              child: Image(
-                // The picture the feed card saved, decoded at screen size:
-                // official preview images can be several MB.
-                image: picture(
-                  url,
-                  width: (media.size.width * media.devicePixelRatio).round(),
+          Semantics(
+            container: true,
+            button: true,
+            label: AppLocalizations.of(context).pictureFullScreen,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () {
+                Haptics.light();
+                Navigator.of(
+                  context,
+                ).push(PictureViewer.route(url: url, articleId: articleId));
+              },
+              child: PictureHero(
+                articleId: articleId,
+                url: url,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: AspectRatio(
+                    aspectRatio: 16 / 9,
+                    child: Image(
+                      // The picture the feed card saved, decoded at screen
+                      // size: official preview images can be several MB.
+                      image: screenPicture(context, url),
+                      fit: BoxFit.cover,
+                      frameBuilder: fadeInPicture,
+                      errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                    ),
+                  ),
                 ),
-                fit: BoxFit.cover,
-                errorBuilder: (_, _, _) => const SizedBox.shrink(),
               ),
             ),
           ),

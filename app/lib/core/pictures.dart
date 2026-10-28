@@ -2,6 +2,8 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 
+import 'motion.dart';
+
 /// Article pictures saved on the phone (#57): each one is downloaded once from
 /// the official site and kept as a file, so the feed card and the article use
 /// the same saved picture, also after the app is closed or offline. A picture
@@ -24,3 +26,55 @@ ImageProvider picture(String url, {int? width}) => ResizeImage.resizeIfNeeded(
   null,
   CachedNetworkImageProvider(url, cacheManager: pictureCache),
 );
+
+/// The picture as the article screen shows it, decoded at the screen's
+/// width. The article screen, the flight from it and the full-screen view
+/// all use this one (#141), so it is decoded once; the feed asks for it as an
+/// article opens, so it is ready when the article has grown out of its card.
+ImageProvider screenPicture(BuildContext context, String url) {
+  final media = MediaQuery.of(context);
+  return picture(
+    url,
+    width: (media.size.width * media.devicePixelRatio).round(),
+  );
+}
+
+/// An article's picture that flies between the article screen and the
+/// full-screen view (#141), as photos do in Apple's apps. (From the feed the
+/// whole card grows into the article instead: `CardZoomRoute`.) With Reduce
+/// Motion on, it does not fly: the screens fade as usual.
+class PictureHero extends StatelessWidget {
+  const PictureHero({
+    super.key,
+    required this.articleId,
+    required this.url,
+    required this.child,
+  });
+
+  final String articleId;
+  final String url;
+  final Widget child;
+
+  static Object tag(String articleId) => 'picture:$articleId';
+
+  @override
+  Widget build(BuildContext context) => HeroMode(
+    enabled: !Motion.reduced(context),
+    child: Hero(
+      tag: tag(articleId),
+      // The flight draws the screen-sized picture, whatever the card's size,
+      // so it fills the box as it grows instead of stretching a thumbnail.
+      flightShuttleBuilder: (context, animation, direction, from, to) =>
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: Image(
+              image: screenPicture(context, url),
+              fit: BoxFit.cover,
+              gaplessPlayback: true,
+              errorBuilder: (_, _, _) => const SizedBox.shrink(),
+            ),
+          ),
+      child: child,
+    ),
+  );
+}

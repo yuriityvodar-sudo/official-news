@@ -604,6 +604,41 @@ void main() {
     expect(last.containsKey('country'), isFalse);
   });
 
+  testWidgets('a new choice rolls into the chip as the old one rolls out, '
+      'and the chip springs to its new width', (tester) async {
+    Widget bar(FeedWhere where) => testApp(
+      home: Center(
+        child: FeedFilterBar(
+          where: where,
+          whereMenu: const WhereMenu(groups: [FeedGroup('g20', 'G20')]),
+          topic: null,
+          topics: const [],
+          onWhere: (_) {},
+          onTopic: (_) {},
+        ),
+      ),
+    );
+    Finder words() => find.descendant(
+      of: find.byKey(_where),
+      matching: find.byWidgetPredicate((w) => w is Text && w.textSpan != null),
+    );
+    await tester.pumpWidget(bar(const FeedWhere.group('g20')));
+    final narrow = tester.getSize(find.byKey(_where)).width;
+
+    await tester.pumpWidget(bar(FeedWhere.all));
+    await tester.pump(const Duration(milliseconds: 80));
+    // Both words for a moment, and a width on its way.
+    expect(words(), findsNWidgets(2));
+    final growing = tester.getSize(find.byKey(_where)).width;
+
+    await tester.pumpAndSettle();
+    expect(words(), findsOneWidget);
+    expect(_label(tester, _where), 'All countries');
+    final wide = tester.getSize(find.byKey(_where)).width;
+    expect(growing, greaterThan(narrow));
+    expect(growing, lessThan(wide));
+  });
+
   testWidgets('in dark mode a chosen chip is the filter red, the rest white', (
     tester,
   ) async {
@@ -650,6 +685,8 @@ void main() {
         ),
       ),
     );
+    // The new choice rolls in as the old one rolls out (#141).
+    await tester.pumpAndSettle();
     expect(_ink(tester, _where), 0xFFFFFFFF);
     expect(_ink(tester, _topics), 0xFFFFFFFF);
   });
@@ -709,7 +746,12 @@ void main() {
       expect(_checkmark(tester), _lightRed);
 
       // Once chosen, the chip shows the same icon as the menu item.
-      await tester.tap(find.text('Health'));
+      await tester.tap(
+        find.descendant(
+          of: find.byType(CupertinoMenuItem),
+          matching: find.text('Health'),
+        ),
+      );
       await tester.pumpAndSettle();
       expect(_icon(tester, _topics), CupertinoIcons.staroflife_fill);
       await tester.tap(find.byKey(_topics));

@@ -5,8 +5,11 @@ import 'package:flutter/material.dart';
 import 'core/analytics.dart';
 import 'core/push.dart';
 import 'core/router.dart';
+import 'core/subscription.dart';
 import 'core/theme.dart';
+import 'features/chat/chat_screen.dart';
 import 'features/feed/feed_controller.dart';
+import 'features/splash/splash.dart';
 import 'l10n/app_localizations.dart';
 
 Future<void> main() async {
@@ -17,6 +20,8 @@ Future<void> main() async {
   await feed.open();
   // Not awaited: the feed shows at once; events before Firebase is up are not sent.
   unawaited(_startFirebase(feed));
+  // The AI chat's subscription (#146): what the phone kept, and StoreKit's news.
+  if (ChatScreen.available) unawaited(chatSubscription.start());
   runApp(OfficialNewsApp(feed: feed));
 }
 
@@ -46,19 +51,27 @@ class OfficialNewsApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return ValueListenableBuilder(
       valueListenable: feed.languageChanges,
-      builder: (context, language, _) => MaterialApp(
-        title: 'Official News',
-        debugShowCheckedModeBanner: false,
-        locale: language.locale,
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        theme: buildTheme(Brightness.light),
-        darkTheme: buildTheme(Brightness.dark),
-        themeMode: ThemeMode.system,
-        onGenerateRoute: (settings) => onGenerateRoute(settings, feed: feed),
-        navigatorKey: appNavigator,
-        navigatorObservers: navigatorObservers,
-        initialRoute: Routes.feed,
+      builder: (context, language, _) => ValueListenableBuilder(
+        // The headline weight from Settings → Design (#66) is in the theme.
+        valueListenable: headlineWeight,
+        builder: (context, weight, _) => MaterialApp(
+          title: 'Outer News',
+          debugShowCheckedModeBanner: false,
+          locale: language.locale,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          theme: buildTheme(Brightness.light, headline: weight),
+          darkTheme: buildTheme(Brightness.dark, headline: weight),
+          themeMode: ThemeMode.system,
+          onGenerateRoute: (settings) => onGenerateRoute(settings, feed: feed),
+          navigatorKey: appNavigator,
+          navigatorObservers: navigatorObservers,
+          initialRoute: Routes.feed,
+          // The splash over the feed at start (#66); the feed loads under it.
+          // A notification that started the app ends it (#62).
+          builder: (context, app) =>
+              SplashHost(endOn: push.opened, child: app!),
+        ),
       ),
     );
   }

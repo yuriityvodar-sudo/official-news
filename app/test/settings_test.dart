@@ -17,6 +17,11 @@ Future<ValueNotifier<FeedLanguage>> _pump(
   List<FeedLanguage>? chosen,
   FeedLanguage words = FeedLanguage.en,
 }) async {
+  // The test's screen, 100 pt taller: the prototype's rows (Design, Splash,
+  // Play, Read, Topics) take the top of the list, the pages' rows under them.
+  tester.view.physicalSize = const Size(800, 700);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.reset);
   final language = ValueNotifier(FeedLanguage.en);
   await tester.pumpWidget(
     testApp(
@@ -42,7 +47,7 @@ void main() {
     for (final row in [
       'Language',
       'Notifications',
-      'About Official News',
+      'About Outer News',
       'Privacy Policy',
       'Terms of Use',
       'Contact & Support',
@@ -50,6 +55,12 @@ void main() {
       expect(find.text(row), findsOneWidget, reason: row);
     }
     expect(find.text('English'), findsOneWidget);
+    // Below the prototype's rows, which push it off the test's screen.
+    await tester.scrollUntilVisible(
+      find.textContaining('not affiliated with any government'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(
       find.textContaining('not affiliated with any government'),
       findsOneWidget,
@@ -126,7 +137,7 @@ void main() {
     ) async {
       await pumpWithPush(tester, null);
       expect(row(en.notificationsUnavailable), findsOneWidget);
-      expect(find.byType(CupertinoListTileChevron), findsNWidgets(5));
+      expect(find.byType(CupertinoListTileChevron), findsNWidgets(7));
       await tester.tap(find.text(en.notifications));
       await tester.pumpAndSettle();
       expect(settingsAppOpened, 0);
@@ -206,7 +217,7 @@ void main() {
       final messaging = FakeMessaging(status: PushPermission.denied);
       await pumpWithPush(tester, messaging);
       expect(row(en.notificationsOff), findsOneWidget);
-      expect(find.byType(CupertinoListTileChevron), findsNWidgets(6));
+      expect(find.byType(CupertinoListTileChevron), findsNWidgets(8));
 
       await tester.tap(find.text(en.notifications));
       await tester.pumpAndSettle();
@@ -318,8 +329,8 @@ void main() {
   });
 
   for (final (row, title, line) in [
-    ('About Official News', 'About', 'Official News is an independent app'),
-    ('Privacy Policy', 'Privacy Policy', 'Official News has no accounts'),
+    ('About Outer News', 'About', 'Outer News is an independent app'),
+    ('Privacy Policy', 'Privacy Policy', 'Outer News has no accounts'),
     (
       'Terms of Use',
       'Terms of Use',
@@ -345,7 +356,7 @@ void main() {
     await _pump(tester);
     await tester.tap(find.text('Privacy Policy'));
     await tester.pumpAndSettle();
-    expect(find.text('Last updated 16 October 2026'), findsOneWidget);
+    expect(find.text('Last updated 27 October 2026'), findsOneWidget);
     // The parts App Review and #34, #60 ask for.
     for (final heading in [
       'On your phone',
@@ -420,7 +431,7 @@ void main() {
     await _pump(tester, words: FeedLanguage.uk);
     await tester.tap(find.text('Умови використання'));
     await tester.pumpAndSettle();
-    expect(find.text('Оновлено 16 жовтня 2026\u202Fр.'), findsOneWidget);
+    expect(find.text('Оновлено 27 жовтня 2026\u202Fр.'), findsOneWidget);
     await tester.scrollUntilVisible(
       find.textContaining('RS Elite Pro s.r.o., Словаччина'),
       200,
@@ -440,7 +451,7 @@ void main() {
     await _pump(tester, words: FeedLanguage.de);
     await tester.tap(find.text('Datenschutzerklärung'));
     await tester.pumpAndSettle();
-    expect(find.text('Stand: 16. Oktober 2026'), findsOneWidget);
+    expect(find.text('Stand: 27. Oktober 2026'), findsOneWidget);
     await tester.scrollUntilVisible(
       find.text('Verantwortlicher: RS Elite Pro s.r.o., Slowakei.'),
       200,

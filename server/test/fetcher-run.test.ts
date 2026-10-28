@@ -271,6 +271,34 @@ describe("runFetcher", () => {
     ]);
   });
 
+  it("keeps only the items its filters let through, by title, the feed's own headline or link", async () => {
+    // Урядовий кур'єр: the lead is the title, and some leads leave out the decision their headline names.
+    await addSource("xx-filters", "https://gov.test/filters.xml", "rss", {
+      title: "description",
+      match: { title: "^Уряд (ухвалив|затвердив)", url: "/news/razom/" },
+      exclude: { title: "(?i)попередн" },
+      itemPages: false,
+    });
+    const date = "Wed, 14 Oct 2026 09:00:00 GMT";
+    const { fetch } = fakeFetch({
+      "https://gov.test/robots.txt": { status: 404, body: "" },
+      "https://gov.test/filters.xml": {
+        body: rss([
+          { title: "Уряд ухвалив рішення для оборони", text: "Про це повідомив Прем’єр-міністр.", link: "https://gov.test/news/razom/1", date },
+          { title: "Засідання Уряду", text: "Уряд затвердив програму житла.", link: "https://gov.test/news/razom/2", date },
+          { title: "Засідання Уряду", text: "Прем’єр-міністр зустрівся з послом.", link: "https://gov.test/news/razom/3", date },
+          { title: "Уряд ухвалив план", text: "Уряд затвердив попередній план.", link: "https://gov.test/news/razom/4", date },
+          { title: "Уряд ухвалив план", text: "Уряд затвердив план комітету.", link: "https://gov.test/news/kom/5", date },
+        ]),
+      },
+    });
+    const [check] = await runFetcher(env, { fetch, now: NOW });
+    expect(check).toMatchObject({ found: 2, saved: 2 });
+    expect((await articlesOf("xx-filters")).map((a) => a.url).sort()).toEqual(["https://gov.test/news/razom/1", "https://gov.test/news/razom/2"]);
+    // The title stays the lead; the headline only lets the item through.
+    expect((await articlesOf("xx-filters")).map((a) => a.original_title).sort()).toEqual(["Про це повідомив Прем’єр-міністр.", "Уряд затвердив програму житла."]);
+  });
+
   it("never stores a time later than the fetch, and skips items without a date", async () => {
     await addSource("xx-times", "https://times.test/list.json", "api", { items: "", title: "t", link: "u", date: { field: "d" }, itemPages: false });
     const { fetch } = fakeFetch({
@@ -286,6 +314,44 @@ describe("runFetcher", () => {
     const [check] = await runFetcher(env, { fetch, now: NOW });
     expect(check).toMatchObject({ saved: 1, undated: 1 });
     expect((await articlesOf("xx-times"))[0]).toMatchObject({ original_title: "Beijing time read as UTC", published_at: "2026-10-14T15:00:00Z" });
+  });
+
+  it("asks a list that takes a year for the current one ({year} in the URL), so it needs no change on 1 January", async () => {
+    // Brazil's Senate lists federal norms one year at a time.
+    const list = "https://legis.senado.test/dadosabertos/legislacao/lista.json?tipo=EMC&ano={year}";
+    await addSource("xx-year", list, "api", {
+      items: "ListaDocumento.documentos.documento",
+      title: "{normaNome}: {ementa}",
+      text: "{ementa}",
+      date: { field: "dataassinatura", dateOnly: true },
+      link: "https://legis.senado.test/norma/{id}",
+      itemPages: false,
+    });
+    const norm = (id: string, nome: string, date: string) => ({ id, normaNome: nome, ementa: "Altera o art. 7º da Constituição Federal.", dataassinatura: date });
+    const { fetch, requests } = fakeFetch({
+      "https://legis.senado.test/robots.txt": { status: 403, body: "Forbidden" },
+      "https://legis.senado.test/dadosabertos/legislacao/lista.json?tipo=EMC&ano=2026": {
+        type: "application/json",
+        body: JSON.stringify({ ListaDocumento: { documentos: { documento: [norm("44184944", "Emenda Constitucional nº 141 de 13/10/2026", "13/10/2026")] } } }),
+      },
+      "https://legis.senado.test/dadosabertos/legislacao/lista.json?tipo=EMC&ano=2027": {
+        type: "application/json",
+        body: JSON.stringify({ ListaDocumento: { documentos: { documento: [norm("45000001", "Emenda Constitucional nº 142 de 02/01/2027", "02/01/2027")] } } }),
+      },
+    });
+
+    expect(await runFetcher(env, { fetch, now: NOW })).toMatchObject([{ ok: true, saved: 1 }]);
+    await env.DB.prepare("UPDATE sources SET last_checked_at = NULL WHERE id = 'xx-year'").run();
+    expect(await runFetcher(env, { fetch, now: new Date("2027-01-03T10:00:00Z") })).toMatchObject([{ ok: true, saved: 1 }]);
+
+    expect(requests.map((r) => r.url).filter((u) => u.includes("lista.json"))).toEqual([
+      "https://legis.senado.test/dadosabertos/legislacao/lista.json?tipo=EMC&ano=2026",
+      "https://legis.senado.test/dadosabertos/legislacao/lista.json?tipo=EMC&ano=2027",
+    ]);
+    expect((await articlesOf("xx-year")).map((a) => [a.url, a.published_at])).toEqual([
+      ["https://legis.senado.test/norma/45000001", "2027-01-02T12:00:00Z"],
+      ["https://legis.senado.test/norma/44184944", "2026-10-13T12:00:00Z"],
+    ]);
   });
 });
 
@@ -533,6 +599,11 @@ describe("runFetcher: whole texts (#71)", () => {
     expect(byRef.statement_26_2131.text).toMatch(/^European Commission Press release/);
     // The item pages (a JavaScript shell with the Commission logo as picture) are never opened.
     expect(requests.some((r) => r.url.includes("/detail/"))).toBe(false);
+    // JSON first, anything else accepted: Mexico's SIDOF answers a bare "application/json" with 406.
+    expect(requests.filter((r) => r.url.includes("/api/documents")).map((r) => r.headers.get("accept"))).toEqual([
+      "application/json, */*;q=0.1",
+      "application/json, */*;q=0.1",
+    ]);
     expect(byRef.ip_26_2153.image_url).toBeNull();
   });
 

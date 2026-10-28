@@ -204,6 +204,8 @@ class Push with WidgetsBindingObserver {
   static const _readsKey = 'push.readIds';
   static const _offeredKey = 'push.offered';
   static const _topicKey = 'push.topic';
+  /// The topic of the AI chat note's earlier switch (#141), dropped (#160).
+  static const _aiChatTopicKey = 'push.aiChatTopic';
 
   /// How long the app waits for a topic change; then it is tried again at the
   /// next trigger. Firebase may still carry it out later: on iOS a change that
@@ -225,11 +227,12 @@ class Push with WidgetsBindingObserver {
   SharedPreferences? _prefs;
   FeedLanguage _language = FeedLanguage.en;
 
-  /// The topic Firebase confirmed during this run, so a start (or a new FCM
-  /// token) subscribes again once: that repairs a subscription Firebase lost.
-  /// Null from the moment a change is sent until Firebase answers it, so a
-  /// change without an answer is sent again at the next trigger.
-  String? _confirmed;
+  /// The topics Firebase confirmed during this run, by their saved key, so a
+  /// start (or a new FCM token) subscribes again once: that repairs a
+  /// subscription Firebase lost. Gone from the moment a change is sent until
+  /// Firebase answers it, so a change without an answer is sent again at the
+  /// next trigger.
+  final _confirmed = <String, String>{};
   Future<void> _syncing = Future.value();
 
   /// The topic of a feed language: `breaking_uk`.
@@ -237,6 +240,11 @@ class Push with WidgetsBindingObserver {
 
   /// What the phone allows; [PushPermission.unavailable] while push is off.
   ValueListenable<PushPermission> get permission => _permission;
+
+  /// Notifies each time a tapped notification has been opened ([open]): the
+  /// splash at start gives way to it at once (#66, `SplashHost.endOn`).
+  Listenable get opened => _opened;
+  final _opened = ValueNotifier(0);
 
   /// Asks iOS for notifications, then subscribes to the feed language's topic.
   /// After a "Don't Allow", iOS does not ask again and this returns
@@ -297,7 +305,7 @@ class Push with WidgetsBindingObserver {
       ..add(messaging.taps.listen((tap) => unawaited(open(tap))))
       ..add(
         messaging.tokenChanges.listen((_) {
-          _confirmed = null;
+          _confirmed.clear();
           unawaited(_sync());
         }),
       );
@@ -319,7 +327,7 @@ class Push with WidgetsBindingObserver {
     _subscriptions.clear();
     _messaging = null;
     _prefs = null;
-    _confirmed = null;
+    _confirmed.clear();
     _enabling = null;
     // A new chain: the old one may belong to an earlier test's fake clock.
     _syncing = Future.value();
@@ -392,6 +400,7 @@ class Push with WidgetsBindingObserver {
     if (article != null) {
       unawaited(navigator.pushNamed(Routes.detail, arguments: article));
     }
+    _opened.value++;
   }
 
   /// Back in the app: notifications may have been turned on or off in the iOS
@@ -443,25 +452,42 @@ class Push with WidgetsBindingObserver {
     if (messaging == null || prefs == null) return;
     final state = _permission.value;
     if (state == PushPermission.unavailable) return;
-    final want = state == PushPermission.granted ? topicFor(_language) : null;
-    final have = prefs.getString(_topicKey);
-    if (want == have && (want == null || want == _confirmed)) return;
+    final allowed = state == PushPermission.granted;
+    await _syncTopic(
+      messaging,
+      prefs,
+      _topicKey,
+      allowed ? topicFor(_language) : null,
+    );
+    // The earlier switch's topic, gone from the phones that took it (#160).
+    await _syncTopic(messaging, prefs, _aiChatTopicKey, null);
+  }
+
+  /// Makes the topic saved under [key] the one wanted, or none.
+  Future<void> _syncTopic(
+    Messaging messaging,
+    SharedPreferences prefs,
+    String key,
+    String? want,
+  ) async {
+    final have = prefs.getString(key);
+    if (want == have && (want == null || want == _confirmed[key])) return;
     if (!await messaging.ready()) return;
     // Unknown until Firebase answers: a change without an answer may still be
     // carried out, so the next trigger sends the wanted topic again.
-    _confirmed = null;
+    _confirmed.remove(key);
     // The old topic first: never two languages at once. It stays saved until
     // Firebase confirms it is gone.
     if (have != null && have != want) {
       await messaging.unsubscribe(have).timeout(_timeout);
-      if (want == null) await prefs.remove(_topicKey);
+      if (want == null) await prefs.remove(key);
     }
     if (want != null) {
       // Saved before it is sent, so a later change unsubscribes it even when
       // this subscribe gets no answer and Firebase carries it out later.
-      await prefs.setString(_topicKey, want);
+      await prefs.setString(key, want);
       await messaging.subscribe(want).timeout(_timeout);
-      _confirmed = want;
+      _confirmed[key] = want;
     }
   }
 

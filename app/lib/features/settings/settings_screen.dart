@@ -5,10 +5,12 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/feed_language.dart';
+import '../../core/motion.dart';
 import '../../core/push.dart';
 import '../../core/theme.dart';
 import '../../l10n/app_localizations.dart';
 import '../detail/detail_screen.dart' show OpenLink, openOfficialPage;
+import '../feed/feed_look.dart';
 import 'info_pages.dart';
 
 /// The version shown at the foot of Settings: "0.1.0 (19)" for TestFlight build
@@ -30,7 +32,14 @@ class SettingsScreen extends StatelessWidget {
     this.openLink = openOfficialPage,
     this.notifications,
     this.openSettingsApp = openAppSettings,
+    this.saveDesign,
+    this.saveHeadlineWeight,
   });
+
+  /// Settings → Design (#66): saves the look and the headline weight on the
+  /// phone (the notifiers change at once either way).
+  final ValueChanged<FeedDesign>? saveDesign;
+  final ValueChanged<HeadlineWeight>? saveHeadlineWeight;
 
   /// The feed's language now, and how to change it (the feed reloads in it).
   final ValueListenable<FeedLanguage> language;
@@ -67,6 +76,10 @@ class SettingsScreen extends StatelessWidget {
             ),
             SliverList.list(
               children: [
+                _DesignSection(
+                  saveDesign: saveDesign,
+                  saveHeadlineWeight: saveHeadlineWeight,
+                ),
                 CupertinoListSection.insetGrouped(
                   header: _Header(l10n.settingsReading),
                   children: [
@@ -174,6 +187,165 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 }
+
+/// Design (#66): the feed's look (today's, or the options A, B and C Yurii
+/// compared in the prototype, kept to switch between) and how heavy the
+/// headlines are. Both are saved on the phone.
+class _DesignSection extends StatelessWidget {
+  const _DesignSection({this.saveDesign, this.saveHeadlineWeight});
+
+  final ValueChanged<FeedDesign>? saveDesign;
+  final ValueChanged<HeadlineWeight>? saveHeadlineWeight;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return CupertinoListSection.insetGrouped(
+      header: _Header(l10n.settingsDesign),
+      children: [
+        ValueListenableBuilder(
+          valueListenable: feedDesign,
+          builder: (context, design, _) => CupertinoListTile(
+            leading: const _Icon(CupertinoIcons.paintbrush),
+            title: Text(l10n.settingsDesign),
+            additionalInfo: Text(designName(design, l10n)),
+            trailing: const CupertinoListTileChevron(),
+            onTap: () => _pickDesign(context, design),
+          ),
+        ),
+        ValueListenableBuilder(
+          valueListenable: headlineWeight,
+          builder: (context, weight, _) => CupertinoListTile(
+            leading: const _Icon(CupertinoIcons.textformat),
+            title: Text(l10n.settingsHeadlineWeight),
+            additionalInfo: Text(headlineWeightName(weight, l10n)),
+            trailing: const CupertinoListTileChevron(),
+            onTap: () => _pickWeight(context, weight),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// The looks as an action sheet, each with its icon and name, the current
+  /// one with a check mark. Back to the feed to show the new look.
+  Future<void> _pickDesign(BuildContext context, FeedDesign current) {
+    final l10n = AppLocalizations.of(context);
+    return showCupertinoModalPopup<void>(
+      context: context,
+      builder: (sheet) {
+        // The sheet's blue, as its words are drawn.
+        final blue = CupertinoColors.systemBlue.resolveFrom(sheet);
+        return CupertinoActionSheet(
+          title: Text(l10n.settingsDesign),
+          actions: [
+            for (final d in FeedDesign.values)
+              CupertinoActionSheetAction(
+                onPressed: () {
+                  Navigator.of(sheet).pop();
+                  if (d == current) return;
+                  Haptics.selection();
+                  feedDesign.value = d;
+                  saveDesign?.call(d);
+                  Navigator.of(context).popUntil((route) => route.isFirst);
+                },
+                child: Semantics(
+                  selected: d == current,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // As wide as the check mark, so the name stays centred.
+                      if (d == current) const SizedBox(width: 28),
+                      Icon(designIcon(d), size: 24, color: blue),
+                      const SizedBox(width: 10),
+                      Flexible(child: Text(designName(d, l10n))),
+                      if (d == current) ...[
+                        const SizedBox(width: 8),
+                        Icon(
+                          CupertinoIcons.checkmark_alt,
+                          size: 20,
+                          color: blue,
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+          ],
+          cancelButton: CupertinoActionSheetAction(
+            onPressed: () => Navigator.of(sheet).pop(),
+            child: Text(l10n.cancel),
+          ),
+        );
+      },
+    );
+  }
+
+  /// The four weights as an action sheet, the current one marked.
+  Future<void> _pickWeight(BuildContext context, HeadlineWeight current) {
+    final l10n = AppLocalizations.of(context);
+    return showCupertinoModalPopup<void>(
+      context: context,
+      builder: (sheet) => CupertinoActionSheet(
+        title: Text(l10n.settingsHeadlineWeight),
+        actions: [
+          for (final w in HeadlineWeight.values)
+            CupertinoActionSheetAction(
+              isDefaultAction: w == current,
+              onPressed: () {
+                Navigator.of(sheet).pop();
+                if (w == current) return;
+                Haptics.selection();
+                headlineWeight.value = w;
+                saveHeadlineWeight?.call(w);
+              },
+              child: Text(
+                headlineWeightName(w, l10n),
+                style: TextStyle(fontWeight: w.weight),
+              ),
+            ),
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          onPressed: () => Navigator.of(sheet).pop(),
+          child: Text(l10n.cancel),
+        ),
+      ),
+    );
+  }
+}
+
+/// A look's icon in Settings → Design, a picture of its layout (Roman,
+/// 22 Oct: icons, not the letters A, B and C): today's list, A's newspaper
+/// page, B's cards, C's lines of text with no pictures, Garnet's stacked
+/// cards, Seal's seal.
+IconData designIcon(FeedDesign d) => switch (d) {
+  FeedDesign.now => CupertinoIcons.square_list,
+  FeedDesign.a => CupertinoIcons.news,
+  FeedDesign.b => CupertinoIcons.rectangle_grid_1x2,
+  FeedDesign.c => CupertinoIcons.text_alignleft,
+  FeedDesign.garnet => CupertinoIcons.rectangle_stack,
+  FeedDesign.seal => CupertinoIcons.checkmark_seal,
+};
+
+/// A look's name beside its icon (Roman, 26 Oct: each one named):
+/// "Classic", "Garnet"…
+String designName(FeedDesign d, AppLocalizations l10n) => switch (d) {
+  FeedDesign.now => l10n.designClassic,
+  FeedDesign.a => l10n.designMagazine,
+  FeedDesign.b => l10n.designCards,
+  FeedDesign.c => l10n.designBriefing,
+  FeedDesign.garnet => l10n.designGarnet,
+  FeedDesign.seal => l10n.designSeal,
+};
+
+/// A weight's name in the app's language.
+String headlineWeightName(HeadlineWeight w, AppLocalizations l10n) =>
+    switch (w) {
+      HeadlineWeight.light => l10n.headlineWeightLight,
+      HeadlineWeight.regular => l10n.headlineWeightRegular,
+      HeadlineWeight.semibold => l10n.headlineWeightSemibold,
+      HeadlineWeight.bold => l10n.headlineWeightBold,
+    };
 
 /// A section header in the iOS grouped-list style: small, grey, upper case.
 class _Header extends StatelessWidget {
