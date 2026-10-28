@@ -77,5 +77,20 @@ export const CREDITS: Record<string, Credit> = {
     "licenceUrl": "https://www.ecb.europa.eu/services/using-our-site/disclaimer-and-copyright/html/index.en.html",
     "wording": "Source: European Central Bank",
     "wordingLang": "en"
-  }
+  },
+  "us-federal-register": {
+    "licence": "Public domain",
+    "licenceUrl": "https://www.federalregister.gov/reader-aids/policy/legal-status"
+  },
+  "br-senate-laws": {},
+  "br-senate-complementary-laws": {},
+  "br-senate-constitutional-amendments": {},
+  "br-senate-provisional-measures": {},
+  "br-senate-decrees": {},
+  "za-cabinet-statements": {},
+  "ua-government-courier": {
+    "wording": "Джерело: Урядовий кур’єр",
+    "wordingLang": "uk"
+  },
+  "ua-verkhovna-rada": {}
 };

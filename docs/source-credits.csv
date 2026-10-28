@@ -23,3 +23,12 @@ cz-government-meetings,,,,,"Not stated on the pages read; resolutions and other 
 es-council-of-ministers,,,Origen de los datos: sitio web de lamoncloa.gob.es. Ministerio de la Presidencia.,es,"The citation lamoncloa.gob.es/Paginas/es_AvisoLegal.aspx asks for (docs/sources.csv); it also asks for the date of the last update of the information used, which the article page's published date gives. Legal review: whether that is enough"
 ua-cabinet-of-ministers,CC BY 4.0,https://creativecommons.org/licenses/by/4.0/,,,"CC BY 4.0 unless stated otherwise (footer of every kmu.gov.ua page, docs/sources.csv). Changes indicated by the AI notice on every page"
 eu-ecb-decisions,Reproduction permitted with the source acknowledged,https://www.ecb.europa.eu/services/using-our-site/disclaimer-and-copyright/html/index.en.html,Source: European Central Bank,en,"The statement on each ECB press release page (#109, read 16 Oct 2026): reproduction permitted provided the source is acknowledged. Russia's row removed with the source (#81)"
+us-federal-register,Public domain,https://www.federalregister.gov/reader-aids/policy/legal-status,,,US government work (17 U.S.C. §105)
+br-senate-laws,,,,,"Laws, decrees and other official acts are not protected (Lei 9.610/1998, art. 8, IV; docs/sources.csv): generic line"
+br-senate-complementary-laws,,,,,"Laws, decrees and other official acts are not protected (Lei 9.610/1998, art. 8, IV; docs/sources.csv): generic line"
+br-senate-constitutional-amendments,,,,,"Laws, decrees and other official acts are not protected (Lei 9.610/1998, art. 8, IV; docs/sources.csv): generic line"
+br-senate-provisional-measures,,,,,"Laws, decrees and other official acts are not protected (Lei 9.610/1998, art. 8, IV; docs/sources.csv): generic line"
+br-senate-decrees,,,,,"Laws, decrees and other official acts are not protected (Lei 9.610/1998, art. 8, IV; docs/sources.csv): generic line"
+za-cabinet-statements,,,,,"Non-commercial informational use (gov.za terms, docs/sources.csv); our own words, nothing reproduced: generic line"
+ua-government-courier,,,Джерело: Урядовий кур’єр,uk,"ukurier.gov.ua/uk/terms-conditions asks for the source to be named and the page linked (docs/sources.csv); the official link sits under every summary. Legal review: confirm the wording"
+ua-verkhovna-rada,,,,,"Acts of state bodies and news of the day are not objects of copyright (Civil Code of Ukraine, art. 434; docs/sources.csv): generic line"

@@ -26,7 +26,10 @@ interface SiteTexts {
   originalTitle: string;
   older: string;
   latestLink: string;
-  /** The list page's h1; "Latest" (the app's own word) heads its section. */
+  /** Heads the list under Top stories on page 1. The site's own since the app
+   * shows one list under its Top stories block with no heading (#164). */
+  latest: string;
+  /** The list page's h1. */
   listTitle: string;
   notInLang: string;
   readIn: string;
@@ -80,6 +83,7 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     originalTitle: "Original title",
     older: "Older decisions",
     latestLink: "Latest decisions",
+    latest: "Latest",
     listTitle: "Official decisions",
     notInLang: "This decision is not available in this language yet.",
     readIn: "Read it in:",
@@ -114,6 +118,7 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     originalTitle: "Оригінальна назва",
     older: "Давніші рішення",
     latestLink: "Останні рішення",
+    latest: "Останнє",
     listTitle: "Офіційні рішення",
     notInLang: "Цього рішення ще немає цією мовою.",
     readIn: "Читати:",
@@ -148,6 +153,7 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     originalTitle: "Оригинальное название",
     older: "Более ранние решения",
     latestLink: "Последние решения",
+    latest: "Последние решения",
     listTitle: "Официальные решения",
     notInLang: "Этого решения пока нет на этом языке.",
     readIn: "Читать:",
@@ -182,6 +188,7 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     originalTitle: "Título original",
     older: "Decisiones anteriores",
     latestLink: "Últimas decisiones",
+    latest: "Lo último",
     listTitle: "Decisiones oficiales",
     notInLang: "Esta decisión aún no está disponible en este idioma.",
     readIn: "Leer en:",
@@ -216,6 +223,7 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     originalTitle: "Originaltitel",
     older: "Ältere Entscheidungen",
     latestLink: "Neueste Entscheidungen",
+    latest: "Aktuell",
     listTitle: "Offizielle Entscheidungen",
     notInLang: "Diese Entscheidung gibt es in dieser Sprache noch nicht.",
     readIn: "Lesen auf:",

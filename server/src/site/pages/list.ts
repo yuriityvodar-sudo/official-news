@@ -70,7 +70,7 @@ ${filterBar(lang, filter, data.menus)}
 ${list.items.length ? html`<p class="notice">${aiNotice(lang)}</p>` : ""}
 ${
   first && list.top.length
-    ? html`<section aria-labelledby="top"><h2 class="section" id="top">${t(lang, "topStories")}</h2>
+    ? html`<section aria-labelledby="top"><h2 class="section" id="top">${t(lang, "topStoriesTitle")}</h2>
 <ol class="items">${list.top.map((a) => item(lang, a))}</ol></section>`
     : ""
 }

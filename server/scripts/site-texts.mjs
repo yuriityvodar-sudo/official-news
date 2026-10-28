@@ -32,8 +32,7 @@ export const SITE_LANGS = ["en", "uk", "ru", "es", "de"];
 
 /** The ARB keys the site shows: these, plus every key matching KEY_PATTERNS. */
 export const KEYS = [
-  "topStories",
-  "latest",
+  "topStoriesTitle",
   "feedEmpty",
   "feedNoTranslations",
   "feedTranslationsComing",

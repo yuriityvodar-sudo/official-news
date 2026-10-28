@@ -46,13 +46,13 @@ describe("the app's texts", () => {
     const all = arbs();
     delete all.uk.aboutIntro;
     all.ru.lastUpdated = "Обновлено {when}";
-    all.de.latest = "{count, plural, one{Neueste} other{Neueste}}";
+    all.de.topStoriesTitle = "{count, plural, one{Wichtig} other{Wichtig}}";
     assert.throws(
       () => siteTexts(all),
       (error) =>
         /app_uk.arb has no "aboutIntro"/.test(error.message) &&
         /app_ru.arb "lastUpdated" has placeholders \{when\}/.test(error.message) &&
-        /app_de.arb "latest" uses plural or select/.test(error.message),
+        /app_de.arb "topStoriesTitle" uses plural or select/.test(error.message),
     );
   });
 

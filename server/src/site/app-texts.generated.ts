@@ -3,9 +3,8 @@
 
 /** The app's texts the website shows, by key. */
 export type AppKey =
-  | "topStories"
-  | "latest"
   | "feedEmpty"
+  | "topStoriesTitle"
   | "feedNoTranslations"
   | "feedTranslationsComing"
   | "decisionTypeLaw"
@@ -106,7 +105,11 @@ export type AppKey =
   | "supportMessages"
   | "supportMistakes"
   | "supportAppStore"
-  | "languageCs";
+  | "languageCs"
+  | "privacyChatHeading"
+  | "privacyChat"
+  | "termsSubscriptionHeading"
+  | "termsSubscription";
 
 export type SiteLang = "en" | "uk" | "ru" | "es" | "de";
 
@@ -115,9 +118,8 @@ export const SITE_LANGS: readonly SiteLang[] = ["en","uk","ru","es","de"];
 /** The app's texts, from app/lib/l10n/app_<lang>.arb. */
 export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
   "en": {
-    "topStories": "Top stories",
-    "latest": "Latest",
     "feedEmpty": "No decisions yet today.",
+    "topStoriesTitle": "Top stories",
     "feedNoTranslations": "No translated decisions yet.",
     "feedTranslationsComing": "Translations appear here as they are ready.",
     "decisionTypeLaw": "Law",
@@ -182,14 +184,14 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "contactSupport": "Contact & Support",
     "publisher": "{name}, Slovakia",
     "lastUpdated": "Last updated {date}",
-    "aboutIntro": "Official News shows what governments and international bodies have decided, in a few calm sentences, with a link to the official page.",
+    "aboutIntro": "Outer News shows what governments and international bodies have decided, in a few calm sentences, with a link to the official page.",
     "aboutSourcesHeading": "Where the news comes from",
     "aboutSources1": "Every decision comes from a verified official website: a government, a ministry, a parliament or an international body. We never use media, aggregators or trending lists.",
     "aboutSources2": "An AI reads the official page and writes the headline and the summary, and translates them. It can make mistakes, so every article links to the original, which is the text that counts.",
     "aboutIndependentHeading": "Independent",
-    "aboutIndependent": "Official News is an independent app. It is not affiliated with, endorsed by or speaking for any government or public body.",
+    "aboutIndependent": "Outer News is an independent app. It is not affiliated with, endorsed by or speaking for any government or public body.",
     "aboutPublishedBy": "Published by {publisher}.",
-    "privacyIntro": "Official News has no accounts: we do not ask for your name, e-mail address or phone number, and we do not sell or share personal data for advertising.",
+    "privacyIntro": "Outer News has no accounts: we do not ask for your name, e-mail address or phone number, and we do not sell or share personal data for advertising.",
     "privacyPhoneHeading": "On your phone",
     "privacyPhone": "Your language and feed filters, the articles you have read, the last feed you saw and the pictures you have viewed are kept on your phone, so the app opens quickly and works offline. Deleting the app deletes them.",
     "privacyLoadingHeading": "When the app loads news",
@@ -207,7 +209,7 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "privacyController": "Data controller: {publisher}.",
     "privacyChangesHeading": "Changes",
     "privacyChanges": "If this policy changes, the new version will be in the app with a new date.",
-    "termsIntro1": "Official News summarizes official decisions for general information. It is not legal, financial or professional advice.",
+    "termsIntro1": "Outer News summarizes official decisions for general information. It is not legal, financial or professional advice.",
     "termsIntro2": "Summaries and translations are made by AI and can be incomplete or wrong. Before you rely on a decision, read the official page linked in every article: that text is the one that counts.",
     "termsContentHeading": "Content",
     "termsContent": "The official texts belong to their publishers. The app shows a short summary, the publisher and a link to the original.",
@@ -218,12 +220,15 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "supportMessages": "Found a mistake in a summary, a broken source, or have an idea? We read every message.",
     "supportMistakes": "When you report a mistake, the name of the article and the language you read it in help us find it.",
     "supportAppStore": "You can reach us through the app's page in the App Store.",
-    "languageCs": "Czech"
+    "languageCs": "Czech",
+    "privacyChatHeading": "AI chat",
+    "privacyChat": "If you subscribe to the AI agent, your question and the article's text are sent to OpenAI to write the answer. We don't keep your conversations or send them to analytics. Apple handles the subscription: we receive a signed record of it from Apple, with an anonymous ID the app creates, never your name or payment details. We count each subscription's questions per day, for the daily limit.",
+    "termsSubscriptionHeading": "AI agent subscription",
+    "termsSubscription": "The AI agent is a monthly subscription through the App Store. It renews automatically until you cancel it in your Apple ID settings, at least 24 hours before the end of the period. Apple handles refunds. The agent answers only from the official text, can make mistakes, and its answers are not legal, financial or medical advice. 20 questions a day; a question about a long document counts as 2 or 3; packs of questions add more."
   },
   "uk": {
-    "topStories": "Головне",
-    "latest": "Останнє",
     "feedEmpty": "Сьогодні рішень ще немає.",
+    "topStoriesTitle": "Головне",
     "feedNoTranslations": "Перекладених рішень ще немає.",
     "feedTranslationsComing": "Переклади з’являться тут, щойно будуть готові.",
     "decisionTypeLaw": "Закон",
@@ -288,14 +293,14 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "contactSupport": "Контакти й підтримка",
     "publisher": "{name}, Словаччина",
     "lastUpdated": "Оновлено {date}",
-    "aboutIntro": "Official News показує, які рішення ухвалили уряди й міжнародні організації: кілька спокійних речень і посилання на офіційну сторінку.",
+    "aboutIntro": "Outer News показує, які рішення ухвалили уряди й міжнародні організації: кілька спокійних речень і посилання на офіційну сторінку.",
     "aboutSourcesHeading": "Звідки новини",
     "aboutSources1": "Кожне рішення береться з перевіреного офіційного сайту: уряду, міністерства, парламенту чи міжнародної організації. Ми ніколи не використовуємо медіа, агрегатори чи списки трендів.",
     "aboutSources2": "ШІ читає офіційну сторінку, пише заголовок і стислий виклад та перекладає їх. Він може помилятися, тому кожна стаття містить посилання на оригінал, а значення має саме його текст.",
     "aboutIndependentHeading": "Незалежність",
-    "aboutIndependent": "Official News — незалежний застосунок. Він не пов’язаний із жодним урядом чи державним органом, не має їхнього схвалення й не виступає від їхнього імені.",
+    "aboutIndependent": "Outer News — незалежний застосунок. Він не пов’язаний із жодним урядом чи державним органом, не має їхнього схвалення й не виступає від їхнього імені.",
     "aboutPublishedBy": "Видавець: {publisher}.",
-    "privacyIntro": "В Official News немає облікових записів: ми не запитуємо ваше ім’я, адресу електронної пошти чи номер телефону, а також не продаємо й не передаємо персональні дані для реклами.",
+    "privacyIntro": "В Outer News немає облікових записів: ми не запитуємо ваше ім’я, адресу електронної пошти чи номер телефону, а також не продаємо й не передаємо персональні дані для реклами.",
     "privacyPhoneHeading": "На вашому телефоні",
     "privacyPhone": "Вибрана мова й фільтри стрічки, прочитані статті, остання стрічка, яку ви бачили, і переглянуті зображення зберігаються на вашому телефоні, щоб застосунок швидко відкривався й працював офлайн. Якщо видалити застосунок, вони теж видаляться.",
     "privacyLoadingHeading": "Коли застосунок завантажує новини",
@@ -313,7 +318,7 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "privacyController": "Контролер даних: {publisher}.",
     "privacyChangesHeading": "Зміни",
     "privacyChanges": "Якщо ця політика зміниться, нова версія з’явиться в застосунку з новою датою.",
-    "termsIntro1": "Official News стисло викладає офіційні рішення для загального ознайомлення. Це не юридична, фінансова чи інша професійна консультація.",
+    "termsIntro1": "Outer News стисло викладає офіційні рішення для загального ознайомлення. Це не юридична, фінансова чи інша професійна консультація.",
     "termsIntro2": "Стислі виклади й переклади створює ШІ, тож вони можуть бути неповними чи помилковими. Перш ніж покладатися на рішення, прочитайте офіційну сторінку, посилання на яку є в кожній статті: значення має саме її текст.",
     "termsContentHeading": "Вміст",
     "termsContent": "Офіційні тексти належать їхнім видавцям. Застосунок показує стислий виклад, видавця й посилання на оригінал.",
@@ -324,12 +329,15 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "supportMessages": "Помітили помилку у викладі, джерело, що не працює, або маєте ідею? Ми читаємо кожне повідомлення.",
     "supportMistakes": "Коли повідомляєте про помилку, назва статті й мова, якою ви її читали, допоможуть нам її знайти.",
     "supportAppStore": "Зв’язатися з нами можна через сторінку застосунку в App Store.",
-    "languageCs": "чеської"
+    "languageCs": "чеської",
+    "privacyChatHeading": "ШІ-чат",
+    "privacyChat": "Якщо ви підписалися на ШІ-агента, ваше запитання і текст статті надсилаються в OpenAI, щоб написати відповідь. Ми не зберігаємо ваше листування і не надсилаємо його в аналітику. Підпискою займається Apple: ми отримуємо від Apple підписаний запис про неї з анонімним ідентифікатором, який створює застосунок, але ніколи — ваше ім’я чи платіжні дані. Ми рахуємо запитання кожної підписки за день — для денного ліміту.",
+    "termsSubscriptionHeading": "Підписка на ШІ-агента",
+    "termsSubscription": "Підписка на ШІ-агента — щомісячна, через App Store. Вона подовжується автоматично, доки ви не скасуєте її в налаштуваннях Apple ID не пізніше ніж за 24 години до кінця періоду. Поверненнями коштів займається Apple. Агент відповідає лише за офіційним текстом, може помилятися, і його відповіді — не юридична, фінансова чи медична консультація. 20 запитань на день; запитання про довгий документ рахується як 2 або 3; пакети запитань додають більше."
   },
   "ru": {
-    "topStories": "Главное",
-    "latest": "Последние решения",
     "feedEmpty": "Сегодня решений пока нет.",
+    "topStoriesTitle": "Главное",
     "feedNoTranslations": "Переведённых решений пока нет.",
     "feedTranslationsComing": "Переводы появятся здесь, как только будут готовы.",
     "decisionTypeLaw": "Закон",
@@ -394,14 +402,14 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "contactSupport": "Контакты и поддержка",
     "publisher": "{name}, Словакия",
     "lastUpdated": "Обновлено {date}",
-    "aboutIntro": "Official News рассказывает о решениях правительств и международных организаций — коротко, спокойно и со ссылкой на официальную страницу.",
+    "aboutIntro": "Outer News рассказывает о решениях правительств и международных организаций — коротко, спокойно и со ссылкой на официальную страницу.",
     "aboutSourcesHeading": "Откуда новости",
     "aboutSources1": "Каждое решение берётся с проверенного официального сайта: правительства, министерства, парламента или международной организации. Мы никогда не используем СМИ, новостные агрегаторы или списки популярных тем.",
     "aboutSources2": "ИИ читает официальную страницу, пишет заголовок и краткое изложение и переводит их. Он может ошибаться, поэтому каждая статья ссылается на оригинал, а значение имеет именно его текст.",
     "aboutIndependentHeading": "Независимость",
-    "aboutIndependent": "Official News — независимое приложение. Оно не связано ни с одним правительством или государственным органом, не одобрено ими и не выступает от их имени.",
+    "aboutIndependent": "Outer News — независимое приложение. Оно не связано ни с одним правительством или государственным органом, не одобрено ими и не выступает от их имени.",
     "aboutPublishedBy": "Издатель: {publisher}.",
-    "privacyIntro": "В Official News нет учётных записей: мы не запрашиваем ваше имя, адрес электронной почты или номер телефона, а также не продаём и не передаём персональные данные для рекламы.",
+    "privacyIntro": "В Outer News нет учётных записей: мы не запрашиваем ваше имя, адрес электронной почты или номер телефона, а также не продаём и не передаём персональные данные для рекламы.",
     "privacyPhoneHeading": "На вашем телефоне",
     "privacyPhone": "Выбранный язык и фильтры ленты, прочитанные статьи, последняя лента, которую вы видели, и просмотренные изображения хранятся на вашем телефоне, чтобы приложение быстро открывалось и работало офлайн. При удалении приложения эти данные удаляются.",
     "privacyLoadingHeading": "Когда приложение загружает новости",
@@ -419,7 +427,7 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "privacyController": "Контролёр данных: {publisher}.",
     "privacyChangesHeading": "Изменения",
     "privacyChanges": "Если эта политика изменится, новая версия появится в приложении с новой датой.",
-    "termsIntro1": "Official News кратко излагает официальные решения для общего ознакомления. Это не юридическая, финансовая или иная профессиональная консультация.",
+    "termsIntro1": "Outer News кратко излагает официальные решения для общего ознакомления. Это не юридическая, финансовая или иная профессиональная консультация.",
     "termsIntro2": "Краткие изложения и переводы создаёт ИИ, поэтому они могут быть неполными или ошибочными. Прежде чем полагаться на решение, прочитайте официальную страницу, ссылка на которую есть в каждой статье: значение имеет именно её текст.",
     "termsContentHeading": "Материалы",
     "termsContent": "Официальные тексты принадлежат их издателям. Приложение показывает краткое изложение, издателя и ссылку на оригинал.",
@@ -430,12 +438,15 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "supportMessages": "Нашли ошибку в кратком изложении или неработающий источник? Есть идея? Мы читаем каждое сообщение.",
     "supportMistakes": "Сообщая об ошибке, укажите заголовок статьи и язык, на котором вы её читали: так нам будет проще найти ошибку.",
     "supportAppStore": "Связаться с нами можно через страницу приложения в App Store.",
-    "languageCs": "чешского"
+    "languageCs": "чешского",
+    "privacyChatHeading": "ИИ-чат",
+    "privacyChat": "Если вы подписались на ИИ-агента, ваш вопрос и текст статьи отправляются в OpenAI, чтобы написать ответ. Мы не храним вашу переписку и не отправляем её в аналитику. Подпиской занимается Apple: мы получаем от Apple подписанную запись о ней с анонимным идентификатором, который создаёт приложение, но никогда — ваше имя или платёжные данные. Мы считаем вопросы каждой подписки за день — для дневного лимита.",
+    "termsSubscriptionHeading": "Подписка на ИИ-агента",
+    "termsSubscription": "Подписка на ИИ-агента — ежемесячная, через App Store. Она продлевается автоматически, пока вы не отмените её в настройках Apple ID не позже чем за 24 часа до конца периода. Возвратами занимается Apple. Агент отвечает только по официальному тексту, может ошибаться, и его ответы — не юридическая, финансовая или медицинская консультация. 20 вопросов в день; вопрос о длинном документе считается за 2 или 3; пакеты вопросов добавляют больше."
   },
   "es": {
-    "topStories": "Destacadas",
-    "latest": "Lo último",
     "feedEmpty": "Aún no hay decisiones hoy.",
+    "topStoriesTitle": "Lo más importante",
     "feedNoTranslations": "Aún no hay decisiones traducidas.",
     "feedTranslationsComing": "Las traducciones aparecerán aquí a medida que estén listas.",
     "decisionTypeLaw": "Ley",
@@ -500,14 +511,14 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "contactSupport": "Contacto y soporte",
     "publisher": "{name}, Eslovaquia",
     "lastUpdated": "Última actualización: {date}",
-    "aboutIntro": "Official News muestra lo que han decidido los gobiernos y los organismos internacionales en pocas frases, con un tono sereno y un enlace a la página oficial.",
+    "aboutIntro": "Outer News muestra lo que han decidido los gobiernos y los organismos internacionales en pocas frases, con un tono sereno y un enlace a la página oficial.",
     "aboutSourcesHeading": "De dónde vienen las noticias",
     "aboutSources1": "Cada decisión procede de un sitio web oficial verificado: un gobierno, un ministerio, un parlamento o un organismo internacional. Nunca usamos medios de comunicación, agregadores ni listas de tendencias.",
     "aboutSources2": "Una IA lee la página oficial, escribe el titular y el resumen, y los traduce. Puede equivocarse; por eso, cada artículo enlaza al original, que es el texto que prevalece.",
     "aboutIndependentHeading": "Independiente",
-    "aboutIndependent": "Official News es una app independiente. No está vinculada a ningún gobierno ni organismo público, no cuenta con su respaldo y no habla en su nombre.",
+    "aboutIndependent": "Outer News es una app independiente. No está vinculada a ningún gobierno ni organismo público, no cuenta con su respaldo y no habla en su nombre.",
     "aboutPublishedBy": "Publicada por {publisher}.",
-    "privacyIntro": "Official News no usa cuentas de usuario: no te pedimos tu nombre, tu correo electrónico ni tu número de teléfono, y no vendemos ni compartimos datos personales con fines publicitarios.",
+    "privacyIntro": "Outer News no usa cuentas de usuario: no te pedimos tu nombre, tu correo electrónico ni tu número de teléfono, y no vendemos ni compartimos datos personales con fines publicitarios.",
     "privacyPhoneHeading": "En tu teléfono",
     "privacyPhone": "El idioma y los filtros elegidos, los artículos que leíste, la última lista de noticias que viste y las imágenes ya vistas se guardan en tu teléfono para que la app se abra rápido y funcione sin conexión. Si eliminas la app, se eliminan con ella.",
     "privacyLoadingHeading": "Cuando la app carga noticias",
@@ -525,7 +536,7 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "privacyController": "Responsable del tratamiento: {publisher}.",
     "privacyChangesHeading": "Cambios",
     "privacyChanges": "Si esta política cambia, la nueva versión estará en la app con una nueva fecha.",
-    "termsIntro1": "Official News resume decisiones oficiales con fines informativos generales. No constituye asesoramiento legal, financiero ni profesional.",
+    "termsIntro1": "Outer News resume decisiones oficiales con fines informativos generales. No constituye asesoramiento legal, financiero ni profesional.",
     "termsIntro2": "Los resúmenes y las traducciones los genera una IA y pueden ser incompletos o incorrectos. Antes de basarte en una decisión, lee la página oficial enlazada en cada artículo: ese es el texto que prevalece.",
     "termsContentHeading": "Contenido",
     "termsContent": "Los textos oficiales pertenecen a las instituciones que los publican. La app muestra un breve resumen, el nombre de la institución y un enlace al original.",
@@ -536,12 +547,15 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "supportMessages": "¿Encontraste un error en un resumen, una fuente que no funciona o tienes una idea? Leemos todos los mensajes.",
     "supportMistakes": "Si nos informas de un error, el título del artículo y el idioma en que lo leíste nos ayudan a encontrarlo.",
     "supportAppStore": "Puedes contactarnos a través de la página de la app en el App Store.",
-    "languageCs": "checo"
+    "languageCs": "checo",
+    "privacyChatHeading": "Chat con IA",
+    "privacyChat": "Si te suscribes al agente de IA, tu pregunta y el texto del artículo se envían a OpenAI para escribir la respuesta. No guardamos tus conversaciones ni las enviamos a la analítica. Apple gestiona la suscripción: recibimos de Apple un registro firmado de ella, con un identificador anónimo que crea la app, nunca tu nombre ni tus datos de pago. Contamos las preguntas de cada suscripción al día, para el límite diario.",
+    "termsSubscriptionHeading": "Suscripción al agente de IA",
+    "termsSubscription": "La suscripción al agente de IA es mensual, a través de la App Store. Se renueva automáticamente hasta que la canceles en los ajustes de tu Apple ID al menos 24 horas antes del final del periodo. Apple gestiona los reembolsos. El agente responde solo a partir del texto oficial, puede equivocarse y sus respuestas no son asesoramiento legal, financiero ni médico. 20 preguntas al día; una pregunta sobre un documento largo cuenta como 2 o 3; los paquetes de preguntas añaden más."
   },
   "de": {
-    "topStories": "Topmeldungen",
-    "latest": "Aktuell",
     "feedEmpty": "Heute noch keine Entscheidungen.",
+    "topStoriesTitle": "Das Wichtigste",
     "feedNoTranslations": "Noch keine übersetzten Entscheidungen.",
     "feedTranslationsComing": "Übersetzungen erscheinen hier, sobald sie verfügbar sind.",
     "decisionTypeLaw": "Gesetz",
@@ -606,14 +620,14 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "contactSupport": "Kontakt & Support",
     "publisher": "{name}, Slowakei",
     "lastUpdated": "Stand: {date}",
-    "aboutIntro": "Official News zeigt, was Regierungen und internationale Organisationen beschlossen haben – in wenigen sachlichen Sätzen und mit einem Link zur offiziellen Seite.",
+    "aboutIntro": "Outer News zeigt, was Regierungen und internationale Organisationen beschlossen haben – in wenigen sachlichen Sätzen und mit einem Link zur offiziellen Seite.",
     "aboutSourcesHeading": "Woher die Nachrichten kommen",
     "aboutSources1": "Jede Entscheidung stammt von der geprüften offiziellen Website einer Regierung, eines Ministeriums, eines Parlaments oder einer internationalen Organisation. Wir nutzen nie Medien, Aggregatoren oder Trendlisten.",
     "aboutSources2": "Eine KI liest die offizielle Seite, schreibt Überschrift und Zusammenfassung und übersetzt sie. Sie kann Fehler machen, deshalb verlinkt jeder Artikel auf das Original; maßgeblich ist dessen Text.",
     "aboutIndependentHeading": "Unabhängig",
-    "aboutIndependent": "Official News ist eine unabhängige App. Sie ist mit keiner Regierung und keiner öffentlichen Stelle verbunden, wird von keiner unterstützt und spricht nicht in deren Namen.",
+    "aboutIndependent": "Outer News ist eine unabhängige App. Sie ist mit keiner Regierung und keiner öffentlichen Stelle verbunden, wird von keiner unterstützt und spricht nicht in deren Namen.",
     "aboutPublishedBy": "Herausgeber: {publisher}.",
-    "privacyIntro": "Official News verwendet keine Benutzerkonten: Wir fragen nicht nach Ihrem Namen, Ihrer E-Mail-Adresse oder Telefonnummer, und wir verkaufen oder teilen keine personenbezogenen Daten zu Werbezwecken.",
+    "privacyIntro": "Outer News verwendet keine Benutzerkonten: Wir fragen nicht nach Ihrem Namen, Ihrer E-Mail-Adresse oder Telefonnummer, und wir verkaufen oder teilen keine personenbezogenen Daten zu Werbezwecken.",
     "privacyPhoneHeading": "Auf Ihrem Gerät",
     "privacyPhone": "Die gewählte Sprache und die Feed-Filter, die gelesenen Artikel, der zuletzt angezeigte Feed und die angesehenen Bilder werden auf Ihrem Gerät gespeichert, damit die App schnell startet und offline funktioniert. Wenn Sie die App löschen, werden sie mitgelöscht.",
     "privacyLoadingHeading": "Wenn die App Nachrichten lädt",
@@ -631,7 +645,7 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "privacyController": "Verantwortlicher: {publisher}.",
     "privacyChangesHeading": "Änderungen",
     "privacyChanges": "Wenn sich diese Erklärung ändert, steht die neue Fassung mit neuem Datum in der App.",
-    "termsIntro1": "Official News fasst offizielle Entscheidungen zur allgemeinen Information zusammen. Es handelt sich nicht um eine rechtliche, finanzielle oder sonstige fachliche Beratung.",
+    "termsIntro1": "Outer News fasst offizielle Entscheidungen zur allgemeinen Information zusammen. Es handelt sich nicht um eine rechtliche, finanzielle oder sonstige fachliche Beratung.",
     "termsIntro2": "Zusammenfassungen und Übersetzungen werden von einer KI erstellt und können unvollständig oder falsch sein. Bevor Sie sich auf eine Entscheidung verlassen, lesen Sie die in jedem Artikel verlinkte offizielle Seite: Maßgeblich ist deren Text.",
     "termsContentHeading": "Inhalte",
     "termsContent": "Die offiziellen Texte gehören ihren Herausgebern. Die App zeigt eine kurze Zusammenfassung, den Herausgeber und einen Link zum Original.",
@@ -642,7 +656,11 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "supportMessages": "Sie haben einen Fehler in einer Zusammenfassung oder eine Quelle gefunden, die nicht funktioniert, oder Sie haben eine Idee? Wir lesen jede Nachricht.",
     "supportMistakes": "Wenn Sie einen Fehler melden, helfen uns der Titel des Artikels und die Sprache, in der Sie ihn gelesen haben, bei der Suche.",
     "supportAppStore": "Sie erreichen uns über die Seite der App im App Store.",
-    "languageCs": "Tschechischen"
+    "languageCs": "Tschechischen",
+    "privacyChatHeading": "KI-Chat",
+    "privacyChat": "Wenn Sie den KI-Agenten abonniert haben, werden Ihre Frage und der Text des Artikels an OpenAI gesendet, um die Antwort zu schreiben. Wir speichern Ihre Gespräche nicht und senden sie nicht an die Analyse. Das Abo wickelt Apple ab: Wir erhalten von Apple einen signierten Nachweis darüber, mit einer anonymen Kennung, die die App erzeugt, nie Ihren Namen oder Ihre Zahlungsdaten. Wir zählen die Fragen jedes Abos pro Tag, für das Tageslimit.",
+    "termsSubscriptionHeading": "Abo für den KI-Agenten",
+    "termsSubscription": "Das Abo für den KI-Agenten läuft monatlich über den App Store. Es verlängert sich automatisch, bis Sie es spätestens 24 Stunden vor Ende des Zeitraums in den Apple-ID-Einstellungen kündigen. Erstattungen wickelt Apple ab. Der Agent antwortet nur aus dem amtlichen Text, kann sich irren, und seine Antworten sind keine Rechts-, Finanz- oder medizinische Beratung. 20 Fragen pro Tag; eine Frage zu einem langen Dokument zählt als 2 oder 3; Fragenpakete bringen mehr."
   }
 };
 
@@ -650,7 +668,7 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
 export const PUBLISHER_NAME = "RS Elite Pro s.r.o.";
 
 /** When the privacy policy and the terms last changed (`policyUpdated` in info_pages.dart). */
-export const POLICY_UPDATED = "2026-10-16";
+export const POLICY_UPDATED = "2026-10-27";
 
 /** Each language's own name and short label (FeedLanguage in feed_language.dart). */
 export const LANGUAGE_NAMES: Record<SiteLang, { nativeName: string; shortLabel: string }> = {
