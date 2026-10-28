@@ -437,7 +437,9 @@ void main() {
 
     await tester.pumpAndSettle();
     expect(CardZoomRoute.moving.value, isFalse);
-    expect(native('Gear'), 1);
+    // Covered by the article, the feed's glass stays plain (#160).
+    expect(native('Gear'), 0);
+    expect(native('Back'), 1);
 
     tester.state<NavigatorState>(find.byType(Navigator)).pop();
     await tester.pump();

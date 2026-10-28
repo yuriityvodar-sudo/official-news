@@ -330,8 +330,9 @@ class NowSettingsButton extends StatelessWidget {
     padding: EdgeInsets.zero,
     minimumSize: const Size(44, 44),
     onPressed: onPressed,
+    // A little larger than before (36), so the glass reads as glass (Yurii, #160).
     child: GlassCircle(
-      size: 36,
+      size: 40,
       child: Icon(
         CupertinoIcons.gear_alt,
         size: 21,

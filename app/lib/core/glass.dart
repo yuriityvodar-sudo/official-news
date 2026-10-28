@@ -89,7 +89,9 @@ class GlassCapsule extends StatelessWidget {
 /// The native glass, or [plain] where there is none. While an article grows
 /// out of its card, goes back into it or is shrunk by hand (#141), the glass
 /// of the screen under it shows as [plain]: iOS would draw the native view
-/// over the moving article. Hidden, not removed, so it is there again at once.
+/// over the moving article. So does the glass of a screen another route
+/// covers (#160): under a sheet its glow showed through as a faint white box.
+/// Hidden, not removed, so it is there again at once.
 class _Glass extends StatelessWidget {
   const _Glass({required this.plain});
 
@@ -102,19 +104,24 @@ class _Glass extends StatelessWidget {
       viewType: 'official_news/glass',
       hitTestBehavior: PlatformViewHitTestBehavior.transparent,
     );
-    if (ModalRoute.of(context) is CardZoomRoute) return glass;
+    final route = ModalRoute.of(context);
+    final covered = !(route?.isCurrent ?? true);
+    if (route is CardZoomRoute) return _show(covered, glass);
     return ValueListenableBuilder(
       valueListenable: CardZoomRoute.moving,
       child: glass,
-      builder: (context, moving, glass) => Stack(
-        fit: StackFit.expand,
-        children: [
-          Opacity(opacity: moving ? 1 : 0, child: plain),
-          Opacity(opacity: moving ? 0 : 1, child: glass),
-        ],
-      ),
+      builder: (context, moving, glass) => _show(covered || moving, glass!),
     );
   }
+
+  /// [plain] when [hidden], else [glass].
+  Widget _show(bool hidden, Widget glass) => Stack(
+    fit: StackFit.expand,
+    children: [
+      Opacity(opacity: hidden ? 1 : 0, child: plain),
+      Opacity(opacity: hidden ? 0 : 1, child: glass),
+    ],
+  );
 }
 
 /// The top of a screen whose content scrolls under floating buttons (#141):
