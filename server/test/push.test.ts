@@ -1,7 +1,7 @@
 // Push notifications (#62, Yurii 16 Oct): breaking decisions (importance 4+)
-// released in the last 24 hours, at most 2 a local day per language and at
-// least 1 (the day's top story at 18:00), 3 hours apart, never 21:00 to 08:00
-// in the language's main time zone. Google's token endpoint and FCM are fakes;
+// released in the last 24 hours, each one as it comes (one per language and
+// run; no daily cap, no spacing, no top story of the day: #157), never 21:00 to
+// 08:00 in the language's main time zone. Google's token endpoint and FCM are fakes;
 // the service account's key is made for each test run and never stored.
 import { createScheduledController } from "cloudflare:test";
 import { env } from "cloudflare:workers";
@@ -11,13 +11,13 @@ import {
   BODY_MAX,
   BREAKING_CANDIDATE,
   CLAIM_PUSH,
-  PUSH_STATE,
+  LANGS_ON,
   type PushLang,
   TIME_ZONES,
-  TOP_CANDIDATE,
   localClock,
   runPush,
   shorten,
+  subtitleFor,
 } from "../src/push";
 import { FCM_SCOPE, PAUSE_MINUTES, TOKEN_MARGIN_MS, TOKEN_URL, fcmUrl, retryLater } from "../src/push/fcm";
 import type { Lang } from "../src/translator";
@@ -102,7 +102,14 @@ type Reply = { status: number; body?: unknown; headers?: Record<string, string> 
 interface Sent {
   url: string;
   authorization: string | null;
-  body: { message: { topic: string; notification: { title: string; body: string }; data: { articleId: string; lang: string } } };
+  body: {
+    message: {
+      topic: string;
+      notification: { title: string; body: string };
+      data: { articleId: string; lang: string };
+      apns: { payload: { aps: { sound: string; alert?: { title: string; subtitle: string; body: string } } } };
+    };
+  };
   /** Whether push_log held the claim (no message id, no error) when the request was made. */
   claimedFirst: boolean;
 }
@@ -145,9 +152,9 @@ function fakeGoogle({ fcm = [] as Reply[], token = [] as Reply[] } = {}) {
 
 type Google = ReturnType<typeof fakeGoogle>;
 const push = (now: Date, google: Google, e = pushEnv()) => runPush(e, { now, fetch: google.fetch });
-/** What a run sent, as "lang article kind" (or "lang article failed: why"). */
+/** What a run sent, as "lang article sent" (or "lang article failed: why"). */
 const sent = (run: Awaited<ReturnType<typeof runPush>>) =>
-  run.pushes.map((p) => `${p.lang} ${p.articleId} ${p.ok ? p.kind : `failed: ${p.error}`}`);
+  run.pushes.map((p) => `${p.lang} ${p.articleId} ${p.ok ? "sent" : `failed: ${p.error}`}`);
 const pushLog = async () =>
   (await env.DB.prepare("SELECT * FROM push_log ORDER BY sent_at, lang").all<Record<string, unknown>>()).results;
 const quiet = () => vi.spyOn(console, "log").mockImplementation(() => {});
@@ -160,7 +167,7 @@ describe("push notifications", () => {
     const now = london(11);
     const run = await push(now, google);
 
-    expect(run.pushes).toEqual([{ lang: "en", articleId: "a1", kind: "breaking", ok: true, messageId: `projects/${PROJECT}/messages/1` }]);
+    expect(run.pushes).toEqual([{ lang: "en", articleId: "a1", ok: true, messageId: `projects/${PROJECT}/messages/1` }]);
     expect(google.messages).toEqual([
       {
         url: `https://fcm.googleapis.com/v1/projects/${PROJECT}/messages:send`,
@@ -170,7 +177,8 @@ describe("push notifications", () => {
             topic: "breaking_en",
             notification: { title: "Headline a1", body: "Short summary of a1." },
             data: { articleId: "a1", lang: "en" },
-            apns: { payload: { aps: { sound: "default" } } },
+            // On iOS a line under the title: the source's country (#157); importance 4, so no "Breaking".
+            apns: { payload: { aps: { alert: { title: "Headline a1", subtitle: "🇩🇪 Germany", body: "Short summary of a1." }, sound: "default" } } },
           },
         },
         // Written to push_log before the request, so a run cut off never sends it again.
@@ -201,7 +209,7 @@ describe("push notifications", () => {
     expect(request.claims).toEqual({ iss: EMAIL, scope: FCM_SCOPE, aud: TOKEN_URL, iat, exp: iat + 3600 });
   });
 
-  it("pushes importance 4 and 5 only outside the daily slot, the most important first, then the newest", async () => {
+  it("pushes importance 4 and 5 only, the most important first, then the newest", async () => {
     await decision("a1", 3, london(9));
     await decision("a2", 4, london(9, 10));
     await decision("a3", 5, london(9, 20));
@@ -209,15 +217,17 @@ describe("push notifications", () => {
     await decision("a5", null, london(9, 40));
     const google = fakeGoogle();
     quiet();
-    expect(sent(await push(london(10), google))).toEqual(["en a4 breaking"]);
-    expect(sent(await push(london(13), google))).toEqual(["en a3 breaking"]);
+    expect(sent(await push(london(10), google))).toEqual(["en a4 sent"]);
+    expect(sent(await push(london(13), google))).toEqual(["en a3 sent"]);
 
-    // Only importance 3 and below left (a2 waits for a day with room): nothing before the slot.
+    // Only importance 3 and below left: nothing, at any hour (#157).
     await env.DB.prepare("DELETE FROM push_log").run();
     await env.DB.prepare("UPDATE articles SET importance = 3 WHERE id IN ('a2', 'a3', 'a4')").run();
-    const run = await push(london(16), google);
-    expect(run.pushes).toEqual([]);
-    expect(run.skipped.en).toBe("nothing breaking (importance 4+) in the last 24 hours");
+    for (const hour of [16, 18, 20]) {
+      const run = await push(london(hour), google);
+      expect(run.pushes).toEqual([]);
+      expect(run.skipped.en).toBe("nothing breaking (importance 4+) in the last 24 hours");
+    }
   });
 
   it("never pushes an article twice in a language, also one a run claimed and did not finish", async () => {
@@ -227,41 +237,26 @@ describe("push notifications", () => {
     await env.DB.prepare("INSERT INTO push_log (article_id, lang, sent_at, topic) VALUES ('a2', 'en', ?, 'breaking_en')").bind(stored(london(8))).run();
     const google = fakeGoogle();
     quiet();
-    expect(sent(await push(london(11), google))).toEqual(["en a1 breaking"]);
-    // a1 and a2 are done in English: nothing else qualifies, and the cap counts the claim too.
-    const run = await push(london(16), google);
+    expect(sent(await push(london(11), google))).toEqual(["en a1 sent"]);
+    // a1 and a2 are done in English: nothing else qualifies.
+    const run = await push(london(11, 5), google);
     expect(run.pushes).toEqual([]);
-    expect(run.skipped.en).toBe("daily cap (2 today)");
+    expect(run.skipped.en).toBe("nothing breaking (importance 4+) in the last 24 hours");
     expect(google.messages.map((m) => m.body.message.data.articleId)).toEqual(["a1"]);
   });
 
-  it("sends at most 2 a local day per language; the count starts again at local midnight", async () => {
+  it("sends every breaking decision as it comes, one per language and run: no daily cap, no spacing (#157)", async () => {
     await decision("a1", 4, london(10));
     await decision("a2", 4, london(10, 1));
-    await decision("a3", 4, london(10, 2));
+    await decision("a3", 5, london(10, 2));
     const google = fakeGoogle();
     quiet();
-    expect(sent(await push(london(10, 30), google))).toEqual(["en a3 breaking"]);
-    expect(sent(await push(london(13, 30), google))).toEqual(["en a2 breaking"]);
-    for (const now of [london(16, 30), london(20, 59)]) {
-      const run = await push(now, google);
-      expect(run.pushes).toEqual([]);
-      expect(run.skipped.en).toBe("daily cap (2 today)");
-    }
-    // The next morning, a1 is still less than 24 hours old.
-    expect(sent(await push(london(8, 30, 17), google))).toEqual(["en a1 breaking"]);
-  });
-
-  it("leaves at least 3 hours between two pushes in the same language", async () => {
-    await decision("a1", 4, london(10));
-    const google = fakeGoogle();
-    quiet();
-    expect(sent(await push(london(10, 5), google))).toEqual(["en a1 breaking"]);
-    await decision("a2", 5, london(11));
-    const early = await push(london(13, 4), google);
-    expect(early.pushes).toEqual([]);
-    expect(early.skipped.en).toBe(`spacing (last push ${stored(london(10, 5))})`);
-    expect(sent(await push(london(13, 5), google))).toEqual(["en a2 breaking"]);
+    expect(sent(await push(london(10, 30), google))).toEqual(["en a3 sent"]);
+    expect(sent(await push(london(10, 31), google))).toEqual(["en a2 sent"]);
+    expect(sent(await push(london(10, 32), google))).toEqual(["en a1 sent"]);
+    await decision("a4", 4, london(12));
+    expect(sent(await push(london(12, 1), google))).toEqual(["en a4 sent"]);
+    expect((await push(london(12, 2), google)).skipped.en).toBe("nothing breaking (importance 4+) in the last 24 hours");
   });
 
   it("sends nothing from 21:00 to 08:00 in each language's time zone, and the night's decision in the morning", async () => {
@@ -272,7 +267,7 @@ describe("push notifications", () => {
     const google = fakeGoogle();
     quiet();
     const night = await push(kyiv(22, 30), google);
-    expect(sent(night)).toEqual(["en a1 breaking"]);
+    expect(sent(night)).toEqual(["en a1 sent"]);
     expect(night.skipped.uk).toBe("quiet hours (22:30 in Europe/Kyiv)");
 
     // 07:59 in Kyiv (05:59 in London): every language is quiet, so the run reads nothing at all.
@@ -282,34 +277,21 @@ describe("push notifications", () => {
     expect(run?.skipped).toMatchObject({ en: "quiet hours (05:59 in Europe/London)", uk: "quiet hours (07:59 in Europe/Kyiv)" });
 
     const morning = await push(kyiv(8, 0, 17), google);
-    expect(sent(morning)).toEqual(["uk a1 breaking"]);
+    expect(sent(morning)).toEqual(["uk a1 sent"]);
     expect(morning.skipped.en).toBe("quiet hours (06:00 in Europe/London)");
   });
 
-  it("sends the day's top story at 18:00 local when nothing went out that day", async () => {
+  it("sends no top story of the day: a day with nothing breaking has no push, also after 18:00 (#157)", async () => {
     await decision("a1", 2, london(9));
     await decision("a2", 3, london(10));
-    await decision("a3", 3, london(11));
-    await decision("a4", 1, london(12));
     const google = fakeGoogle();
     quiet();
-    const before = await push(london(17, 59), google);
-    expect(before.pushes).toEqual([]);
-    expect(before.skipped.en).toBe("nothing breaking (importance 4+) in the last 24 hours");
-    // The highest importance, then the newest: a3.
-    expect(sent(await push(london(18), google))).toEqual(["en a3 daily"]);
-    expect(google.messages[0].body.message).toMatchObject({ topic: "breaking_en", data: { articleId: "a3", lang: "en" } });
-  });
-
-  it("sends no top story at the daily slot when a push already went out that day", async () => {
-    await decision("b1", 4, london(11));
-    const google = fakeGoogle();
-    quiet();
-    expect(sent(await push(london(12), google))).toEqual(["en b1 breaking"]);
-    await decision("b2", 2, london(13));
-    const slot = await push(london(18, 30), google);
-    expect(slot.pushes).toEqual([]);
-    expect(slot.skipped.en).toBe("nothing breaking (importance 4+) in the last 24 hours");
+    for (const now of [london(17, 59), london(18), london(20, 30)]) {
+      const run = await push(now, google);
+      expect(run.pushes).toEqual([]);
+      expect(run.skipped.en).toBe("nothing breaking (importance 4+) in the last 24 hours");
+    }
+    expect(google.messages).toEqual([]);
   });
 
   it("pushes in another language only when its translation is published, with the translated text", async () => {
@@ -324,16 +306,18 @@ describe("push notifications", () => {
     const google = fakeGoogle();
     quiet();
     const run = await push(london(11), google);
-    expect(sent(run)).toEqual(["en a1 breaking", "uk a1 breaking", "ru a2 breaking"]);
+    expect(sent(run)).toEqual(["en a1 sent", "uk a1 sent", "ru a2 sent"]);
     expect(run.skipped).toEqual({ es: "language off", de: "language off" });
     const uk = google.messages.find((m) => m.body.message.topic === "breaking_uk");
     expect(uk?.body.message).toMatchObject({ notification: { title: "Заголовок a1", body: "Коротко про a1." }, data: { articleId: "a1", lang: "uk" } });
+    // The line under the title in Ukrainian too: importance 5, so "Терміново" (#157).
+    expect(uk?.body.message.apns.payload.aps.alert?.subtitle).toBe("🇩🇪 Німеччина · Терміново");
     expect(google.messages.find((m) => m.body.message.topic === "breaking_ru")?.body.message.data).toEqual({ articleId: "a2", lang: "ru" });
     // One token for the whole run.
     expect(google.tokenRequests).toHaveLength(1);
 
     const next = await push(london(14), google);
-    expect(sent(next)).toEqual(["en a2 breaking"]);
+    expect(sent(next)).toEqual(["en a2 sent"]);
     expect(next.skipped).toMatchObject({
       uk: "nothing breaking (importance 4+) in the last 24 hours",
       ru: "nothing breaking (importance 4+) in the last 24 hours",
@@ -385,7 +369,7 @@ describe("push notifications", () => {
     const google = fakeGoogle();
     quiet();
     const t0 = london(10);
-    expect(sent(await push(t0, google))).toEqual(["en a1 breaking"]);
+    expect(sent(await push(t0, google))).toEqual(["en a1 sent"]);
     // Valid 3599 seconds: kept until 5 minutes before that.
     const expiresAt = new Date(t0.getTime() + 3599_000 - TOKEN_MARGIN_MS);
     expect(await env.DB.prepare("SELECT key, value, expires_at FROM kv_cache").all().then((r) => r.results)).toEqual([
@@ -394,12 +378,12 @@ describe("push notifications", () => {
 
     // Ukrainian is published half an hour later: the next run sends it with the same token, without asking Google.
     await translated("a1", "uk");
-    expect(sent(await push(later(t0, 30), google))).toEqual(["uk a1 breaking"]);
+    expect(sent(await push(later(t0, 30), google))).toEqual(["uk a1 sent"]);
     expect(google.tokenRequests).toHaveLength(1);
 
     // Russian after the token's time in the cache: a new token.
     await translated("a1", "ru");
-    expect(sent(await push(expiresAt, google))).toEqual(["ru a1 breaking"]);
+    expect(sent(await push(expiresAt, google))).toEqual(["ru a1 sent"]);
     expect(google.tokenRequests).toHaveLength(2);
     expect(google.messages.map((m) => m.authorization)).toEqual(["Bearer token-1", "Bearer token-1", "Bearer token-2"]);
   });
@@ -417,18 +401,15 @@ describe("push notifications", () => {
     ]);
     expect(JSON.parse(String(log.mock.calls[0][0])).pushes).toEqual(first.pushes);
 
-    // It counts for the spacing, so messages FCM keeps refusing cost one try in 3 hours, never the same article twice.
-    expect((await push(london(11), google)).skipped.en).toBe(`spacing (last push ${stored(london(10))})`);
-    expect(sent(await push(london(13), google))).toEqual(["en a2 breaking"]);
-    // Not for the daily cap: a2 was today's first push that went out.
-    await decision("a3", 4, london(15));
-    expect(sent(await push(london(16), google))).toEqual(["en a3 breaking"]);
-    expect(google.messages.map((m) => m.body.message.data.articleId)).toEqual(["a1", "a2", "a3"]);
+    // The next run goes on with the next decision; a1 is never tried again.
+    expect(sent(await push(london(10, 1), google))).toEqual(["en a2 sent"]);
+    expect((await push(london(10, 2), google)).pushes).toEqual([]);
+    expect(google.messages.map((m) => m.body.message.data.articleId)).toEqual(["a1", "a2"]);
     // Only an answer about the token, the permission, the quota or FCM itself is tried again.
     expect([400, 401, 403, 404, 408, 413, 429, 500, 503].filter(retryLater)).toEqual([401, 403, 408, 429, 500, 503]);
   });
 
-  it("counts a request without an answer (the timeout, a network error) as sent: never tried again, and in the daily cap", async () => {
+  it("counts a request without an answer (the timeout, a network error) as sent: never tried again", async () => {
     await decision("a1", 5, london(7, 30));
     await decision("a2", 4, london(7, 40));
     await decision("a3", 4, london(7, 50));
@@ -439,15 +420,14 @@ describe("push notifications", () => {
     const first = await push(london(8), google);
     expect(sent(first)).toEqual(["en a1 failed: request failed: The operation was aborted due to timeout"]);
     expect(first.pushes[0].outcome).toBe("unknown");
-    expect(sent(await push(london(11), google))).toEqual(["en a3 breaking"]);
-    const third = await push(london(14), google);
-    expect(third.pushes).toEqual([]);
-    expect(third.skipped.en).toBe("daily cap (2 today)");
-    // At most 2 requests to the topic in the local day.
-    expect(google.messages.map((m) => m.body.message.data.articleId)).toEqual(["a1", "a3"]);
+    expect(sent(await push(london(8, 1), google))).toEqual(["en a3 sent"]);
+    expect(sent(await push(london(8, 2), google))).toEqual(["en a2 sent"]);
+    // One request per article: a1 is not sent again.
+    expect(google.messages.map((m) => m.body.message.data.articleId)).toEqual(["a1", "a3", "a2"]);
     expect((await pushLog()).map((r) => [r.article_id, r.message_id, r.error, r.refused])).toEqual([
       ["a1", null, "request failed: The operation was aborted due to timeout", 0],
       ["a3", `projects/${PROJECT}/messages/2`, null, 0],
+      ["a2", `projects/${PROJECT}/messages/3`, null, 0],
     ]);
   });
 
@@ -478,16 +458,16 @@ describe("push notifications", () => {
     expect(during.skipped).toMatchObject({ en: `paused until ${until} (${why})`, uk: `paused until ${until} (${why})` });
     expect(google.tokenRequests).toHaveLength(0);
     // After it: a new token, and the article goes out in every language.
-    expect(sent(await push(later(london(10), PAUSE_MINUTES), google))).toEqual(["en a1 breaking", "uk a1 breaking", "ru a1 breaking"]);
+    expect(sent(await push(later(london(10), PAUSE_MINUTES), google))).toEqual(["en a1 sent", "uk a1 sent", "ru a1 sent"]);
     expect(google.tokenRequests).toHaveLength(1);
     expect(google.messages.slice(1).map((m) => m.authorization)).toEqual(["Bearer token-1", "Bearer token-1", "Bearer token-1"]);
   });
 
   it("tries again when FCM could not take a message (503, 429): after the pause, or FCM's Retry-After when longer", async () => {
-    // Nothing breaking that day, and FCM busy at the daily slot: the day's one push still goes out.
+    // FCM busy: the decision goes out once FCM can take it.
     await decision("a1", 3, london(9));
     await decision("a2", 2, london(10));
-    await decision("a3", 3, london(11));
+    await decision("a3", 4, london(11));
     const google = fakeGoogle({
       fcm: [
         { status: 503, body: { error: { status: "UNAVAILABLE", message: "The service is currently unavailable." } } },
@@ -503,7 +483,7 @@ describe("push notifications", () => {
     // Retry-After 30 minutes: longer than the pause, so honoured.
     expect(sent(await push(london(18, 10), google))).toEqual(["en a3 failed: HTTP 429 RESOURCE_EXHAUSTED: Quota exceeded."]);
     expect((await push(london(18, 30), google)).skipped.en).toBe(`paused until ${stored(london(18, 40))} (FCM: HTTP 429 RESOURCE_EXHAUSTED: Quota exceeded.)`);
-    expect(sent(await push(london(18, 40), google))).toEqual(["en a3 daily"]);
+    expect(sent(await push(london(18, 40), google))).toEqual(["en a3 sent"]);
     expect(google.messages).toHaveLength(3);
     expect(google.tokenRequests).toHaveLength(1);
   });
@@ -524,7 +504,7 @@ describe("push notifications", () => {
     }
     expect(google.tokenRequests).toHaveLength(1);
     // Then it asks again, and sends.
-    expect(sent(await push(london(10, 10), google))).toEqual(["en a1 breaking"]);
+    expect(sent(await push(london(10, 10), google))).toEqual(["en a1 sent"]);
     expect(google.tokenRequests).toHaveLength(2);
   });
 
@@ -562,7 +542,7 @@ describe("push notifications", () => {
   it("sends nothing twice when two runs overlap", async () => {
     await decision("a1", 5, london(9));
     await decision("a2", 5, london(9, 30));
-    // The second run starts while the first waits for FCM, and finds a1 claimed and the language just pushed.
+    // The second run starts while the first waits for FCM, and finds a2 claimed: it sends a1, never a2 again.
     let second: Promise<Awaited<ReturnType<typeof runPush>>> | undefined;
     const google = fakeGoogle();
     const overlapping = (async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -571,16 +551,16 @@ describe("push notifications", () => {
     }) as typeof globalThis.fetch;
     quiet();
     const first = await runPush(pushEnv(), { now: london(10), fetch: overlapping });
-    expect(sent(first)).toEqual(["en a2 breaking"]);
-    expect((await second)?.pushes).toEqual([]);
-    expect(google.messages).toHaveLength(1);
+    expect(sent(first)).toEqual(["en a2 sent"]);
+    expect(sent((await second)!)).toEqual(["en a1 sent"]);
+    expect(google.messages.map((m) => m.body.message.data.articleId).sort()).toEqual(["a1", "a2"]);
   });
 
   it("sends nothing twice when two runs read the state before either claims", async () => {
     await decision("a1", 5, london(9));
     await decision("a2", 5, london(9, 30));
     // The second run starts and finishes while the first waits for its token: both read
-    // PUSH_STATE before either claimed, so only the claim keeps the first from sending.
+    // the same candidate before either claimed, so only the claim keeps the first from sending.
     let started = false;
     let second: Awaited<ReturnType<typeof runPush>> | undefined;
     const google = fakeGoogle();
@@ -593,24 +573,23 @@ describe("push notifications", () => {
     }) as typeof globalThis.fetch;
     quiet();
     const first = await runPush(pushEnv(), { now: london(10), fetch: racing });
-    expect(second && sent(second)).toEqual(["en a2 breaking"]);
+    expect(second && sent(second)).toEqual(["en a2 sent"]);
     expect(first.pushes).toEqual([]);
     expect(first.skipped.en).toBe("claimed by another run");
     expect(google.messages).toHaveLength(1);
   });
 
-  it("keeps a claim safe against another run: the cap, the spacing and the article are checked in the same statement", async () => {
+  it("keeps a claim safe against another run: one article once per language, in one statement", async () => {
     await decision("a1", 5, london(9));
-    const claim = (article: string, now: Date) =>
+    const claim = (article: string, lang: string, now: Date) =>
       env.DB.prepare(CLAIM_PUSH)
-        .bind(article, "en", stored(now), "breaking_en", stored(later(now, -180)), stored(london(0)), 2)
+        .bind(article, lang, stored(now), `breaking_${lang}`)
         .all()
         .then((r) => r.results.length);
-    expect(await claim("a1", london(10))).toBe(1);
-    expect(await claim("a1", london(14))).toBe(0); // pushed before
-    expect(await claim("a2", london(12))).toBe(0); // within 3 hours
-    expect(await claim("a2", london(13))).toBe(1);
-    expect(await claim("a3", london(17))).toBe(0); // 2 today
+    expect(await claim("a1", "en", london(10))).toBe(1);
+    expect(await claim("a1", "en", london(14))).toBe(0); // pushed before
+    expect(await claim("a1", "uk", london(10))).toBe(1); // another language
+    expect(await claim("a2", "en", london(10, 1))).toBe(1); // no spacing, no cap
   });
 
   it("knows each language's local time, also across a clock change", () => {
@@ -630,17 +609,29 @@ describe("push notifications", () => {
     expect(localClock(new Date("2026-10-26T00:00:00Z"), "Europe/London").hour).toBe(0);
   });
 
-  it("reads the state through push_log's index, breaking news through its own index, the top story through added_at", async () => {
+  it("reads breaking news through its own index, with lookups by key", async () => {
     const plan = async (sql: string, ...binds: unknown[]) =>
       (await env.DB.prepare(`EXPLAIN QUERY PLAN ${sql}`).bind(...binds).all<{ detail: string }>()).results.map((r) => r.detail).join("; ");
-    const state = await plan(PUSH_STATE, JSON.stringify([{ lang: "en", dayStart: stored(london(0)) }]));
-    expect(state).toContain("push_log_lang_time");
-    for (const [sql, index] of [[BREAKING_CANDIDATE, "articles_breaking"], [TOP_CANDIDATE, "articles_added_at"]]) {
-      const candidate = await plan(sql, "uk", stored(london(0)), stored(london(0, 0, 9)));
-      expect(candidate).toContain(`SEARCH a USING INDEX ${index} (added_at>?)`);
-      expect(candidate).toContain("sqlite_autoindex_article_translations_1");
-      expect(candidate).toContain("sqlite_autoindex_push_log_1");
-    }
+    const candidate = await plan(BREAKING_CANDIDATE, "uk", stored(london(0)), stored(london(0, 0, 9)));
+    expect(candidate).toContain("SEARCH a USING INDEX articles_breaking (added_at>?)");
+    expect(candidate).toContain("sqlite_autoindex_article_translations_1");
+    expect(candidate).toContain("sqlite_autoindex_push_log_1");
+    expect(candidate).toContain("sqlite_autoindex_sources_1");
+    // The languages that are on: English always, another only when enabled.
+    await only("uk");
+    const on = await env.DB.prepare(LANGS_ON).bind(JSON.stringify(["en", "uk", "ru"])).all<{ lang: string }>();
+    expect(on.results.map((r) => r.lang)).toEqual(["en", "uk"]);
+  });
+
+  it("writes the line under the title: the flag and the country in the push's language, and \"Breaking\" for importance 5 only", () => {
+    expect(subtitleFor("BR", 5, "en")).toBe("🇧🇷 Brazil · Breaking");
+    expect(subtitleFor("IT", 4, "en")).toBe("🇮🇹 Italy");
+    expect(subtitleFor("DE", 5, "uk")).toBe("🇩🇪 Німеччина · Терміново");
+    expect(subtitleFor("BR", 5, "ru")).toBe("🇧🇷 Бразилия · Срочно");
+    expect(subtitleFor("EU", 5, "es")).toBe("🇪🇺 Unión Europea · Última hora");
+    expect(subtitleFor("UA", 5, "de")).toBe("🇺🇦 Ukraine · Eilmeldung");
+    expect(subtitleFor(null, 5, "en")).toBe("Breaking");
+    expect(subtitleFor(null, 4, "en")).toBe("");
   });
 
   it("reads few D1 rows in a run that sends nothing, with a day of news in four languages", async () => {
@@ -663,8 +654,8 @@ describe("push notifications", () => {
     quiet();
     const rows = await d1Rows(() => push(london(11), google));
     expect(rows.written).toBe(0);
-    // 61 on 16 Oct (209 before breaking news had its own index): the push_log state, and per language
-    // the 5 breaking decisions with their lookups. About 450 runs a day are outside every quiet hour.
+    // 61 on 16 Oct (209 before breaking news had its own index): the languages that are on, and per
+    // language the 5 breaking decisions with their lookups. About 450 runs a day are outside every quiet hour.
     expect(rows.read).toBeLessThan(80);
   });
 });
