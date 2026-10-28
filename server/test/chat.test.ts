@@ -290,4 +290,15 @@ describe("packs of questions (#146)", () => {
     await notify("REFUND", { transactionId: "3000000009", revocationDate: NOW.getTime() });
     expect(await wallet()).toBe(50 * QUESTION_MICROS - COST);
   });
+
+  it("a pack refunded before the app sent it is never credited, until Apple reverses the refund", async () => {
+    // Yurii's review of #184: Apple's refund can come first, and the app still holds the pack signed before it.
+    await notify("REFUND", { revocationDate: NOW.getTime() });
+    expect(await buy()).toEqual({ status: 200, body: { credited: false, boughtQuestions: 0 } });
+    // Apple may send it again: still nothing, in no wallet.
+    await notify("REFUND", { revocationDate: NOW.getTime() });
+    expect(await env.DB.prepare("SELECT COUNT(*) AS wallets FROM chat_wallet").first<number>("wallets")).toBe(0);
+    await notify("REFUND_REVERSED", {});
+    expect(await buy()).toEqual({ status: 200, body: { credited: true, boughtQuestions: 50 } });
+  });
 });
