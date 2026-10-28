@@ -86,12 +86,8 @@ class GlassCapsule extends StatelessWidget {
   );
 }
 
-/// The native glass, or [plain] where there is none. While an article grows
-/// out of its card, goes back into it or is shrunk by hand (#141), the glass
-/// of the screen under it shows as [plain]: iOS would draw the native view
-/// over the moving article. So does the glass of a screen another route
-/// covers (#160): under a sheet its glow showed through as a faint white box.
-/// Hidden, not removed, so it is there again at once.
+/// The native glass, or [plain] where there is none, and while anything is
+/// over its screen ([NativeOrPlain]).
 class _Glass extends StatelessWidget {
   const _Glass({required this.plain});
 
@@ -100,28 +96,115 @@ class _Glass extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (!GlassCircle.native) return plain;
-    const glass = UiKitView(
-      viewType: 'official_news/glass',
-      hitTestBehavior: PlatformViewHitTestBehavior.transparent,
-    );
-    final route = ModalRoute.of(context);
-    final covered = !(route?.isCurrent ?? true);
-    if (route is CardZoomRoute) return _show(covered, glass);
-    return ValueListenableBuilder(
-      valueListenable: CardZoomRoute.moving,
-      child: glass,
-      builder: (context, moving, glass) => _show(covered || moving, glass!),
+    return NativeOrPlain(
+      native: const UiKitView(
+        viewType: 'official_news/glass',
+        hitTestBehavior: PlatformViewHitTestBehavior.transparent,
+      ),
+      plain: plain,
     );
   }
+}
 
-  /// [plain] when [hidden], else [glass].
-  Widget _show(bool hidden, Widget glass) => Stack(
-    fit: StackFit.expand,
-    children: [
-      Opacity(opacity: hidden ? 1 : 0, child: plain),
-      Opacity(opacity: hidden ? 0 : 1, child: glass),
-    ],
-  );
+/// iOS's own [native] view (the glass, the topic pills), or Flutter's [plain]
+/// look in its place. iOS draws its views over Flutter, and the glass's
+/// shadow reaches past their frame, where Flutter cannot draw over it: under
+/// a sheet or the splash it showed through as a faint grey band (Roman, 27
+/// Oct). So [plain] stands in while anything is over the screen: another
+/// route (a sheet, a page coming in, until it has gone again), or an article
+/// growing out of its card, going back into it or shrunk by hand (#141),
+/// except on the article itself; and until iOS has made its view ([ready]).
+/// Under the splash ([NativeCover]) [native] comes in as the splash fades,
+/// as much as the app under it, so nothing changes once it has gone. Both
+/// stay in the tree, so each is there again at once.
+class NativeOrPlain extends StatefulWidget {
+  const NativeOrPlain({
+    super.key,
+    required this.native,
+    required this.plain,
+    this.ready = true,
+  });
+
+  final Widget native;
+  final Widget plain;
+  final bool ready;
+
+  @override
+  State<NativeOrPlain> createState() => _NativeOrPlainState();
+}
+
+class _NativeOrPlainState extends State<NativeOrPlain> {
+  /// How far a route over this screen has come in: at rest at the start
+  /// once none is, or the last one has gone.
+  Animation<double>? _over;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final over = ModalRoute.of(context)?.secondaryAnimation;
+    if (over == _over) return;
+    _over?.removeStatusListener(_changed);
+    _over = over?..addStatusListener(_changed);
+  }
+
+  @override
+  void dispose() {
+    _over?.removeStatusListener(_changed);
+    super.dispose();
+  }
+
+  void _changed(AnimationStatus _) {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final route = ModalRoute.of(context);
+    final clear =
+        widget.ready &&
+        (route?.isCurrent ?? true) &&
+        (_over?.isDismissed ?? true);
+    // The article's own views show while it grows out of its card.
+    final zooms = route is! CardZoomRoute;
+    final cover = NativeCover.of(context);
+    return ListenableBuilder(
+      listenable: Listenable.merge([?cover, if (zooms) CardZoomRoute.moving]),
+      builder: (context, _) {
+        final shown = clear && !(zooms && CardZoomRoute.moving.value)
+            ? 1 - (cover?.value ?? 0.0)
+            : 0.0;
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            IgnorePointer(
+              ignoring: shown > 0,
+              child: Opacity(opacity: shown > 0 ? 0 : 1, child: widget.plain),
+            ),
+            IgnorePointer(
+              ignoring: shown == 0,
+              child: Opacity(opacity: shown, child: widget.native),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+/// Something of Flutter's over the whole app (the splash, `SplashHost`):
+/// [cover] is how much of the app it hides, 1 while it shows, down to 0 as
+/// it fades. iOS's own views under it show only as much as the app does
+/// ([NativeOrPlain]).
+class NativeCover extends InheritedWidget {
+  const NativeCover({super.key, required this.cover, required super.child});
+
+  final ValueListenable<double> cover;
+
+  static ValueListenable<double>? of(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<NativeCover>()?.cover;
+
+  @override
+  bool updateShouldNotify(NativeCover old) => old.cover != cover;
 }
 
 /// The top of a screen whose content scrolls under floating buttons (#141):
