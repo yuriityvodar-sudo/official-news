@@ -1,6 +1,13 @@
+import 'dart:io' show Platform;
+
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
+import 'package:flutter/rendering.dart' show PlatformViewHitTestBehavior;
+import 'package:flutter/services.dart';
 
 import '../../core/filters.dart';
+import '../../core/motion.dart';
 import '../../core/topics.dart';
 import '../../l10n/app_localizations.dart';
 
@@ -130,6 +137,7 @@ class FeedFilterBar extends StatelessWidget {
               true,
               () => onTopic(chosen),
               icon: topicIcon(chosen),
+              symbol: topicSymbol(chosen),
             ),
           for (final t in menu)
             _Item(
@@ -137,6 +145,7 @@ class FeedFilterBar extends StatelessWidget {
               t.id == chosen,
               () => onTopic(t.id),
               icon: topicIcon(t.id),
+              symbol: topicSymbol(t.id),
             ),
         ],
       ],
@@ -146,7 +155,7 @@ class FeedFilterBar extends StatelessWidget {
 
 /// One item of a chip's menu.
 class _Item {
-  const _Item(this.title, this.selected, this.onTap, {this.icon});
+  const _Item(this.title, this.selected, this.onTap, {this.icon, this.symbol});
 
   final String title;
   final bool selected;
@@ -154,6 +163,15 @@ class _Item {
 
   /// A topic's icon, before its name: the one its chip shows once chosen.
   final IconData? icon;
+
+  /// The same glyph's SF Symbol, for the native menu on iOS.
+  final String? symbol;
+
+  Map<String, Object?> get native => {
+    'title': title,
+    'selected': selected,
+    'symbol': symbol,
+  };
 }
 
 /// The red that says a filter is on: a chosen chip's label, icon and chevron,
@@ -211,6 +229,18 @@ class _PulldownState extends State<_Pulldown> {
     // feed's SafeArea hides those insets from the chip, so they are read from
     // the screen itself.
     final insets = MediaQueryData.fromView(View.of(context)).padding;
+    // On iOS the menu is iOS's own (#141): Liquid Glass from iOS 26, the
+    // system's animation and haptics. The chip stays Flutter's.
+    if (_NativeMenu.available) {
+      return _NativeMenu(
+        sections: sections,
+        label: widget.semanticLabel,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 44),
+          child: Center(widthFactor: 1, child: _chip(context, fg)),
+        ),
+      );
+    }
     return CupertinoMenuAnchor(
       overlayPadding: EdgeInsets.fromLTRB(
         8,
@@ -251,42 +281,147 @@ class _PulldownState extends State<_Pulldown> {
         child: Semantics(
           label: widget.semanticLabel,
           excludeSemantics: true,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-            decoration: BoxDecoration(
-              color: CupertinoColors.tertiarySystemFill.resolveFrom(context),
-              borderRadius: BorderRadius.circular(18),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // At the largest text sizes a long label ends in "…" instead
-                // of overflowing the chip. An icon sits in a line of text, so
-                // the chip is as high as one with a label, and grows with it.
-                Flexible(
-                  child: Text.rich(
-                    widget.icon == null
-                        ? TextSpan(text: widget.label)
-                        : WidgetSpan(
-                            alignment: PlaceholderAlignment.middle,
-                            child: Icon(widget.icon, size: 17, color: fg),
-                          ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: fg,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 4),
-                Icon(CupertinoIcons.chevron_down, size: 12, color: fg),
-              ],
-            ),
-          ),
+          child: _chip(context, fg),
         ),
       ),
+    );
+  }
+
+  /// The grey chip: the choice (or its icon) and a chevron, in [fg]. A new
+  /// choice rolls in as the old one rolls out, and the chip's width follows
+  /// with a spring (#141); with Reduce Motion on, the words only fade.
+  Widget _chip(BuildContext context, Color fg) {
+    final reduced = Motion.reduced(context);
+    return AnimatedSize(
+      duration: reduced ? Duration.zero : Motion.slow,
+      curve: Motion.spring,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        decoration: BoxDecoration(
+          color: CupertinoColors.tertiarySystemFill.resolveFrom(context),
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // At the largest text sizes a long label ends in "…" instead
+            // of overflowing the chip. An icon sits in a line of text, so
+            // the chip is as high as one with a label, and grows with it.
+            Flexible(
+              child: AnimatedSwitcher(
+                duration: Motion.base,
+                transitionBuilder: (child, animation) => FadeTransition(
+                  opacity: animation,
+                  child: reduced
+                      ? child
+                      : SlideTransition(
+                          position: Tween(
+                            begin: const Offset(0, 0.4),
+                            end: Offset.zero,
+                          ).animate(animation),
+                          child: child,
+                        ),
+                ),
+                child: Text.rich(
+                  key: ValueKey((widget.label, widget.icon)),
+                  widget.icon == null
+                      ? TextSpan(text: widget.label)
+                      : WidgetSpan(
+                          alignment: PlaceholderAlignment.middle,
+                          child: Icon(widget.icon, size: 17, color: fg),
+                        ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: fg,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 4),
+            Icon(CupertinoIcons.chevron_down, size: 12, color: fg),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Tests set it to check the native menus' side in Flutter.
+@visibleForTesting
+bool? debugNativeMenus;
+
+/// iOS's own pull-down menu over a chip (#141): a clear native button on
+/// top of [child] opens a UIMenu with [sections] (`MenuView` in the Runner)
+/// and tells which item was chosen. VoiceOver hears the native button, named
+/// [label]. A change of the items makes a new native button.
+class _NativeMenu extends StatefulWidget {
+  const _NativeMenu({
+    required this.sections,
+    required this.label,
+    required this.child,
+  });
+
+  final List<List<_Item>> sections;
+  final String label;
+  final Widget child;
+
+  /// The iOS app; tests (macOS) and Android keep the Flutter menu, unless
+  /// a test sets [debugNativeMenus].
+  static bool get available => debugNativeMenus ?? (!kIsWeb && Platform.isIOS);
+
+  @override
+  State<_NativeMenu> createState() => _NativeMenuState();
+}
+
+class _NativeMenuState extends State<_NativeMenu> {
+  MethodChannel? _channel;
+
+  void _created(int id) {
+    _channel = MethodChannel('official_news/menu_$id')
+      ..setMethodCallHandler((call) async {
+        if (call.method != 'select') return;
+        final [section as int, row as int] = call.arguments as List<Object?>;
+        widget.sections[section][row].onTap();
+      });
+  }
+
+  @override
+  void dispose() {
+    _channel?.setMethodCallHandler(null);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final params = {
+      'label': widget.label,
+      'sections': [
+        for (final section in widget.sections)
+          [for (final item in section) item.native],
+      ],
+    };
+    return Stack(
+      children: [
+        ExcludeSemantics(child: widget.child),
+        Positioned.fill(
+          child: UiKitView(
+            key: ValueKey(params.toString()),
+            viewType: 'official_news/menu',
+            creationParams: params,
+            creationParamsCodec: const StandardMessageCodec(),
+            onPlatformViewCreated: _created,
+            hitTestBehavior: PlatformViewHitTestBehavior.opaque,
+            // The touch goes to the native button at once: iOS opens the
+            // menu as the finger goes down, which a delayed touch never does.
+            gestureRecognizers: {
+              Factory<OneSequenceGestureRecognizer>(EagerGestureRecognizer.new),
+            },
+          ),
+        ),
+      ],
     );
   }
 }

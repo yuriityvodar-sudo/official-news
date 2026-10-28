@@ -80,13 +80,26 @@ bool isFresh(Article article, {DateTime? now}) {
 /// The time of a decision from the last hour (#141), in the accent colour,
 /// fading out and in three times as the card appears and then still, so a
 /// fresh decision catches the eye without the feed blinking (a dot would
-/// read as the unread mark). With Reduce Motion on, it is still from the
-/// start.
+/// read as the unread mark). Each decision pulses once while the app runs:
+/// a row built again (scrolled away and back, back from the article) is
+/// still. With Reduce Motion on, it is still from the start.
 class FreshTime extends StatefulWidget {
-  const FreshTime(this.time, {super.key, required this.style});
+  const FreshTime(
+    this.time, {
+    super.key,
+    required this.articleId,
+    required this.style,
+  });
 
   final String time;
+  final String articleId;
   final TextStyle style;
+
+  /// The articles whose time has pulsed in this run of the app.
+  static final _pulsed = <String>{};
+
+  @visibleForTesting
+  static void forgetPulses() => _pulsed.clear();
 
   @override
   State<FreshTime> createState() => _FreshTimeState();
@@ -111,7 +124,8 @@ class _FreshTimeState extends State<FreshTime>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (!Motion.reduced(context) && _beats == 0) unawaited(_beat());
+    if (_beats > 0 || Motion.reduced(context)) return;
+    if (FreshTime._pulsed.add(widget.articleId)) unawaited(_beat());
   }
 
   Future<void> _beat() async {

@@ -4,6 +4,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show PlatformViewHitTestBehavior;
 
+import 'card_zoom.dart';
+
 /// A round surface of [size] behind a small control, with [child] centred
 /// on it: Apple's Liquid Glass on iOS (a native view, `GlassView` in the
 /// Runner; real glass from iOS 26, the plain circle before), and the plain
@@ -17,15 +19,12 @@ class GlassCircle extends StatelessWidget {
   final double size;
   final Widget child;
 
-  /// Where the native glass is used: the iOS app, not tests (macOS) or Android.
-  static bool get native => !kIsWeb && Platform.isIOS;
+  /// Where the native glass is used: the iOS app, not tests (macOS) or
+  /// Android, unless a test sets [debugNative].
+  static bool get native => debugNative ?? (!kIsWeb && Platform.isIOS);
 
-  /// The native glass while its screen is on top, the plain look while
-  /// another route covers it (#160): iOS draws the glass itself, above
-  /// Flutter, so under a sheet its glow showed through as a faint white box.
-  /// Back on top, the glass returns.
-  static bool nativeIn(BuildContext context) =>
-      native && (ModalRoute.of(context)?.isCurrent ?? true);
+  @visibleForTesting
+  static bool? debugNative;
 
   @override
   Widget build(BuildContext context) => SizedBox(
@@ -34,18 +33,14 @@ class GlassCircle extends StatelessWidget {
     child: Stack(
       fit: StackFit.expand,
       children: [
-        if (nativeIn(context))
-          const UiKitView(
-            viewType: 'official_news/glass',
-            hitTestBehavior: PlatformViewHitTestBehavior.transparent,
-          )
-        else
-          DecoratedBox(
+        _Glass(
+          plain: DecoratedBox(
             decoration: BoxDecoration(
               color: Theme.of(context).colorScheme.surfaceContainerHighest,
               shape: BoxShape.circle,
             ),
           ),
+        ),
         Center(child: child),
       ],
     ),
@@ -73,19 +68,14 @@ class GlassCapsule extends StatelessWidget {
     child: Stack(
       children: [
         Positioned.fill(
-          child: GlassCircle.nativeIn(context)
-              ? const UiKitView(
-                  viewType: 'official_news/glass',
-                  hitTestBehavior: PlatformViewHitTestBehavior.transparent,
-                )
-              : DecoratedBox(
-                  decoration: ShapeDecoration(
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.surfaceContainerHighest,
-                    shape: const StadiumBorder(),
-                  ),
-                ),
+          child: _Glass(
+            plain: DecoratedBox(
+              decoration: ShapeDecoration(
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                shape: const StadiumBorder(),
+              ),
+            ),
+          ),
         ),
         Padding(
           padding: padding,
@@ -93,6 +83,44 @@ class GlassCapsule extends StatelessWidget {
         ),
       ],
     ),
+  );
+}
+
+/// The native glass, or [plain] where there is none. While an article grows
+/// out of its card, goes back into it or is shrunk by hand (#141), the glass
+/// of the screen under it shows as [plain]: iOS would draw the native view
+/// over the moving article. So does the glass of a screen another route
+/// covers (#160): under a sheet its glow showed through as a faint white box.
+/// Hidden, not removed, so it is there again at once.
+class _Glass extends StatelessWidget {
+  const _Glass({required this.plain});
+
+  final Widget plain;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!GlassCircle.native) return plain;
+    const glass = UiKitView(
+      viewType: 'official_news/glass',
+      hitTestBehavior: PlatformViewHitTestBehavior.transparent,
+    );
+    final route = ModalRoute.of(context);
+    final covered = !(route?.isCurrent ?? true);
+    if (route is CardZoomRoute) return _show(covered, glass);
+    return ValueListenableBuilder(
+      valueListenable: CardZoomRoute.moving,
+      child: glass,
+      builder: (context, moving, glass) => _show(covered || moving, glass!),
+    );
+  }
+
+  /// [plain] when [hidden], else [glass].
+  Widget _show(bool hidden, Widget glass) => Stack(
+    fit: StackFit.expand,
+    children: [
+      Opacity(opacity: hidden ? 1 : 0, child: plain),
+      Opacity(opacity: hidden ? 0 : 1, child: glass),
+    ],
   );
 }
 

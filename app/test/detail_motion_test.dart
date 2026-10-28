@@ -170,7 +170,8 @@ void main() {
     expect(find.byType(PictureViewer), findsNothing);
   });
 
-  testWidgets('a card\'s picture and the article\'s fly as one', (
+  testWidgets('the article\'s picture flies into the full-screen view; a '
+      'card\'s does not fly on its own, the whole card grows instead', (
     tester,
   ) async {
     final article = _article();
@@ -187,7 +188,13 @@ void main() {
         ),
       ),
     );
-    expect(heroIn(find.byType(NowArticleRow)).tag, PictureHero.tag('a1'));
+    expect(
+      find.descendant(
+        of: find.byType(NowArticleRow),
+        matching: find.byType(Hero),
+      ),
+      findsNothing,
+    );
 
     await tester.pumpWidget(testApp(home: DetailScreen(article: article)));
     expect(heroIn(find.byType(DetailScreen)).tag, PictureHero.tag('a1'));
