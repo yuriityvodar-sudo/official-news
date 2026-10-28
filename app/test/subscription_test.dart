@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -8,6 +7,8 @@ import 'package:in_app_purchase/in_app_purchase.dart';
 import 'package:official_news/core/api_client.dart';
 import 'package:official_news/core/subscription.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import 'fake_store.dart';
 
 /// The AI chat by subscription in the app (#146), its first part: the
 /// subscription kept from StoreKit, and the chat's call to the server.
@@ -19,57 +20,6 @@ String _jws(DateTime expires) =>
     'h.${base64Url.encode(utf8.encode(jsonEncode({'expiresDate': expires.millisecondsSinceEpoch}))).replaceAll('=', '')}.s';
 
 final _now = DateTime(2026, 10, 27, 12);
-
-class FakeStore implements Store {
-  final controller = StreamController<List<PurchaseDetails>>.broadcast();
-  final bought = <String>[];
-  final finished = <PurchaseDetails>[];
-  int restores = 0;
-  bool open = true;
-
-  @override
-  Stream<List<PurchaseDetails>> get purchases => controller.stream;
-
-  @override
-  Future<bool> available() async => open;
-
-  @override
-  Future<ProductDetails?> product(String id) async => ProductDetails(
-    id: id,
-    title: 'AI agent',
-    description: 'Monthly',
-    price: r'$4.99',
-    rawPrice: 4.99,
-    currencyCode: 'USD',
-  );
-
-  @override
-  Future<void> buy(
-    ProductDetails product, {
-    required String accountToken,
-  }) async => bought.add(accountToken);
-
-  @override
-  Future<void> restore() async => restores++;
-
-  @override
-  Future<void> finish(PurchaseDetails purchase) async => finished.add(purchase);
-
-  /// StoreKit reporting a purchase of the chat's product.
-  void report(PurchaseStatus status, {String jws = ''}) => controller.add([
-    PurchaseDetails(
-      purchaseID: 'p1',
-      productID: ChatSubscription.productId,
-      verificationData: PurchaseVerificationData(
-        localVerificationData: '',
-        serverVerificationData: jws,
-        source: 'app_store',
-      ),
-      transactionDate: '1793000000000',
-      status: status,
-    )..pendingCompletePurchase = true,
-  ]);
-}
 
 void main() {
   late FakeStore store;

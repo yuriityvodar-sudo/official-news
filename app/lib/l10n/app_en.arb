@@ -841,5 +841,82 @@
   "copyLink": "Copy link",
   "@copyLink": {
     "description": "An action in the menu of a long-pressed card: copies the official page's address (#141)."
+  },
+  "aiAgent": "AI agent",
+  "@aiAgent": {
+    "description": "The AI agent's name, over its chat and on the paywall (#146)."
+  },
+  "paywallSample": "example",
+  "@paywallSample": {
+    "description": "A small tag on the paywall's sample answer: it shows what an answer looks like."
+  },
+  "chatSuggestConcernsMe": "Does this concern me?",
+  "@chatSuggestConcernsMe": {
+    "description": "A suggested first question in the AI chat, and the paywall's sample question."
+  },
+  "paywallTitle": "Continue the conversation with the AI agent",
+  "@paywallTitle": {
+    "description": "The paywall's title, under the sample answer that fades out."
+  },
+  "paywallPoints": "Only the official text · the source link · conversations not kept",
+  "@paywallPoints": {
+    "description": "What the AI agent does, on the paywall."
+  },
+  "paywallPrice": "{price} a month",
+  "@paywallPrice": {
+    "description": "The subscription's price as the App Store gives it, per month: the largest text of the offer (App Store guideline 3.1.2).",
+    "placeholders": {
+      "price": {
+        "type": "String"
+      }
+    }
+  },
+  "paywallRenewal": "Renews automatically. Cancel any time in your Apple ID settings.",
+  "@paywallRenewal": {
+    "description": "Under the price on the paywall: auto-renewal and where to cancel."
+  },
+  "paywallSubscribe": "Subscribe",
+  "@paywallSubscribe": {
+    "description": "The paywall's button."
+  },
+  "paywallRestore": "Restore Purchases",
+  "@paywallRestore": {
+    "description": "On the paywall: brings back a subscription bought on this Apple ID."
+  },
+  "paywallUnavailable": "Purchases aren't available right now.",
+  "@paywallUnavailable": {
+    "description": "On the paywall when the App Store does not answer."
+  },
+  "paywallPending": "Waiting for approval.",
+  "@paywallPending": {
+    "description": "On the paywall while a purchase waits (Ask to Buy)."
+  },
+  "paywallFailed": "The purchase didn't go through. Try again.",
+  "@paywallFailed": {
+    "description": "On the paywall after a failed purchase."
+  },
+  "paywallNothingToRestore": "No subscription to restore.",
+  "@paywallNothingToRestore": {
+    "description": "On the paywall after Restore Purchases found nothing."
+  },
+  "paywallClose": "Close",
+  "@paywallClose": {
+    "description": "VoiceOver's name for the paywall's close button."
+  },
+  "privacyChatHeading": "AI chat",
+  "@privacyChatHeading": {
+    "description": "A heading of the privacy policy."
+  },
+  "privacyChat": "If you subscribe to the AI agent, your question and the article's text are sent to OpenAI to write the answer. We don't keep your conversations or send them to analytics. Apple handles the subscription: we receive a signed record of it from Apple, with an anonymous ID the app creates, never your name or payment details. We count each subscription's questions per day, for the daily limit.",
+  "@privacyChat": {
+    "description": "The privacy policy's section on the AI chat by subscription (#146)."
+  },
+  "termsSubscriptionHeading": "AI agent subscription",
+  "@termsSubscriptionHeading": {
+    "description": "A heading of the terms of use."
+  },
+  "termsSubscription": "The AI agent is a monthly subscription through the App Store. It renews automatically until you cancel it in your Apple ID settings, at least 24 hours before the end of the period. Apple handles refunds. The agent answers only from the official text, can make mistakes, and its answers are not legal, financial or medical advice. 20 questions a day; a question about a long document counts as 2 or 3; packs of questions add more.",
+  "@termsSubscription": {
+    "description": "The terms of use's section on the AI agent subscription (#146)."
   }
 }

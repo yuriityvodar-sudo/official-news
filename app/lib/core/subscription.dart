@@ -239,7 +239,10 @@ class ChatSubscription extends ChangeNotifier {
 /// App Store products: a debug build with `--dart-define=CHAT_DEMO=1` sells a
 /// pretend subscription at once ([DemoStore]) and the chat answers with the
 /// article's summary. Release builds (TestFlight) never do.
-const chatDemo = kDebugMode && bool.fromEnvironment('CHAT_DEMO');
+const chatDemo =
+    kDebugMode &&
+    (String.fromEnvironment('CHAT_DEMO') == '1' ||
+        bool.fromEnvironment('CHAT_DEMO'));
 
 /// [chatDemo]'s App Store: the price, and a purchase that goes through at once.
 class DemoStore implements Store {
@@ -296,6 +299,6 @@ class DemoStore implements Store {
   Future<void> finish(PurchaseDetails purchase) async {}
 }
 
-/// The app's subscription. On iOS `main.dart` starts it with the app, once the
-/// paywall comes (#146).
+/// The app's subscription, started with the app (`main.dart`): for now only in
+/// the simulator's demo build, on iOS once the chat screen comes (#146).
 final chatSubscription = ChatSubscription();
