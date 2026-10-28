@@ -14,12 +14,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'test_app.dart';
 
-/// The one list (Yurii, 16 Oct) on the live API's own answers, saved on
-/// 16 Oct at 23:26 (Berlin) in `test/fixtures/`: `GET /articles` (page 1,
-/// feedSeq 209 to 190, top stories 209, 181, 175, 173 and 171) and its next
-/// page, `GET /articles?cursor=WzE5MF0` (feedSeq 189 to 170). Four of the
-/// five top stories are on page 2; each must show once, in its place, and
-/// page 2 must only add to the end of the list.
+/// The Top stories block and the one list (#164; Yurii, 16 and 26 Oct) on the
+/// live API's own answers, saved on 16 Oct at 23:26 (Berlin) in
+/// `test/fixtures/`: `GET /articles` (page 1, feedSeq 209 to 190, top
+/// stories 209, 181, 175, 173 and 171, as the server sent them before #164)
+/// and its next page, `GET /articles?cursor=WzE5MF0` (feedSeq 189 to 170).
+/// The block takes the first three; each decision must show once, the other
+/// two at their place, and page 2 must only add to the end of the list.
 
 Map<String, dynamic> _fixture(String name) =>
     jsonDecode(File('test/fixtures/$name').readAsStringSync())
@@ -68,8 +69,8 @@ void main() {
   });
 
   for (final design in FeedDesign.values) {
-    testWidgets('design ${design.name}: the live pages make one list, '
-        '209 down to 170, each top story once', (tester) async {
+    testWidgets('design ${design.name}: the live pages make the block and '
+        'one list, 209 down to 170, each decision once', (tester) async {
       feedDesign.value = design;
       tester.view.physicalSize = const Size(393, 852) * 3;
       tester.view.devicePixelRatio = 3;
@@ -88,24 +89,30 @@ void main() {
       await tester.pump();
       await tester.pump();
 
-      // Page 1: its own articles only; 181, 175, 173 and 171 wait for page 2.
+      // The block: the first three top stories, two of them from page 2.
+      expect([for (final a in feed.topStories) a.feedSeq], [209, 181, 175]);
+      // Page 1: its own articles only, without the block's; 173 and 171 wait
+      // for page 2.
       final first = [for (final a in feed.feed) a.feedSeq!];
-      expect(first, [for (var s = 209; s >= 190; s--) s]);
+      expect(first, [for (var s = 208; s >= 190; s--) s]);
 
       await tester.drag(find.byType(CustomScrollView), const Offset(0, -20000));
       await tester.pumpAndSettle();
       expect(asked.take(2), ['', 'WzE5MF0']);
       final all = [for (final a in feed.feed) a.feedSeq!];
-      expect(all, [for (var s = 209; s >= 170; s--) s]);
+      expect(all, [
+        for (var s = 208; s >= 170; s--)
+          if (s != 181 && s != 175) s,
+      ]);
       expect(all.take(first.length), first, reason: 'page 2 only appends');
-      for (final top in [209, 181, 175, 173, 171]) {
+      for (final top in [173, 171]) {
         expect(all.where((s) => s == top), hasLength(1), reason: '$top');
       }
 
-      // On screen too: 181, a top story from page 2, between 182 and 180
-      // (laid out, if just off the screen). Found by the headline's start:
-      // A cuts a headline at a whole word, and 180's live headline came
-      // already cut ("…Programa Nacional de…").
+      // On screen too: 173, a top story from page 2 not in the block, between
+      // 174 and 172 (laid out, if just off the screen). Found by the
+      // headline's start: A cuts a headline at a whole word, and some live
+      // headlines came already cut.
       String start(int seq) {
         final h = feed.feed.singleWhere((a) => a.feedSeq == seq).headline;
         return h.length > 40 ? h.substring(0, 40) : h;
@@ -124,20 +131,20 @@ void main() {
           .position
           .jumpTo(0);
       await tester.pump();
-      final row181 = find.textContaining(start(181), findRichText: true);
+      final row173 = find.textContaining(start(173), findRichText: true);
       await tester.scrollUntilVisible(
-        row181,
+        row173,
         300,
         scrollable: find.byType(Scrollable).first,
       );
       // In the middle of the screen, so the rows around it are laid out.
       await Scrollable.ensureVisible(
-        tester.element(row181.first),
+        tester.element(row173.first),
         alignment: 0.5,
       );
       await tester.pumpAndSettle();
-      expect(y(182), lessThan(y(181)));
-      expect(y(181), lessThan(y(180)));
+      expect(y(174), lessThan(y(173)));
+      expect(y(173), lessThan(y(172)));
     });
   }
 }
