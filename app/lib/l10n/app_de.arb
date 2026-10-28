@@ -221,5 +221,7 @@
   "termsSubscriptionHeading": "Abo für den KI-Agenten",
   "termsSubscription": "Das Abo für den KI-Agenten läuft monatlich über den App Store. Es verlängert sich automatisch, bis Sie es spätestens 24 Stunden vor Ende des Zeitraums in den Apple-ID-Einstellungen kündigen. Erstattungen wickelt Apple ab. Der Agent antwortet nur aus dem amtlichen Text, kann sich irren, und seine Antworten sind keine Rechts-, Finanz- oder medizinische Beratung. 20 Fragen pro Tag; eine Frage zu einem langen Dokument zählt als 2 oder 3; Fragenpakete bringen mehr.",
   "chatRemaining": "{count, plural, =1{Heute noch 1 Frage} other{Heute noch {count} Fragen}}",
-  "chatLimitReached": "Die Fragen für heute sind aufgebraucht. Neue ab {time}."
+  "chatLongDocument": "Langes Dokument: Eine Frage dazu zählt als {count}",
+  "chatOutTitle": "Für heute keine Fragen mehr",
+  "chatOutBody": "Neue gibt es um {time}."
 }

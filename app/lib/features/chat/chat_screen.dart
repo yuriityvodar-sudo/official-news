@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io' show Platform;
+import 'dart:math' show max;
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
@@ -28,9 +29,12 @@ class _Turn {
 
 /// The AI chat about one decision (#146, docs/contract.md): suggested first
 /// questions, the answer streamed as it is written, the official link under
-/// each answer, how many questions are left today once there are 3 or fewer.
-/// Not paid any more (the server's 402): the paywall shows again. Nothing of
-/// the conversation is kept: it is gone with the screen.
+/// each answer. The limit as Claude shows it (variant A of Roman's mockup,
+/// 27 Oct): nothing until it is near, then "3 questions left today" over the
+/// field; once none are left, a card in the field's place, with when new ones
+/// come. A long document's question takes more of the limit, and the chat
+/// says so. Not paid any more (the server's 402): the paywall shows again.
+/// Nothing of the conversation is kept: it is gone with the screen.
 class ChatScreen extends StatefulWidget {
   const ChatScreen({
     super.key,
@@ -67,17 +71,46 @@ class _ChatScreenState extends State<ChatScreen> {
   final _field = TextEditingController();
   final _scroll = ScrollController();
   final _turns = <_Turn>[];
-  int? _remaining;
   String? _problem;
   bool _sending = false;
+
+  /// The questions left, today's and the bought ones together; null until known.
+  int? _left;
+
+  /// How much of the limit one question about this article takes.
+  int _units = 1;
+
+  /// When today's questions come back.
+  DateTime? _resetsAt;
 
   ChatSubscription get _subscription => widget.subscription ?? chatSubscription;
 
   @override
   void initState() {
     super.initState();
+    unawaited(_loadStatus());
     final first = widget.firstQuestion;
     if (first != null) unawaited(Future.microtask(() => _ask(first)));
+  }
+
+  /// What is left, from the server: the card shows at once when nothing is.
+  Future<void> _loadStatus() async {
+    final transaction = _subscription.transaction;
+    if (transaction == null || chatDemo) return;
+    try {
+      final status = await _api.chatStatus(
+        articleId: widget.article.id,
+        transaction: transaction,
+      );
+      if (!mounted) return;
+      setState(() {
+        _left = status.total;
+        _units = status.units;
+        _resetsAt = status.resetsAt;
+      });
+    } catch (_) {
+      // Offline, or not paid: the first question says which.
+    }
   }
 
   @override
@@ -122,7 +155,8 @@ class _ChatScreenState extends State<ChatScreen> {
               ],
               transaction: transaction,
             );
-      _remaining = reply.remaining;
+      _left = reply.remaining;
+      _units = reply.units;
       await for (final piece in reply.text) {
         if (!mounted) return;
         setState(() => answer.text += piece);
@@ -130,13 +164,14 @@ class _ChatScreenState extends State<ChatScreen> {
       }
       answer.done = true;
     } on ChatLimit catch (limit) {
-      _turns.removeLast();
-      final at = limit.resetsAt?.toLocal();
-      _problem = l10n.chatLimitReached(
-        at == null
-            ? '00:00'
-            : '${at.hour.toString().padLeft(2, '0')}:${at.minute.toString().padLeft(2, '0')}',
-      );
+      // Not asked: the question goes back into the field, for when there are more.
+      _turns
+        ..remove(answer)
+        ..remove(asked);
+      _field.text = text;
+      _left = 0;
+      _units = limit.units;
+      _resetsAt = limit.resetsAt;
     } on ApiException catch (e) {
       _turns.removeLast();
       if (e.statusCode == 402) {
@@ -160,7 +195,9 @@ class _ChatScreenState extends State<ChatScreen> {
     _toEnd();
   }
 
-  /// [chatDemo]: the summary, word by word, as an answer would come.
+  /// [chatDemo]: the summary, word by word, as an answer would come, with one
+  /// question fewer left each time from 3, so the line over the field and the
+  /// card can be seen too.
   ChatAnswer _demoAnswer() {
     final words = (widget.article.summary ?? widget.article.headline).split(
       ' ',
@@ -170,7 +207,7 @@ class _ChatScreenState extends State<ChatScreen> {
         const Duration(milliseconds: 40),
         (i) => i == 0 ? words[i] : ' ${words[i]}',
       ).take(words.length),
-      remaining: 3,
+      remaining: _left == null ? 3 : max(0, _left! - 1),
     );
   }
 
@@ -214,7 +251,11 @@ class _ChatScreenState extends State<ChatScreen> {
       RegExp(r'^www\.'),
       '',
     );
-    final remaining = _remaining;
+    final left = _left;
+    final at = (_resetsAt ?? DateTime.now().toUtc()).toLocal();
+    final resets = _resetsAt == null
+        ? '00:00'
+        : '${at.hour.toString().padLeft(2, '0')}:${at.minute.toString().padLeft(2, '0')}';
     // The app's type (theme.dart), as the paywall: the serif for the
     // decision's headline and the answers, the sans for the reader's
     // questions, buttons, links and labels (Yurii, review of #188).
@@ -247,6 +288,35 @@ class _ChatScreenState extends State<ChatScreen> {
                       l10n.chatNotAdvice,
                       style: TextStyle(fontSize: 12, color: muted),
                     ),
+                    if (_units > 1) ...[
+                      const SizedBox(height: 10),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: style.ink.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              CupertinoIcons.doc_text,
+                              size: 17,
+                              color: style.ink,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                l10n.chatLongDocument(_units),
+                                style: TextStyle(fontSize: 13, color: label),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                     if (_turns.isEmpty) ...[
                       const SizedBox(height: 16),
                       Wrap(
@@ -363,55 +433,132 @@ class _ChatScreenState extends State<ChatScreen> {
                         ),
                       ),
                     ],
-                    if (remaining != null && remaining <= 3) ...[
-                      const SizedBox(height: 10),
-                      Text(
-                        l10n.chatRemaining(remaining),
-                        style: TextStyle(fontSize: 13, color: muted),
-                      ),
-                    ],
                   ],
                 ),
               ),
-              // One row at the bottom: the field with its send button.
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 6, 12, 10),
-                child: CupertinoTextField(
-                  controller: _field,
-                  placeholder: l10n.chatAsk,
-                  maxLength: 500,
-                  minLines: 1,
-                  maxLines: 4,
-                  textInputAction: TextInputAction.send,
-                  onSubmitted: _sending ? null : _ask,
-                  padding: const EdgeInsets.fromLTRB(14, 10, 6, 10),
-                  decoration: BoxDecoration(
-                    color: CupertinoColors.tertiarySystemFill.resolveFrom(
-                      context,
-                    ),
-                    borderRadius: BorderRadius.circular(22),
-                  ),
-                  suffix: CupertinoButton(
-                    padding: const EdgeInsets.only(right: 6),
-                    minimumSize: const Size(44, 44),
-                    onPressed: _sending
-                        ? null
-                        : () {
-                            Haptics.light();
-                            unawaited(_ask(_field.text));
-                          },
-                    child: Icon(
-                      CupertinoIcons.arrow_up_circle_fill,
-                      size: 32,
-                      color: style.fill,
-                      semanticLabel: l10n.chatSend,
+              if (left == 0)
+                // Nothing left: the card takes the field's place.
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 6, 12, 10),
+                  child: _OutCard(style: style, resets: resets),
+                )
+              else ...[
+                if (left != null && left <= 3)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(CupertinoIcons.clock, size: 15, color: style.ink),
+                        const SizedBox(width: 6),
+                        Text(
+                          l10n.chatRemaining(left),
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                            color: style.ink,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
+                // One row at the bottom: the field with its send button.
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 6, 12, 10),
+                  child: CupertinoTextField(
+                    controller: _field,
+                    placeholder: l10n.chatAsk,
+                    maxLength: 500,
+                    minLines: 1,
+                    maxLines: 4,
+                    textInputAction: TextInputAction.send,
+                    onSubmitted: _sending ? null : _ask,
+                    padding: const EdgeInsets.fromLTRB(14, 10, 6, 10),
+                    decoration: BoxDecoration(
+                      color: CupertinoColors.tertiarySystemFill.resolveFrom(
+                        context,
+                      ),
+                      borderRadius: BorderRadius.circular(22),
+                    ),
+                    suffix: CupertinoButton(
+                      padding: const EdgeInsets.only(right: 6),
+                      minimumSize: const Size(44, 44),
+                      onPressed: _sending
+                          ? null
+                          : () {
+                              Haptics.light();
+                              unawaited(_ask(_field.text));
+                            },
+                      child: Icon(
+                        CupertinoIcons.arrow_up_circle_fill,
+                        size: 32,
+                        color: style.fill,
+                        semanticLabel: l10n.chatSend,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// No questions left for today: when new ones come.
+class _OutCard extends StatelessWidget {
+  const _OutCard({required this.style, required this.resets});
+
+  final ChatStyle style;
+  final String resets;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final label = CupertinoColors.label.resolveFrom(context);
+    final muted = CupertinoColors.secondaryLabel.resolveFrom(context);
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+      decoration: BoxDecoration(
+        color: CupertinoColors.secondarySystemGroupedBackground.resolveFrom(
+          context,
+        ),
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: [
+          BoxShadow(
+            color: style.fill.withValues(alpha: 0.2),
+            blurRadius: 30,
+            spreadRadius: -14,
+            offset: const Offset(0, 14),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(CupertinoIcons.hourglass, size: 19, color: style.ink),
+              const SizedBox(width: 7),
+              Flexible(
+                child: Text(
+                  l10n.chatOutTitle,
+                  textAlign: TextAlign.center,
+                  // The card's title in the serif, as the paywall's (#188).
+                  style: NewsText.from(context).headline.copyWith(color: label),
                 ),
               ),
             ],
           ),
-        ),
+          const SizedBox(height: 4),
+          Text(
+            l10n.chatOutBody(resets),
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 13, height: 1.35, color: muted),
+          ),
+        ],
       ),
     );
   }

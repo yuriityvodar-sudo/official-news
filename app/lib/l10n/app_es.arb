@@ -221,5 +221,7 @@
   "termsSubscriptionHeading": "Suscripción al agente de IA",
   "termsSubscription": "La suscripción al agente de IA es mensual, a través de la App Store. Se renueva automáticamente hasta que la canceles en los ajustes de tu Apple ID al menos 24 horas antes del final del periodo. Apple gestiona los reembolsos. El agente responde solo a partir del texto oficial, puede equivocarse y sus respuestas no son asesoramiento legal, financiero ni médico. 20 preguntas al día; una pregunta sobre un documento largo cuenta como 2 o 3; los paquetes de preguntas añaden más.",
   "chatRemaining": "{count, plural, =1{Te queda 1 pregunta hoy} other{Te quedan {count} preguntas hoy}}",
-  "chatLimitReached": "Ya no quedan preguntas por hoy. Nuevas a partir de las {time}."
+  "chatLongDocument": "Documento largo: una pregunta sobre él cuenta como {count}",
+  "chatOutTitle": "Se acabaron las preguntas de hoy",
+  "chatOutBody": "Nuevas a las {time}."
 }

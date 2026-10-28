@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -187,29 +188,56 @@ void main() {
   group('the chat', () {
     late List<Map<String, dynamic>> asked;
 
-    /// The server: answers in pieces, or with [status].
+    /// The server: answers in pieces, or with [status]; [left] questions
+    /// left before asking, at [units] a question.
     ApiClient server({
       int status = 200,
       int remaining = 9,
       String body = '{}',
-    }) => ApiClient(
-      baseUrl: 'https://api.test',
-      client: MockClient.streaming((request, bodyStream) async {
-        asked.add(
-          jsonDecode(await bodyStream.bytesToString()) as Map<String, dynamic>,
-        );
-        if (status != 200) {
-          return http.StreamedResponse(Stream.value(utf8.encode(body)), status);
-        }
-        return http.StreamedResponse(
-          Stream.fromIterable(
-            ['Yes,', ' from November', ' 2027.'].map(utf8.encode),
-          ),
-          200,
-          headers: {'x-chat-remaining': '$remaining'},
-        );
-      }),
-    );
+      List<int> left = const [20],
+      int units = 1,
+    }) {
+      var statuses = 0;
+      return ApiClient(
+        baseUrl: 'https://api.test',
+        client: MockClient.streaming((request, bodyStream) async {
+          final sent = await bodyStream.bytesToString();
+          if (request.url.path == '/v1/chat/status') {
+            final now = left[math.min(statuses++, left.length - 1)];
+            return http.StreamedResponse(
+              Stream.value(
+                utf8.encode(
+                  jsonEncode({
+                    'questionsLeft': now,
+                    'boughtQuestions': 0,
+                    'units': units,
+                    'resetsAt': '2026-10-28T00:00:00Z',
+                  }),
+                ),
+              ),
+              200,
+            );
+          }
+          asked.add(jsonDecode(sent) as Map<String, dynamic>);
+          if (status != 200) {
+            return http.StreamedResponse(
+              Stream.value(utf8.encode(body)),
+              status,
+            );
+          }
+          return http.StreamedResponse(
+            Stream.fromIterable(
+              ['Yes,', ' from November', ' 2027.'].map(utf8.encode),
+            ),
+            200,
+            headers: {
+              'x-chat-remaining': '$remaining',
+              'x-chat-units': '$units',
+            },
+          );
+        }),
+      );
+    }
 
     Future<void> openChat(
       WidgetTester tester,
@@ -217,10 +245,14 @@ void main() {
       List<Uri>? opened,
     }) async {
       asked = [];
-      store.report(
-        PurchaseStatus.purchased,
-        jws: _jws(_now.add(const Duration(days: 30))),
-      );
+      // Bought before the chat opens, and done with (outside the test's fake time).
+      await tester.runAsync(() async {
+        store.report(
+          PurchaseStatus.purchased,
+          jws: _jws(_now.add(const Duration(days: 30))),
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+      });
       await tester.pumpWidget(
         testApp(
           home: ChatScreen(
@@ -282,15 +314,15 @@ void main() {
           server(
             status: 429,
             body:
-                '{"error":"No questions left today","resetsAt":"2026-10-28T00:00:00Z"}',
+                '{"error":"No questions left today","resetsAt":"2026-10-28T00:00:00Z","units":1}',
           ),
         );
         await tester.tap(find.text('Does this concern me?'));
         await tester.pumpAndSettle();
-        expect(
-          find.textContaining("That's all of today's questions"),
-          findsOneWidget,
-        );
+        // The card in the field's place, and the question kept for later.
+        expect(find.text('No questions left for today'), findsOneWidget);
+        expect(find.byType(CupertinoTextField), findsNothing);
+        expect(find.text('Does this concern me?'), findsOneWidget);
 
         await openChat(tester, server(status: 503));
         await tester.tap(find.text('Does this concern me?'));
@@ -300,6 +332,28 @@ void main() {
           findsOneWidget,
         );
         expect(find.text('Try again'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'nothing left on opening: the card in the field\'s place, with when new ones come',
+      (tester) async {
+        await openChat(tester, server(left: [0]));
+        expect(find.text('No questions left for today'), findsOneWidget);
+        expect(find.textContaining('New ones at'), findsOneWidget);
+        expect(find.byType(CupertinoTextField), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'a long document says how much of the limit a question takes, and when few are left',
+      (tester) async {
+        await openChat(tester, server(left: [3], units: 3));
+        expect(
+          find.text('Long document: a question about it counts as 3'),
+          findsOneWidget,
+        );
+        expect(find.text('3 questions left today'), findsOneWidget);
       },
     );
 

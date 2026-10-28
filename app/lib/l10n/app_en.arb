@@ -968,9 +968,22 @@
       }
     }
   },
-  "chatLimitReached": "That's all of today's questions. New ones from {time}.",
-  "@chatLimitReached": {
-    "description": "In the AI chat when the day's 10 questions are used up; {time} is when new ones come, in the phone's time.",
+  "chatLongDocument": "Long document: a question about it counts as {count}",
+  "@chatLongDocument": {
+    "description": "In the AI chat over a long document: one question about it takes {count} of the day's questions (#146).",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "chatOutTitle": "No questions left for today",
+  "@chatOutTitle": {
+    "description": "The AI chat's card in the field's place once the day's questions are used up."
+  },
+  "chatOutBody": "New ones at {time}.",
+  "@chatOutBody": {
+    "description": "Under the card's title; {time} is when today's questions come back, in the phone's time.",
     "placeholders": {
       "time": {
         "type": "String"
