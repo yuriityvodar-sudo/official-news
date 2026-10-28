@@ -195,7 +195,7 @@ void main() {
             language: language,
             height: 3000,
           );
-          expect(find.text('Official News'), findsOneWidget);
+          expect(find.text('Outer News'), findsOneWidget);
           for (final id in _order) {
             expect(find.text('Decision $id'), findsOneWidget, reason: id);
           }

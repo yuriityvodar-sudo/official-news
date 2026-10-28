@@ -111,8 +111,8 @@ void main() {
     // Folded: below the 44-pt bar and its title, not over them.
     await tester.drag(find.byType(CustomScrollView), const Offset(0, -900));
     await tester.pumpAndSettle();
-    expect(find.text('Official News'), findsWidgets);
-    final barTitle = tester.getRect(find.text('Official News').last);
+    expect(find.text('Outer News'), findsWidgets);
+    final barTitle = tester.getRect(find.text('Outer News').last);
     expect(barTitle.bottom, lessThanOrEqualTo(44));
     expect(tester.getRect(pill).top, greaterThan(44));
     // And the space around it lets taps through to the feed.

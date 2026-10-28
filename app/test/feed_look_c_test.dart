@@ -251,7 +251,7 @@ void main() {
       final atTop = tester.getTopLeft(pill).dy;
       await tester.drag(find.byType(CustomScrollView), const Offset(0, -600));
       await tester.pumpAndSettle();
-      expect(find.text('Official News').hitTestable(), findsNothing);
+      expect(find.text('Outer News').hitTestable(), findsNothing);
       expect(tester.getTopLeft(pill).dy, lessThan(atTop));
       expect(
         tester.getTopLeft(pill).dy,
