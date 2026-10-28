@@ -47,7 +47,7 @@ void main() {
     for (final row in [
       'Language',
       'Notifications',
-      'About Official News',
+      'About Outer News',
       'Privacy Policy',
       'Terms of Use',
       'Contact & Support',
@@ -329,8 +329,8 @@ void main() {
   });
 
   for (final (row, title, line) in [
-    ('About Official News', 'About', 'Official News is an independent app'),
-    ('Privacy Policy', 'Privacy Policy', 'Official News has no accounts'),
+    ('About Outer News', 'About', 'Outer News is an independent app'),
+    ('Privacy Policy', 'Privacy Policy', 'Outer News has no accounts'),
     (
       'Terms of Use',
       'Terms of Use',

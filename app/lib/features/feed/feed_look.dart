@@ -136,7 +136,7 @@ class FeedMasthead {
     required this.filterBar,
   });
 
-  /// "Official News": the app's name, the same in every language.
+  /// "Outer News": the app's name, the same in every language.
   final String title;
 
   /// Today in the reader's language: "Friday, 16 October", "Пʼятниця, 16 жовтня".

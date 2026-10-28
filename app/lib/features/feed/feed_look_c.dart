@@ -165,7 +165,7 @@ class _Styles {
     color: secondary,
   );
 
-  /// "Official News".
+  /// "Outer News".
   TextStyle get title => TextStyle(
     fontFamily: _serif,
     fontFamilyFallback: _serifFallback,
@@ -231,7 +231,7 @@ class _Masthead extends StatelessWidget {
   final FeedMasthead masthead;
 
   /// Draws the texts as plain RichText, so the measuring copy is not found
-  /// as a second "Official News" by tests.
+  /// as a second "Outer News" by tests.
   final bool prototype;
 
   @override
