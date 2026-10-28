@@ -58,6 +58,51 @@ ApiClient _api(Future<List<Map<String, dynamic>>> page) => ApiClient(
   }),
 );
 
+/// A fake API whose first page is what [items] gives at each request, and
+/// whose new check finds what [newer] gives.
+ApiClient _liveApi(
+  List<Map<String, dynamic>> Function() items, {
+  List<Map<String, dynamic>> Function()? newer,
+}) => ApiClient(
+  baseUrl: 'https://api.test',
+  client: MockClient((request) async {
+    if (!request.url.path.startsWith('/articles')) {
+      return http.Response('{"error":"Not found"}', 404);
+    }
+    final query = request.url.queryParameters;
+    final list = query.containsKey('since') || query.containsKey('after')
+        ? newer?.call() ?? <Map<String, dynamic>>[]
+        : items();
+    return http.Response(
+      jsonEncode({'items': list, 'nextCursor': null, 'top': <Object>[]}),
+      200,
+    );
+  }),
+);
+
+/// The feed screen over [controller].
+Future<void> _pumpScreen(WidgetTester tester, FeedController controller) async {
+  await tester.pumpWidget(
+    testApp(
+      onGenerateRoute: onGenerateRoute,
+      home: FeedScreen(
+        controller: controller,
+        newCheckEvery: const Duration(hours: 1),
+      ),
+    ),
+  );
+  await tester.pump();
+  await tester.pump();
+  // The first rows have arrived (#141).
+  await tester.pump(const Duration(seconds: 1));
+  await tester.pumpAndSettle();
+}
+
+/// The app's name as the folded title shows it, small.
+final _smallTitle = find.byWidgetPredicate(
+  (w) => w is Text && w.data == 'Official News' && w.style?.fontSize == 17,
+);
+
 Future<void> _pumpFeed(
   WidgetTester tester,
   Future<List<Map<String, dynamic>>> page,
@@ -214,6 +259,116 @@ void main() {
       expect(
         tester.widgetList<Arrive>(find.byType(Arrive)).every((a) => !a.animate),
         isTrue,
+      );
+    });
+  });
+
+  group('decisions that have just come in', () {
+    setUp(() => Arrive.enabled = true);
+    tearDown(() => Arrive.enabled = false);
+
+    double top(WidgetTester tester, String id) =>
+        tester.getTopLeft(find.text('Decision $id')).dy;
+
+    testWidgets('spring in at the top and push the others down', (
+      tester,
+    ) async {
+      var items = [_article('a1'), _article('a2')];
+      final controller = FeedController(api: _liveApi(() => items));
+      await _pumpScreen(tester, controller);
+      final before = top(tester, 'a1');
+
+      items = [_article('n1'), _article('n2'), ...items];
+      await controller.refresh();
+      await tester.pump();
+      // The new ones start with no height: the others have not moved yet.
+      expect(top(tester, 'a1'), moreOrLessEquals(before, epsilon: 0.5));
+      // Two rows and the lines under them; with no height, not on screen.
+      expect(
+        tester
+            .widgetList<GrowIn>(find.byType(GrowIn, skipOffstage: false))
+            .where((g) => g.animate)
+            .length,
+        4,
+      );
+
+      // The first one starts at the next frames, and is on its way.
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 60));
+      await tester.pump(const Duration(milliseconds: 100));
+      final early = top(tester, 'a1');
+      expect(early, greaterThan(before + 1));
+      await tester.pumpAndSettle();
+      expect(top(tester, 'a1'), greaterThan(early));
+      expect(top(tester, 'n1'), lessThan(top(tester, 'n2')));
+    });
+
+    testWidgets('with Reduce Motion on, are there at once, fading in', (
+      tester,
+    ) async {
+      tester.platformDispatcher.accessibilityFeaturesTestValue =
+          const FakeAccessibilityFeatures(disableAnimations: true);
+      addTearDown(
+        tester.platformDispatcher.clearAccessibilityFeaturesTestValue,
+      );
+      var items = [_article('a1')];
+      final controller = FeedController(api: _liveApi(() => items));
+      await _pumpScreen(tester, controller);
+
+      items = [_article('n1'), ...items];
+      await controller.refresh();
+      await tester.pump();
+      final now = top(tester, 'a1');
+      await tester.pumpAndSettle();
+      expect(top(tester, 'a1'), now);
+    });
+  });
+
+  group('the folded title', () {
+    testWidgets('the name folds into a small title as the masthead scrolls '
+        'away; a tap on it goes back to the top', (tester) async {
+      final controller = FeedController(
+        api: _liveApi(() => [for (var i = 0; i < 20; i++) _article('a$i')]),
+      );
+      await _pumpScreen(tester, controller);
+      expect(_smallTitle, findsNothing);
+
+      await tester.drag(find.byType(CustomScrollView), const Offset(0, -400));
+      await tester.pumpAndSettle();
+      expect(_smallTitle, findsOneWidget);
+
+      await tester.tap(_smallTitle);
+      await tester.pumpAndSettle();
+      final list = tester.state<ScrollableState>(
+        find
+            .descendant(
+              of: find.byType(CustomScrollView),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+      expect(list.position.pixels, 0);
+      expect(_smallTitle, findsNothing);
+    });
+
+    testWidgets('the "N new" pill floats under it', (tester) async {
+      final controller = FeedController(
+        api: _liveApi(
+          () => [for (var i = 0; i < 20; i++) _article('a$i')],
+          newer: () => [_article('n1')],
+        ),
+      );
+      await _pumpScreen(tester, controller);
+      await controller.checkForNew();
+      await tester.pump();
+      await tester.drag(find.byType(CustomScrollView), const Offset(0, -600));
+      await tester.pumpAndSettle();
+
+      final pill = find.text('1 new decision');
+      expect(pill, findsOneWidget);
+      expect(
+        tester.getTopLeft(pill).dy,
+        greaterThan(tester.getBottomLeft(_smallTitle).dy),
       );
     });
   });
