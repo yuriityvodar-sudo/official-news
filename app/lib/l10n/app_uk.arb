@@ -223,5 +223,12 @@
   "chatRemaining": "{count, plural, one{Сьогодні залишилося {count} запитання} few{Сьогодні залишилося {count} запитання} many{Сьогодні залишилося {count} запитань} other{Сьогодні залишилося {count} запитання}}",
   "chatLongDocument": "Довгий документ: запитання про нього рахується за {count}",
   "chatOutTitle": "Запитання на сьогодні закінчилися",
-  "chatOutBody": "Нові — о {time}."
+  "chatOutBody": "Нові — о {time}. Або докупіть: вони не згорають.",
+  "chatTopUp": "Докупити запитання",
+  "topUpTitle": "Ще запитання",
+  "topUpSubtitle": "Витрачаються після 20 денних і не згорають.",
+  "topUpBest": "вигідніше",
+  "topUpBuy": "Купити за {price}",
+  "topUpFine": "Разова покупка через App Store. Запитання про довгий документ може рахуватися за кілька.",
+  "topUpPack": "{count, plural, one{+{count} запитання} few{+{count} запитання} many{+{count} запитань} other{+{count} запитання}}"
 }

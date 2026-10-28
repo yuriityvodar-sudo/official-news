@@ -981,12 +981,50 @@
   "@chatOutTitle": {
     "description": "The AI chat's card in the field's place once the day's questions are used up."
   },
-  "chatOutBody": "New ones at {time}.",
+  "chatOutBody": "New ones at {time}. Or buy more: they don't expire.",
   "@chatOutBody": {
     "description": "Under the card's title; {time} is when today's questions come back, in the phone's time.",
     "placeholders": {
       "time": {
         "type": "String"
+      }
+    }
+  },
+  "chatTopUp": "Buy more questions",
+  "@chatTopUp": {
+    "description": "The card's button: opens the packs of questions."
+  },
+  "topUpTitle": "More questions",
+  "@topUpTitle": {
+    "description": "The top-up sheet's title."
+  },
+  "topUpSubtitle": "Used after the 20 a day, and they don't expire.",
+  "@topUpSubtitle": {
+    "description": "Under the top-up sheet's title."
+  },
+  "topUpBest": "better value",
+  "@topUpBest": {
+    "description": "A tag on the bigger pack."
+  },
+  "topUpBuy": "Buy for {price}",
+  "@topUpBuy": {
+    "description": "The top-up sheet's button; {price} as the App Store gives it.",
+    "placeholders": {
+      "price": {
+        "type": "String"
+      }
+    }
+  },
+  "topUpFine": "A one-time App Store purchase. A question about a long document can count as several.",
+  "@topUpFine": {
+    "description": "Under the top-up sheet's button."
+  },
+  "topUpPack": "{count, plural, =1{+1 question} other{+{count} questions}}",
+  "@topUpPack": {
+    "description": "A pack of questions on the top-up sheet.",
+    "placeholders": {
+      "count": {
+        "type": "int"
       }
     }
   }

@@ -267,6 +267,20 @@ class ApiClient {
     }),
   );
 
+  /// `POST /v1/chat/credits` (#146): a pack of questions bought, credited to
+  /// the subscription of [transaction] once, however often it is sent.
+  /// Returns the bought questions there now.
+  Future<int> creditPack({
+    required String pack,
+    required String transaction,
+  }) async {
+    final json = await _postJson('/v1/chat/credits', {
+      'pack': pack,
+      'transaction': transaction,
+    });
+    return (json['boughtQuestions'] as num?)?.toInt() ?? 0;
+  }
+
   Future<Map<String, dynamic>> _postJson(
     String path,
     Map<String, Object> body,

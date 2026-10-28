@@ -223,5 +223,12 @@
   "chatRemaining": "{count, plural, =1{Te queda 1 pregunta hoy} other{Te quedan {count} preguntas hoy}}",
   "chatLongDocument": "Documento largo: una pregunta sobre él cuenta como {count}",
   "chatOutTitle": "Se acabaron las preguntas de hoy",
-  "chatOutBody": "Nuevas a las {time}."
+  "chatOutBody": "Nuevas a las {time}. O compra más: no caducan.",
+  "chatTopUp": "Comprar más preguntas",
+  "topUpTitle": "Más preguntas",
+  "topUpSubtitle": "Se usan después de las 20 diarias y no caducan.",
+  "topUpBest": "mejor precio",
+  "topUpBuy": "Comprar por {price}",
+  "topUpFine": "Una compra única en la App Store. Una pregunta sobre un documento largo puede contar como varias.",
+  "topUpPack": "{count, plural, =1{+1 pregunta} other{+{count} preguntas}}"
 }
