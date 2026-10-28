@@ -9,9 +9,10 @@ import 'package:official_news/features/feed/feed_controller.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'test_app.dart';
 
-/// Yurii, 16 Oct: the feed is one list. The server still sends its top
-/// stories; the app puts them among the rest, each article once, in the order
-/// the articles arrived in the feed ([oneFeed], [FeedController.feed]).
+/// Yurii, 16 Oct: the feed is one list, in the order the articles arrived
+/// ([oneFeed]). Since #164 (Yurii, 26 Oct) the server's top stories are a
+/// block above it ([topStoriesBlock], [FeedController.topStories]), which the
+/// list leaves out, so each article shows once ([FeedController.feed]).
 
 final _now = DateTime.utc(2026, 10, 16, 12);
 
@@ -138,6 +139,16 @@ void main() {
     });
   });
 
+  group('topStoriesBlock', () {
+    test('the server\'s first 3, in its order; none with fewer than 2', () {
+      final top = [for (var i = 1; i <= 5; i++) _a('t$i', feedSeq: i)];
+      expect(_ids(topStoriesBlock(top)), ['t1', 't2', 't3']);
+      expect(_ids(topStoriesBlock(top.take(2).toList())), ['t1', 't2']);
+      expect(topStoriesBlock(top.take(1).toList()), isEmpty);
+      expect(topStoriesBlock(const []), isEmpty);
+    });
+  });
+
   group('FeedController.feed', () {
     setUp(() => SharedPreferences.setMockInitialValues({}));
 
@@ -172,14 +183,22 @@ void main() {
       ),
     );
 
-    test('loading more only adds to the end, each article once', () async {
+    test('loading more only adds to the end, each article once: the top '
+        'stories in their block, not in the list', () async {
       final feed = controller();
       await feed.start();
+      expect(_ids(feed.topStories), ['a30', 'a15']);
       final first = _ids(feed.feed);
-      expect(first, [for (var i = 40; i >= 21; i--) 'a$i']);
+      expect(first, [
+        for (var i = 40; i >= 21; i--)
+          if (i != 30) 'a$i',
+      ]);
       await feed.loadMore();
       expect(_ids(feed.feed).take(first.length), first);
-      expect(_ids(feed.feed), [for (var i = 40; i >= 1; i--) 'a$i']);
+      expect(_ids(feed.feed), [
+        for (var i = 40; i >= 1; i--)
+          if (i != 30 && i != 15) 'a$i',
+      ]);
     });
 
     test('the new check counts only what arrived after the newest shown, '
@@ -194,7 +213,8 @@ void main() {
       await feed.refresh();
       expect(feed.newCount, 0);
       expect(_ids(feed.feed).take(3), ['a42', 'a41', 'a40']);
-      expect(_ids(feed.feed).where((id) => id == 'a30'), hasLength(1));
+      expect(_ids(feed.topStories), ['a30', 'a15']);
+      expect(_ids(feed.feed), isNot(contains('a30')));
     });
   });
 }
