@@ -150,17 +150,18 @@ void main() {
     tester,
   ) async {
     SharedPreferences.setMockInitialValues({
-      'feed.readIds': ['n29'],
+      'feed.readIds': ['t2'],
     });
     final semantics = tester.ensureSemantics();
     await pumpFeed(tester);
-    // Every row as the Latest rows were: no summary under the headline.
+    // Every row as the Latest rows were, the Top stories' too: no summary
+    // under the headline.
     final read = tester.getSemantics(
-      find.bySemanticsLabel(RegExp(r'^Decision n29\. Germany, Federal')),
+      find.bySemanticsLabel(RegExp(r'^Decision t2\. Germany, Federal')),
     );
     expect(read.value, 'Read');
     final unread = tester.getSemantics(
-      find.bySemanticsLabel(RegExp(r'^Decision n28\. Germany, Federal')),
+      find.bySemanticsLabel(RegExp(r'^Decision t3\. Germany, Federal')),
     );
     expect(unread.value, isEmpty);
     expect(find.textContaining('Short summary'), findsNothing);

@@ -85,8 +85,13 @@ class FeedController extends ChangeNotifier {
   List<FeedTopic>? get topics => _topics;
   List<FeedTopic>? _topics;
 
-  /// "Top stories": the API's `top`, only on the first page.
+  /// "Top stories": the API's `top`, only on the first page, best first.
   List<Article> top = const [];
+
+  /// The Top stories block above the list (#164, [topStoriesBlock]); empty
+  /// when there is none.
+  List<Article> get topStories => _topStories;
+  List<Article> _topStories = const [];
 
   /// Every article loaded so far, as the server pages them, newest first
   /// (top articles are in here too, on whichever page they fall).
@@ -99,14 +104,26 @@ class FeedController extends ChangeNotifier {
   List<Article> _items = const [];
   String? _cursor;
 
-  /// What the feed shows: one list, no sections (Yurii, 16 Oct). [items] and
-  /// [top] together, each article once, in the order they arrived in the
-  /// feed ([oneFeed]). Worked out once each time they change.
+  /// What the list under the Top stories block shows ([topStories]): [items]
+  /// in the order they arrived in the feed ([oneFeed]), each article once,
+  /// so without the block's. With no block, [top] is merged in at its place,
+  /// as in the one list of 16 Oct. Worked out once each time they change.
   List<Article> get feed => _feed;
   List<Article> _feed = const [];
 
-  void _merge() =>
-      _feed = oneFeed(top: top, items: _items, complete: _cursor == null);
+  void _merge() {
+    _topStories = topStoriesBlock(top);
+    final inBlock = {for (final a in _topStories) a.id};
+    _feed = [
+      for (final a in oneFeed(
+        top: _topStories.isEmpty ? top : const [],
+        items: _items,
+        complete: _cursor == null,
+      ))
+        if (!inBlock.contains(a.id)) a,
+    ];
+  }
+
   Set<String> readIds = {};
 
   /// True while there is nothing to show yet.
@@ -556,6 +573,12 @@ List<Article> oneFeed({
       if (loaded.contains(a.id) || order(a, last) < 0) a,
   ];
 }
+
+/// The Top stories block (#164, Yurii 26 Oct): the server's top stories as it
+/// ranks them, best first, at most 3; none with fewer than 2, which then show
+/// at their place in the list.
+List<Article> topStoriesBlock(List<Article> top) =>
+    top.length < 2 ? const [] : top.take(3).toList();
 
 /// Which of two articles arrived in the feed later, for [oneFeed]: negative
 /// when [a] did, 0 when nothing tells them apart.

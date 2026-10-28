@@ -10,6 +10,8 @@
   "feedLoadMoreFailed": "Не вдалося завантажити більше новин. Торкніться, щоб повторити.",
   "feedEnd": "Ви переглянули все",
   "feedEmpty": "Сьогодні рішень ще немає.",
+  "topStoriesTitle": "Головне",
+  "topStoriesCaption": "За важливістю за три дні, по одному від країни",
   "feedNoTranslations": "Перекладених рішень ще немає.",
   "feedTranslationsComing": "Переклади з’являться тут, щойно будуть готові.",
   "newDecisions": "{count, plural, one{{count} нове рішення} few{{count} нові рішення} many{{count} нових рішень} other{{count} нового рішення}}",
