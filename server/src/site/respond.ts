@@ -32,7 +32,7 @@ export const CACHE = {
   missing: { browser: "public, max-age=60", edge: "max-age=60" },
   /** An article not translated into this language (yet). */
   notInLanguage: { browser: "public, max-age=300", edge: "max-age=300" },
-  /** /favicon.ico and /apple-touch-icon*.png: a cheap 404 the browser keeps a day. */
+  /** /apple-touch-icon*.png and /icon-512.png (icon.ts), and the 404 for /favicon.ico: kept a day. */
   icon: { browser: "public, max-age=86400", edge: "max-age=86400" },
   /**
    * Another spelling of a list or the landing page (a query it does not use,
@@ -75,8 +75,8 @@ export const csp = (styleHash: string) =>
 export interface Reply {
   kind: CacheKind;
   status: number;
-  /** A page (Html), plain text, or nothing. */
-  body: Html | string | null;
+  /** A page (Html), plain text, a PNG (icon.ts), or nothing. */
+  body: Html | string | Uint8Array | null;
   /** The page's language, for Content-Language. */
   lang?: string;
   /** A page's robotsFor(), the same value as its meta tag; else ROBOTS_DEFAULT. */
@@ -90,17 +90,18 @@ export interface Reply {
 export function respond(reply: Reply, method: string, styleHash: string): Response {
   const cache = CACHE[reply.kind];
   const isText = typeof reply.body === "string";
+  const isPng = reply.body instanceof Uint8Array;
   const headers = new Headers({
     "cache-control": cache.browser,
     "cloudflare-cdn-cache-control": cache.edge,
     "x-robots-tag": reply.robots ?? ROBOTS_DEFAULT,
     "x-content-type-options": "nosniff",
     "content-security-policy": csp(styleHash),
-    "content-type": isText ? "text/plain; charset=utf-8" : "text/html; charset=utf-8",
+    "content-type": isPng ? "image/png" : isText ? "text/plain; charset=utf-8" : "text/html; charset=utf-8",
   });
   if (reply.lang) headers.set("content-language", reply.lang);
   if (reply.location) headers.set("location", reply.location);
   if (reply.allow) headers.set("allow", reply.allow);
-  const body = method === "HEAD" || reply.body === null ? null : String(reply.body);
+  const body = method === "HEAD" || reply.body === null ? null : reply.body instanceof Uint8Array ? reply.body : String(reply.body);
   return new Response(body, { status: reply.status, headers });
 }

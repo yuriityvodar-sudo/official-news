@@ -501,7 +501,8 @@ describe("one URL per view: every link is a cache key of its own", () => {
       const later = nextLink(first.body);
       for (const body of [first.body, later ? (await site(later)).body : ""]) {
         const main = body.split("<footer")[0];
-        for (const m of main.matchAll(/href="(\/[^"]*)"/g)) seen.add(m[1].replaceAll("&amp;", "&"));
+        // Every link but the home-screen icon's (icon.ts), which is no page.
+        for (const m of main.matchAll(/href="(\/[^"]*)"/g)) if (m[1] !== "/apple-touch-icon.png") seen.add(m[1].replaceAll("&amp;", "&"));
       }
     }
     expect(seen.size).toBeGreaterThan(60);
@@ -523,7 +524,7 @@ describe("every new page", () => {
       expect(status, path).toBe(200);
       expect(headers.get("x-robots-tag"), path).toBe("noindex");
       expect(body, path).toContain('<meta name="robots" content="noindex">');
-      expect(body, path).not.toMatch(/<script|<img|<iframe|rel="stylesheet"|rel="preload"|rel="prefetch"/i);
+      expect(body, path).not.toMatch(/<script|<img(?! src="data:image\/png;base64,)|<iframe|rel="stylesheet"|rel="preload"|rel="prefetch"/i);
       expect(headers.get("cloudflare-cdn-cache-control"), path).toBe(CACHE.list.edge);
     }
   });

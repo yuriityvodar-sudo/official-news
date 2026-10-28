@@ -13,6 +13,7 @@ import { rankTopics } from "../api/filters";
 import type { Topic } from "../summarizer/schema";
 import { type ApiArticle, articleInLanguages, latest, topicsMenu, whereMenu } from "./data";
 import type { SiteEnv } from "./env";
+import { APPLE_TOUCH_ICON, OG_IMAGE } from "./icon";
 import { type Page, cssHash, layout } from "./layout";
 import { articlePage, notInLanguagePage } from "./pages/article";
 import { errorPage, notFoundPage } from "./pages/errors";
@@ -149,7 +150,11 @@ async function route(request: Request, env: SiteEnv): Promise<Reply> {
   // it to their clean URL, with no D1 read (#88 and #89 reviews).
   if (path === "/") return url.search ? { kind: "redirect", status: 301, body: null, location: `${origin}/` } : page(landingPage(origin), 200, "fixed");
   if (path === "/robots.txt") return { kind: "fixed", status: 200, body: ROBOTS_TXT };
-  if (path === "/favicon.ico" || /^\/apple-touch-icon[\w-]*\.png$/.test(path)) return { kind: "icon", status: 404, body: "Not found\n" };
+  // The icon (icon.ts): Safari's home-screen icon under any of its names, and
+  // the link preview's picture. The tab icon is inline, so /favicon.ico stays a 404.
+  if (/^\/apple-touch-icon[\w-]*\.png$/.test(path)) return { kind: "icon", status: 200, body: APPLE_TOUCH_ICON };
+  if (path === "/icon-512.png") return { kind: "icon", status: 200, body: OG_IMAGE };
+  if (path === "/favicon.ico") return { kind: "icon", status: 404, body: "Not found\n" };
 
   const match = LANG_PATH.exec(path);
   if (!match || !isSiteLang(match[1])) return notFound("en");

@@ -59,7 +59,9 @@ const ROUTES: [string, number, keyof typeof CACHE, string | null][] = [
   ["/.well-known/apple-app-site-association", 404, "missing", "en"],
   ["/sitemap.xml", 404, "missing", "en"],
   ["/favicon.ico", 404, "icon", null],
-  ["/apple-touch-icon-precomposed.png", 404, "icon", null],
+  ["/apple-touch-icon.png", 200, "icon", null],
+  ["/apple-touch-icon-precomposed.png", 200, "icon", null],
+  ["/icon-512.png", 200, "icon", null],
   ["/en/", 301, "redirect", null],
   ["/en?utm_source=x", 301, "redirect", null],
   ["/?fbclid=1", 301, "redirect", null],
@@ -205,12 +207,15 @@ describe("one request per page view", () => {
     ];
     for (const path of paths) {
       const { body } = await site(path);
-      expect(body, path).not.toMatch(/<script|<img|<iframe|<object|<embed|<video|<audio|<source|rel="stylesheet"|rel="preload"|rel="prefetch"|rel="preconnect"|rel="dns-prefetch"|@import|@font-face/i);
-      // CSS url() only for data:, and every icon a data: URL (no /favicon.ico request).
+      expect(body, path).not.toMatch(/<script|<iframe|<object|<embed|<video|<audio|<source|rel="stylesheet"|rel="preload"|rel="prefetch"|rel="preconnect"|rel="dns-prefetch"|@import|@font-face/i);
+      // The only picture is the icon in the header, inline (icon.ts).
+      for (const m of body.matchAll(/<img [^>]*src="([^"]+)"/g)) expect(m[1], path).toMatch(/^data:image\/png;base64,/);
+      // CSS url() only for data:, and the tab icon a data: URL (no /favicon.ico request).
       for (const m of body.matchAll(/url\(([^)]*)\)/g)) expect(m[1], path).toMatch(/^["']?data:/);
-      expect(body).toMatch(/<link rel="icon" href="data:image\/svg\+xml,/);
+      expect(body).toMatch(/<link rel="icon" href="data:image\/png;base64,/);
       for (const m of body.matchAll(/<link rel="([^"]+)" [^>]*href="([^"]+)"/g)) {
         if (m[1] === "icon") expect(m[2]).toMatch(/^data:/);
+        else if (m[1] === "apple-touch-icon") expect(m[2]).toBe("/apple-touch-icon.png");
         else expect(["canonical", "alternate"], `${path}: <link rel="${m[1]}">`).toContain(m[1]);
       }
       expect(body).not.toContain("picture.jpg");
@@ -254,7 +259,7 @@ describe("text from the data and the address", () => {
     for (const path of [`/en/de/${XSS}`, "/en"]) {
       const { status, body } = await reach(path);
       expect(status).toBe(200);
-      expect(body).not.toMatch(/<script|<img|<svg onload|<b>bold/i);
+      expect(body).not.toMatch(/<script|<img(?! src="data:image\/png;base64,)|<svg onload|<b>bold/i);
       // No tag carries an event handler: the escaped text may say "onerror=", a tag never does.
       // (Attribute values are blanked first: a meta description may quote the escaped text.)
       expect(body.replace(/"[^"]*"/g, '""')).not.toMatch(/<[^>]*\son\w+=/i);

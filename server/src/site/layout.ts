@@ -5,6 +5,7 @@
 // app's theme (app/lib/core/theme.dart: Georgia, not the system's New York),
 // light and dark; if #66 changes the app's font, change it here too.
 import { type Html, html, raw } from "./html";
+import { TAB_ICON } from "./icon";
 import { LANGUAGE_NAMES, type SiteLang, publisher, t, text } from "./texts";
 import { INFO_PAGES, type InfoPage, infoPath, listPath } from "./urls";
 
@@ -46,7 +47,7 @@ h1,h2,.item .title{-webkit-hyphens:auto;hyphens:auto;hyphenate-limit-chars:12 5 
 .top{border-bottom:.5px solid var(--separator);padding:4px 0 10px}
 .bar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;column-gap:12px}
 .brand{display:inline-flex;align-items:center;gap:8px;min-height:44px;font:700 20px/1.1 Georgia,"Times New Roman",serif;color:var(--text);text-decoration:none}
-.brand svg{width:24px;height:24px;color:var(--accent);flex:none}
+.brand img{width:24px;height:24px;border-radius:6px;flex:none}
 .langs{display:flex;flex-wrap:wrap;margin-right:-10px}
 .langs a{display:inline-flex;align-items:center;justify-content:center;min-width:44px;min-height:44px;padding:0 6px;font-size:13px;font-weight:600;letter-spacing:.3px;color:var(--secondary);text-decoration:none}
 .langs a[aria-current]{color:var(--text);text-decoration:underline 2px var(--accent);text-underline-offset:6px}
@@ -130,7 +131,6 @@ export function cssHash(): Promise<string> {
 }
 
 /** Our own mark: a building with columns, in the app's red. Never a source's picture. */
-const COLUMNS = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 9.5 12 4l9 5.5"/><path d="M4 20h16"/><path d="M6 10.5v7M10 10.5v7M14 10.5v7M18 10.5v7"/></svg>`;
 export const SEAL = raw(
   `<svg class="seal" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="currentColor"/><path d="M4.8 8.2 7 10.4l4.2-4.6" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
 );
@@ -140,11 +140,6 @@ export const SPARKLE = raw(
 export const ARROW = raw(
   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6"/><path d="M20 4 11 13"/><path d="M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/></svg>`,
 );
-
-/** The tab icon as a data: URL, so the browser asks for no /favicon.ico. */
-const ICON = `data:image/svg+xml,${encodeURIComponent(
-  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#fa2d48" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9.5 12 4l9 5.5"/><path d="M4 20h16"/><path d="M6 10.5v7M10 10.5v7M14 10.5v7M18 10.5v7"/></svg>`,
-)}`;
 
 export interface Alternate {
   /** A language code, or `x-default`. */
@@ -186,6 +181,8 @@ const footer = (lang: SiteLang) => {
 export function layout(page: Page, robots: string): Html {
   const { lang } = page;
   const description = page.description ?? text(lang, "aboutIntro");
+  // The link preview's picture needs an absolute URL: the canonical's origin (error pages have none).
+  const origin = page.canonical ? new URL(page.canonical).origin : "";
   const switcher = page.switcher.length
     ? html`<nav class="langs" aria-label="${text(lang, "language")}">${page.switcher.map(
         (item) =>
@@ -208,18 +205,19 @@ ${page.canonical ? html`<link rel="canonical" href="${page.canonical}">\n` : ""}
 <meta property="og:title" content="${page.ogTitle ?? page.title}">
 <meta property="og:description" content="${description}">
 <meta property="og:type" content="${page.ogType ?? "website"}">
-${page.canonical ? html`<meta property="og:url" content="${page.canonical}">\n` : ""}<meta name="twitter:card" content="summary">
+${page.canonical ? html`<meta property="og:url" content="${page.canonical}">\n` : ""}${origin ? html`<meta property="og:image" content="${origin}/icon-512.png">\n<meta property="og:image:width" content="512">\n<meta property="og:image:height" content="512">\n` : ""}<meta name="twitter:card" content="summary">
 <meta name="apple-itunes-app" content="app-id=${APP_STORE_ID}">
 <meta name="color-scheme" content="light dark">
 <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
-<link rel="icon" href="${ICON}" type="image/svg+xml">
+<link rel="icon" href="${TAB_ICON}" type="image/png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <style>${raw(CSS)}</style>
 </head>
 <body>
 <a class="skip" href="#main">${t(lang, "skip")}</a>
 <header class="top"><div class="wrap">
-<div class="bar"><a class="brand" href="${listPath(lang)}">${raw(COLUMNS)}<span>${SITE_NAME}</span></a>${switcher}</div>
+<div class="bar"><a class="brand" href="${listPath(lang)}"><img src="${TAB_ICON}" alt="" width="24" height="24"><span>${SITE_NAME}</span></a>${switcher}</div>
 <p class="note">${t(lang, "independentNote")}</p>
 </div></header>
 <main id="main"><div class="wrap">
