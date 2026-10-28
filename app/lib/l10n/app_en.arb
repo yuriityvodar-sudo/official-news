@@ -517,9 +517,9 @@
   "@settingsAboutHeader": {
     "description": "Settings section header (shown in capitals) over the four information pages."
   },
-  "aboutApp": "About Official News",
+  "aboutApp": "About Outer News",
   "@aboutApp": {
-    "description": "The settings row that opens the About page. Official News is the app's name: never translated."
+    "description": "The settings row that opens the About page. Outer News is the app's name: never translated."
   },
   "aboutTitle": "About",
   "@aboutTitle": {
@@ -576,7 +576,7 @@
       }
     }
   },
-  "aboutIntro": "Official News shows what governments and international bodies have decided, in a few calm sentences, with a link to the official page.",
+  "aboutIntro": "Outer News shows what governments and international bodies have decided, in a few calm sentences, with a link to the official page.",
   "@aboutIntro": {
     "description": "About page, first paragraph."
   },
@@ -596,7 +596,7 @@
   "@aboutIndependentHeading": {
     "description": "About page, heading."
   },
-  "aboutIndependent": "Official News is an independent app. It is not affiliated with, endorsed by or speaking for any government or public body.",
+  "aboutIndependent": "Outer News is an independent app. It is not affiliated with, endorsed by or speaking for any government or public body.",
   "@aboutIndependent": {
     "description": "About page, under aboutIndependentHeading."
   },
@@ -611,7 +611,7 @@
     }
   },
 
-  "privacyIntro": "Official News has no accounts: we do not ask for your name, e-mail address or phone number, and we do not sell or share personal data for advertising.",
+  "privacyIntro": "Outer News has no accounts: we do not ask for your name, e-mail address or phone number, and we do not sell or share personal data for advertising.",
   "@privacyIntro": {
     "description": "Privacy policy, first paragraph. A legal text: translate faithfully, keep the meaning exact."
   },
@@ -696,7 +696,7 @@
     "description": "Privacy policy, under privacyChangesHeading."
   },
 
-  "termsIntro1": "Official News summarizes official decisions for general information. It is not legal, financial or professional advice.",
+  "termsIntro1": "Outer News summarizes official decisions for general information. It is not legal, financial or professional advice.",
   "@termsIntro1": {
     "description": "Terms of use, first paragraph. A legal text: translate faithfully, keep the meaning exact."
   },

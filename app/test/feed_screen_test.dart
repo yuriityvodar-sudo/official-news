@@ -677,7 +677,7 @@ void main() {
         expect(target.right, _phone.width - 20);
         expect(
           target.top,
-          lessThan(tester.getRect(find.text('Official News')).bottom),
+          lessThan(tester.getRect(find.text('Outer News')).bottom),
         );
         semantics.dispose();
       },

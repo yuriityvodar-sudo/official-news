@@ -627,4 +627,4 @@ We read the latest official news (4–11 Oct) from all Phase 2 sources and the P
 - [x] AI model: Workers AI, `@cf/google/gemma-4-26b-a4b-it` (item 7, 14 Oct; Gemma 4 since #63, 16 Oct; see `docs/decisions.md`)
 - [ ] Home countries in Phase 1: move Kenya, and Roman's country, up from Phase 2?
 - [ ] Labels for territories with disputed status (Taiwan, Palestine, Kosovo)
-- [ ] Later: app name
+- [x] App name: Outer News (28 Oct, #65; `docs/decisions.md`). The domain is still to buy

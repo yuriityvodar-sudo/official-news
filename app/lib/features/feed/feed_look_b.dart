@@ -157,7 +157,7 @@ class _Masthead extends StatelessWidget {
   final FeedMasthead masthead;
 
   /// Laid out only to measure the header: the name is drawn without a Text
-  /// widget, so the feed has one "Official News" for VoiceOver and for tests.
+  /// widget, so the feed has one "Outer News" for VoiceOver and for tests.
   final bool measuring;
 
   @override

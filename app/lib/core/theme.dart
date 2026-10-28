@@ -166,7 +166,7 @@ class NewsText extends ThemeExtension<NewsText> {
   static NewsText from(BuildContext context) =>
       Theme.of(context).extension<NewsText>()!;
 
-  /// "Official News" at the top of the feed.
+  /// "Outer News" at the top of the feed.
   final TextStyle masthead;
   final TextStyle dateLine;
 

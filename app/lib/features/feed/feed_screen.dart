@@ -329,7 +329,7 @@ class _FeedScreenState extends State<FeedScreen> {
 
   Widget _page(BuildContext context, FeedLook look) {
     final l10n = AppLocalizations.of(context);
-    final foldedTitle = look.foldedTitle(context, 'Official News');
+    final foldedTitle = look.foldedTitle(context, 'Outer News');
     return Scaffold(
       backgroundColor: look.background(context),
       body: SafeArea(
@@ -351,7 +351,7 @@ class _FeedScreenState extends State<FeedScreen> {
                     context,
                     FeedMasthead(
                       // The app's name, the same in every language.
-                      title: 'Official News',
+                      title: 'Outer News',
                       date: longDay(DateTime.now(), l10n),
                       openSettings: _openSettings,
                       filterBar: FeedFilterBar(
