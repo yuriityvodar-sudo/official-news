@@ -4,6 +4,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:official_news/core/home_country.dart';
 import 'package:official_news/core/motion.dart';
 import 'package:official_news/core/pictures.dart';
 import 'package:official_news/core/read_mark.dart';
@@ -24,11 +25,15 @@ import 'package:official_news/features/feed/feed_look.dart';
 ///
 /// The feed starts in the Classic look, which most tests were written for; a
 /// new reader's is Garnet ([defaultDesign]), and each look's tests pick it.
+///
+/// The phone has no region, whatever the computer's is: For you is the whole
+/// world's feed until a test gives one (#170).
 Future<void> testExecutable(FutureOr<void> Function() testMain) async {
   pictureCache = NoPictures();
   Arrive.enabled = false;
   readStyle.value = ReadStyle.dim;
   feedDesign.value = FeedDesign.now;
+  readPhoneRegion = () => null;
   await GlobalMaterialLocalizations.delegate.load(const Locale('en'));
   await testMain();
 }

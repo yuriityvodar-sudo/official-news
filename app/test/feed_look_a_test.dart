@@ -105,7 +105,7 @@ void main() {
     expect(pill, findsOneWidget);
 
     // Open: below the nameplate and the filters, not over them.
-    final filters = tester.getRect(find.text('All countries'));
+    final filters = tester.getRect(find.text('For you'));
     expect(tester.getRect(pill).top, greaterThan(filters.bottom));
 
     // Folded: below the 44-pt bar and its title, not over them.

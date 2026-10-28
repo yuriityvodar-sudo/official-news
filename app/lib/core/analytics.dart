@@ -80,7 +80,8 @@ class Analytics {
   }
 
   /// The reader changed a filter (#67, #68) on a chip: the filters as they
-  /// are now. `where` is `all`, `group` or `country`; `place` the group's id
+  /// are now. `where` is `forYou` (#170), `all` (the whole world), `group` or
+  /// `country`; `place` the group's id
   /// (`g7`), the country's code (`GB`), or `all`; `topic` the topic's id, or
   /// `all`. Not `value`: Google Analytics keeps that name for an event's
   /// number, and drops a text in it (`firebase_error` 18).
@@ -177,6 +178,12 @@ class Analytics {
   /// Whether this phone gets notifications, on its later events: `on`, `off`
   /// or `not_asked`, so returns can be compared with and without them.
   Future<void> pushState(String state) => _user('notifications', state);
+
+  /// The reader's own country for For you (#170), on their later events: two
+  /// letters, or `none` while the app knows none. The country only, nothing
+  /// else about the reader.
+  Future<void> homeCountry(String? code) =>
+      _user('home_country', code ?? 'none');
 
   /// What an event says about its article: no text of it, only where it is from and what it is.
   static Map<String, Object> _about(Article a) => {

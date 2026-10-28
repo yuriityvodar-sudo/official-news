@@ -45,6 +45,26 @@
   "@topStoriesCaption": {
     "description": "Under the Top stories heading: how they are picked (the AI's importance, less for older ones, from the last 3 days, at most one per country)."
   },
+  "feedForYou": "For you",
+  "@feedForYou": {
+    "description": "The feed's default choice under the date (#170): what concerns the reader's own country, its decisions, the EU's for a member and the world's that matter. Also the menu item."
+  },
+  "feedWholeWorld": "The whole world",
+  "@feedWholeWorld": {
+    "description": "The other choice (#170): every country's decisions, the feed as it was before For you. Also the menu item."
+  },
+  "topStoriesForYouTitle": "Top stories for you",
+  "@topStoriesForYouTitle": {
+    "description": "The Top stories heading in For you (#170): the server's top stories with a point more for the reader's own country."
+  },
+  "topStoriesForYouWorld": "the world's top stories",
+  "@topStoriesForYouWorld": {
+    "description": "The last part of the caption under topStoriesForYouTitle, after the reader's country and the European Union: \"Czechia · European Union · the world's top stories\". Lower case, as it follows a dot."
+  },
+  "yourCountry": "Your country",
+  "@yourCountry": {
+    "description": "In the For you caption, for a country the app has no name for."
+  },
   "feedNoTranslations": "No translated decisions yet.",
   "@feedNoTranslations": {
     "description": "A translated feed is empty: translations come in over the day."
