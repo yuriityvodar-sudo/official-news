@@ -2,7 +2,7 @@
 
 What exists right now, outside the code. Update this file whenever an account, service or resource is created or changed, in the same commit or pull request. Secrets never go here, only names and where they live.
 
-Last updated: 2026-10-28 (#88, the website preview on outernews.app)
+Last updated: 2026-10-29 (#88, the website's Google Analytics stream)
 
 ## Accounts and services
 
@@ -11,6 +11,7 @@ Last updated: 2026-10-28 (#88, the website preview on outernews.app)
 | GitHub repo | Created 2026-10-13 | Yurii | `yuriityvodar-sudo/official-news`, public, no licence. Secret scanning and push protection on. Branch protection on `main` since 2026-10-14 (after #13): pull request with 1 approval, checks `App (Flutter)` and `Server (Worker)` must pass on an up-to-date branch, new commits dismiss the approval, conversations resolved, applies to admins, no force pushes or deletion. Since 2026-10-16 (Yurii): "Automatically delete head branches" is on, so a merged PR's branch is deleted by GitHub (restorable from the PR page; branches without a merged PR are not touched) |
 | Roman's access to the repo | Active since 2026-10-14 | Yurii | GitHub user `surynets-git`, write access |
 | Cloudflare account | Created 2026-10-13 | Yurii (Super Administrator) | Name `NewsApp`, account ID `8dc93578877d397a693094f3e2b01029` (not a secret; it goes in the Worker config) |
+| Google Analytics web stream "Outer News website" | Created 2026-10-29 (#88) | Yurii (his Google account; created by his Claude on his word) | In the Google Analytics property `official-news-48e16` (property 559256393, account official-news 412309642), next to the iOS app's stream, so the website and the app sit in one property. Stream ID 16224831822, URL https://outernews.app, Measurement ID `G-D0H8XW2SWJ` (not a secret; `server/src/site/consent.ts`), enhanced measurement on (page views, scrolls, outbound clicks, site search, file downloads, video). The site loads it only after a visitor's yes. |
 | Roman's access to Cloudflare | Active since 2026-10-14 | Yurii | Role Administrator, scope NewsApp account only (cannot manage members or billing) |
 | workers.dev address | Created 2026-10-13 | Yurii | `officialnews.workers.dev`; a Worker named `api` would be served at `api.officialnews.workers.dev` |
 | Cloudflare Worker | Deployed 2026-10-14 | Roman (item 1) | Worker `api` in `server/`, live at `https://api.officialnews.workers.dev`. `.github/workflows/deploy.yml` applies D1 migrations and deploys on every merge to `main` that touches `server/`. Workers Caching is on (`cache` in `server/wrangler.jsonc`, #121): no account setting, no key; the Free plan's size limit applies to cached responses, and a cache hit still counts as a request |
