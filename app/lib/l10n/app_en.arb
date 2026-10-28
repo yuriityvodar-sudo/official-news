@@ -915,7 +915,7 @@
   "@termsSubscriptionHeading": {
     "description": "A heading of the terms of use."
   },
-  "termsSubscription": "The AI agent is a monthly subscription through the App Store. It renews automatically until you cancel it in your Apple ID settings, at least 24 hours before the end of the period. Apple handles refunds. The agent answers only from the official text, can make mistakes, and its answers are not legal, financial or medical advice. Up to 10 questions a day.",
+  "termsSubscription": "The AI agent is a monthly subscription through the App Store. It renews automatically until you cancel it in your Apple ID settings, at least 24 hours before the end of the period. Apple handles refunds. The agent answers only from the official text, can make mistakes, and its answers are not legal, financial or medical advice. 20 questions a day; a question about a long document counts as 2 or 3; packs of questions add more.",
   "@termsSubscription": {
     "description": "The terms of use's section on the AI agent subscription (#146)."
   }
