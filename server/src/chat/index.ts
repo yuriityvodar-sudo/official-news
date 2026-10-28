@@ -1,4 +1,4 @@
-import { JwsError, isActive, recordTransaction, verifyTransaction, type Subscription, type VerifyOptions } from "../appstore";
+import { JwsError, isActive, recordTransaction, verifyTransaction, type AppleTransaction, type Subscription, type VerifyOptions } from "../appstore";
 import { creditPack, verifyPack, walletMicros } from "../appstore/packs";
 import type { Env } from "../env";
 import { toStoredTime } from "../fetcher/text";
@@ -52,6 +52,8 @@ export interface Refusal {
 export interface ChatOptions extends VerifyOptions {
   fetch?: typeof fetch;
   now?: Date;
+  /** The request's `X-Chat-Sandbox-Key`, which only Roman's local builds send (`sandboxOpen`). */
+  sandboxKey?: string | null;
 }
 
 const error = (status: number, message: string, extra: Record<string, string | number> = {}): Refusal => ({
@@ -156,33 +158,59 @@ function answerText(events: ReadableStream<Uint8Array>, counted: (usage: Usage) 
 /** Midnight UTC after `now`, when the day's questions come back. */
 const nextDay = (now: Date) => toStoredTime(new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1)));
 
-/** The subscription a signed transaction belongs to, kept up to date; null unless it is paid now. */
-async function activeSubscription(transaction: string, env: Env, options: VerifyOptions, now: Date): Promise<Subscription | null> {
+const SANDBOX_CLOSED = "Not open to test purchases";
+
+/**
+ * Sandbox purchases cost nothing (TestFlight, a build run from a Mac), so only
+ * Roman's local builds get the chat with one (Roman, 28 Oct): they send the
+ * Worker secret CHAT_SANDBOX_KEY as `X-Chat-Sandbox-Key`. Compared in constant
+ * time. Without the secret, closed to every Sandbox purchase.
+ */
+async function sandboxOpen(env: Env, key: string | null | undefined): Promise<boolean> {
+  if (!env.CHAT_SANDBOX_KEY || !key) return false;
+  const digest = (s: string) => crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
+  const [expected, given] = await Promise.all([digest(env.CHAT_SANDBOX_KEY), digest(key)]);
+  return crypto.subtle.timingSafeEqual(expected, given);
+}
+
+/** The chat's subscription in a signed transaction, checked, or why not: 402 if it is not one, 403 a Sandbox one without the key. */
+async function checkedTransaction(jws: string, env: Env, options: ChatOptions): Promise<AppleTransaction | Refusal> {
+  let t: AppleTransaction;
   try {
-    const subscription = await recordTransaction(env, await verifyTransaction(transaction, options), { now });
-    return isActive(subscription, now) ? subscription : null;
+    t = await verifyTransaction(jws, options);
   } catch (e) {
     if (!(e instanceof JwsError)) throw e;
-    return null;
+    return error(402, "Subscription required");
   }
+  if (t.environment === "Sandbox" && !(await sandboxOpen(env, options.sandboxKey))) return error(403, SANDBOX_CLOSED);
+  return t;
+}
+
+/** The subscription a signed transaction belongs to, kept up to date, or the refusal: 402 unless it is paid now. */
+async function activeSubscription(jws: string, env: Env, options: ChatOptions, now: Date): Promise<Subscription | Refusal> {
+  const t = await checkedTransaction(jws, env, options);
+  if ("status" in t) return t;
+  const subscription = await recordTransaction(env, t, { now });
+  return isActive(subscription, now) ? subscription : error(402, "Subscription required");
 }
 
 const IN_FEED = "a.is_news = 1 AND a.feed_seq IS NOT NULL";
 const today = (now: Date) => toStoredTime(now).slice(0, 10);
 
 /**
- * `POST /v1/chat`: the subscription first (402 without an active one), then the
- * article (404 outside the feed), what is left of the limit (429), the key
- * (503). The question's share of the limit (`units`) is taken as OpenAI starts
- * answering, so an answer the reader leaves still counts, and one OpenAI never
- * gave does not; its real cost replaces it once the answer has ended.
+ * `POST /v1/chat`: the subscription first (402 without an active one, 403 a
+ * Sandbox one without the key), then the article (404 outside the feed), what
+ * is left of the limit (429), the key (503). The question's share of the limit
+ * (`units`) is taken as OpenAI starts answering, so an answer the reader
+ * leaves still counts, and one OpenAI never gave does not; its real cost
+ * replaces it once the answer has ended.
  */
 export async function answerChat(body: unknown, env: Env, options: ChatOptions = {}): Promise<ChatResult> {
   const now = options.now ?? new Date();
   const request = readRequest(body);
   if (typeof request === "string") return error(400, request);
   const subscription = await activeSubscription(request.transaction, env, options, now);
-  if (!subscription) return error(402, "Subscription required");
+  if ("status" in subscription) return subscription;
 
   const article = await env.DB.prepare(
     `SELECT a.headline, a.summary, a.text, a.original_title, a.published_at, s.name AS source, s.country, t.summary AS translated_summary
@@ -269,7 +297,7 @@ export async function chatStatus(body: unknown, env: Env, options: ChatOptions =
   const b = body as { articleId?: unknown; transaction?: unknown } | null;
   if (!b || typeof b.articleId !== "string" || typeof b.transaction !== "string") return error(400, "Expected { articleId, transaction }");
   const subscription = await activeSubscription(b.transaction, env, options, now);
-  if (!subscription) return error(402, "Subscription required");
+  if ("status" in subscription) return subscription;
   const article = await env.DB.prepare(`SELECT LENGTH(a.text) AS chars FROM articles a WHERE a.id = ? AND ${IN_FEED}`)
     .bind(b.articleId)
     .first<{ chars: number | null }>();
@@ -284,7 +312,8 @@ export async function chatStatus(body: unknown, env: Env, options: ChatOptions =
  * subscription it is for: credited to that subscription's wallet once (a
  * second call changes nothing), so the app can send it until this answers
  * and only then finish the purchase. 400 for anything but a pack of this app,
- * 402 without a subscription's transaction to credit it to.
+ * 402 without a subscription's transaction to credit it to, 403 a Sandbox pack
+ * or subscription without the key.
  */
 export async function creditChatPack(body: unknown, env: Env, options: ChatOptions = {}): Promise<Refusal> {
   const now = options.now ?? new Date();
@@ -297,13 +326,11 @@ export async function creditChatPack(body: unknown, env: Env, options: ChatOptio
     if (!(e instanceof JwsError)) throw e;
     return error(400, "Not a pack of this app");
   }
-  let subscription;
-  try {
-    subscription = await recordTransaction(env, await verifyTransaction(b.transaction, options), { now });
-  } catch (e) {
-    if (!(e instanceof JwsError)) throw e;
-    return error(402, "Subscription required");
-  }
+  // A free pack, too, only for Roman's local builds: never into a paid subscription's wallet.
+  if (pack.environment === "Sandbox" && !(await sandboxOpen(env, options.sandboxKey))) return error(403, SANDBOX_CLOSED);
+  const t = await checkedTransaction(b.transaction, env, options);
+  if ("status" in t) return t;
+  const subscription = await recordTransaction(env, t, { now });
   const id = subscription.original_transaction_id;
   const credited = await creditPack(env, id, pack, now);
   const wallet = await walletMicros(env, id);
