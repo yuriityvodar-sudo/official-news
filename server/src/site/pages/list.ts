@@ -8,7 +8,7 @@
 // under the title (filters.ts); paging, the language links and the alternates
 // keep them.
 import type { ApiArticle, ApiList } from "../data";
-import { parseTime, publishedDate } from "../dates";
+import { fullDate, parseTime, publishedDate } from "../dates";
 import { html } from "../html";
 import { type Page, SITE_NAME } from "../layout";
 import { SITE_LANGS, type SiteLang, aiNotice, countryName, decisionLabel, t, text } from "../texts";
@@ -26,6 +26,52 @@ ${lead ? html`<p>${lead}</p>` : ""}<p class="meta">${article.source.name} · ${c
   }</p>
 </li>`;
 }
+
+/** The front page's lead (design 1a, Yurii 28 Oct): the first top story, big, with its short summary. */
+function leadStory(lang: SiteLang, article: ApiArticle) {
+  const type = decisionLabel(lang, article.decisionType);
+  const published = parseTime(article.publishedAt);
+  const dek = article.shortSummary?.trim();
+  return html`<article class="leadstory">
+${type ? html`<p class="kind">${type}</p>` : ""}<a class="title" href="${articlePath(lang, article)}">${article.headline ?? article.originalTitle}</a>
+${dek ? html`<p class="dek">${dek}</p>` : ""}<p class="meta">${article.source.name} · ${countryName(lang, article.country)}${
+    published ? html` · ${publishedDate(lang, published, article.dateOnly)}` : ""
+  }</p>
+</article>`;
+}
+
+/** When, in a stream row: the time (UTC) for today's decisions, else the day ("16.10"). */
+function when(article: ApiArticle, today: string): string {
+  const date = parseTime(article.publishedAt);
+  if (!date) return "";
+  const iso = date.toISOString();
+  if (!article.dateOnly && iso.slice(0, 10) === today) return iso.slice(11, 16);
+  return `${iso.slice(8, 10)}.${iso.slice(5, 7)}`;
+}
+
+/** A row of the front page's Latest column: when, then the decision's kind, headline and source. */
+function streamItem(lang: SiteLang, article: ApiArticle, today: string) {
+  const type = decisionLabel(lang, article.decisionType);
+  return html`<li class="item row"><span class="when">${when(article, today)}</span><div>
+${type ? html`<p class="kind">${type}</p>` : ""}<a class="title" href="${articlePath(lang, article)}">${article.headline ?? article.originalTitle}</a>
+<p class="meta">${article.source.name} · ${countryName(lang, article.country)}</p>
+</div></li>`;
+}
+
+/** A card of the grid under the top part (design 1b's grid, Yurii 28 Oct): the first one wide, with its short summary. */
+function card(lang: SiteLang, article: ApiArticle, today: string, wide: boolean) {
+  const type = decisionLabel(lang, article.decisionType);
+  const dek = wide ? article.shortSummary?.trim() : undefined;
+  const at = when(article, today);
+  return html`<li class="card${wide ? " wide" : ""}">
+${type ? html`<p class="kind">${type}</p>` : ""}<a class="title" href="${articlePath(lang, article)}">${article.headline ?? article.originalTitle}</a>
+${dek ? html`<p class="dek">${dek}</p>` : ""}<p class="meta">${article.source.name} · ${countryName(lang, article.country)}${at ? ` · ${at}` : ""}</p>
+</li>`;
+}
+
+/** How many decisions the Latest column holds, and the grid under it (one wide and one, then three: Yurii, 28 Oct, "not too many"). The rest of the page follows as a compact list. */
+const COLUMN = 6;
+const GRID = 5;
 
 /** The `before` of the next page: the last article's feedSeq, when the API says there is one. */
 export const nextBefore = (list: ApiList) => (list.nextCursor ? (list.items.at(-1)?.feedSeq ?? null) : null);
@@ -63,21 +109,42 @@ ${filter.place ? html`<a class="more" href="${listPath(lang, { place: null, topi
   const topIds = new Set(first ? list.top.map((a) => a.id) : []);
   const latest = list.items.filter((a) => !topIds.has(a.id));
   const items = list.items.length ? (latest.length ? html`<ol class="items">${latest.map((a) => item(lang, a))}</ol>` : "") : empty;
-  // Page 1 has Top stories, then "Latest" (the app's sections); a later page is
-  // one list under the title, with no heading that would repeat it (#88 review).
-  const body = html`<h1 class="page-title">${t(lang, "listTitle")}</h1>
+  // Page 1 is design 1a (Yurii, 28 Oct): the lead on the left (the first top
+  // story, or the first decision when there are none), the other top stories
+  // under it, and the Latest column on the right, by time; on a phone one
+  // column, lead first. A later page is one list under the title, with no
+  // heading that would repeat it (#88 review).
+  const today = new Date().toISOString().slice(0, 10);
+  const lead = first ? (list.top[0] ?? latest[0]) : undefined;
+  const moreTop = first ? list.top.slice(1) : [];
+  const stream = lead && !list.top.length ? latest.slice(1) : latest;
+  const head = html`<div class="front-head"><h1 class="page-title">${t(lang, "listTitle")}</h1>
+${filterBar(lang, filter, data.menus)}</div>`;
+  const older = next ? html`<a class="more" href="${listPath(lang, filter, next)}" rel="next">${t(lang, "older")} →</a><br>` : "";
+  const body = lead
+    ? html`${head}
+<div class="front">
+${
+  list.top.length
+    ? html`<section class="lead-col" aria-labelledby="top"><h2 class="vh" id="top">${t(lang, "topStoriesTitle")}</h2>`
+    : html`<section class="lead-col" aria-labelledby="lead"><h2 class="vh" id="lead">${t(lang, "latest")}</h2>`
+}
+${leadStory(lang, lead)}
+<p class="notice">${aiNotice(lang)}</p>
+${moreTop.length ? html`<ol class="items">${moreTop.map((a) => item(lang, a))}</ol>` : ""}
+</section>
+${stream.length ? html`<section class="latest-col" aria-labelledby="latest"><div class="latest-head"><h2 class="section" id="latest">${t(lang, "latest")}</h2><span class="meta">${fullDate(lang, new Date())}</span></div>
+<ol class="items">${stream.slice(0, COLUMN).map((a) => streamItem(lang, a, today))}</ol>
+</section>` : ""}
+</div>
+${stream.length > COLUMN ? html`<ol class="cards" aria-label="${t(lang, "latest")}">${stream.slice(COLUMN, COLUMN + GRID).map((a, i) => card(lang, a, today, i === 0))}</ol>` : ""}
+${stream.length > COLUMN + GRID ? html`<ol class="items more-rows" aria-label="${t(lang, "latest")}">${stream.slice(COLUMN + GRID).map((a) => streamItem(lang, a, today))}</ol>` : ""}
+${older}`
+    : html`<h1 class="page-title">${t(lang, "listTitle")}</h1>
 ${filterBar(lang, filter, data.menus)}
 ${list.items.length ? html`<p class="notice">${aiNotice(lang)}</p>` : ""}
-${
-  first && list.top.length
-    ? html`<section aria-labelledby="top"><h2 class="section" id="top">${t(lang, "topStoriesTitle")}</h2>
-<ol class="items">${list.top.map((a) => item(lang, a))}</ol></section>`
-    : ""
-}
-${first && items !== "" ? html`<section aria-labelledby="latest"><h2 class="section" id="latest">${t(lang, "latest")}</h2>
 ${items}
-</section>` : items}
-${next ? html`<a class="more" href="${listPath(lang, filter, next)}" rel="next">${t(lang, "older")} →</a><br>` : ""}
+${older}
 ${first ? "" : html`<a class="more" href="${listPath(lang, filter)}">${t(lang, "latestLink")}</a>`}`;
 
   // "Germany · Economy · Latest decisions · Outer News", "G7 · …": the filters' full names first, for tabs and history.

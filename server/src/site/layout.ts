@@ -116,7 +116,29 @@ footer{border-top:.5px solid var(--separator);padding:8px 0 40px;font-size:13px;
 footer nav{display:flex;flex-wrap:wrap;column-gap:18px}
 footer nav a{display:inline-flex;align-items:center;min-height:44px;color:var(--text);text-decoration:none}
 footer p{margin:8px 0 0}
-@media (min-width:720px){h1{font-size:36px}.page-title{font-size:40px}.pick{position:relative}.menu{right:auto;width:320px}}`;
+.leadstory .title{display:block;font:700 30px/1.15 Georgia,"Times New Roman",serif;color:var(--text);text-decoration:none}
+.leadstory .title:hover{text-decoration:underline}
+.leadstory .dek{margin:14px 0 8px;font-size:17px;line-height:1.5}
+.front{margin-top:18px}
+.latest-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-top:26px}
+.latest-head .section{margin:0;font-family:Georgia,"Times New Roman",serif}
+.row{display:grid;grid-template-columns:52px 1fr;column-gap:12px}
+.row .when{padding-top:2px;font-size:14px;color:var(--secondary);font-variant-numeric:tabular-nums}
+.row .title{font-size:18px}
+.front .title,.cards .title,.more-rows .title{-webkit-hyphens:manual;hyphens:manual;text-wrap:balance}
+.more-rows{margin-top:28px}
+.front .title,.cards .title{-webkit-hyphens:manual;hyphens:manual;text-wrap:balance}
+.row .meta{margin:6px 0 0;font-size:13px}
+.cards{list-style:none;margin:28px 0 0;padding:0;display:grid;gap:14px}
+.card{display:flex;flex-direction:column;padding:20px 22px;border-radius:16px;background:var(--card)}
+.card .kind{margin-bottom:6px}
+.card .title{display:block;font:700 20px/1.25 Georgia,"Times New Roman",serif;color:var(--text);text-decoration:none}
+.card .title:hover{text-decoration:underline}
+.card .dek{margin:12px 0 0;font-size:15px;line-height:1.5}
+.card .meta{margin:auto 0 0;padding-top:18px;font-size:13px}
+@media (min-width:720px){h1{font-size:36px}.page-title{font-size:40px}.pick{position:relative}.menu{right:auto;width:320px}}
+@media (min-width:960px){body:has(.front) .wrap{max-width:1120px;padding:0 32px}.top .wrap{display:flex;flex-wrap:wrap;align-items:center;column-gap:16px}.top .bar{display:contents}.top .brand{order:1}.top .note{order:2}.top .langs{order:3;margin-left:auto}.front-head{display:flex;align-items:center;justify-content:space-between;gap:24px;padding-bottom:18px;border-bottom:.5px solid var(--separator)}.front-head .filters{margin:0;flex:none}.page-title{font-size:56px}.front{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);column-gap:48px;margin-top:24px}.leadstory .title{font-size:44px;line-height:1.1}.leadstory .dek{font-size:18px}.latest-head{margin-top:0}.cards{grid-template-columns:repeat(3,minmax(0,1fr));margin-top:40px}.card.wide{grid-column:span 2}.card.wide .title{font-size:30px;line-height:1.15}.card{min-height:200px}.more-rows{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:48px;margin-top:36px}}
+@media (min-width:720px) and (max-width:959px){.cards{grid-template-columns:repeat(2,minmax(0,1fr))}.card.wide{grid-column:span 2}}`;
 
 let styleHash: Promise<string> | undefined;
 

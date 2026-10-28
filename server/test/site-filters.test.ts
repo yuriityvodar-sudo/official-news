@@ -205,7 +205,7 @@ describe("the lists are the API's filtered pages", () => {
       const page = await site(next);
       expect(page.status, next).toBe(200);
       const main = page.body.split("<footer")[0];
-      const top = /<section aria-labelledby="top">[\s\S]*?<\/section>/.exec(main)?.[0] ?? "";
+      const top = /<section[^>]*aria-labelledby="top">[\s\S]*?<\/section>/.exec(main)?.[0] ?? "";
       pages.push({ top: linkedIds(top), items: linkedIds(main.replace(top, "")) });
       next = nextLink(page.body);
     }
