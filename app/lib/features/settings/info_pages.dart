@@ -96,10 +96,10 @@ class InfoPage extends StatelessWidget {
 }
 
 /// Who publishes the app, as the App Store lists it (Roman, #61 review). The
-/// name is never translated; its country is ([AppLocalizations.publisher]).
+/// name is never translated, and no country follows it (Yurii, 28 Oct).
 const publisherName = 'RS Elite Pro s.r.o.';
 
-/// "RS Elite Pro s.r.o., Slovakia" in the app's language.
+/// "RS Elite Pro s.r.o.", as every language writes it.
 String publisher(AppLocalizations l10n) => l10n.publisher(publisherName);
 
 /// Where readers write to us. Empty until Yurii picks the address (#64);

@@ -129,7 +129,7 @@
   "version": "Versión {version}",
   "languageFooter": "Las noticias y la app se muestran en este idioma.",
 
-  "publisher": "{name}, Eslovaquia",
+  "publisher": "{name}",
   "lastUpdated": "Última actualización: {date}",
   "aboutIntro": "Outer News muestra lo que han decidido los gobiernos y los organismos internacionales en pocas frases, con un tono sereno y un enlace a la página oficial.",
   "aboutSourcesHeading": "De dónde vienen las noticias",

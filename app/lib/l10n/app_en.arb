@@ -564,9 +564,9 @@
     "description": "Under the list of languages."
   },
 
-  "publisher": "{name}, Slovakia",
+  "publisher": "{name}",
   "@publisher": {
-    "description": "Who publishes the app: the company's name, never translated, and its country.",
+    "description": "Who publishes the app: the company's name, never translated, with no country after it (Yurii, 28 Oct).",
     "placeholders": {
       "name": {
         "type": "String",
@@ -614,7 +614,7 @@
     "placeholders": {
       "publisher": {
         "type": "String",
-        "example": "RS Elite Pro s.r.o., Slovakia"
+        "example": "RS Elite Pro s.r.o."
       }
     }
   },
@@ -691,7 +691,7 @@
     "placeholders": {
       "publisher": {
         "type": "String",
-        "example": "RS Elite Pro s.r.o., Slovakia"
+        "example": "RS Elite Pro s.r.o."
       }
     }
   },
@@ -738,7 +738,7 @@
     "placeholders": {
       "publisher": {
         "type": "String",
-        "example": "RS Elite Pro s.r.o., Slovakia"
+        "example": "RS Elite Pro s.r.o."
       }
     }
   },

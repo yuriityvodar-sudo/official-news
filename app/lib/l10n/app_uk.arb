@@ -129,7 +129,7 @@
   "version": "Версія {version}",
   "languageFooter": "Новини й застосунок показуються цією мовою.",
 
-  "publisher": "{name}, Словаччина",
+  "publisher": "{name}",
   "lastUpdated": "Оновлено {date}",
   "aboutIntro": "Outer News показує, які рішення ухвалили уряди й міжнародні організації: кілька спокійних речень і посилання на офіційну сторінку.",
   "aboutSourcesHeading": "Звідки новини",

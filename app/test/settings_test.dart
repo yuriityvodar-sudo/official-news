@@ -433,12 +433,12 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Оновлено 27 жовтня 2026\u202Fр.'), findsOneWidget);
     await tester.scrollUntilVisible(
-      find.textContaining('RS Elite Pro s.r.o., Словаччина'),
+      find.textContaining('RS Elite Pro s.r.o.'),
       200,
     );
     expect(
       find.text(
-        'Видавець: RS Elite Pro s.r.o., Словаччина. Якщо ці умови зміняться, '
+        'Видавець: RS Elite Pro s.r.o.. Якщо ці умови зміняться, '
         'нова версія з’явиться в застосунку з новою датою.',
       ),
       findsOneWidget,
@@ -453,7 +453,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Stand: 27. Oktober 2026'), findsOneWidget);
     await tester.scrollUntilVisible(
-      find.text('Verantwortlicher: RS Elite Pro s.r.o., Slowakei.'),
+      find.text('Verantwortlicher: RS Elite Pro s.r.o..'),
       200,
     );
     expect(find.textContaining('(siehe „Kontakt & Support“)'), findsOneWidget);
