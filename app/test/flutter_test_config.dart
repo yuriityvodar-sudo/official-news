@@ -21,10 +21,14 @@ import 'package:official_news/features/feed/feed_look.dart';
 ///
 /// Rows are in place at once: tests check where they end up, not how they
 /// arrive (#141; motion_test.dart checks the arrival).
+///
+/// The feed starts in the Classic look, which most tests were written for; a
+/// new reader's is Garnet ([defaultDesign]), and each look's tests pick it.
 Future<void> testExecutable(FutureOr<void> Function() testMain) async {
   pictureCache = NoPictures();
   Arrive.enabled = false;
   readStyle.value = ReadStyle.dim;
+  feedDesign.value = FeedDesign.now;
   await GlobalMaterialLocalizations.delegate.load(const Locale('en'));
   await testMain();
 }

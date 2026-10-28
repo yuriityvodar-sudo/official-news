@@ -11,9 +11,11 @@ import 'package:official_news/core/feed_language.dart';
 import 'package:official_news/core/feed_store.dart';
 import 'package:official_news/core/router.dart';
 import 'package:official_news/core/theme.dart';
+import 'package:official_news/features/chat/chat_style.dart';
 import 'package:official_news/features/feed/feed_controller.dart';
 import 'package:official_news/features/feed/feed_look.dart';
 import 'package:official_news/features/feed/feed_screen.dart';
+import 'package:official_news/features/feed/feed_touches.dart';
 import 'package:official_news/features/settings/settings_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -171,12 +173,16 @@ void main() {
   Map<String, Object> lastOpened() =>
       events.lastWhere((e) => e.$1 == 'open_article').$2;
 
-  test('a build names its design in any case; anything else is today\'s', () {
+  test('a build names its design in any case; anything else, and a new '
+      'reader, gets Garnet', () {
     expect(designNamed('a'), FeedDesign.a);
     expect(designNamed(' B '), FeedDesign.b);
     expect(designNamed('now'), FeedDesign.now);
-    expect(designNamed(''), FeedDesign.now);
-    expect(designNamed('z'), FeedDesign.now);
+    expect(designNamed('Seal'), FeedDesign.seal);
+    // Yurii, 28 Oct (#176, #195): Garnet is what a new reader sees first.
+    expect(defaultDesign, FeedDesign.garnet);
+    expect(designNamed(''), FeedDesign.garnet);
+    expect(designNamed('z'), FeedDesign.garnet);
   });
 
   for (final design in FeedDesign.values) {
@@ -433,22 +439,32 @@ void main() {
         ),
       ),
     );
-    // The row shows the icon of the look that is on; the sheet offers the
-    // four icons, no letters.
+    // The row shows the name of the look that is on; the sheet offers every
+    // look by its icon and name, no letters.
     final semantics = tester.ensureSemantics();
     expect(find.text('Design'), findsOneWidget);
-    expect(find.byIcon(CupertinoIcons.square_list), findsOneWidget);
+    expect(find.text('Classic'), findsOneWidget);
     // VoiceOver hears the look's name with the row's title.
-    expect(find.bySemanticsLabel(RegExp(r'\bNow\b')), findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp(r'\bClassic\b')), findsOneWidget);
     await tester.tap(find.text('Design'));
     await tester.pumpAndSettle();
     expect(find.byType(CupertinoActionSheet), findsOneWidget);
-    for (final icon in [
-      CupertinoIcons.news,
-      CupertinoIcons.rectangle_grid_1x2,
-      CupertinoIcons.text_alignleft,
+    for (final (icon, name) in [
+      (CupertinoIcons.square_list, 'Classic'),
+      (CupertinoIcons.news, 'Magazine'),
+      (CupertinoIcons.rectangle_grid_1x2, 'Cards'),
+      (CupertinoIcons.text_alignleft, 'Briefing'),
+      (CupertinoIcons.rectangle_stack, 'Garnet'),
+      (CupertinoIcons.checkmark_seal, 'Seal'),
     ]) {
       expect(find.byIcon(icon), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byType(CupertinoActionSheet),
+          matching: find.text(name),
+        ),
+        findsOneWidget,
+      );
     }
     for (final letter in ['A', 'B', 'C']) {
       expect(find.text(letter), findsNothing);
@@ -459,8 +475,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(feedDesign.value, FeedDesign.b);
     expect(saved, FeedDesign.b);
-    expect(find.byIcon(CupertinoIcons.rectangle_grid_1x2), findsOneWidget);
-    expect(find.bySemanticsLabel(RegExp(r'\bDesign B\b')), findsOneWidget);
+    expect(find.text('Cards'), findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp(r'\bCards\b')), findsOneWidget);
     semantics.dispose();
     feedDesign.value = FeedDesign.now;
   });
@@ -481,4 +497,69 @@ void main() {
     expect(again.design(), FeedDesign.now);
     expect(again.headlineWeight(), HeadlineWeight.bold);
   });
+
+  for (final design in [FeedDesign.garnet, FeedDesign.seal]) {
+    group('design ${design.name}', () {
+      setUp(() => feedDesign.value = design);
+
+      /// The look's colour: Garnet's red or Seal's green.
+      final accent = design == FeedDesign.seal
+          ? const Color(0xFF0E7A5E)
+          : const Color(0xFFC41230);
+
+      testWidgets('the seal in the colour before the app\'s name, the date, '
+          'the filters, and every decision on a white card', (tester) async {
+        await pumpFeed(tester, _items, _top);
+        final seal = find.byIcon(CupertinoIcons.checkmark_seal_fill).first;
+        expect(
+          tester.getCenter(seal).dx,
+          lessThan(tester.getTopLeft(find.text('Outer News')).dx),
+        );
+        final badge = tester.widget<Container>(
+          find.ancestor(of: seal, matching: find.byType(Container)).first,
+        );
+        final gradient =
+            (badge.decoration! as BoxDecoration).gradient! as LinearGradient;
+        expect(gradient.colors.first, accent);
+        // The Where and Topics pull-downs, as in the other looks.
+        expect(find.byKey(const ValueKey('filter-where')), findsOneWidget);
+        expect(find.byKey(const ValueKey('filter-topic')), findsOneWidget);
+        final card = tester.widget<DecoratedBox>(
+          find
+              .ancestor(
+                of: find.text('Decision a1'),
+                matching: find.byType(DecoratedBox),
+              )
+              .first,
+        );
+        final box = card.decoration as BoxDecoration;
+        expect(box.color, const Color(0xFFFFFFFF));
+        expect(box.borderRadius, BorderRadius.circular(24));
+        // A soft shadow in a tint of the colour.
+        expect(box.boxShadow!.last.color.withValues(alpha: 1), accent);
+        // The time of a decision from the last hour in the colour too, not
+        // the app's pink (Yurii, #196).
+        final fresh = tester.widgetList<FreshTime>(find.byType(FreshTime));
+        expect(fresh, isNotEmpty);
+        for (final time in fresh) {
+          expect(time.color, accent);
+        }
+      });
+
+      testWidgets('the AI chat takes the look\'s colour', (tester) async {
+        late ChatStyle chat;
+        await tester.pumpWidget(
+          CupertinoApp(
+            home: Builder(
+              builder: (context) {
+                chat = ChatStyle.of(context);
+                return const SizedBox();
+              },
+            ),
+          ),
+        );
+        expect(chat.fill, accent);
+      });
+    });
+  }
 }
