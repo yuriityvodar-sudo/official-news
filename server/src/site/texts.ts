@@ -23,7 +23,13 @@ interface SiteTexts {
   published: string;
   added: string;
   originalTitle: string;
+  older: string;
   latestLink: string;
+  /** Heads the list under Top stories on page 1. The site's own since the app
+   * shows one list under its Top stories block with no heading (#164). */
+  latest: string;
+  /** The list page's h1. */
+  listTitle: string;
   /** The "Get the app" block above the footer (Yurii, 28 Oct): placeholders until the app is in the stores. */
   getApp: string;
   getAppBody: string;
@@ -55,7 +61,10 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     published: "Published {date}",
     added: "In Outer News since {date}",
     originalTitle: "Original title",
+    older: "Older decisions",
     latestLink: "Latest decisions",
+    latest: "Latest",
+    listTitle: "Official decisions",
     getApp: "Get the app",
     getAppBody: "Official decisions from around the world, in a few calm sentences, on your phone.",
     comingSoon: "Coming soon",
@@ -81,7 +90,10 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     published: "Опубліковано {date}",
     added: "В Outer News з {date}",
     originalTitle: "Оригінальна назва",
+    older: "Давніші рішення",
     latestLink: "Останні рішення",
+    latest: "Останнє",
+    listTitle: "Офіційні рішення",
     getApp: "Завантажте застосунок",
     getAppBody: "Офіційні рішення з усього світу кількома спокійними реченнями у вашому телефоні.",
     comingSoon: "Незабаром",
@@ -107,7 +119,10 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     published: "Опубликовано {date}",
     added: "В Outer News с {date}",
     originalTitle: "Оригинальное название",
+    older: "Более ранние решения",
     latestLink: "Последние решения",
+    latest: "Последние решения",
+    listTitle: "Официальные решения",
     getApp: "Скачайте приложение",
     getAppBody: "Официальные решения со всего мира в нескольких спокойных предложениях в вашем телефоне.",
     comingSoon: "Скоро",
@@ -133,7 +148,10 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     published: "Publicado el {date}",
     added: "En Outer News desde el {date}",
     originalTitle: "Título original",
+    older: "Decisiones anteriores",
     latestLink: "Últimas decisiones",
+    latest: "Lo último",
+    listTitle: "Decisiones oficiales",
     getApp: "Descarga la app",
     getAppBody: "Decisiones oficiales de todo el mundo, en pocas frases serenas, en tu móvil.",
     comingSoon: "Próximamente",
@@ -159,7 +177,10 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     published: "Veröffentlicht am {date}",
     added: "Bei Outer News seit dem {date}",
     originalTitle: "Originaltitel",
+    older: "Ältere Entscheidungen",
     latestLink: "Neueste Entscheidungen",
+    latest: "Aktuell",
+    listTitle: "Offizielle Entscheidungen",
     getApp: "Laden Sie die App",
     getAppBody: "Offizielle Entscheidungen aus aller Welt, in wenigen ruhigen Sätzen, auf Ihrem Handy.",
     comingSoon: "Demnächst",

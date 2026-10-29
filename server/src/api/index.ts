@@ -312,7 +312,7 @@ function toStoredTime(date: Date): string {
  */
 type Cursor = { feedSeq: number } | { articleId: string; publishedAt: string };
 
-function encodeCursor(feedSeq: number): string {
+export function encodeCursor(feedSeq: number): string {
   return btoa(JSON.stringify([feedSeq])).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
 }
 

@@ -18,7 +18,7 @@ describe("every page in every language", () => {
   });
 
   it("renders with no placeholder, undefined or null left", async () => {
-    const paths = [...SITE_LANGS.flatMap((l) => [`/${l}/de/${testId(1)}`, `/${l}/nowhere`, ...INFO_PAGES.map((p) => `/${l}/${p}`)])];
+    const paths = [...SITE_LANGS.flatMap((l) => [`/${l}`, `/${l}/de/${testId(1)}`, `/${l}/nowhere`, ...INFO_PAGES.map((p) => `/${l}/${p}`)])];
     paths.push(`/en/de/${testId(2)}`, `/uk/de/${testId(2)}`);
     for (const path of paths) {
       const { status, body } = await site(path);
@@ -47,7 +47,7 @@ describe("every page in every language", () => {
     }
   });
 
-  it("shows the AI label under the headline and the AI notice on articles", async () => {
+  it("shows the AI label under the headline and the AI notice on articles and lists", async () => {
     const article = (await site(`/uk/de/${testId(1)}`)).body;
     expect(article).toMatch(/<\/h1>\n<p class="ai meta">.*Стислий виклад від ШІ · переклад з німецької/);
     expect(article).toContain(aiNoticeText("uk"));
@@ -56,12 +56,13 @@ describe("every page in every language", () => {
     // iMessage previews show only the title: it carries the label; the tab's title does not.
     expect(article).toMatch(/<meta property="og:title" content="\[uk\] Рішення \w+ про бюджет · Стислий виклад від ШІ">/);
     expect(article).toMatch(/<title>\[uk\] Рішення \w+ про бюджет · Outer News<\/title>/);
+    expect((await site("/es")).body).toContain(aiNoticeText("es"));
   });
 
   it("puts the AI notice on every page that shows an AI headline, the not-in-language 404 too", async () => {
     await insertArticle({ id: testId(4) }); // English only
-    const paths = SITE_LANGS.map((l) => `/${l}/de/${testId(1)}`);
-    paths.push(`/uk/de/${testId(4)}`);
+    const paths = SITE_LANGS.flatMap((l) => [`/${l}`, `/${l}/de/${testId(1)}`]);
+    paths.push(`/en?before=${Number.MAX_SAFE_INTEGER}`, `/uk/de/${testId(4)}`);
     for (const path of paths) {
       const { status, body } = await site(path);
       const lang = path.slice(1, 3) as (typeof SITE_LANGS)[number];
@@ -77,6 +78,18 @@ describe("every page in every language", () => {
       const { body } = await site(`/${lang}/de/${testId(1)}`);
       expect(body.split(text(lang, "independentNote")).length - 1, lang).toBe(1);
       expect(body, lang).not.toContain(text(lang, "aboutIndependent"));
+    }
+  });
+
+  it("titles a list apart from its sections, and a later page has no section heading", async () => {
+    for (const lang of SITE_LANGS) {
+      const first = (await site(`/${lang}`)).body;
+      const h1 = /<h1 class="page-title">([^<]+)<\/h1>/.exec(first)![1];
+      const h2s = [...first.matchAll(/<h2 class="section"[^>]*>([^<]+)<\/h2>/g)].map((m) => m[1]);
+      expect(h2s, lang).not.toContain(h1);
+      const later = (await site(`/${lang}?before=${Number.MAX_SAFE_INTEGER}`)).body;
+      expect(later, lang).not.toContain('<h2 class="section"');
+      expect(later, lang).toContain('<ol class="items">');
     }
   });
 

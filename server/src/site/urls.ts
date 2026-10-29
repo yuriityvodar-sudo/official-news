@@ -19,8 +19,14 @@ export const originOf = (siteOrigin: string) => siteOrigin.replace(/\/+$/, "");
 /** The country part of an article's address: "de", "eu". */
 export const countryPath = (country: string) => (/^[A-Z]{2}$/.test(country) ? country.toLowerCase() : "xx");
 
-/** The latest list in a language: `/en`. */
-export const listPath = (lang: SiteLang) => `/${lang}`;
+/**
+ * The one URL of a list: `/en`, `/en?before=120` (the next page).
+ * handler.ts sends every other spelling here with a 301, so each view has
+ * one cache entry.
+ */
+export function listPath(lang: SiteLang, before: number | null = null): string {
+  return before ? `/${lang}?before=${before}` : `/${lang}`;
+}
 
 export const infoPath = (lang: SiteLang, page: InfoPage) => `/${lang}/${page}`;
 
