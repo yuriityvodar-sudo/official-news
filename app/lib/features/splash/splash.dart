@@ -6,7 +6,7 @@ import 'package:flutter/services.dart';
 import '../../core/glass.dart';
 import '../../core/theme.dart';
 
-/// The splash at app start (#66, Yurii, 16 Oct): three words stacked on
+/// The splash at app start (#66, Yurii, 16 Oct): the app's name stacked on
 /// a white page (black in dark mode), with a wave that moves from the bottom
 /// up. Four styles were compared in the prototype; 1b is the one shown
 /// (Yurii, 20 Oct), the others stay for a build's `--dart-define=SPLASH`.
@@ -20,16 +20,16 @@ import '../../core/theme.dart';
 /// while it plays. With Reduce Motion the words fade in, stand still for a
 /// moment and fade out.
 
-/// The splash's words, one per line, as Yurii wrote them: in English in
-/// every language (Yurii, 28 Oct), like the app's name. Was in the app's
-/// language (#124).
-const splashLines = ['only', 'official', 'news'];
+/// The splash's words, one per line: the app's name, Outer News, the same in
+/// every language (Yurii, 28 Oct). Was "only / official / news", in the
+/// app's language until #194.
+const splashLines = ['Outer', 'News'];
 
 enum SplashStyle {
-  /// The lines rise into place from below, one after another: "only" first.
+  /// The lines rise into place from below, one after another: "Outer" first.
   rise,
 
-  /// The same, the other way round: "news" first, so the wave runs up, as
+  /// The same, the other way round: "News" first, so the wave runs up, as
   /// the other two do (1b, to compare).
   riseUp,
 
@@ -40,7 +40,7 @@ enum SplashStyle {
   fill,
 }
 
-/// The style shown at start: 1b, "news" first (Yurii's pick, 20 Oct). A build
+/// The style shown at start: 1b, "News" first (Yurii's pick, 20 Oct). A build
 /// can start with another one: `--dart-define=SPLASH=sweep` (or `riseup`, `fill`, or `1`,
 /// `1b`, `2`, `3`).
 final splashStyle = ValueNotifier<SplashStyle>(
@@ -434,8 +434,8 @@ double _phase(double ms, double start, double length, [Curve? curve]) {
 const _lead = 100.0;
 
 /// 1 · rise: each line comes up from below into its place, as if from under
-/// a fold, "only" first, then "official", then "news", overlapping like a wave.
-/// 1b ([fromBottom]): "news" first, then "official", then "only".
+/// a fold, "Outer" first, then "News", overlapping like a wave.
+/// 1b ([fromBottom]): "News" first, then "Outer".
 class _Rise extends StatelessWidget {
   const _Rise({
     required this.lines,
@@ -546,10 +546,10 @@ class _Sweep extends StatelessWidget {
 
 /// 3 · fill: the letters show empty (light grey), then fill with black from
 /// the bottom up behind a moving wave, like water rising inside them. Each
-/// line has its own water, "news" first: the next line starts a third of the
+/// line has its own water, "News" first: the next line starts a third of the
 /// way into the one under it, so an edge is always moving through ink (one
-/// water line for all three would cross the empty room between the lines
-/// with nothing to see, and look like it stops).
+/// water line for both would cross the empty room between the lines with
+/// nothing to see, and look like it stops).
 class _Fill extends StatelessWidget {
   const _Fill({
     required this.lines,
