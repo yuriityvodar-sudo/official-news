@@ -2,9 +2,12 @@ name: TestFlight
 
 # On demand only: Actions tab → TestFlight → Run workflow → pick a branch, and
 # which build: `testflight` for the team's phones (the default), or `store` for
-# the build we submit to App Review (#137). Both go up to App Store Connect the
-# same way; the choice only marks the build (APP_BUILD), so analytics can leave
-# the team's use out of every report.
+# the build we submit to App Review (#137). The choice marks the build
+# (APP_BUILD), so analytics can leave the team's use out of every report.
+# A `testflight` build also opens the AI chat to free Sandbox purchases, with
+# the key CHAT_SANDBOX_KEY_TESTFLIGHT (#146), so it goes up for internal
+# testing only: App Store Connect never lets it reach external testers or the
+# App Store. Never submit one; submit a `store` build.
 # Needs these repository secrets (see docs/setup.md). Yurii creates the API key
 # with his Admin role on Roman's App Store Connect team and adds them himself:
 #   APPLE_TEAM_ID      the RS Elite Pro team ID (10 characters)
@@ -109,19 +112,34 @@ jobs:
       - name: Build the iOS app without signing
         # The live API, not the laptop default (app/lib/core/config.dart), the
         # build's mark (testflight or store), and the Firebase values when
-        # there are any.
+        # there are any. Only a `testflight` build gets the key that opens the
+        # AI chat to Sandbox purchases, from the GitHub secret
+        # CHAT_SANDBOX_KEY_TESTFLIGHT (#146, docs/setup.md). Flutter hands
+        # every --dart-define to Xcode in base64 (DART_DEFINES), which GitHub
+        # does not know to hide, so that form of the key is masked first
+        # (Yurii's review of #217; 81 bytes, so no `=` padding for Xcode to
+        # escape), and the archive below runs quiet.
         env:
           APP_BUILD: ${{ inputs.build }}
-        run: flutter build ios --release --no-codesign --build-number=${{ github.run_number }} --dart-define=API_URL=https://api.officialnews.workers.dev --dart-define=APP_BUILD="$APP_BUILD" --dart-define=BUILD_NUMBER=${{ github.run_number }} $FIREBASE_DEFINES
+          CHAT_SANDBOX_KEY: ${{ inputs.build == 'testflight' && secrets.CHAT_SANDBOX_KEY_TESTFLIGHT || '' }}
+        run: |
+          if [ -n "$CHAT_SANDBOX_KEY" ]; then
+            echo "::add-mask::$(printf 'CHAT_SANDBOX_KEY=%s' "$CHAT_SANDBOX_KEY" | base64 | tr -d '\n')"
+          elif [ "$APP_BUILD" = testflight ]; then
+            echo "::warning::CHAT_SANDBOX_KEY_TESTFLIGHT is not set, so this build keeps the AI chat closed (docs/setup.md)."
+          fi
+          flutter build ios --release --no-codesign --build-number=${{ github.run_number }} --dart-define=API_URL=https://api.officialnews.workers.dev --dart-define=APP_BUILD="$APP_BUILD" --dart-define=CHAT_SANDBOX_KEY="$CHAT_SANDBOX_KEY" --dart-define=BUILD_NUMBER=${{ github.run_number }} $FIREBASE_DEFINES
 
       - name: Archive without signing
         # Nothing is signed here, so this step never talks to the Apple account
         # and never creates a certificate. Xcode refuses a Distribution identity
         # on the Swift packages under automatic signing, so the signing happens
         # once, at the export below (the first try of #96 failed on that).
+        # Quiet: a full log prints every build script's environment, with
+        # DART_DEFINES in it (Yurii's review of #217).
         working-directory: app/ios
         run: |
-          xcodebuild archive \
+          xcodebuild archive -quiet \
             -workspace Runner.xcworkspace -scheme Runner -configuration Release \
             -archivePath "$RUNNER_TEMP/Runner.xcarchive" \
             -destination "generic/platform=iOS" \
@@ -184,9 +202,16 @@ jobs:
       - name: Sign with the Distribution certificate and upload to TestFlight
         # Automatic signing at export: the App Store profile for the bundle ID is
         # made or fetched with the API key, and the only Distribution identity in
-        # the keychain is the imported one.
+        # the keychain is the imported one. A `testflight` build goes up for
+        # internal testing only (testFlightInternalTestingOnly, #146): Xcode's
+        # help says such a build "cannot be distributed via external TestFlight
+        # or the App Store", so its open chat never reaches App Review.
         working-directory: app/ios
+        env:
+          APP_BUILD: ${{ inputs.build }}
         run: |
+          internal=false
+          if [ "$APP_BUILD" = testflight ]; then internal=true; fi
           cat > "$RUNNER_TEMP/ExportOptions.plist" <<EOF
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -195,8 +220,10 @@ jobs:
             <key>destination</key><string>upload</string>
             <key>signingStyle</key><string>automatic</string>
             <key>teamID</key><string>${{ secrets.APPLE_TEAM_ID }}</string>
+            <key>testFlightInternalTestingOnly</key><$internal/>
           </dict></plist>
           EOF
+          echo "Internal testing only: $internal"
           xcodebuild -exportArchive \
             -archivePath "$RUNNER_TEMP/Runner.xcarchive" \
             -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \

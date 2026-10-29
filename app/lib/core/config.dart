@@ -7,9 +7,17 @@ const apiUrl = String.fromEnvironment(
   defaultValue: 'http://localhost:8787',
 );
 
-/// Opens the AI chat to Sandbox purchases, which cost nothing, on Roman's own
-/// builds only (#146, Roman, 28 Oct): `--dart-define-from-file=.env` with his
-/// app/.env (git ignores it; app/.env.example has the name). The server
-/// answers no Sandbox purchase without it, and builds without it, such as
-/// TestFlight's, keep the chat closed (`ChatScreen.opened`).
+/// Opens the AI chat to Sandbox purchases, which cost nothing, on the team's
+/// builds only (#146): Roman's own with his key (Roman, 28 Oct:
+/// `--dart-define-from-file=.env` with his app/.env; git ignores it,
+/// app/.env.example has the name), and `testflight` builds with the
+/// TestFlight key, which the TestFlight workflow builds in (Roman and Yurii,
+/// 29 Oct). The server answers no Sandbox purchase without a key, and builds
+/// without one, such as `store` ones, keep the chat closed
+/// (`ChatScreen.opened`).
 const chatSandboxKey = String.fromEnvironment('CHAT_SANDBOX_KEY');
+
+/// Which build this is: `testflight` for the team's phones, `store` for the
+/// build submitted to the App Store, `dev` for a local one; the TestFlight
+/// workflow sets it from its `build` choice (#137).
+const appBuild = String.fromEnvironment('APP_BUILD', defaultValue: 'dev');

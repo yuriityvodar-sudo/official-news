@@ -209,7 +209,7 @@ void main() {
     );
 
     test(
-      'sends Roman\'s key with the chat\'s requests on his own builds, and none on others',
+      'sends the build\'s Sandbox key with the chat\'s requests, Roman\'s or TestFlight\'s, and none without one',
       () async {
         final sent = <http.Request>[];
         ApiClient keyed(String? key) => ApiClient(

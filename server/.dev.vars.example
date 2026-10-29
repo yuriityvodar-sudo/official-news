@@ -14,3 +14,12 @@ ZAI_API_KEY=
 # key file on one line. Leave it empty locally: with it, the local Worker sends
 # real pushes to the app's topics (breaking_en, breaking_uk …). Empty means no push.
 FCM_SERVICE_ACCOUNT=
+
+# OpenAI, for the AI chat by subscription (#146). Empty means /v1/chat answers 503.
+OPENAI_API_KEY=
+
+# The keys that open the AI chat to Sandbox purchases (#146): Roman's local
+# builds send CHAT_SANDBOX_KEY, TestFlight builds CHAT_SANDBOX_KEY_TESTFLIGHT,
+# as X-Chat-Sandbox-Key. Empty means no Sandbox purchase gets an answer.
+CHAT_SANDBOX_KEY=
+CHAT_SANDBOX_KEY_TESTFLIGHT=
