@@ -31,15 +31,23 @@ enum PushPermission {
 }
 
 /// What a notification carries besides its text (docs/contract.md, Push
-/// notifications in the app): the article to open and its language.
+/// notifications in the app): the article to open and its language, or
+/// `type: support` for our reply to a reader's message (#220).
 class PushTap {
-  const PushTap({this.articleId, this.lang});
+  const PushTap({this.articleId, this.lang, this.type});
 
-  factory PushTap.fromData(Map<String, dynamic> data) =>
-      PushTap(articleId: _text(data['articleId']), lang: _text(data['lang']));
+  factory PushTap.fromData(Map<String, dynamic> data) => PushTap(
+    articleId: _text(data['articleId']),
+    lang: _text(data['lang']),
+    type: _text(data['type']),
+  );
 
   final String? articleId;
   final String? lang;
+  final String? type;
+
+  /// Our reply to a message from the reader: it opens the messages screen.
+  bool get support => type == 'support';
 
   static String? _text(Object? value) =>
       value is String && value.isNotEmpty ? value : null;
@@ -79,6 +87,10 @@ abstract class Messaging {
 
   /// A new FCM token: its topics are subscribed again.
   Stream<void> get tokenChanges;
+
+  /// This phone's FCM token, for a reply to its message to us (#220); null
+  /// when it has none yet.
+  Future<String?> token();
 }
 
 /// [Messaging] through the `firebase_messaging` plugin. Only used once
@@ -150,6 +162,14 @@ class FirebaseMessagingLayer implements Messaging {
   @override
   // ignore: deprecated_member_use
   Stream<void> get tokenChanges => _fcm.onTokenRefresh;
+
+  /// The FCM token the server sends a reply to. `register()` and
+  /// `onRegistered`, which the plugin offers instead, give a Firebase
+  /// Installation ID, only for apps that turn on
+  /// `FirebaseMessagingInstallationIdEnabled`, which this one does not.
+  @override
+  // ignore: deprecated_member_use
+  Future<String?> token() => _fcm.getToken();
 }
 
 /// The iOS Settings app, meant to open on this app's page (the value of
@@ -377,9 +397,37 @@ class Push with WidgetsBindingObserver {
     await _sync();
   }
 
+  /// The FCM token for a message to us (#220), only while notifications are
+  /// allowed; null otherwise, or when Firebase has none within a few seconds
+  /// (on iOS it needs the APNs token first). Never throws.
+  Future<String?> token() async {
+    final messaging = _messaging;
+    if (messaging == null || _permission.value != PushPermission.granted) {
+      return null;
+    }
+    return _try<String?>(
+      'token',
+      () => messaging.token().timeout(const Duration(seconds: 5)),
+    );
+  }
+
   /// Opens a tapped notification's article over the feed, in the
-  /// notification's language; the feed alone when it cannot be loaded.
+  /// notification's language; the feed alone when it cannot be loaded. Our
+  /// reply to a reader's message opens the messages screen (#220).
   Future<void> open(PushTap tap) async {
+    if (tap.support) {
+      unawaited(
+        analytics.pushOpened(
+          articleId: 'support',
+          lang: FeedLanguage.fromCode(tap.lang).code,
+        ),
+      );
+      final navigator = await _navigatorReady();
+      navigator.popUntil((route) => route.isFirst);
+      unawaited(navigator.pushNamed(Routes.support));
+      _opened.value++;
+      return;
+    }
     final given = tap.articleId;
     final id = given != null && _articleId.hasMatch(given) ? given : null;
     final lang = FeedLanguage.fromCode(tap.lang);

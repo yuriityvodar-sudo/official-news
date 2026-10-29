@@ -871,13 +871,76 @@
   "@supportMistakes": {
     "description": "Contact & Support page, second paragraph."
   },
-  "supportAppStore": "You can reach us through the app's page in the App Store.",
-  "@supportAppStore": {
-    "description": "Contact & Support page, while there is no support e-mail address yet. App Store is Apple's name: never translated."
-  },
   "supportWrite": "Write to us",
   "@supportWrite": {
-    "description": "Contact & Support page: the button that opens an e-mail to us."
+    "description": "Contact & Support page: the button that opens the messages screen (#220); also that screen's title."
+  },
+  "supportOrEmail": "Or e-mail us at {email}",
+  "@supportOrEmail": {
+    "description": "Contact & Support page, under the Write to us button: the e-mail address for readers who prefer e-mail (selectable).",
+    "placeholders": {
+      "email": {
+        "type": "String",
+        "example": "support@outernews.app"
+      }
+    }
+  },
+  "supportIntro": "Write to us here. We read every message and reply on this screen.",
+  "@supportIntro": {
+    "description": "Messages screen (#220), above the field before the first message."
+  },
+  "supportPlaceholder": "Your message",
+  "@supportPlaceholder": {
+    "description": "Messages screen: the empty field's placeholder."
+  },
+  "supportSend": "Send",
+  "@supportSend": {
+    "description": "Messages screen: the button that sends the message."
+  },
+  "supportYou": "You",
+  "@supportYou": {
+    "description": "Messages screen: who wrote a message, read by VoiceOver before the reader's own messages (ours are signed Outer News)."
+  },
+  "supportReceived": "We've received your message. We'll reply here.",
+  "@supportReceived": {
+    "description": "Messages screen: under the reader's message while it waits for our reply."
+  },
+  "supportWriteAgainAfter": "You can write again after {date}.",
+  "@supportWriteAgainAfter": {
+    "description": "Messages screen: while the field is locked, waiting for our reply; when the reader can write again.",
+    "placeholders": {
+      "date": {
+        "type": "String",
+        "example": "5 November 2026"
+      }
+    }
+  },
+  "supportTooMany": "You've sent a lot of messages today. Try again after {time}.",
+  "@supportTooMany": {
+    "description": "Messages screen: the server refused the message because of the daily limit; when it can be sent (24-hour time).",
+    "placeholders": {
+      "time": {
+        "type": "String",
+        "example": "01:00"
+      }
+    }
+  },
+  "supportSendError": "Your message wasn't sent. Check your connection and try again.",
+  "@supportSendError": {
+    "description": "Messages screen: the message did not go through (offline or a server error); it stays in the field."
+  },
+  "supportLoadError": "Couldn't load your messages. Check your connection and try again.",
+  "@supportLoadError": {
+    "description": "Messages screen: the conversation could not be loaded; a Try again button follows."
+  },
+  "supportCharsLeft": "{count, plural, =1{1 character left} other{{count} characters left}}",
+  "@supportCharsLeft": {
+    "description": "Messages screen: under the field once 200 or fewer of the 2,000 characters are left.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
   },
 
   "languageCs": "Czech",
@@ -1086,6 +1149,14 @@
   "privacyChat": "If you subscribe to the AI agent, your question and the article's text are sent to OpenAI to write the answer. We don't keep your conversations or send them to analytics. Apple handles the subscription: we receive a signed record of it from Apple, with an anonymous ID the app creates, never your name or payment details. We count each subscription's questions per day, for the daily limit.",
   "@privacyChat": {
     "description": "The privacy policy's section on the AI chat by subscription (#146)."
+  },
+  "privacySupportHeading": "Messages to us",
+  "@privacySupportHeading": {
+    "description": "A heading of the privacy policy."
+  },
+  "privacySupport": "Messages you send us in the app are kept with an anonymous ID of your phone (not your name), the app's version and language, and your notification token if you allowed notifications, so we can reply. We delete a conversation 90 days after it is closed or goes quiet.",
+  "@privacySupport": {
+    "description": "The privacy policy's section on messages to us in the app (#220)."
   },
   "termsSubscriptionHeading": "AI agent subscription",
   "@termsSubscriptionHeading": {

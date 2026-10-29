@@ -4,6 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../../core/api_client.dart';
 import '../../core/countries.dart';
 import '../../core/feed_language.dart';
 import '../../core/motion.dart';
@@ -11,7 +12,6 @@ import '../../core/push.dart';
 import '../../core/analytics.dart';
 import '../../core/theme.dart';
 import '../../l10n/app_localizations.dart';
-import '../detail/detail_screen.dart' show OpenLink, openOfficialPage;
 import '../feed/feed_look.dart';
 import 'info_pages.dart';
 
@@ -33,7 +33,7 @@ class SettingsScreen extends StatelessWidget {
     super.key,
     required this.language,
     required this.onLanguage,
-    this.openLink = openOfficialPage,
+    this.supportApi,
     this.notifications,
     this.openSettingsApp = openAppSettings,
     this.saveDesign,
@@ -59,8 +59,8 @@ class SettingsScreen extends StatelessWidget {
   final ValueListenable<FeedLanguage> language;
   final ValueChanged<FeedLanguage> onLanguage;
 
-  /// Opens a link (the support e-mail); tests pass their own.
-  final OpenLink openLink;
+  /// The server for Contact & Support's messages (#220); tests pass their own.
+  final ApiClient? supportApi;
 
   /// The push notifications the Notifications row shows (#62): the app's
   /// own [push] unless a test passes its own.
@@ -203,7 +203,7 @@ class SettingsScreen extends StatelessWidget {
                         return InfoPage(
                           title: l10n.contactSupport,
                           sections: supportSections(l10n),
-                          footer: supportFooter(context, open: openLink),
+                          footer: supportFooter(context, api: supportApi),
                         );
                       },
                     ),

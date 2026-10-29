@@ -1,9 +1,11 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
+import '../../core/api_client.dart';
 import '../../core/news_widgets.dart';
 import '../../core/theme.dart';
 import '../../l10n/app_localizations.dart';
+import 'support_screen.dart';
 
 /// One section of an information page: an optional heading and its paragraphs.
 class InfoSection {
@@ -118,9 +120,9 @@ String publisherDetails(AppLocalizations l10n) => l10n.publisherDetails(
   publisherFile,
 );
 
-/// Where readers write to us (#137): Cloudflare Email Routing forwards it to
-/// Yurii (docs/setup.md). Empty, the support page would say to use the App
-/// Store page instead.
+/// Where readers can also e-mail us (#137): Cloudflare Email Routing forwards
+/// it to Yurii (docs/setup.md). Shown under "Write to us", which opens the
+/// in-app messages (#220).
 const supportEmail = 'support@outernews.app';
 
 /// When the privacy policy and the terms last changed.
@@ -157,6 +159,7 @@ List<InfoSection> privacySections(AppLocalizations l10n) => [
   ], heading: l10n.privacyNotificationsHeading),
   InfoSection([l10n.privacyAi], heading: l10n.privacyAiHeading),
   InfoSection([l10n.privacyChat], heading: l10n.privacyChatHeading),
+  InfoSection([l10n.privacySupport], heading: l10n.privacySupportHeading),
   InfoSection([
     l10n.privacyRights(l10n.contactSupport),
     l10n.privacyController(publisherDetails(l10n)),
@@ -178,26 +181,36 @@ List<InfoSection> supportSections(AppLocalizations l10n) => [
   InfoSection([l10n.supportMessages, l10n.supportMistakes]),
 ];
 
-/// The support page's action: an e-mail button, or where to write until there is an address.
-Widget supportFooter(BuildContext context, {Future<void> Function(Uri)? open}) {
+/// The support page's action (#220): "Write to us" opens the messages
+/// screen, with the e-mail address under it, to copy, for a reader who
+/// prefers e-mail. [api] is for tests.
+Widget supportFooter(BuildContext context, {ApiClient? api}) {
   final l10n = AppLocalizations.of(context);
-  if (supportEmail.isEmpty) {
-    return Text(
-      l10n.supportAppStore,
-      style: TextStyle(
-        fontSize: 16,
-        color: CupertinoColors.secondaryLabel.resolveFrom(context),
-      ),
-    );
-  }
   return Padding(
     padding: const EdgeInsets.only(top: 8),
-    child: CupertinoButton.filled(
-      color: AppColors.accent,
-      onPressed: open == null
-          ? null
-          : () => open(Uri(scheme: 'mailto', path: supportEmail)),
-      child: Text(l10n.supportWrite),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        CupertinoButton.filled(
+          color: AppColors.accent,
+          onPressed: () => Navigator.of(context).push(
+            CupertinoPageRoute<void>(
+              settings: const RouteSettings(name: SupportScreen.routeName),
+              builder: (_) => SupportScreen(api: api),
+            ),
+          ),
+          child: Text(l10n.supportWrite),
+        ),
+        const SizedBox(height: 12),
+        SelectableText(
+          l10n.supportOrEmail(supportEmail),
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 14,
+            color: CupertinoColors.secondaryLabel.resolveFrom(context),
+          ),
+        ),
+      ],
     ),
   );
 }
