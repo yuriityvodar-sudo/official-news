@@ -16,20 +16,23 @@ import '../../core/theme.dart';
 import '../../l10n/app_localizations.dart';
 import 'feed_look.dart';
 import 'feed_look_now.dart';
+import 'feed_pills.dart';
 import 'feed_topic_tags.dart';
 import 'feed_touches.dart';
 
 /// The two looks after Apple News that Roman picked (26 Oct), in our own
 /// colours ([NewsPalette]): a light grey page whose top takes a tint of the
 /// colour, a large title with the logo and the date in
-/// grey, and every decision on a white card with a soft shadow of the colour,
-/// its picture on the right. Pulled down to refresh, the title and the date
-/// grow from the left edge as iOS's large title does, and plain grey words in
-/// the gap say what is happening, then how it went ([_PullHint], Roman's
-/// pick 1 of `handoff/refresh-patterns.html`, 27 Oct). Liquid Glass for the
-/// "N new" pill. A card grows into its article when opened
-/// (#141). Every card alike, as in every look (Yurii, 16 Oct): no bigger
-/// first story yet.
+/// grey, what the feed shows as pills of Liquid Glass that stay at the top
+/// while the rows pass under them (For you, the whole world, the topics:
+/// [FeedPills]), and every decision on a white card with a soft shadow of
+/// the colour, its picture on the right. Pulled down to refresh, the title
+/// and the date grow from the left edge as iOS's large title does, and plain
+/// grey words in the gap say what is happening, then how it went
+/// ([_PullHint], Roman's pick 1 of `handoff/refresh-patterns.html`, 27 Oct).
+/// Liquid Glass for the "N new" pill too. A card grows into its article when
+/// opened (#141). Every card alike, as in every look (Yurii, 16 Oct): no
+/// bigger first story yet.
 class NewsLook extends FeedLook {
   NewsLook(this.palette);
 
@@ -56,20 +59,10 @@ class NewsLook extends FeedLook {
   /// How far down the screen the tint fades into the page.
   static const _tinted = 0.32;
 
-  /// The rows soften into the tint at the top edge: the backdrop's colour
-  /// where the feed starts, under the status bar, so no band shows there
-  /// (dark mode's tint showed one; Yurii, #208).
+  /// The pinned glass row is the top edge: rows pass under it, not under a
+  /// fade or a folded title.
   @override
-  Color topEdge(BuildContext context) {
-    final style = _NewsStyle.of(context, palette);
-    final height = MediaQuery.sizeOf(context).height;
-    final starts = height > 0 ? MediaQuery.paddingOf(context).top / height : 0;
-    return Color.lerp(
-      style.top,
-      style.page,
-      clampDouble(starts / _tinted, 0, 1),
-    )!;
-  }
+  bool get fadesTopEdge => false;
 
   @override
   Widget refreshIndicator(BuildContext context, FeedPull pull) =>
@@ -117,62 +110,76 @@ class NewsLook extends FeedLook {
   @override
   Widget masthead(BuildContext context, FeedMasthead masthead) {
     final style = _NewsStyle.of(context, palette);
-    return SliverPadding(
-      padding: const EdgeInsets.fromLTRB(16, 10, 8, 4),
-      sliver: SliverToBoxAdapter(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _Stretch(
-                        pull: masthead.pull,
-                        child: Row(
-                          children: [
-                            const _Logo(),
-                            const SizedBox(width: 8),
-                            Flexible(
-                              child: Text(
-                                masthead.title,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: style.title,
-                              ),
+    final scaler = MediaQuery.textScalerOf(context);
+    // The title and the date as tall as their letters: they scroll away, the
+    // pills stay.
+    final titleHeight =
+        10 + scaler.scale(32) * 1.08 + scaler.scale(26) * 1.08 + 12;
+    return SliverPersistentHeader(
+      pinned: true,
+      delegate: _NewsHeader(
+        titleHeight: titleHeight,
+        pillsHeight: FeedPills.heightFor(scaler),
+        title: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 10, 8, 0),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _Stretch(
+                      pull: masthead.pull,
+                      child: Row(
+                        children: [
+                          const _Logo(),
+                          const SizedBox(width: 8),
+                          Flexible(
+                            child: Text(
+                              masthead.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: style.title,
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
-                      _Stretch(
-                        pull: masthead.pull,
-                        child: FittedBox(
-                          fit: BoxFit.scaleDown,
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            masthead.date,
-                            maxLines: 1,
-                            style: style.title.copyWith(
-                              fontSize: 26,
-                              color: style.muted,
-                            ),
+                    ),
+                    _Stretch(
+                      pull: masthead.pull,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          masthead.date,
+                          maxLines: 1,
+                          style: style.title.copyWith(
+                            fontSize: 26,
+                            color: style.muted,
                           ),
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-                masthead.settingsButton,
-              ],
-            ),
-            Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: masthead.filterBar,
-            ),
-          ],
+              ),
+              masthead.settingsButton,
+            ],
+          ),
+        ),
+        // What the feed shows stays at the top, glass over the rows.
+        pills: FeedPills(
+          where: masthead.where,
+          topic: masthead.topic,
+          topics: masthead.topics,
+          onChoose: masthead.onChoose,
+          ink: style.ink,
+          fill: style.card,
+          edge: style.glassEdge,
+          shadow: style.softShadow,
+          chosen: style.chosen,
+          glow: style.glow,
         ),
       ),
     );
@@ -282,6 +289,70 @@ class NewsLook extends FeedLook {
       ),
     );
   }
+}
+
+/// [NewsLook]'s masthead, pinned: the title and the date scroll away and
+/// fade, as an iOS large title does, and the pills stay at the top with
+/// nothing behind them, so the rows pass under the glass. The tint behind it
+/// all is the look's backdrop, one piece with the status bar's.
+class _NewsHeader extends SliverPersistentHeaderDelegate {
+  _NewsHeader({
+    required this.titleHeight,
+    required this.pillsHeight,
+    required this.title,
+    required this.pills,
+  });
+
+  /// As tall as their words at the reader's text size.
+  final double titleHeight;
+  final double pillsHeight;
+  final Widget title;
+  final Widget pills;
+
+  @override
+  double get minExtent => pillsHeight;
+
+  @override
+  double get maxExtent => titleHeight + pillsHeight;
+
+  @override
+  Widget build(BuildContext context, double shrinkOffset, bool overlaps) {
+    final gone = (shrinkOffset / titleHeight).clamp(0.0, 1.0);
+    // The title stays, unseen once gone, so the pills keep their place in
+    // the tree: the row keeps how far it was swiped, and the gear's glass
+    // is not made again as the title comes back.
+    // The chosen pill's glow reaches over the rows under the header, not cut
+    // where it ends (Yurii, #210); the title is clipped to its own band.
+    return Stack(
+      fit: StackFit.expand,
+      clipBehavior: Clip.none,
+      children: [
+        Positioned(
+          left: 0,
+          right: 0,
+          top: -shrinkOffset,
+          height: titleHeight,
+          child: ClipRect(
+            child: Opacity(opacity: 1 - gone, child: title),
+          ),
+        ),
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: 0,
+          height: pillsHeight,
+          child: pills,
+        ),
+      ],
+    );
+  }
+
+  @override
+  bool shouldRebuild(_NewsHeader old) =>
+      old.titleHeight != titleHeight ||
+      old.pillsHeight != pillsHeight ||
+      old.title != title ||
+      old.pills != pills;
 }
 
 /// What shows in the gap the pull opens above the masthead: plain grey
@@ -480,7 +551,7 @@ class _RenderStretch extends RenderProxyBox {
   static const _most = 0.09 * 1.4;
 
   /// How far below its place the masthead's sliver is drawn: its outermost
-  /// one (the padding around it), whose place at rest is the top of the feed.
+  /// one, whose place at rest is the top of the feed.
   double get _below {
     RenderObject? sliver = parent;
     while (sliver != null && sliver is! RenderSliver) {
@@ -576,6 +647,7 @@ class _Logo extends StatelessWidget {
   );
 }
 
+/// One decision on a white card: where it comes from with the official
 /// seal, the headline, when and its topics; its picture on the right.
 /// Drawn as its article's top ([ZoomSource.isArticleTop]), it has no shadow:
 /// the card has become the page.
@@ -753,7 +825,7 @@ String _spoken(BuildContext context, Article a, List<String> topics) {
 
 /// [NewsLook]'s colours and type, light or dark.
 class _NewsStyle {
-  _NewsStyle._(this.dark, this.accent, this.accent2)
+  _NewsStyle._(this.dark, this.accent, this.accent2, this.chosenColors)
     : page = dark ? const Color(0xFF000000) : const Color(0xFFF2F2F7),
       card = dark ? const Color(0xFF1C1C1E) : const Color(0xFFFFFFFF),
       ink = dark ? const Color(0xFFFFFFFF) : const Color(0xFF000000),
@@ -766,11 +838,13 @@ class _NewsStyle {
         dark,
         dark ? const Color(0xFFFF5A72) : const Color(0xFFC41230),
         dark ? const Color(0xFFFF8A9C) : const Color(0xFFE4566E),
+        const [Color(0xFFC41230), Color(0xFF9E0E27)],
       ),
       NewsPalette.seal => _NewsStyle._(
         dark,
         dark ? const Color(0xFF3DD4A3) : const Color(0xFF0E7A5E),
         dark ? const Color(0xFF7BE6C2) : const Color(0xFF2DB88D),
+        const [Color(0xFF0E7A5E), Color(0xFF0A5C47)],
       ),
     };
   }
@@ -782,6 +856,17 @@ class _NewsStyle {
   /// The look's colour, and the lighter end of its gradient.
   final Color accent;
   final Color accent2;
+
+  /// The chosen pill's colour, deepening, the same in both themes, so its
+  /// white words read: at least 5.3:1 (Yurii, #210; Roman's pick A of
+  /// `handoff/chosen-pill-contrast.html`).
+  final List<Color> chosenColors;
+
+  LinearGradient get chosen => LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: chosenColors,
+  );
 
   final Color page;
   final Color card;
@@ -817,6 +902,21 @@ class _NewsStyle {
       blurRadius: 34,
       spreadRadius: -10,
       offset: const Offset(0, 16),
+    ),
+  ];
+
+  /// The pills' shadow, lighter.
+  List<BoxShadow> get softShadow => [
+    BoxShadow(
+      color: dark ? const Color(0x00000000) : const Color(0x0D000000),
+      blurRadius: 2,
+      offset: const Offset(0, 1),
+    ),
+    BoxShadow(
+      color: accent.withValues(alpha: dark ? 0.1 : 0.12),
+      blurRadius: 18,
+      spreadRadius: -6,
+      offset: const Offset(0, 8),
     ),
   ];
 
