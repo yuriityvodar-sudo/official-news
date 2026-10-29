@@ -48,21 +48,31 @@ const addToWallet = (env: Env, subscription: string, micros: number, at: string)
  * Credits a pack to a subscription's wallet, once: the app sends it again
  * until this answers, and StoreKit gives the app an unfinished pack again
  * after a restart, so the same pack must never count twice. A pack already
- * refunded is not credited. Returns whether it was new.
+ * refunded is not credited. Returns whether it was new, or "capped" for a
+ * second Sandbox pack the same UTC day: they cost nothing, so one a day per
+ * subscription (Yurii's review of #217), checked in the insert itself so two
+ * at once cannot both pass.
  */
-export async function creditPack(env: Env, subscription: string, pack: PackTransaction, now = new Date()): Promise<boolean> {
+export async function creditPack(env: Env, subscription: string, pack: PackTransaction, now = new Date()): Promise<boolean | "capped"> {
   if (pack.revocationDate) return false;
   const at = toStoredTime(now);
   const micros = packMicros(pack.productId);
   const { meta } = await env.DB.prepare(
     `INSERT INTO chat_credits (transaction_id, original_transaction_id, product_id, micros, environment, created_at)
-     VALUES (?1, ?2, ?3, ?4, ?5, ?6) ON CONFLICT (transaction_id) DO NOTHING`,
+     SELECT ?1, ?2, ?3, ?4, ?5, ?6
+     WHERE ?5 = 'Production' OR NOT EXISTS (
+       SELECT 1 FROM chat_credits WHERE original_transaction_id = ?2 AND environment = 'Sandbox' AND created_at >= ?7)
+     ON CONFLICT (transaction_id) DO NOTHING`,
   )
-    .bind(pack.transactionId, subscription, pack.productId, micros, pack.environment, at)
+    .bind(pack.transactionId, subscription, pack.productId, micros, pack.environment, at, at.slice(0, 10))
     .run();
-  if (!meta.changes) return false;
-  await addToWallet(env, subscription, micros, at).run();
-  return true;
+  if (meta.changes) {
+    await addToWallet(env, subscription, micros, at).run();
+    return true;
+  }
+  if (pack.environment === "Production") return false;
+  const known = await env.DB.prepare("SELECT 1 AS known FROM chat_credits WHERE transaction_id = ?").bind(pack.transactionId).first("known");
+  return known ? false : "capped";
 }
 
 /**

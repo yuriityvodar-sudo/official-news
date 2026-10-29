@@ -303,11 +303,14 @@ describe("packs of questions (#146)", () => {
   });
 });
 
-describe("Sandbox purchases, free in TestFlight (#146, Roman, 28 Oct)", () => {
+describe("Sandbox purchases, free for the team's builds (#146, Roman, 28 and 29 Oct)", () => {
   const KEY = "roman-local-key";
-  const keyed: typeof env = { ...env, OPENAI_API_KEY: "sk-test", CHAT_SANDBOX_KEY: KEY };
+  const TESTFLIGHT = "testflight-key";
+  const keyed: typeof env = { ...env, OPENAI_API_KEY: "sk-test", CHAT_SANDBOX_KEY: KEY, CHAT_SANDBOX_KEY_TESTFLIGHT: TESTFLIGHT };
   /** A month bought in a test build: the App Store's Sandbox, paid with nothing. */
   const sandbox = () => transaction({ originalTransactionId: "4000000001", transactionId: "4000000001", environment: "Sandbox" });
+  /** A pack bought in a test build. */
+  const freePack = (changes: object = {}) => pack({ environment: "Sandbox", ...changes });
   const question = async (sandboxKey: string | null, { ai = openAi(), worker = keyed } = {}) =>
     answerChat({ articleId: "c1", lang: "uk", messages: [QUESTION], transaction: await store.sign(sandbox()) }, worker, {
       ...trusted(),
@@ -316,34 +319,58 @@ describe("Sandbox purchases, free in TestFlight (#146, Roman, 28 Oct)", () => {
     });
   const status = async (sandboxKey: string | null) =>
     chatStatus({ articleId: "c1", transaction: await store.sign(sandbox()) }, keyed, { ...trusted(), sandboxKey });
-  const credit = async (sandboxKey: string | null, subscription = sandbox()) =>
-    creditChatPack({ pack: await store.sign(pack({ environment: "Sandbox" })), transaction: await store.sign(subscription) }, keyed, {
-      ...trusted(),
+  const credit = async (sandboxKey: string | null, { bought = freePack(), subscription = sandbox(), at = NOW } = {}) =>
+    creditChatPack({ pack: await store.sign(bought), transaction: await store.sign(subscription) }, keyed, {
+      rootSha256: store.rootSha256,
+      now: at,
       sandboxKey,
     });
 
-  it("get nothing without Roman's key: no answer, no status, no pack, and nothing kept", async () => {
+  it("get nothing without a key: no answer, no status, no pack, and nothing kept", async () => {
     const ai = openAi();
     for (const key of [null, "", "another-key"]) {
       expect(await question(key, { ai })).toEqual({ status: 403, body: { error: "Not open to test purchases" } });
       expect(await status(key)).toMatchObject({ status: 403 });
       expect(await credit(key)).toMatchObject({ status: 403 });
     }
-    // Without the Worker's secret the key opens nothing.
-    expect(await question(KEY, { ai, worker: { ...env, OPENAI_API_KEY: "sk-test" } })).toMatchObject({ status: 403 });
+    // Without the Worker's secrets the keys open nothing.
+    for (const key of [KEY, TESTFLIGHT]) {
+      expect(await question(key, { ai, worker: { ...env, OPENAI_API_KEY: "sk-test" } })).toMatchObject({ status: 403 });
+    }
     // A free pack is never credited to a paid subscription either.
-    expect(await credit(null, transaction())).toMatchObject({ status: 403 });
+    expect(await credit(null, { subscription: transaction() })).toMatchObject({ status: 403 });
     expect(ai.requests).toHaveLength(0);
     expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM subscriptions").first<number>("n")).toBe(0);
     expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM chat_credits").first<number>("n")).toBe(0);
     expect(await usage()).toEqual({ questions: 0, spent: 0 });
   });
 
-  it("are answered for Roman's local builds, which send the key, within the same limit", async () => {
+  it("are answered for Roman's local builds and the team's TestFlight builds, which send their keys, within the same limit", async () => {
     expect(await answer(await question(KEY))).toBe("Так, з листопада 2027 року.");
-    expect(await usage()).toEqual({ questions: 1, spent: COST });
+    expect(await answer(await question(TESTFLIGHT))).toBe("Так, з листопада 2027 року.");
+    expect(await usage()).toEqual({ questions: 2, spent: 2 * COST });
+    expect(await credit(TESTFLIGHT)).toEqual({ status: 200, body: { credited: true, boughtQuestions: 50 } });
+    const today = Math.floor((DAILY_QUESTIONS * QUESTION_MICROS - 2 * COST) / QUESTION_MICROS);
+    for (const key of [KEY, TESTFLIGHT]) {
+      expect(await status(key)).toMatchObject({ status: 200, body: { questionsLeft: today, boughtQuestions: 50 } });
+    }
+  });
+
+  it("never put a free pack into a paid subscription's wallet, nor a paid pack into a free one's, key or not", async () => {
+    const otherStore = { status: 403, body: { error: "The pack and the subscription come from different stores" } };
+    expect(await credit(KEY, { subscription: transaction() })).toEqual(otherStore);
+    expect(await credit(KEY, { bought: pack() })).toEqual(otherStore);
+    expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM chat_credits").first<number>("n")).toBe(0);
+  });
+
+  it("credit one free pack a day to a subscription: a second waits for the next day", async () => {
+    // Yurii's review of #217: each free pack is real OpenAI cost. Paid packs have no such cap (two in a day above).
     expect(await credit(KEY)).toEqual({ status: 200, body: { credited: true, boughtQuestions: 50 } });
-    const today = Math.floor((DAILY_QUESTIONS * QUESTION_MICROS - COST) / QUESTION_MICROS);
-    expect(await status(KEY)).toMatchObject({ status: 200, body: { questionsLeft: today, boughtQuestions: 50 } });
+    expect(await credit(KEY)).toEqual({ status: 200, body: { credited: false, boughtQuestions: 50 } });
+    const second = freePack({ transactionId: "3000000002" });
+    expect(await credit(TESTFLIGHT, { bought: second })).toEqual({ status: 429, body: { error: "One test pack a day", resetsAt: "2026-10-28T00:00:00Z" } });
+    // The app keeps it unfinished, so StoreKit gives it back at the next start.
+    const tomorrow = new Date(NOW.getTime() + DAY);
+    expect(await credit(TESTFLIGHT, { bought: second, at: tomorrow })).toEqual({ status: 200, body: { credited: true, boughtQuestions: 100 } });
   });
 });
