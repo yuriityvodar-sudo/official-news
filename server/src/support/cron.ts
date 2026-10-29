@@ -117,15 +117,18 @@ export async function sendReplyPushes(env: Env, options: PushOptions = {}): Prom
 /**
  * Once a day (the cleanup run): deletes the conversations closed, or with no
  * new message, for more than KEEP_DAYS, with their messages, and clears the
- * address hashes of past days (only today's count needs them).
+ * address hashes of past days with those days' salts (only today's count
+ * needs them).
  */
 export async function cleanupSupport(env: Env, now = new Date()): Promise<number> {
   const before = toStoredTime(new Date(now.getTime() - KEEP_DAYS * DAY_MS));
+  const today = toStoredTime(now).slice(0, 10);
   const old = "SELECT id FROM support_threads WHERE closed_at < ?1 OR updated_at < ?1";
   const [, threads] = await env.DB.batch([
     env.DB.prepare(`DELETE FROM support_messages WHERE thread_id IN (${old})`).bind(before),
     env.DB.prepare(`DELETE FROM support_threads WHERE id IN (${old})`).bind(before),
-    env.DB.prepare("UPDATE support_messages SET ip_day_hash = NULL WHERE ip_day_hash IS NOT NULL AND created_at < ?1").bind(`${toStoredTime(now).slice(0, 10)}T00:00:00Z`),
+    env.DB.prepare("UPDATE support_messages SET ip_day_hash = NULL WHERE ip_day_hash IS NOT NULL AND created_at < ?1").bind(`${today}T00:00:00Z`),
+    env.DB.prepare("DELETE FROM support_salts WHERE day < ?1").bind(today),
   ]);
   return threads.meta.changes ?? 0;
 }

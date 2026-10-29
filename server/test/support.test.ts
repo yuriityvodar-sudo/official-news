@@ -7,7 +7,7 @@ import { messagePost } from "../src/admin/messages";
 import type { AdminEnv } from "../src/admin/env";
 import { runCleanup } from "../src/health/cleanup";
 import { TOKEN_URL, fcmUrl } from "../src/push/fcm";
-import { DAILY_MESSAGES, postSupportMessage, sha256, supportThread } from "../src/support";
+import { DAILY_MESSAGES, addressHash, daySalt, networkKey, postSupportMessage, sha256, supportThread } from "../src/support";
 import { REPLY_PUSHES_PER_RUN, cleanupSupport, sendReplyPushes } from "../src/support/cron";
 
 const DEVICE = "device-0123456789abcdef0123456789abcdef";
@@ -108,6 +108,43 @@ describe("POST /v1/support/messages", () => {
     expect(sixth).toEqual({ status: 429, body: { error: "Too many messages today", resetsAt: "2026-10-30T00:00:00Z" } });
     expect((await postSupportMessage(body({ device: `${"d".repeat(31)}x` }), "198.51.100.2", env, T0)).status).toBe(200);
     expect((await postSupportMessage(body({ device: `${"d".repeat(31)}y` }), "198.51.100.1", env, new Date("2026-10-30T00:00:01Z"))).status).toBe(200);
+  });
+
+  it("counts an IPv6 address by its /64 network, and an IPv4 address as it is", async () => {
+    expect(networkKey("2001:db8:abcd:12:1111:2222:3333:4444")).toBe("2001:db8:abcd:12::/64");
+    expect(networkKey("2001:DB8:ABCD:0012::1")).toBe("2001:db8:abcd:12::/64");
+    expect(networkKey("2001:db8::1")).toBe("2001:db8:0:0::/64");
+    expect(networkKey("::1")).toBe("0:0:0:0::/64");
+    expect(networkKey("fe80::1%en0")).toBe("fe80:0:0:0::/64");
+    expect(networkKey("::ffff:192.0.2.1")).toBe("192.0.2.1");
+    expect(networkKey("198.51.100.1")).toBe("198.51.100.1");
+    expect(networkKey("not an address")).toBe("not an address");
+
+    // Five phones on one /64, each with its own address: the sixth is refused, another /64 is not.
+    for (let i = 0; i < DAILY_MESSAGES; i++) {
+      expect((await postSupportMessage(body({ device: `${"h".repeat(31)}${i}` }), `2001:db8:abcd:12::${i + 1}`, env, T0)).status).toBe(200);
+    }
+    expect((await postSupportMessage(body({ device: `${"h".repeat(31)}x` }), "2001:db8:abcd:12:ffff:1:2:3", env, T0)).status).toBe(429);
+    expect((await postSupportMessage(body({ device: `${"h".repeat(31)}x` }), "2001:db8:abcd:13::1", env, T0)).status).toBe(200);
+  });
+
+  it("hashes the address with a random salt for the day: kept within the day, new the next day, never the plain hash", async () => {
+    const salt = await daySalt(env, "2026-10-29");
+    expect(salt).toMatch(/^[0-9a-f]{64}$/);
+    expect(await daySalt(env, "2026-10-29")).toBe(salt);
+    const next = await daySalt(env, "2026-10-30");
+    expect(next).not.toBe(salt);
+    expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM support_salts").first("n")).toBe(2);
+
+    const ip = "203.0.113.7";
+    const hash = await addressHash(env, ip, "2026-10-29");
+    expect(await addressHash(env, ip, "2026-10-29")).toBe(hash);
+    expect(await addressHash(env, ip, "2026-10-30")).not.toBe(hash);
+    expect(hash).toBe(await sha256(`${salt}|${ip}`));
+    for (const plain of [`${ip}|2026-10-29`, `${ip}2026-10-29`, ip]) expect(hash).not.toBe(await sha256(plain));
+
+    await send({}, T0, ip);
+    expect(await env.DB.prepare("SELECT ip_day_hash FROM support_messages").first("ip_day_hash")).toBe(hash);
   });
 
   it("refuses a bad body with 400", async () => {
@@ -294,12 +331,30 @@ describe("the cleanup of old conversations", () => {
     expect(await count()).toEqual([2, 2]);
     expect(await cleanupSupport(env, later(T0, 96.5))).toBe(1);
     expect(await count()).toEqual([1, 1]);
-    // Only today's messages keep the address hash, for the day's count.
+    // Only today's messages keep the address hash, for the day's count, and only today's salt is kept.
     expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM support_messages WHERE ip_day_hash IS NOT NULL").first("n")).toBe(0);
+    expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM support_salts").first("n")).toBe(0);
 
     // The daily cleanup run does it too.
     await env.DB.prepare("UPDATE support_threads SET updated_at = '2026-01-01T00:00:00Z'").run();
     await runCleanup(env, later(T0, 97));
     expect(await count()).toEqual([0, 0]);
+  });
+});
+
+describe("the cleanup of the address hashes", () => {
+  it("keeps today's salt and hashes, and deletes past days' salts with their hashes", async () => {
+    await send({ device: `${"k".repeat(31)}1` }, T0, "192.0.2.1");
+    const tomorrow = later(T0, 1);
+    await send({ device: `${"k".repeat(31)}2` }, tomorrow, "192.0.2.1");
+    expect(await env.DB.prepare("SELECT day FROM support_salts ORDER BY day").all()).toMatchObject({ results: [{ day: "2026-10-29" }, { day: "2026-10-30" }] });
+
+    await cleanupSupport(env, tomorrow);
+    expect(await env.DB.prepare("SELECT day FROM support_salts").all()).toMatchObject({ results: [{ day: "2026-10-30" }] });
+    expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM support_messages WHERE ip_day_hash IS NOT NULL").first("n")).toBe(1);
+    // Today's count still works after the cleanup: the same salt, so the same hash.
+    expect(await env.DB.prepare("SELECT ip_day_hash FROM support_messages WHERE ip_day_hash IS NOT NULL").first("ip_day_hash")).toBe(
+      await addressHash(env, "192.0.2.1", "2026-10-30"),
+    );
   });
 });

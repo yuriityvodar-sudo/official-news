@@ -2,7 +2,8 @@
 // writes from the app with no login, we reply on the admin page (admin/
 // messages.ts), and the reply goes back with a push (./cron.ts). One open
 // message at a time: after writing, a reader waits for our reply, or 7 days.
-// The phone's id is stored only as its SHA-256, the network address not at all.
+// The phone's id is stored only as its SHA-256; the network address only as a
+// one-way hash with a random salt for the day, cleared when the day is over.
 import type { Env } from "../env";
 import { toStoredTime } from "../fetcher/text";
 
@@ -39,9 +40,45 @@ export interface SupportAnswer {
   body: Record<string, unknown>;
 }
 
+const hex = (bytes: Uint8Array) => [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
+
 export async function sha256(text: string): Promise<string> {
-  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text)));
-  return [...digest].map((b) => b.toString(16).padStart(2, "0")).join("");
+  return hex(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text))));
+}
+
+/**
+ * The part of an address the daily limit counts: an IPv4 address as it is, an
+ * IPv6 address by its /64 network (its first 4 groups), since a phone or a
+ * server has a whole /64 and rotates its address within it. An IPv4 address
+ * written inside IPv6 (`::ffff:192.0.2.1`) counts as that IPv4 address.
+ * Anything else is counted as it is.
+ */
+export function networkKey(ip: string): string {
+  const address = ip.trim().toLowerCase().split("%")[0];
+  if (!address.includes(":")) return address;
+  if (address.includes(".")) return address.slice(address.lastIndexOf(":") + 1);
+  const parts = address.split("::");
+  if (parts.length > 2) return address;
+  const head = parts[0] ? parts[0].split(":") : [];
+  const tail = parts.length === 2 && parts[1] ? parts[1].split(":") : [];
+  const groups = parts.length === 2 ? [...head, ...Array<string>(Math.max(0, 8 - head.length - tail.length)).fill("0"), ...tail] : head;
+  if (groups.length !== 8 || !groups.every((g) => /^[0-9a-f]{1,4}$/.test(g))) return address;
+  return `${groups.slice(0, 4).map((g) => parseInt(g, 16).toString(16)).join(":")}::/64`;
+}
+
+/** The UTC day's salt (YYYY-MM-DD), made at random on the day's first use; the daily cleanup deletes past days' salts. */
+export async function daySalt(env: Env, day: string): Promise<string> {
+  const fresh = hex(crypto.getRandomValues(new Uint8Array(32)));
+  const [, read] = await env.DB.batch<{ salt: string }>([
+    env.DB.prepare("INSERT OR IGNORE INTO support_salts (day, salt) VALUES (?1, ?2)").bind(day, fresh),
+    env.DB.prepare("SELECT salt FROM support_salts WHERE day = ?1").bind(day),
+  ]);
+  return read.results[0].salt;
+}
+
+/** The address's hash for the day's count: SHA-256 of the day's salt and the address's network (networkKey). */
+export async function addressHash(env: Env, ip: string | null, day: string): Promise<string> {
+  return sha256(`${await daySalt(env, day)}|${networkKey(ip ?? "unknown")}`);
 }
 
 /** A message's text, trimmed, when it is 1 to MAX_TEXT characters; else null. */
@@ -60,7 +97,7 @@ const LATEST = `SELECT t.id, t.status, m.sender, m.text, m.created_at
   WHERE t.id = (SELECT id FROM support_threads WHERE device_hash = ?1 ORDER BY created_at DESC, rowid DESC LIMIT 1)
   ORDER BY m.created_at, m.rowid`;
 
-/** The reader's messages today from one address (?1, its hash with the day). */
+/** The reader's messages today from one address (?1, its hash for the day). */
 const SENT_TODAY = "SELECT COUNT(*) AS n FROM support_messages WHERE ip_day_hash = ?1";
 
 /**
@@ -156,7 +193,7 @@ function readBody(body: unknown): Incoming | string {
 
 /**
  * `POST /v1/support/messages`: a reader's message. `ip` is CF-Connecting-IP,
- * used only as a hash with the UTC day, to count the day's messages.
+ * used only as a hash with the UTC day's salt, to count the day's messages.
  */
 export async function postSupportMessage(body: unknown, ip: string | null, env: Env, now = new Date()): Promise<SupportAnswer> {
   const m = readBody(body);
@@ -164,7 +201,7 @@ export async function postSupportMessage(body: unknown, ip: string | null, env: 
   const deviceHash = await sha256(m.device);
   const at = toStoredTime(now);
   const day = at.slice(0, 10);
-  const ipHash = await sha256(`${ip ?? "unknown"}|${day}`);
+  const ipHash = await addressHash(env, ip, day);
   const weekAgo = toStoredTime(new Date(now.getTime() - WAIT_DAYS * DAY_MS));
   // A second try only when another send changed the conversation between the read and the write.
   for (let attempt = 0; attempt < 2; attempt++) {
