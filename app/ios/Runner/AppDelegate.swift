@@ -25,6 +25,25 @@ import firebase_messaging
     if let menus = engineBridge.pluginRegistry.registrar(forPlugin: "official_news/menu") {
       menus.register(MenuViewFactory(messenger: menus.messenger()), withId: "official_news/menu")
     }
+    // The phone's Region setting, for For you (#170).
+    if let region = engineBridge.pluginRegistry.registrar(forPlugin: "official_news/region") {
+      FlutterMethodChannel(name: "official_news/region", binaryMessenger: region.messenger())
+        .setMethodCallHandler { _, result in result(AppDelegate.phoneRegion()) }
+    }
+  }
+
+  /// The country of iOS Settings → General → Language & Region → Region
+  /// (#170). Flutter's locale is the first preferred language instead, whose
+  /// region can be another: "en-GB" on a phone set to Germany (Yurii, #201).
+  static func phoneRegion() -> String? {
+    if #available(iOS 16, *) { return Locale.current.region?.identifier }
+    // iOS 15: a region set apart from the language is the identifier's "rg"
+    // keyword ("en_GB@rg=dezzzz"), else its own region.
+    let id = Locale.current.identifier
+    if let range = id.range(of: "rg=") {
+      return String(id[range.upperBound...].prefix(2)).uppercased()
+    }
+    return Locale.current.regionCode
   }
 }
 

@@ -94,9 +94,10 @@ class ApiClient {
   /// ([ArticlesPage.inLanguage]).
   /// With `country` (two letters, #68) only that country's articles; with
   /// `group` (a group's id from [fetchCountries]) its countries' articles
-  /// together, at most one of the two; with `topic` (#67) only that topic's.
-  /// Pages, cursors, `after` and `top` all follow them, so every request for
-  /// one feed sends the same ones.
+  /// together, at most one of the two; with `topic` (#67) only that topic's;
+  /// with `forCountry` (#170) what concerns a reader in that country, For
+  /// you. Pages, cursors, `after` and `top` all follow them, so every request
+  /// for one feed sends the same ones.
   Future<ArticlesPage> fetchArticles({
     String? cursor,
     DateTime? since,
@@ -106,6 +107,7 @@ class ApiClient {
     String? country,
     String? group,
     String? topic,
+    String? forCountry,
   }) async {
     final param = _langParam(lang);
     final uri = Uri.parse('$_baseUrl/articles').replace(
@@ -118,10 +120,21 @@ class ApiClient {
         'country': ?country,
         'group': ?group,
         'topic': ?topic,
+        'for': ?forCountry,
       },
     );
     final page = ArticlesPage.fromJson(await _getJson(uri));
     return param == null ? page : page.inLanguage(param);
+  }
+
+  /// `GET /locate` (#170): the country the server sees this phone in, for For
+  /// you on a phone without a region; null when it does not know (a local
+  /// run, Tor). Never cached, never stored on the server.
+  Future<String?> locate() async {
+    final country = (await _getJson(Uri.parse('$_baseUrl/locate')))['country'];
+    return country is String && RegExp(r'^[A-Z]{2}$').hasMatch(country)
+        ? country
+        : null;
   }
 
   /// `GET /articles/:id`; with `lang`, 404 when it is not translated, also when

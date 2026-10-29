@@ -31,6 +31,8 @@ class FeedStore {
   static const _noCountriesKey = 'feed.noCountries';
   static const _designKey = 'feed.design';
   static const _headlineWeightKey = 'feed.headlineWeight';
+  static const _locatedKey = 'feed.located';
+  static const _homeKey = 'feed.home';
 
   /// What the first filters build (Global / Local, 16 Oct) kept: its Local
   /// country and its list of countries per language. Local is gone, so the
@@ -40,8 +42,11 @@ class FeedStore {
   static const _maxRead = 500;
 
   /// English keeps the key it had before there were languages: 'feed.lastPage'.
-  static String _pageKeyFor(FeedLanguage lang) =>
-      lang == FeedLanguage.en ? _pageKey : '$_pageKey.${lang.code}';
+  /// For you's page for a country has its own (#170): 'feed.lastPage.for.CZ'.
+  static String _pageKeyFor(FeedLanguage lang, [String? forCountry]) {
+    final key = lang == FeedLanguage.en ? _pageKey : '$_pageKey.${lang.code}';
+    return forCountry == null ? key : '$key.for.$forCountry';
+  }
 
   /// The language chosen in Settings. Until one is chosen (the first launch),
   /// [phone]: the phone's language when the app has it, else English (#52).
@@ -57,8 +62,11 @@ class FeedStore {
   Future<void> saveLanguage(FeedLanguage lang) =>
       _prefs.setString(_langKey, lang.code);
 
-  ArticlesPage? lastPage([FeedLanguage lang = FeedLanguage.en]) {
-    final raw = _prefs.getString(_pageKeyFor(lang));
+  ArticlesPage? lastPage([
+    FeedLanguage lang = FeedLanguage.en,
+    String? forCountry,
+  ]) {
+    final raw = _prefs.getString(_pageKeyFor(lang, forCountry));
     if (raw == null) return null;
     try {
       final page = ArticlesPage.fromJson(
@@ -75,14 +83,33 @@ class FeedStore {
   Future<void> saveLastPage(
     ArticlesPage page, [
     FeedLanguage lang = FeedLanguage.en,
-  ]) => _prefs.setString(_pageKeyFor(lang), jsonEncode(page.toJson()));
+    String? forCountry,
+  ]) => _prefs.setString(
+    _pageKeyFor(lang, forCountry),
+    jsonEncode(page.toJson()),
+  );
 
-  /// The Where choice (#68): every country until another is chosen.
+  /// For you or the whole world (#170): For you until the whole world is
+  /// chosen. For you, the default, is not saved.
   FeedWhere where() => FeedWhere.fromSaved(_prefs.getString(_whereKey));
 
-  Future<void> saveWhere(FeedWhere where) => where.isAll
+  Future<void> saveWhere(FeedWhere where) => where.isForYou
       ? _prefs.remove(_whereKey)
       : _prefs.setString(_whereKey, where.saved);
+
+  /// The country `GET /locate` last gave for a phone without a region
+  /// (#170), kept for the next launch; null until it gave one.
+  String? located() => _prefs.getString(_locatedKey);
+
+  Future<void> saveLocated(String country) =>
+      _prefs.setString(_locatedKey, country);
+
+  /// The country chosen in Settings → My country (#170); null follows the
+  /// phone.
+  String? chosenCountry() => _prefs.getString(_homeKey);
+
+  Future<void> saveChosenCountry(String? code) =>
+      code == null ? _prefs.remove(_homeKey) : _prefs.setString(_homeKey, code);
 
   /// Forgets the Global / Local choice of the first filters build: a saved
   /// Local reads as every country ([where] never reads it).

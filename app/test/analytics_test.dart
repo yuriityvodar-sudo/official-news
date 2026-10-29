@@ -160,7 +160,8 @@ void main() {
       'language': 'uk',
       'previous_language': 'en',
     });
-    expect(userProperties, {'feed_language': 'uk'});
+    // The home country too, unknown on this phone (#170).
+    expect(userProperties, {'home_country': 'none', 'feed_language': 'uk'});
   });
 
   test(
@@ -176,7 +177,11 @@ void main() {
         Analytics(null, (name, value) async => userProperties[name] = value),
         language: feed.languageChanges,
       );
-      expect(userProperties, {'build': 'dev', 'feed_language': 'uk'});
+      expect(userProperties, {
+        'home_country': 'none',
+        'build': 'dev',
+        'feed_language': 'uk',
+      });
     },
   );
 

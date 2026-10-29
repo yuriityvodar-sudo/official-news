@@ -6,6 +6,10 @@ import 'topics.dart';
 
 /// The feed's two filters (#67, #68): where the news come from, and one topic.
 ///
+/// For you (#170, the default since 28 Oct; Yurii agreed on #170): what
+/// concerns the reader's own country, asked as `for=` it; or the whole world.
+/// The Where pull-down's groups and countries are no longer offered.
+///
 /// Where (Yurii, 16 Oct): all countries (the default), a group of countries
 /// (an official organization: the European Union, G7, G20, NATO), or one
 /// country alone. Which countries a group has is the server's rule (`GROUPS`
@@ -13,7 +17,7 @@ import 'topics.dart';
 /// and never filters on the phone. Both filters are asked of the server
 /// (`GET /articles?group=|country=&topic=`), so the pages, the top stories
 /// and the "N new" check all follow them.
-enum WhereKind { all, group, country }
+enum WhereKind { all, group, country, forYou }
 
 @immutable
 class FeedWhere {
@@ -25,8 +29,13 @@ class FeedWhere {
   /// One country alone, by its two-letter code (`GB`).
   const FeedWhere.country(String code) : this._(WhereKind.country, code);
 
-  /// Every country.
+  /// Every country: the whole world.
   static const all = FeedWhere._(WhereKind.all, null);
+
+  /// For you (#170): the reader's own country's decisions, the EU's for a
+  /// member and the world's that matter (the server's rule), asked as
+  /// `for=` the home country ([FeedController.homeCountry]).
+  static const forYou = FeedWhere._(WhereKind.forYou, null);
 
   final WhereKind kind;
 
@@ -34,25 +43,23 @@ class FeedWhere {
   final String? id;
 
   bool get isAll => kind == WhereKind.all;
+  bool get isForYou => kind == WhereKind.forYou;
 
   /// What `GET /articles` and `GET /topics` send.
   String? get group => kind == WhereKind.group ? id : null;
   String? get country => kind == WhereKind.country ? id : null;
 
-  /// As saved on the phone: `all`, `group:g7`, `country:GB`.
-  String get saved => isAll ? 'all' : '${kind.name}:$id';
+  /// As saved on the phone: `world`, `foryou`, `group:g7`, `country:GB`.
+  String get saved => switch (kind) {
+    WhereKind.all => 'world',
+    WhereKind.forYou => 'foryou',
+    _ => '${kind.name}:$id',
+  };
 
-  /// A saved value; anything else (nothing saved, the old Global or Local of
-  /// the first filters build) is every country.
-  static FeedWhere fromSaved(String? saved) {
-    final match = _saved.firstMatch(saved ?? '');
-    if (match == null) return all;
-    return match[1] == 'group'
-        ? FeedWhere.group(match[2]!)
-        : FeedWhere.country(match[2]!);
-  }
-
-  static final _saved = RegExp(r'^(group|country):(.+)$');
+  /// A saved value: `world` is the whole world; anything else is For you,
+  /// the default (#170), also nothing saved and a group or a country saved
+  /// before For you: the reader can no longer choose them.
+  static FeedWhere fromSaved(String? saved) => saved == 'world' ? all : forYou;
 
   @override
   bool operator ==(Object other) =>
