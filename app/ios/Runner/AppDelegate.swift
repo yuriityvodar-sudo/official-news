@@ -1,4 +1,5 @@
 import Flutter
+import SwiftUI
 import UIKit
 import firebase_messaging
 
@@ -24,6 +25,10 @@ import firebase_messaging
     // iOS's own pull-down menus for the feed's filter chips (#141).
     if let menus = engineBridge.pluginRegistry.registrar(forPlugin: "official_news/menu") {
       menus.register(MenuViewFactory(messenger: menus.messenger()), withId: "official_news/menu")
+    }
+    // The Garnet and Seal looks' pills in Liquid Glass (#166).
+    if let pills = engineBridge.pluginRegistry.registrar(forPlugin: "official_news/pills") {
+      pills.register(PillsViewFactory(messenger: pills.messenger()), withId: "official_news/pills")
     }
     // The phone's Region setting, for For you (#170).
     if let region = engineBridge.pluginRegistry.registrar(forPlugin: "official_news/region") {
@@ -164,4 +169,270 @@ class MenuView: NSObject, FlutterPlatformView {
   }
 
   func view() -> UIView { button }
+}
+
+/// The Garnet and Seal looks' pills, drawn by iOS (Roman, 27 Oct, #166): what
+/// the feed shows (For you, The whole world, the topics) as a row of SwiftUI
+/// buttons in Liquid Glass from iOS 26, the chosen one a drop of the look's
+/// colour that flows to the pill tapped; the system's translucent material
+/// before iOS 26. Flutter sends the pills, the chosen one, the colour and
+/// light or dark (`update`); a tap goes back as `select` with the pill's id
+/// (`pill-for-you`, `pill-world`, `pill-topic-economy`), and where the row
+/// rests once swiped as `scrolled` (iOS 26), on the channel
+/// `official_news/pills_<id>`.
+class PillsViewFactory: NSObject, FlutterPlatformViewFactory {
+  private let messenger: FlutterBinaryMessenger
+
+  init(messenger: FlutterBinaryMessenger) {
+    self.messenger = messenger
+    super.init()
+  }
+
+  func createArgsCodec() -> FlutterMessageCodec & NSObjectProtocol {
+    FlutterStandardMessageCodec.sharedInstance()
+  }
+
+  func create(
+    withFrame frame: CGRect,
+    viewIdentifier viewId: Int64,
+    arguments args: Any?
+  ) -> FlutterPlatformView {
+    PillsView(
+      frame: frame,
+      channel: FlutterMethodChannel(
+        name: "official_news/pills_\(viewId)", binaryMessenger: messenger),
+      arguments: args as? [String: Any] ?? [:])
+  }
+}
+
+class PillsView: NSObject, FlutterPlatformView {
+  private let model: PillsModel
+  private let host: UIHostingController<PillsRow>
+  private let channel: FlutterMethodChannel
+
+  init(frame: CGRect, channel: FlutterMethodChannel, arguments: [String: Any]) {
+    let model = PillsModel()
+    model.update(arguments, animated: false)
+    self.model = model
+    self.channel = channel
+    host = UIHostingController(rootView: PillsRow(model: model))
+    super.init()
+    model.onSelect = { [weak self] id in
+      self?.channel.invokeMethod("select", arguments: id)
+    }
+    model.onScroll = { [weak self] offset in
+      self?.channel.invokeMethod("scrolled", arguments: Double(offset))
+    }
+    host.view.frame = frame
+    host.view.backgroundColor = .clear
+    host.overrideUserInterfaceStyle = model.dark ? .dark : .light
+    // The same row takes every change, so the drop flows instead of a new row appearing.
+    channel.setMethodCallHandler { [weak self] call, result in
+      if call.method == "update", let args = call.arguments as? [String: Any], let self {
+        self.model.update(args, animated: true)
+        self.host.overrideUserInterfaceStyle = self.model.dark ? .dark : .light
+      }
+      result(nil)
+    }
+  }
+
+  deinit {
+    channel.setMethodCallHandler(nil)
+  }
+
+  func view() -> UIView { host.view }
+}
+
+final class PillsModel: ObservableObject {
+  struct Pill: Identifiable, Equatable {
+    let id: String
+    let title: String
+    let symbol: String
+  }
+
+  @Published var pills: [Pill] = []
+  @Published var chosen = ""
+  @Published var tint = Color.accentColor
+  @Published var dark = false
+  var onSelect: (String) -> Void = { _ in }
+  var onScroll: (CGFloat) -> Void = { _ in }
+
+  /// How far the row is swiped, told to Flutter once it rests: Flutter's own
+  /// row, shown while an article grows out of its card, stands the same.
+  var offset: CGFloat = 0
+
+  /// How the drop moves: a spring that settles with a little give, as iOS's
+  /// own selections do.
+  static let flow = Animation.spring(response: 0.48, dampingFraction: 0.74)
+
+  func update(_ args: [String: Any], animated: Bool) {
+    let pills = (args["pills"] as? [[String: Any]] ?? []).map {
+      Pill(
+        id: $0["id"] as? String ?? "",
+        title: $0["title"] as? String ?? "",
+        symbol: $0["symbol"] as? String ?? "")
+    }
+    if pills != self.pills { self.pills = pills }
+    tint = Color(uiColor: UIColor(argb: args["tint"] as? Int ?? 0))
+    dark = args["dark"] as? Bool ?? false
+    let chosen = args["chosen"] as? String ?? ""
+    guard chosen != self.chosen else { return }
+    if animated {
+      withAnimation(Self.flow) { self.chosen = chosen }
+    } else {
+      self.chosen = chosen
+    }
+  }
+
+  /// The tap's haptic comes from Flutter, as for every other way to choose what
+  /// the feed shows.
+  func tap(_ id: String) {
+    guard id != chosen else { return }
+    withAnimation(Self.flow) { chosen = id }
+    onSelect(id)
+  }
+}
+
+struct PillsRow: View {
+  @ObservedObject var model: PillsModel
+
+  /// The pills in Flutter's row (58 points at the usual text size, taller as
+  /// the text grows), where Flutter's own pills are, with room under them
+  /// for the glass's shadow.
+  static let insets = EdgeInsets(top: 8, leading: 16, bottom: 14, trailing: 16)
+
+  var body: some View {
+    Group {
+      if #available(iOS 26.0, *) {
+        GlassPills(model: model)
+      } else {
+        MaterialPills(model: model)
+      }
+    }
+    .environment(\.colorScheme, model.dark ? .dark : .light)
+    .ignoresSafeArea()
+  }
+}
+
+/// A pill's icon and name, white on the chosen one's colour. At least 36
+/// points high, and growing with the reader's text size as Flutter's pills
+/// do (Yurii, #210): the subheadline is 15 points at the usual size.
+struct PillLabel: View {
+  let pill: PillsModel.Pill
+  let chosen: Bool
+
+  var body: some View {
+    HStack(spacing: 6) {
+      // VoiceOver reads the name alone.
+      Image(systemName: pill.symbol).accessibilityHidden(true)
+      Text(pill.title).lineLimit(1)
+    }
+    .font(.subheadline.weight(.semibold))
+    .foregroundColor(chosen ? .white : .primary)
+    .padding(.horizontal, 14)
+    .padding(.vertical, 8)
+    .frame(minHeight: 36)
+    .contentShape(Capsule())
+  }
+}
+
+/// iOS 26: every pill is Liquid Glass; the chosen one's glass is tinted and
+/// keeps one id, so iOS flows it from pill to pill, merging with the glass it
+/// passes, as its own tab bars and segmented controls do.
+@available(iOS 26.0, *)
+struct GlassPills: View {
+  @ObservedObject var model: PillsModel
+  @Namespace private var glass
+
+  var body: some View {
+    ScrollViewReader { proxy in
+      ScrollView(.horizontal, showsIndicators: false) {
+        GlassEffectContainer(spacing: 4) {
+          HStack(spacing: 8) {
+            ForEach(model.pills) { pill in
+              let chosen = pill.id == model.chosen
+              Button {
+                model.tap(pill.id)
+              } label: {
+                PillLabel(pill: pill, chosen: chosen)
+              }
+              .buttonStyle(.plain)
+              .glassEffect(
+                chosen ? .regular.tint(model.tint).interactive() : .regular.interactive(),
+                in: Capsule()
+              )
+              .glassEffectID(chosen ? "chosen" : pill.id, in: glass)
+              .accessibilityAddTraits(chosen ? .isSelected : [])
+              .id(pill.id)
+            }
+          }
+          .padding(PillsRow.insets)
+        }
+      }
+      .scrollClipDisabled()
+      .onAppear { proxy.scrollTo(model.chosen, anchor: .center) }
+      .onChange(of: model.chosen) { _, id in
+        withAnimation(PillsModel.flow) { proxy.scrollTo(id, anchor: .center) }
+      }
+      .onScrollGeometryChange(for: CGFloat.self) { geometry in
+        geometry.contentOffset.x + geometry.contentInsets.leading
+      } action: { _, offset in
+        model.offset = offset
+      }
+      .onScrollPhaseChange { _, phase in
+        if phase == .idle { model.onScroll(model.offset) }
+      }
+    }
+  }
+}
+
+/// Before iOS 26: the system's translucent material, and a drop of the colour
+/// that slides to the chosen pill.
+struct MaterialPills: View {
+  @ObservedObject var model: PillsModel
+  @Namespace private var drop
+
+  var body: some View {
+    ScrollViewReader { proxy in
+      ScrollView(.horizontal, showsIndicators: false) {
+        HStack(spacing: 8) {
+          ForEach(model.pills) { pill in
+            let chosen = pill.id == model.chosen
+            Button {
+              model.tap(pill.id)
+            } label: {
+              PillLabel(pill: pill, chosen: chosen)
+            }
+            .buttonStyle(.plain)
+            .background(
+              ZStack {
+                Capsule().fill(.ultraThinMaterial)
+                if chosen {
+                  Capsule().fill(model.tint).matchedGeometryEffect(id: "drop", in: drop)
+                }
+              }
+            )
+            .accessibilityAddTraits(chosen ? .isSelected : [])
+            .id(pill.id)
+          }
+        }
+        .padding(PillsRow.insets)
+      }
+      .onAppear { proxy.scrollTo(model.chosen, anchor: .center) }
+      .onChange(of: model.chosen) { id in
+        withAnimation(PillsModel.flow) { proxy.scrollTo(id, anchor: .center) }
+      }
+    }
+  }
+}
+
+extension UIColor {
+  /// A colour as Flutter's `Color.toARGB32()` writes it.
+  convenience init(argb: Int) {
+    self.init(
+      red: CGFloat((argb >> 16) & 0xFF) / 255,
+      green: CGFloat((argb >> 8) & 0xFF) / 255,
+      blue: CGFloat(argb & 0xFF) / 255,
+      alpha: CGFloat((argb >> 24) & 0xFF) / 255)
+  }
 }
