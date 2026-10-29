@@ -546,20 +546,15 @@ void main() {
           ? const Color(0xFF0E7A5E)
           : const Color(0xFFC41230);
 
-      testWidgets('the seal in the colour before the app\'s name, the date, '
+      testWidgets('the logo before the app\'s name, the date, '
           'the filters, and every decision on a white card', (tester) async {
         await pumpFeed(tester, _items, _top);
-        final seal = find.byIcon(CupertinoIcons.checkmark_seal_fill).first;
+        final logo = find.byKey(const ValueKey('masthead-logo'));
+        expect(logo, findsOneWidget);
         expect(
-          tester.getCenter(seal).dx,
+          tester.getCenter(logo).dx,
           lessThan(tester.getTopLeft(find.text('Outer News')).dx),
         );
-        final badge = tester.widget<Container>(
-          find.ancestor(of: seal, matching: find.byType(Container)).first,
-        );
-        final gradient =
-            (badge.decoration! as BoxDecoration).gradient! as LinearGradient;
-        expect(gradient.colors.first, accent);
         // What the feed shows as pills under the date, not the other looks'
         // menu (#170).
         expect(find.byType(FeedPills), findsOneWidget);

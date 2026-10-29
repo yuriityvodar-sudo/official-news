@@ -22,11 +22,11 @@ import 'feed_touches.dart';
 
 /// The two looks after Apple News that Roman picked (26 Oct), in our own
 /// colours ([NewsPalette]): a light grey page whose top takes a tint of the
-/// colour, a large title with a seal in the colour's gradient and the date in
-/// grey, what the feed shows as pills of Liquid Glass that stay at the top
-/// while the rows pass under them (For you, the whole world, the topics:
-/// [FeedPills]), and every decision on a white card with a soft shadow of
-/// the colour, its picture on the right. Pulled down to refresh, the title
+/// colour, a large title with the logo and the date in grey, what the feed
+/// shows as pills of Liquid Glass that stay at the top while the rows pass
+/// under them (For you, the whole world, the topics: [FeedPills]), and every
+/// decision on a white card with a soft shadow of the colour, its picture on
+/// the right. Pulled down to refresh, the title
 /// and the date grow from the left edge as iOS's large title does, and plain
 /// grey words in the gap say what is happening, then how it went
 /// ([_PullHint], Roman's pick 1 of `handoff/refresh-patterns.html`, 27 Oct).
@@ -133,7 +133,7 @@ class NewsLook extends FeedLook {
                       pull: masthead.pull,
                       child: Row(
                         children: [
-                          _Seal(style: style),
+                          const _Logo(),
                           const SizedBox(width: 8),
                           Flexible(
                             child: Text(
@@ -626,33 +626,24 @@ class _RenderStretch extends RenderProxyBox {
 /// Apple's; and seal, the green of an official seal.
 enum NewsPalette { garnet, seal }
 
-/// The official-source seal before the app's name, in the colour's
-/// gradient on a soft glow.
-class _Seal extends StatelessWidget {
-  const _Seal({required this.style});
-
-  final _NewsStyle style;
+/// The app's logo before its name (Yurii, 29 Oct: our logo in place of the
+/// seal): the black N on the light page, the red N on the black one, where
+/// the black would vanish. Decorative: the name next to it is what VoiceOver
+/// reads.
+class _Logo extends StatelessWidget {
+  const _Logo();
 
   @override
-  Widget build(BuildContext context) => Container(
-    width: 30,
-    height: 30,
-    decoration: BoxDecoration(
-      gradient: style.gradient,
-      borderRadius: BorderRadius.circular(9),
-      boxShadow: [
-        BoxShadow(
-          color: style.glow,
-          blurRadius: 14,
-          spreadRadius: -2,
-          offset: const Offset(0, 6),
-        ),
-      ],
-    ),
-    child: const Icon(
-      CupertinoIcons.checkmark_seal_fill,
-      size: 18,
-      color: Color(0xFFFFFFFF),
+  Widget build(BuildContext context) => ExcludeSemantics(
+    child: Image(
+      key: const ValueKey('masthead-logo'),
+      image: AssetImage(
+        Theme.of(context).brightness == Brightness.dark
+            ? 'assets/logo_n_dark.png'
+            : 'assets/logo_n.png',
+      ),
+      width: 30,
+      height: 30,
     ),
   );
 }
