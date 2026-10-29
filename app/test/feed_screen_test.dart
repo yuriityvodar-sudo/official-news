@@ -12,6 +12,7 @@ import 'package:official_news/core/feed_language.dart';
 import 'package:official_news/core/news_widgets.dart';
 import 'package:official_news/core/router.dart';
 import 'package:official_news/features/feed/feed_controller.dart';
+import 'package:official_news/features/feed/feed_look.dart';
 import 'package:official_news/features/feed/feed_screen.dart';
 import 'package:official_news/features/feed/feed_topic_tags.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -1207,5 +1208,54 @@ void main() {
       expect(log.last.queryParameters['lang'], 'es');
       expect(find.text('No translated decisions yet.'), findsOneWidget);
     });
+  });
+
+  // Yurii, 29 Oct: Settings → Design → Classic left the feed under a grey
+  // veil (#224). Rebuilt in the new look, the new list and the old one shared
+  // the scroll controller for a frame, and the top fade threw.
+  group('switching the look keeps the list', () {
+    tearDown(() => feedDesign.value = FeedDesign.now);
+
+    for (final from in FeedDesign.values) {
+      for (final to in FeedDesign.values) {
+        if (from == to) continue;
+        testWidgets('${from.name} to ${to.name}', (tester) async {
+          _screen(tester, _phone);
+          feedDesign.value = from;
+          await _pump(
+            tester,
+            FeedController(
+              api: _api({
+                '': _page([
+                  for (var i = 0; i < 20; i++)
+                    _article('s$i', _today.add(Duration(minutes: 60 - i))),
+                ]),
+              }),
+            ),
+          );
+          await tester.drag(
+            find.byType(CustomScrollView),
+            const Offset(0, -400),
+          );
+          await tester.pumpAndSettle();
+          ScrollableState list() => tester.state<ScrollableState>(
+            find
+                .descendant(
+                  of: find.byType(CustomScrollView),
+                  matching: find.byType(Scrollable),
+                )
+                .first,
+          );
+          final before = list();
+
+          feedDesign.value = to;
+          await tester.pump();
+          await tester.pumpAndSettle();
+
+          expect(tester.takeException(), isNull);
+          expect(list(), same(before));
+        });
+      }
+    }
   });
 }
