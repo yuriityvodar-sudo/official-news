@@ -18,7 +18,7 @@ function memoryKv(): KVNamespace {
   } as unknown as KVNamespace;
 }
 
-const baseEnv = () => ({ GA_PROPERTY: "123", ACCESS_TEAM: TEAM, ADMIN_EMAILS: "yurii@example.com, roman@example.com", GA_CLIENT_EMAIL: "reader@x.iam.gserviceaccount.com" });
+const baseEnv = () => ({ GA_PROPERTY: "123", ACCESS_TEAM: TEAM, ACCESS_AUD: "aud-admin", ADMIN_EMAILS: "yurii@example.com, roman@example.com", GA_CLIENT_EMAIL: "reader@x.iam.gserviceaccount.com" });
 const env: AdminEnv = { ...baseEnv(), ADMIN_KV: memoryKv() };
 
 const b64url = (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
@@ -50,7 +50,7 @@ function fakeFetch(publicJwk: JsonWebKey, reports: unknown[] = [], kid = "k1"): 
   }) as typeof fetch;
 }
 
-const claims = (email: string, minutes = 60) => ({ iss: `https://${TEAM}.cloudflareaccess.com`, email, exp: Math.floor(Date.now() / 1000) + minutes * 60 });
+const claims = (email: string, minutes = 60) => ({ iss: `https://${TEAM}.cloudflareaccess.com`, aud: ["aud-admin"], email, exp: Math.floor(Date.now() / 1000) + minutes * 60 });
 
 describe("the admin page's lock", () => {
   it("answers 403 without Access's token, for anyone not on the list, for an expired or forged token", async () => {
@@ -64,6 +64,8 @@ describe("the admin page's lock", () => {
     expect(await go(await token(privateKey, claims("yurii@example.com", -5)))).toBe(403);
     expect(await go(await token(other.privateKey, claims("yurii@example.com")))).toBe(403);
     expect(await go(await token(privateKey, { ...claims("yurii@example.com"), iss: "https://evil.cloudflareaccess.com" }))).toBe(403);
+    expect(await go(await token(privateKey, { ...claims("yurii@example.com"), aud: ["another-app"] }))).toBe(403);
+    expect(await go(await token(privateKey, { ...claims("yurii@example.com"), aud: undefined }))).toBe(403);
     expect(await go(await token(privateKey, claims("Yurii@Example.com")))).toBe(200);
   });
 

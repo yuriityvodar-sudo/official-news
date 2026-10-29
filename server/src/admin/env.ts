@@ -5,7 +5,13 @@ export interface AdminEnv {
   GA_PROPERTY: string;
   /** Cloudflare Access's team: its sign-in tokens are checked against this team's keys. */
   ACCESS_TEAM: string;
-  /** Who may open the page, comma-separated; Cloudflare Access lets in the same two. */
+  /** The Access app's Application Audience (AUD) tag: a token must be for this app. Not a secret. */
+  ACCESS_AUD: string;
+  /**
+   * Who may open the page, comma-separated; Cloudflare Access lets in the same
+   * two. A Worker secret, so our addresses stay out of the public repo; when
+   * it is missing nobody gets in.
+   */
   ADMIN_EMAILS: string;
   /** The analytics-reader service account (read only on the property), whose key this Worker makes itself (selfkey.ts). */
   GA_CLIENT_EMAIL: string;

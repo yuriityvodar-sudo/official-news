@@ -25,7 +25,7 @@ async function teamKeys(team: string, fetcher: typeof fetch, kid?: unknown): Pro
   return keys.keys;
 }
 
-/** The signed-in person's e-mail when the token is Access's, unexpired and for one of ADMIN_EMAILS; otherwise null. */
+/** The signed-in person's e-mail when the token is Access's, for this Access app (ACCESS_AUD), unexpired and for one of ADMIN_EMAILS; otherwise null. */
 export async function signedInEmail(request: Request, env: AdminEnv, fetcher: typeof fetch = fetch, now = Date.now()): Promise<string | null> {
   const token = request.headers.get("cf-access-jwt-assertion");
   if (!token) return null;
@@ -41,9 +41,12 @@ export async function signedInEmail(request: Request, env: AdminEnv, fetcher: ty
   }
   if (header.alg !== "RS256") return null;
   if (claims.iss !== `https://${env.ACCESS_TEAM}.cloudflareaccess.com`) return null;
+  // A token Access issued for another app of the team does not open this one.
+  const aud = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
+  if (!env.ACCESS_AUD || !aud.includes(env.ACCESS_AUD)) return null;
   if (typeof claims.exp !== "number" || claims.exp * 1000 <= now) return null;
   const email = typeof claims.email === "string" ? claims.email.toLowerCase() : "";
-  const allowed = env.ADMIN_EMAILS.split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
+  const allowed = (env.ADMIN_EMAILS ?? "").split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
   if (!allowed.includes(email)) return null;
   const jwk = (await teamKeys(env.ACCESS_TEAM, fetcher, header.kid)).find((k) => k.kid === header.kid);
   if (!jwk) return null;
