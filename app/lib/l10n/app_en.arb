@@ -1154,9 +1154,9 @@
   "@privacySupportHeading": {
     "description": "A heading of the privacy policy."
   },
-  "privacySupport": "Messages you send us in the app are kept with an anonymous ID of your phone (not your name), the app's version and language, and your notification token if you allowed notifications, so we can reply. We delete a conversation 90 days after it is closed or goes quiet.",
+  "privacySupport": "Messages you send us in the app are kept with an anonymous ID of your phone (not your name), the app's version and language, and your notification token if you allowed notifications, so we can reply. We delete a conversation 90 days after it is closed or goes quiet. To limit messages to 5 a day, we also keep a one-way code of your network address until the end of that day (UTC).",
   "@privacySupport": {
-    "description": "The privacy policy's section on messages to us in the app (#220)."
+    "description": "The privacy policy's section on messages to us in the app (#220), with the one-way code of the network address kept until the day ends (UTC) for the limit of 5 messages a day (Roman's review of #221)."
   },
   "termsSubscriptionHeading": "AI agent subscription",
   "@termsSubscriptionHeading": {

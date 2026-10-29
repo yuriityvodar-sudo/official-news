@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../../core/api_client.dart';
 import '../../core/feed_language.dart';
@@ -250,7 +249,7 @@ class _SupportScreenState extends State<SupportScreen>
 
   /// The field and Send; a counter once the message nears the limit.
   Widget _composer(BuildContext context, AppLocalizations l10n) {
-    final left = supportMaxLength - _field.text.length;
+    final left = supportMaxLength - supportLength(_field.text);
     final empty = _field.text.trim().isEmpty;
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 6, 12, 10),
@@ -262,8 +261,7 @@ class _SupportScreenState extends State<SupportScreen>
             placeholder: l10n.supportPlaceholder,
             minLines: 3,
             maxLines: 8,
-            maxLength: supportMaxLength,
-            maxLengthEnforcement: MaxLengthEnforcement.enforced,
+            inputFormatters: const [SupportLengthFormatter()],
             enabled: !_sending,
             textCapitalization: TextCapitalization.sentences,
             padding: const EdgeInsets.all(12),

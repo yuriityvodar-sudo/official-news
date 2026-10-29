@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:math';
 
+import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart' show StringCharacters;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api_client.dart';
@@ -68,8 +70,44 @@ class SupportLimit extends ApiException {
   final DateTime? resetsAt;
 }
 
-/// The longest message the server takes, after trimming.
+/// The longest message the server takes, after trimming, in Unicode code
+/// points (runes), as the server counts it (docs/contract.md).
 const supportMaxLength = 2000;
+
+/// A message's length as the server counts it: code points, so 👍🏽 is 2.
+int supportLength(String text) => text.runes.length;
+
+/// Keeps the field at most [supportMaxLength] code points, cut between whole
+/// characters, so an emoji is never split. Like Flutter's own length limit, an
+/// edit to a full field is refused, and a longer paste is cut at its end.
+class SupportLengthFormatter extends TextInputFormatter {
+  const SupportLengthFormatter();
+
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    if (supportLength(newValue.text) <= supportMaxLength) return newValue;
+    if (supportLength(oldValue.text) >= supportMaxLength) return oldValue;
+    var runes = 0;
+    var end = 0;
+    for (final character in newValue.text.characters) {
+      final n = supportLength(character);
+      if (runes + n > supportMaxLength) break;
+      runes += n;
+      end += character.length;
+    }
+    final selection = newValue.selection;
+    return TextEditingValue(
+      text: newValue.text.substring(0, end),
+      selection: selection.copyWith(
+        baseOffset: min(selection.baseOffset, end),
+        extentOffset: min(selection.extentOffset, end),
+      ),
+    );
+  }
+}
 
 const _deviceKey = 'support.device';
 

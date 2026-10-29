@@ -424,6 +424,46 @@ void main() {
       expect(find.text(en.supportCharsLeft(0)), findsOneWidget);
     });
 
+    testWidgets('the limit counts code points, as the server does: 👍🏽 is 2', (
+      tester,
+    ) async {
+      await pump(tester);
+      final field = find.byType(CupertinoTextField);
+      String text() =>
+          tester.widget<CupertinoTextField>(field).controller!.text;
+      // 👍🏽 is 2 code points, 4 UTF-16 units and 1 character on screen.
+      expect('👍🏽'.runes.length, 2);
+      await tester.enterText(field, '👍🏽' * 950);
+      await tester.pump();
+      expect(find.text(en.supportCharsLeft(100)), findsOneWidget);
+      // 1,001 of them would be 2,002 code points: cut to 1,000, never half a 👍🏽.
+      await tester.enterText(field, '${'👍🏽' * 1001}a');
+      await tester.pump();
+      expect(text(), '👍🏽' * 1000);
+      expect(find.text(en.supportCharsLeft(0)), findsOneWidget);
+      // 1,999 letters and one 👍🏽 do not fit: the 👍🏽 goes whole.
+      await tester.enterText(field, '');
+      await tester.enterText(field, '${'a' * 1999}👍🏽');
+      await tester.pump();
+      expect(text(), 'a' * 1999);
+      expect(find.text(en.supportCharsLeft(1)), findsOneWidget);
+    });
+
+    test('a full field takes no more, wherever the edit is', () {
+      const formatter = SupportLengthFormatter();
+      final full = TextEditingValue(
+        text: 'a' * supportMaxLength,
+        selection: const TextSelection.collapsed(offset: 10),
+      );
+      final inserted = TextEditingValue(
+        text: '${'a' * 10}😀${'a' * (supportMaxLength - 10)}',
+        selection: const TextSelection.collapsed(offset: 12),
+      );
+      expect(formatter.formatEditUpdate(full, inserted), full);
+      const short = TextEditingValue(text: 'hi');
+      expect(formatter.formatEditUpdate(TextEditingValue.empty, short), short);
+    });
+
     testWidgets('back in the app, the reply is read again', (tester) async {
       server.thread = waiting('Hello');
       await pump(tester);
