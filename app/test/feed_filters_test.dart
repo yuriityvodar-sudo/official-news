@@ -87,19 +87,6 @@ final _week = [
 
 /// The groups as the server defines them (`GROUPS`), with the members these
 /// tests have articles for; `EU` is the EU institutions.
-const _groups = {
-  'eu': {'DE', 'FR', 'EU'},
-  'g7': {'DE', 'FR', 'GB', 'JP', 'US', 'EU'},
-  'g20': {'DE', 'FR', 'GB', 'JP', 'TR', 'US', 'EU'},
-  'nato': {'DE', 'FR', 'GB', 'TR', 'US'},
-};
-
-const _groupNames = {
-  'en': {'eu': 'European Union', 'g7': 'G7', 'g20': 'G20', 'nato': 'NATO'},
-  'uk': {'eu': 'Європейський Союз', 'g7': 'G7', 'g20': 'G20', 'nato': 'НАТО'},
-  'de': {'eu': 'Europäische Union', 'g7': 'G7', 'g20': 'G20', 'nato': 'NATO'},
-};
-
 const _topicNames = {
   'en': {
     'economy': 'Economy',
@@ -117,25 +104,6 @@ const _topicNames = {
   },
 };
 
-const _countryNames = {
-  'en': {
-    'DE': 'Germany',
-    'GB': 'United Kingdom',
-    'JP': 'Japan',
-    'TR': 'Türkiye',
-    'US': 'United States',
-    'NZ': 'New Zealand',
-  },
-  'uk': {
-    'DE': 'Німеччина',
-    'GB': 'Велика Британія',
-    'JP': 'Японія',
-    'TR': 'Туреччина',
-    'US': 'США',
-    'NZ': 'Нова Зеландія',
-  },
-};
-
 http.Response _ok(Object body) => http.Response.bytes(
   utf8.encode(jsonEncode(body)),
   200,
@@ -148,13 +116,12 @@ http.Response _bad(String message) => http.Response.bytes(
   headers: {'content-type': 'application/json; charset=utf-8'},
 );
 
-/// A server that follows the contract for the filters: `country=` (only that
-/// country), `group=` (its members, refused when unknown, never with
-/// `country=`) and `topic=` on every article request, `GET /topics` busiest
-/// first under them, `GET /countries` with its groups (fixed order) and the
-/// countries with sources (by name), which the app no longer shows (#170).
-/// Without [menus], a server from before them: both menus answer 404 and every
-/// filter is ignored. Pages of [pageSize]; the cursor is the next offset.
+/// A server that follows the contract for the filters: `topic=` on every
+/// article request, and `GET /topics` busiest first. It refuses `country=`
+/// and `group=` (#68), which builds from before For you sent: this one never
+/// does (#170). Without [menus], a server from before them: `/topics`
+/// answers 404 and every filter is ignored. Pages of [pageSize]; the cursor
+/// is the next offset.
 /// `for=XX` (#170): XX's own, the EU institutions' for a member, and the
 /// world's of importance 3 or more; `GET /locate` answers [located]; the
 /// first page's `top` is [topIds] among what the page's filters show.
@@ -170,8 +137,6 @@ class _Server {
   }) : articles = articles ?? _week;
 
   List<Map<String, dynamic>> articles;
-  final countries = const ['DE', 'GB', 'JP', 'TR', 'US'];
-  final groupIds = const ['eu', 'g7', 'g20', 'nato'];
   final bool menus;
   final List<String> extraTopics;
   final int pageSize;
@@ -204,21 +169,6 @@ class _Server {
       switch (request.url.path) {
         case '/locate':
           return _ok({'country': located});
-        case '/countries':
-          final names = _countryNames[lang]!;
-          return _ok({
-            'groups': [
-              for (final id in groupIds)
-                {
-                  'id': id,
-                  'name': _groupNames[lang]?[id] ?? id.toUpperCase(),
-                  'members': [...?_groups[id]],
-                },
-            ],
-            'countries': [
-              for (final c in countries) {'code': c, 'name': names[c]!},
-            ]..sort((a, b) => a['name']!.compareTo(b['name']!)),
-          });
         case '/topics':
           final counts = <String, int>{};
           for (final a in _matching(q, topic: false)) {
@@ -266,26 +216,18 @@ class _Server {
     }),
   );
 
-  /// The server's 400s for the Where filter.
-  String? _check(Map<String, String> q) {
-    if (!menus) return null;
-    if (q.containsKey('country') && q.containsKey('group')) {
-      return 'country and group cannot be used together: send one of them';
-    }
-    final group = q['group'];
-    if (group != null && !groupIds.contains(group)) {
-      return 'group must be one of: ${groupIds.join(', ')}';
-    }
-    return null;
-  }
+  /// A 400 for the Where filter of 16 Oct (#68), which this build never
+  /// sends: For you replaced it (#170).
+  String? _check(Map<String, String> q) =>
+      q.containsKey('country') || q.containsKey('group')
+      ? 'this build sends neither country= nor group='
+      : null;
 
   List<Map<String, dynamic>> _matching(
     Map<String, String> q, {
     bool topic = true,
   }) {
     if (!menus) return articles;
-    final country = q['country'];
-    final group = _groups[q['group']];
     final id = topic ? q['topic'] : null;
     final home = q['for'];
     bool forYou(Map<String, dynamic> a) =>
@@ -294,9 +236,7 @@ class _Server {
         (a['importance'] as int) >= 3;
     return [
       for (final a in articles)
-        if ((country == null || a['country'] == country) &&
-            (group == null || group.contains(a['country'])) &&
-            (home == null || forYou(a)) &&
+        if ((home == null || forYou(a)) &&
             (id == null || (a['topics'] as List).contains(id)))
           a,
     ];
@@ -768,7 +708,6 @@ void main() {
     await _pick(tester, _topics, 'Housing');
     expect(_shown(tester), isEmpty);
     expect(find.text('No decisions here in the last 7 days.'), findsOneWidget);
-    expect(find.text('Show all countries'), findsNothing);
     // The button that undoes a filter is the filters' red.
     expect(
       tester
@@ -880,6 +819,10 @@ void main() {
       'feed.where': 'group:g7',
       'feed.topic': 'health',
       'feed.scope': 'local',
+      // The Where menus and the flag kept for them (#68).
+      'feed.whereMenu.en': '{"groups":null,"countries":[]}',
+      'feed.whereMenu.uk': '{"groups":null,"countries":[]}',
+      'feed.noCountries': true,
     });
     final again = _Server();
     final next = FeedController(api: again.api);
@@ -892,9 +835,18 @@ void main() {
     for (final param in ['group', 'country', 'for']) {
       expect(q.containsKey(param), isFalse, reason: param);
     }
-    // The first filters build's Local is dropped as before.
+    // The first filters build's Local is dropped as before, and the Where
+    // menus with it; nothing asks for them any more.
     final prefs = await SharedPreferences.getInstance();
-    expect(prefs.containsKey('feed.scope'), isFalse);
+    for (final key in [
+      'feed.scope',
+      'feed.whereMenu.en',
+      'feed.whereMenu.uk',
+      'feed.noCountries',
+    ]) {
+      expect(prefs.containsKey(key), isFalse, reason: key);
+    }
+    expect(again.log.where((u) => u.path == '/countries'), isEmpty);
   });
 
   testWidgets('the analytics event says what the choice is now', (
@@ -906,9 +858,9 @@ void main() {
     await _pick(tester, _topics, 'Health'); // no change: no event
     await _pick(tester, _topics, 'For you');
     expect(filterEvents(), [
-      {'where': 'all', 'place': 'all', 'topic': 'all'},
-      {'where': 'all', 'place': 'all', 'topic': 'health'},
-      {'where': 'forYou', 'place': 'all', 'topic': 'all'},
+      {'where': 'all', 'topic': 'all'},
+      {'where': 'all', 'topic': 'health'},
+      {'where': 'forYou', 'topic': 'all'},
     ]);
     // Never `value`: Google Analytics keeps it for a number and drops a text.
     for (final e in filterEvents()) {
@@ -956,7 +908,7 @@ void main() {
     );
   });
 
-  group('a server without /topics and /countries', () {
+  group('a server without /topics', () {
     testWidgets('the menu has For you and the whole world only', (
       tester,
     ) async {
@@ -1168,27 +1120,6 @@ void main() {
     ]) {
       expect(topicIcons.values, isNot(contains(other)));
     }
-  });
-
-  test("a group's chip is its short name in the app's language", () {
-    const expected = {
-      FeedLanguage.en: ['EU', 'G7', 'G20', 'NATO'],
-      FeedLanguage.uk: ['ЄС', 'G7', 'G20', 'НАТО'],
-      FeedLanguage.ru: ['ЕС', 'G7', 'G20', 'НАТО'],
-      FeedLanguage.es: ['UE', 'G7', 'G20', 'OTAN'],
-      FeedLanguage.de: ['EU', 'G7', 'G20', 'NATO'],
-    };
-    expect(expected.keys.toSet(), FeedLanguage.values.toSet());
-    for (final MapEntry(key: lang, value: short) in expected.entries) {
-      final l10n = l10nFor(lang);
-      expect(
-        [for (final id in groupIds) groupShortName(id, l10n)],
-        short,
-        reason: lang.code,
-      );
-    }
-    // A group the app does not know: its id in capitals.
-    expect(groupShortName('brics', l10nFor()), 'BRICS');
   });
 
   testWidgets("a topic the app does not know yet: the server's name", (

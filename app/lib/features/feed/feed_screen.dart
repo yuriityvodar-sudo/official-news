@@ -630,9 +630,8 @@ class _FeedScreenState extends State<FeedScreen> {
     ].join(' · ');
   }
 
-  /// A filtered feed with nothing in it (#67, #68): says so, with a way back
-  /// to all countries and to all topics, whichever narrows it. A group is a
-  /// fixed choice, so it can be empty too.
+  /// A topic with nothing in it (#67): says so, with a way back to all
+  /// topics.
   Widget _filteredEmpty(BuildContext context) {
     final text = NewsText.from(context);
     final l10n = AppLocalizations.of(context);
@@ -654,11 +653,6 @@ class _FeedScreenState extends State<FeedScreen> {
       children: [
         Text(l10n.filterEmpty, style: text.meta),
         const SizedBox(height: 4),
-        if (!_feed.where.isAll && !_feed.where.isForYou)
-          undo(
-            l10n.filterShowAllCountries,
-            () => _chooseFeed(FeedWhere.all, _feed.topic),
-          ),
         if (_feed.topic != null)
           undo(l10n.filterShowAllTopics, () => _chooseFeed(_feed.where, null)),
       ],
