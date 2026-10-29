@@ -28,5 +28,8 @@
   },
   // This Worker's own storage, for its Google key only; no other Worker binds it.
   "kv_namespaces": [{ "binding": "ADMIN_KV", "id": "7ae84e6c07104a778fd5da307d7bb927" }],
+  // The API's database (#220), for readers' messages: this Worker reads and writes
+  // only the support tables. Migrations are applied with the API's config (wrangler.jsonc).
+  "d1_databases": [{ "binding": "DB", "database_name": "official-news", "database_id": "67052e61-5544-4c6d-a182-1321192f3d0a" }],
   "observability": { "enabled": true }
 }
