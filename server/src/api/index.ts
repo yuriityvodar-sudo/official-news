@@ -2,6 +2,7 @@ import { receiveNotification } from "../appstore";
 import { answerChat, chatStatus, creditChatPack } from "../chat";
 import type { Env } from "../env";
 import { REAL_SOURCE, health } from "../health";
+import { postSupportMessage, supportThread } from "../support";
 import { TOPICS, type Topic } from "../summarizer/schema";
 import { LANGS, type Lang, SHOWN, isLang, queueStatus, releaseStatus } from "../translator";
 import {
@@ -702,6 +703,19 @@ async function route(request: Request, env: Env): Promise<Response> {
         "x-chat-units": String(result.units),
       },
     });
+  }
+
+  // Messages from readers (#220): never cached (no-store, json). The phone's id comes in a header, never in the URL.
+  if (url.pathname === "/v1/support/messages") {
+    if (request.method !== "POST") return json({ error: "Method not allowed" }, 405, { allow: "POST" });
+    const body = await request.json().catch(() => null);
+    const answer = await postSupportMessage(body, request.headers.get("cf-connecting-ip"), env);
+    return json(answer.body, answer.status);
+  }
+  if (url.pathname === "/v1/support/thread") {
+    if (request.method !== "GET") return json({ error: "Method not allowed" }, 405, { allow: "GET" });
+    const answer = await supportThread(request.headers.get("x-support-device"), env);
+    return json(answer.body, answer.status);
   }
 
   if (request.method !== "GET") return json({ error: "Method not allowed" }, 405, { allow: "GET" });
