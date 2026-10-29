@@ -1007,8 +1007,10 @@ void main() {
               reason: '$opaque',
             );
           }
-          // The same deep colour in both themes, the look's own first.
+          // The same deep colour in both themes, the look's own first; iOS's
+          // row tints its chosen pill with it too.
           expect(colors.first.withValues(alpha: 1), accent);
+          expect(tester.widget<FeedPills>(find.byType(FeedPills)).tint, accent);
           expect(
             tester.widget<Text>(find.text('For you')).style!.color,
             const Color(0xFFFFFFFF),
