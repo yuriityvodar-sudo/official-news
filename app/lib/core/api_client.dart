@@ -92,20 +92,19 @@ class ApiClient {
   /// without the parameter.
   /// An article that is not in `lang` is dropped here, whatever the server sends
   /// ([ArticlesPage.inLanguage]).
-  /// With `country` (two letters, #68) only that country's articles; with
-  /// `group` (a group's id from [fetchCountries]) its countries' articles
-  /// together, at most one of the two; with `topic` (#67) only that topic's.
-  /// Pages, cursors, `after` and `top` all follow them, so every request for
-  /// one feed sends the same ones.
+  /// With `topic` (#67) only that topic's; with `forCountry` (#170) what
+  /// concerns a reader in that country, For you. Pages, cursors, `after` and
+  /// `top` all follow them, so every request for one feed sends the same
+  /// ones. The server still takes `country=` and `group=` (#68) for builds
+  /// from before For you; this one never sends them.
   Future<ArticlesPage> fetchArticles({
     String? cursor,
     DateTime? since,
     int? after,
     int limit = 20,
     String? lang,
-    String? country,
-    String? group,
     String? topic,
+    String? forCountry,
   }) async {
     final param = _langParam(lang);
     final uri = Uri.parse('$_baseUrl/articles').replace(
@@ -115,13 +114,22 @@ class ApiClient {
         if (since != null) 'since': since.toUtc().toIso8601String(),
         if (after != null) 'after': '$after',
         'lang': ?param,
-        'country': ?country,
-        'group': ?group,
         'topic': ?topic,
+        'for': ?forCountry,
       },
     );
     final page = ArticlesPage.fromJson(await _getJson(uri));
     return param == null ? page : page.inLanguage(param);
+  }
+
+  /// `GET /locate` (#170): the country the server sees this phone in, for For
+  /// you on a phone without a region; null when it does not know (a local
+  /// run, Tor). Never cached, never stored on the server.
+  Future<String?> locate() async {
+    final country = (await _getJson(Uri.parse('$_baseUrl/locate')))['country'];
+    return country is String && RegExp(r'^[A-Z]{2}$').hasMatch(country)
+        ? country
+        : null;
   }
 
   /// `GET /articles/:id`; with `lang`, 404 when it is not translated, also when
@@ -141,47 +149,17 @@ class ApiClient {
   }
 
   /// `GET /topics` (#67): the topics with at least one article in the feed's
-  /// 7 days, under `country` or `group` when given, busiest first, named in
-  /// `lang`. A server without it answers 404 ([ApiException]); an answer of
-  /// another shape is a [FormatException].
-  Future<List<FeedTopic>> fetchTopics({
-    String? lang,
-    String? country,
-    String? group,
-  }) async {
+  /// 7 days, the whole world's, busiest first, named in `lang`. A server
+  /// without it answers 404 ([ApiException]); an answer of another shape is a
+  /// [FormatException].
+  Future<List<FeedTopic>> fetchTopics({String? lang}) async {
     final json = await _getJson(
-      _withQuery('$_baseUrl/topics', {
-        'lang': ?_langParam(lang),
-        'country': ?country,
-        'group': ?group,
-      }),
+      _withQuery('$_baseUrl/topics', {'lang': ?_langParam(lang)}),
     );
     return [
       for (final t in _list(json, 'topics'))
         FeedTopic(_string(t, 'id'), _string(t, 'name')),
     ];
-  }
-
-  /// `GET /countries` (#68): the Where menu, named in `lang`, in the server's
-  /// order: the groups of countries, then the countries that have sources.
-  /// A server from before the groups has no `groups`: [WhereMenu.groups] is
-  /// null, and the menu has the countries only.
-  Future<WhereMenu> fetchCountries({String? lang}) async {
-    final json = await _getJson(
-      _withQuery('$_baseUrl/countries', {'lang': ?_langParam(lang)}),
-    );
-    return WhereMenu(
-      groups: json['groups'] == null
-          ? null
-          : [
-              for (final g in _list(json, 'groups'))
-                FeedGroup(_string(g, 'id'), _string(g, 'name')),
-            ],
-      countries: [
-        for (final c in _list(json, 'countries'))
-          FeedCountry(_string(c, 'code'), _string(c, 'name')),
-      ],
-    );
   }
 
   static Uri _withQuery(String url, Map<String, String> query) {

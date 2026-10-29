@@ -240,7 +240,7 @@ void main() {
       expect(pill, findsOneWidget);
 
       // At the top, with the whole masthead open.
-      final chips = find.text('All topics').hitTestable();
+      final chips = find.text('For you').hitTestable();
       expect(
         tester.getTopLeft(pill).dy,
         greaterThan(tester.getBottomLeft(chips).dy + 8),

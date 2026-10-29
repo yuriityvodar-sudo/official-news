@@ -8,6 +8,7 @@ import 'package:flutter/rendering.dart';
 
 import '../../core/analytics.dart';
 import '../../core/card_zoom.dart';
+import '../../core/countries.dart';
 import '../../core/glass.dart';
 import '../../core/article.dart';
 import '../../core/feed_language.dart';
@@ -108,6 +109,7 @@ class _FeedScreenState extends State<FeedScreen> {
     if (widget.controller == null) _feed.dispose();
     _scroll.dispose();
     _masthead.dispose();
+    _pull.dispose();
     super.dispose();
   }
 
@@ -191,6 +193,62 @@ class _FeedScreenState extends State<FeedScreen> {
     }
   }
 
+  /// How the last pull to refresh went, for the look to say it (#166).
+  FeedRefreshed? _refreshed;
+
+  /// The pull to refresh as the gap last showed it, for the masthead.
+  final _pull = ValueNotifier<FeedPull?>(null);
+
+  /// How long the gap stays open once the feed has loaded, with how it went.
+  static const _refreshedFor = Duration(milliseconds: 1100);
+
+  /// The pull to refresh: the feed again, then, held a moment before the gap
+  /// closes in a look that says it, how that went ("3 new decisions", "No
+  /// new decisions"). Such a look asks the reader to let go past the refresh
+  /// point, so the feed refreshes once the pull is let go. A failure is not
+  /// held: the feed says it itself. Nor is a feed that another replaced
+  /// meanwhile (a filter chosen while the gap is open, For you's country
+  /// found): what is new in it is not the pull's to say (Yurii, #208).
+  Future<void> _pullToRefresh() async {
+    final says = lookFor(feedDesign.value).saysHowRefreshWent;
+    setState(() => _refreshed = null);
+    if (says) await (_letGo = Completer<void>()).future;
+    if (!mounted) return;
+    // The Top stories block's decisions too: one that moves between the
+    // block and the list is not new.
+    Iterable<Article> shown() => [..._feed.topStories, ..._feed.feed];
+    final before = {for (final article in shown()) article.id};
+    final switches = _feed.switches;
+    await _feed.refresh();
+    if (!mounted || _feed.error != null || _feed.switches != switches) return;
+    setState(
+      () => _refreshed = FeedRefreshed(
+        shown().where((a) => !before.contains(a.id)).length,
+        wasEmpty: before.isEmpty,
+      ),
+    );
+    if (says) await Future<void>.delayed(_refreshedFor);
+  }
+
+  /// A pull past the refresh point, waiting to be let go ([_scrolled]).
+  Completer<void>? _letGo;
+
+  /// The feed moves, or stops, without a finger on it: a pull held past the
+  /// refresh point has been let go.
+  bool _scrolled(ScrollNotification scroll) {
+    final letGo = switch (scroll) {
+      ScrollUpdateNotification(:final dragDetails) => dragDetails == null,
+      ScrollEndNotification() => true,
+      _ => false,
+    };
+    // The feed's own scrolling, not a row inside it.
+    if (letGo && scroll.depth == 0) {
+      _letGo?.complete();
+      _letGo = null;
+    }
+    return false;
+  }
+
   /// The "N new" pill: to the top first, then the new decisions spring in
   /// there, in view (#141).
   Future<void> _showNew() async {
@@ -264,6 +322,9 @@ class _FeedScreenState extends State<FeedScreen> {
           onLanguage: _chooseLanguage,
           saveDesign: _feed.saveDesign,
           saveHeadlineWeight: _feed.saveHeadlineWeight,
+          country: _feed.chosenCountry,
+          phoneCountry: _feed.phoneCountryChanges,
+          onCountry: (code) => unawaited(_feed.setChosenCountry(code)),
         ),
       ),
     );
@@ -292,23 +353,14 @@ class _FeedScreenState extends State<FeedScreen> {
     await _feed.setLanguage(chosen);
   }
 
-  /// Every country, a group or one country from the chip (#68): another
+  /// For you, the whole world or one topic from the menu (#170): another
   /// feed, from the top.
-  Future<void> _chooseWhere(FeedWhere where) async {
-    if (where != _feed.where) {
+  Future<void> _chooseFeed(FeedWhere where, String? topic) async {
+    if (where != _feed.where || topic != _feed.topic) {
       Haptics.selection();
       _toTop();
     }
-    await _feed.setWhere(where);
-  }
-
-  /// One topic, or all, from the chip (#67): another feed, from the top.
-  Future<void> _chooseTopic(String? topic) async {
-    if (topic != _feed.topic) {
-      Haptics.selection();
-      _toTop();
-    }
-    await _feed.setTopic(topic);
+    await _feed.setFeed(where, topic: topic);
   }
 
   void _toTop() {
@@ -330,8 +382,13 @@ class _FeedScreenState extends State<FeedScreen> {
   Widget _page(BuildContext context, FeedLook look) {
     final l10n = AppLocalizations.of(context);
     final foldedTitle = look.foldedTitle(context, 'Outer News');
-    return Scaffold(
-      backgroundColor: look.background(context),
+    // A look's backdrop runs under the status bar and the masthead as one
+    // piece, so no seam shows between them.
+    final backdrop = look.backdrop(context);
+    final page = Scaffold(
+      backgroundColor: backdrop == null
+          ? look.background(context)
+          : const Color(0x00000000),
       body: SafeArea(
         bottom: false,
         child: Stack(
@@ -344,7 +401,22 @@ class _FeedScreenState extends State<FeedScreen> {
               slivers: [
                 // Pull to refresh works in every state, including error and empty.
                 // It taps back itself as the pull passes the refresh point.
-                CupertinoSliverRefreshControl(onRefresh: _feed.refresh),
+                CupertinoSliverRefreshControl(
+                  onRefresh: _pullToRefresh,
+                  builder: (context, mode, pulled, trigger, extent) {
+                    final pull = FeedPull(
+                      mode: mode,
+                      pulled: pulled,
+                      trigger: trigger,
+                      extent: extent,
+                      result: _refreshed,
+                    );
+                    // Called while the feed is laid out: only painters
+                    // listen (FeedMasthead.pull).
+                    _pull.value = pull;
+                    return look.refreshIndicator(context, pull);
+                  },
+                ),
                 _MastheadEdge(
                   link: _masthead,
                   sliver: look.masthead(
@@ -354,14 +426,11 @@ class _FeedScreenState extends State<FeedScreen> {
                       title: 'Outer News',
                       date: longDay(DateTime.now(), l10n),
                       openSettings: _openSettings,
-                      filterBar: FeedFilterBar(
-                        where: _feed.where,
-                        whereMenu: _feed.whereMenu,
-                        topic: _feed.topic,
-                        topics: _feed.topics,
-                        onWhere: _chooseWhere,
-                        onTopic: _chooseTopic,
-                      ),
+                      where: _feed.where,
+                      topic: _feed.topic,
+                      topics: _feed.topics,
+                      onChoose: _chooseFeed,
+                      pull: _pull,
                     ),
                   ),
                 ),
@@ -370,17 +439,18 @@ class _FeedScreenState extends State<FeedScreen> {
             ),
             // Rows fade softly at the top edge once the feed is scrolled, and
             // the app's name folds into a small title there (#141).
-            Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              child: _TopFade(
-                scroll: _scroll,
-                color: look.background(context),
-                title: foldedTitle,
-                onTitleTap: () => unawaited(_toTopSmoothly()),
+            if (look.fadesTopEdge)
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: _TopFade(
+                  scroll: _scroll,
+                  color: look.background(context),
+                  title: foldedTitle,
+                  onTitleTap: () => unawaited(_toTopSmoothly()),
+                ),
               ),
-            ),
             if (_feed.newCount > 0)
               Positioned.fill(
                 child: _UnderMasthead(
@@ -401,6 +471,15 @@ class _FeedScreenState extends State<FeedScreen> {
           ],
         ),
       ),
+    );
+    final scrolled = NotificationListener<ScrollNotification>(
+      onNotification: _scrolled,
+      child: page,
+    );
+    if (backdrop == null) return scrolled;
+    return DecoratedBox(
+      decoration: BoxDecoration(gradient: backdrop),
+      child: scrolled,
     );
   }
 
@@ -454,8 +533,12 @@ class _FeedScreenState extends State<FeedScreen> {
     }
 
     // The Top stories block, then one list without its decisions (#164); the
-    // server has applied the filters (#67, #68).
+    // server has applied the filters (#67, #68). In For you they are the
+    // reader's country's top stories (#170).
     final block = _feed.topStories;
+    final forYou = _feed.where.isForYou && _feed.topic == null
+        ? _feed.homeCountry
+        : null;
     final shown = _feed.feed;
     final slivers = <Widget>[];
 
@@ -470,8 +553,12 @@ class _FeedScreenState extends State<FeedScreen> {
         look.topStories(
           context,
           TopStories(
-            title: l10n.topStoriesTitle,
-            caption: l10n.topStoriesCaption,
+            title: forYou != null
+                ? l10n.topStoriesForYouTitle
+                : l10n.topStoriesTitle,
+            caption: forYou != null
+                ? _forYouCaption(l10n, forYou)
+                : l10n.topStoriesCaption,
             list: FeedList(
               articles: block,
               readIds: _feed.readIds,
@@ -530,9 +617,20 @@ class _FeedScreenState extends State<FeedScreen> {
     sliver: SliverToBoxAdapter(child: child),
   );
 
-  /// A filtered feed with nothing in it (#67, #68): says so, with a way back
-  /// to all countries and to all topics, whichever narrows it. A group is a
-  /// fixed choice, so it can be empty too.
+  /// What picked For you's top stories (#170): "Czechia · European Union ·
+  /// the world's top stories", the European Union for its members only; a
+  /// country the app has no name for is "Your country".
+  String _forYouCaption(AppLocalizations l10n, String home) {
+    final name = countryName(home, l10n);
+    return [
+      name == home ? l10n.yourCountry : name,
+      if (euMembers.contains(home)) l10n.countryEU,
+      l10n.topStoriesForYouWorld,
+    ].join(' · ');
+  }
+
+  /// A topic with nothing in it (#67): says so, with a way back to all
+  /// topics.
   Widget _filteredEmpty(BuildContext context) {
     final text = NewsText.from(context);
     final l10n = AppLocalizations.of(context);
@@ -554,10 +652,8 @@ class _FeedScreenState extends State<FeedScreen> {
       children: [
         Text(l10n.filterEmpty, style: text.meta),
         const SizedBox(height: 4),
-        if (!_feed.where.isAll)
-          undo(l10n.filterShowAllCountries, () => _chooseWhere(FeedWhere.all)),
         if (_feed.topic != null)
-          undo(l10n.filterShowAllTopics, () => _chooseTopic(null)),
+          undo(l10n.filterShowAllTopics, () => _chooseFeed(_feed.where, null)),
       ],
     );
   }

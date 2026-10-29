@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The app's red (AppColors.accent), behind the push notification's icon. -->
+    <color name="notification">#FA2D48</color>
+</resources>

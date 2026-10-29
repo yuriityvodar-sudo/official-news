@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart' show Theme;
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -9,11 +11,15 @@ import 'package:official_news/core/analytics.dart';
 import 'package:official_news/core/api_client.dart';
 import 'package:official_news/core/feed_language.dart';
 import 'package:official_news/core/feed_store.dart';
+import 'package:official_news/core/filters.dart';
+import 'package:official_news/core/glass.dart';
 import 'package:official_news/core/router.dart';
 import 'package:official_news/core/theme.dart';
+import 'package:official_news/core/topics.dart';
 import 'package:official_news/features/chat/chat_style.dart';
 import 'package:official_news/features/feed/feed_controller.dart';
 import 'package:official_news/features/feed/feed_look.dart';
+import 'package:official_news/features/feed/feed_pills.dart';
 import 'package:official_news/features/feed/feed_screen.dart';
 import 'package:official_news/features/feed/feed_touches.dart';
 import 'package:official_news/features/settings/settings_screen.dart';
@@ -146,9 +152,11 @@ void main() {
     List<Map<String, dynamic>> top, {
     ApiClient? api,
     FeedLanguage language = FeedLanguage.en,
+    double width = 393,
     double height = 852,
+    Brightness brightness = Brightness.light,
   }) async {
-    tester.view.physicalSize = Size(393, height) * 3;
+    tester.view.physicalSize = Size(width, height) * 3;
     tester.view.devicePixelRatio = 3;
     addTearDown(tester.view.reset);
     final feed = FeedController(api: api ?? _api(items, top));
@@ -156,9 +164,12 @@ void main() {
       testApp(
         language: language,
         onGenerateRoute: onGenerateRoute,
-        home: FeedScreen(
-          controller: feed,
-          newCheckEvery: const Duration(hours: 1),
+        home: Theme(
+          data: buildTheme(brightness),
+          child: FeedScreen(
+            controller: feed,
+            newCheckEvery: const Duration(hours: 1),
+          ),
         ),
       ),
     );
@@ -280,22 +291,35 @@ void main() {
       testWidgets('with a filter, the place is in the list as shown', (
         tester,
       ) async {
-        // a1 is French: with Germany chosen, the list is a2, a3 and a4.
+        // a1 is about health: with Economy chosen, the list is a2, a3 and a4.
         final items = [
           for (final a in _items)
-            a['id'] == 'a1' ? _article('a1', feedSeq: 6, country: 'FR') : a,
+            a['id'] == 'a1'
+                ? {
+                    ..._article('a1', feedSeq: 6),
+                    'topics': ['health'],
+                  }
+                : a,
         ];
         await pumpFeed(tester, items, _top);
-        await tester.tap(
-          find.byKey(const ValueKey('filter-where')).hitTestable(),
-        );
-        await tester.pumpAndSettle();
-        await tester.tap(
-          find.descendant(
-            of: find.byType(CupertinoMenuItem),
-            matching: find.text('Germany'),
-          ),
-        );
+        final pill = find.byKey(const ValueKey('pill-topic-economy'));
+        if (pill.evaluate().isNotEmpty) {
+          // Garnet and Seal: the topics are pills, along the row.
+          await tester.ensureVisible(pill);
+          await tester.pumpAndSettle();
+          await tester.tap(pill);
+        } else {
+          await tester.tap(
+            find.byKey(const ValueKey('filter-topic')).hitTestable(),
+          );
+          await tester.pumpAndSettle();
+          await tester.tap(
+            find.descendant(
+              of: find.byType(CupertinoMenuItem),
+              matching: find.text('Economy'),
+            ),
+          );
+        }
         await tester.pumpAndSettle();
         expect(find.text('Decision a1'), findsNothing);
 
@@ -522,23 +546,19 @@ void main() {
           ? const Color(0xFF0E7A5E)
           : const Color(0xFFC41230);
 
-      testWidgets('the seal in the colour before the app\'s name, the date, '
+      testWidgets('the logo before the app\'s name, the date, '
           'the filters, and every decision on a white card', (tester) async {
         await pumpFeed(tester, _items, _top);
-        final seal = find.byIcon(CupertinoIcons.checkmark_seal_fill).first;
+        final logo = find.byKey(const ValueKey('masthead-logo'));
+        expect(logo, findsOneWidget);
         expect(
-          tester.getCenter(seal).dx,
+          tester.getCenter(logo).dx,
           lessThan(tester.getTopLeft(find.text('Outer News')).dx),
         );
-        final badge = tester.widget<Container>(
-          find.ancestor(of: seal, matching: find.byType(Container)).first,
-        );
-        final gradient =
-            (badge.decoration! as BoxDecoration).gradient! as LinearGradient;
-        expect(gradient.colors.first, accent);
-        // The Where and Topics pull-downs, as in the other looks.
-        expect(find.byKey(const ValueKey('filter-where')), findsOneWidget);
-        expect(find.byKey(const ValueKey('filter-topic')), findsOneWidget);
+        // What the feed shows as pills under the date, not the other looks'
+        // menu (#170).
+        expect(find.byType(FeedPills), findsOneWidget);
+        expect(find.byKey(const ValueKey('filter-topic')), findsNothing);
         final card = tester.widget<DecoratedBox>(
           find
               .ancestor(
@@ -574,6 +594,568 @@ void main() {
           ),
         );
         expect(chat.fill, accent);
+      });
+    });
+  }
+
+  for (final design in [FeedDesign.garnet, FeedDesign.seal]) {
+    group('design ${design.name}: the tint and the pull', () {
+      setUp(() => feedDesign.value = design);
+
+      /// The look's colour: Garnet's red or Seal's green.
+      final accent = design == FeedDesign.seal
+          ? const Color(0xFF0E7A5E)
+          : const Color(0xFFC41230);
+
+      testWidgets("the page's top takes a tint of the colour, one piece with "
+          "the status bar's", (tester) async {
+        await pumpFeed(tester, _items, _top);
+        final tint = Color.alphaBlend(
+          accent.withValues(alpha: 0.1),
+          const Color(0xFFF2F2F7),
+        );
+        final backdrop = tester
+            .widgetList<DecoratedBox>(find.byType(DecoratedBox))
+            .map((box) => box.decoration)
+            .whereType<BoxDecoration>()
+            .map((decoration) => decoration.gradient)
+            .whereType<LinearGradient>()
+            .firstWhere((gradient) => gradient.colors.length == 2);
+        expect(backdrop.colors, [tint, const Color(0xFFF2F2F7)]);
+        expect(backdrop.stops, [0, 0.32]);
+      });
+
+      testWidgets('pulled down, the title and the date grow from their left '
+          'edge, grey words in the gap say to pull, and no glow rises', (
+        tester,
+      ) async {
+        await pumpFeed(tester, [_article('r0', feedSeq: 1)], const []);
+        final title = find.text('Outer News');
+        final rest = tester.getRect(title);
+        final pull = await tester.startGesture(
+          tester.getCenter(find.text('Decision r0')),
+        );
+        await pull.moveBy(const Offset(0, 60));
+        await pull.moveBy(const Offset(0, 60));
+        await tester.pump();
+        expect(find.text('Pull to refresh'), findsOneWidget);
+        expect(find.byType(ImageFiltered), findsNothing);
+        final pulled = tester.getRect(title);
+        final grown = pulled.width / rest.width;
+        expect(grown, greaterThan(1.02));
+        // From the left edge of the masthead's text, 16 points in: the
+        // name, after the seal, moves right only as much as the seal grows.
+        expect(
+          pulled.left - rest.left,
+          moreOrLessEquals((rest.left - 16) * (grown - 1), epsilon: 0.01),
+        );
+        await pull.up();
+        await tester.pumpAndSettle();
+        // Sprung back with the feed.
+        expect(tester.getRect(title), rest);
+        expect(find.text('Pull to refresh'), findsNothing);
+      });
+
+      /// A server whose first page has one decision, and [fresh] more on
+      /// top of it once it is asked again.
+      ApiClient refreshingApi(List<Map<String, dynamic>> fresh) {
+        var pages = 0;
+        return ApiClient(
+          baseUrl: 'https://api.test',
+          client: MockClient((request) async {
+            final menu = fakeMenus(request);
+            if (menu != null) return menu;
+            final query = request.url.queryParameters;
+            final newCheck =
+                query.containsKey('after') || query.containsKey('since');
+            if (!newCheck) pages++;
+            return fakeJson({
+              'items': [
+                if (!newCheck && pages > 1) ...fresh,
+                if (!newCheck) _article('r0', feedSeq: 1),
+              ],
+              'nextCursor': null,
+              'top': [],
+            });
+          }),
+        );
+      }
+
+      /// Pulls the feed down past the point where it refreshes, holding it.
+      Future<TestGesture> pullFar(WidgetTester tester) async {
+        final pull = await tester.startGesture(
+          tester.getCenter(find.text('Decision r0')),
+        );
+        for (var i = 0; i < 8; i++) {
+          await pull.moveBy(const Offset(0, 50));
+          await tester.pump();
+        }
+        return pull;
+      }
+
+      /// Lets the pull go and draws the next [time] frame by frame, as the
+      /// gap springs back to where it rests and the feed is asked again.
+      Future<void> letGo(
+        WidgetTester tester,
+        TestGesture pull, [
+        Duration time = const Duration(milliseconds: 300),
+      ]) async {
+        const frame = Duration(milliseconds: 50);
+        await pull.up();
+        for (var t = Duration.zero; t < time; t += frame) {
+          await tester.pump(frame);
+        }
+      }
+
+      testWidgets('pulled far enough it says to let go; once refreshed it '
+          'says how many decisions are new, then the gap closes', (
+        tester,
+      ) async {
+        await pumpFeed(
+          tester,
+          const [],
+          const [],
+          api: refreshingApi([
+            _article('n1', feedSeq: 3),
+            _article('n2', feedSeq: 2),
+          ]),
+        );
+        final title = find.text('Outer News');
+        final rest = tester.getRect(title);
+        final pull = await pullFar(tester);
+        expect(find.text('Release to refresh'), findsOneWidget);
+        expect(tester.getRect(title).width, greaterThan(rest.width * 1.05));
+        // Held there, it waits to be let go, as it says (Yurii, #208): the
+        // feed is not asked again yet.
+        await tester.pump(const Duration(seconds: 2));
+        expect(find.text('Release to refresh'), findsOneWidget);
+        expect(find.text('Decision n1'), findsNothing);
+        await letGo(tester, pull);
+        expect(find.text('2 new decisions'), findsOneWidget);
+        expect(find.byIcon(CupertinoIcons.checkmark_circle_fill), findsOne);
+        expect(find.text('Decision n1'), findsOneWidget);
+
+        // Held about a second, then gone with the gap; the title is its own
+        // size again while the gap stays open.
+        await tester.pump(const Duration(milliseconds: 600));
+        expect(find.text('2 new decisions'), findsOneWidget);
+        expect(tester.getRect(title).width, moreOrLessEquals(rest.width));
+        expect(tester.getRect(title).top, greaterThan(rest.top + 40));
+        await tester.pump(const Duration(seconds: 1));
+        await tester.pumpAndSettle();
+        expect(find.text('2 new decisions'), findsNothing);
+      });
+
+      testWidgets('a top story that comes in counts as new; one that moves '
+          'into the Top stories block does not', (tester) async {
+        var pages = 0;
+        final api = ApiClient(
+          baseUrl: 'https://api.test',
+          client: MockClient((request) async {
+            final menu = fakeMenus(request);
+            if (menu != null) return menu;
+            final query = request.url.queryParameters;
+            if (query.containsKey('after') || query.containsKey('since')) {
+              return fakeJson({'items': [], 'nextCursor': null, 'top': []});
+            }
+            final r0 = _article('r0', feedSeq: 1);
+            final r1 = _article('r1', feedSeq: 2);
+            final n1 = _article('n1', feedSeq: 3);
+            return fakeJson(
+              ++pages == 1
+                  ? {
+                      'items': [r1, r0],
+                      'nextCursor': null,
+                      'top': [],
+                    }
+                  : {
+                      'items': [n1, r1, r0],
+                      'nextCursor': null,
+                      'top': [n1, r1],
+                    },
+            );
+          }),
+        );
+        await pumpFeed(tester, const [], const [], api: api);
+        final pull = await pullFar(tester);
+        await letGo(tester, pull);
+        expect(find.text('1 new decision'), findsOneWidget);
+        await tester.pump(const Duration(seconds: 2));
+        await tester.pumpAndSettle();
+      });
+
+      testWidgets('a feed that another replaces while the gap is open says '
+          'nothing about new decisions', (tester) async {
+        final answer = Completer<http.Response>();
+        var pages = 0;
+        final api = ApiClient(
+          baseUrl: 'https://api.test',
+          client: MockClient((request) async {
+            final menu = fakeMenus(request);
+            if (menu != null) return menu;
+            final query = request.url.queryParameters;
+            if (query.containsKey('after') || query.containsKey('since')) {
+              return fakeJson({'items': [], 'nextCursor': null, 'top': []});
+            }
+            // The pull's own answer waits; the whole world's comes at once,
+            // with w1 in it.
+            final r0 = _article('r0', feedSeq: 1);
+            return switch (++pages) {
+              2 => answer.future,
+              1 => fakeJson({
+                'items': [r0],
+                'nextCursor': null,
+                'top': [],
+              }),
+              _ => fakeJson({
+                'items': [_article('w1', feedSeq: 2), r0],
+                'nextCursor': null,
+                'top': [],
+              }),
+            };
+          }),
+        );
+        final feed = await pumpFeed(tester, const [], const [], api: api);
+        final pull = await pullFar(tester);
+        await letGo(tester, pull);
+        expect(pages, 2);
+        // Yurii's case: For you's feed replaced by the whole world's.
+        unawaited(feed.setFeed(FeedWhere.all));
+        await tester.pump();
+        expect(find.text('Decision w1'), findsOneWidget);
+        answer.complete(
+          fakeJson({
+            'items': [_article('r0', feedSeq: 1)],
+            'nextCursor': null,
+            'top': [],
+          }),
+        );
+        for (var i = 0; i < 20; i++) {
+          await tester.pump(const Duration(milliseconds: 100));
+          expect(find.textContaining('new decision'), findsNothing);
+          expect(find.text('News updated'), findsNothing);
+        }
+        await tester.pumpAndSettle();
+      });
+
+      testWidgets('a refresh that brings nothing new says so', (tester) async {
+        await pumpFeed(tester, const [], const [], api: refreshingApi([]));
+        final pull = await pullFar(tester);
+        await letGo(tester, pull);
+        expect(find.text('No new decisions'), findsOneWidget);
+        await tester.pump(const Duration(seconds: 2));
+        await tester.pumpAndSettle();
+        expect(find.text('No new decisions'), findsNothing);
+      });
+
+      testWidgets('while the feed loads, the words pulse softly', (
+        tester,
+      ) async {
+        final answer = Completer<http.Response>();
+        var pages = 0;
+        final api = ApiClient(
+          baseUrl: 'https://api.test',
+          client: MockClient((request) async {
+            final menu = fakeMenus(request);
+            if (menu != null) return menu;
+            if (++pages > 1) return answer.future;
+            return fakeJson({
+              'items': [_article('r0', feedSeq: 1)],
+              'nextCursor': null,
+              'top': [],
+            });
+          }),
+        );
+        await pumpFeed(tester, const [], const [], api: api);
+        final pull = await pullFar(tester);
+        await letGo(tester, pull, const Duration(milliseconds: 400));
+        expect(find.text('Refreshing the news…'), findsOneWidget);
+        double opacity() => tester
+            .widget<Opacity>(
+              find
+                  .ancestor(
+                    of: find.text('Refreshing the news…'),
+                    matching: find.byType(Opacity),
+                  )
+                  .first,
+            )
+            .opacity;
+        final first = opacity();
+        await tester.pump(const Duration(milliseconds: 350));
+        expect(opacity(), isNot(moreOrLessEquals(first)));
+
+        answer.complete(
+          fakeJson({
+            'items': [_article('r0', feedSeq: 1)],
+            'nextCursor': null,
+            'top': [],
+          }),
+        );
+        await tester.pump();
+        await tester.pump(const Duration(seconds: 2));
+        await tester.pumpAndSettle();
+      });
+    });
+  }
+
+  for (final design in [FeedDesign.garnet, FeedDesign.seal]) {
+    group('design ${design.name}: the pills', () {
+      setUp(() => feedDesign.value = design);
+
+      /// The look's colour in light mode: Garnet's red or Seal's green.
+      final accent = design == FeedDesign.seal
+          ? const Color(0xFF0E7A5E)
+          : const Color(0xFFC41230);
+
+      final rows = [
+        for (var i = 0; i < 12; i++) _article('r$i', feedSeq: 20 - i),
+      ];
+
+      /// The pills from left to right, by key.
+      List<String> pills(WidgetTester tester) => [
+        for (final pill in tester.widgetList(
+          find.descendant(
+            of: find.byType(FeedPills),
+            matching: find.byWidgetPredicate(
+              (w) => switch (w.key) {
+                ValueKey<String>(:final value) => value.startsWith('pill-'),
+                _ => false,
+              },
+            ),
+          ),
+        ))
+          (pill.key! as ValueKey<String>).value,
+      ];
+
+      /// The glass of the pill [key]: the chosen one is filled with the
+      /// colour's gradient, the others with a tint of the card.
+      BoxDecoration glass(WidgetTester tester, String key) =>
+          tester
+                  .widget<AnimatedContainer>(
+                    find.descendant(
+                      of: find.byKey(ValueKey(key)),
+                      matching: find.byType(AnimatedContainer),
+                    ),
+                  )
+                  .decoration!
+              as BoxDecoration;
+
+      testWidgets('For you first, then the whole world, then the topics '
+          'busiest first, as the menu has them; a tap shows each', (
+        tester,
+      ) async {
+        final semantics = tester.ensureSemantics();
+        final feed = await pumpFeed(tester, rows, const [], width: 2400);
+        await tester.pumpAndSettle();
+        expect(pills(tester), [
+          'pill-for-you',
+          'pill-world',
+          for (final id in topicIds) 'pill-topic-$id',
+        ]);
+        expect(find.byKey(const ValueKey('filter-topic')), findsNothing);
+        expect(
+          tester.getSemantics(find.byKey(const ValueKey('pill-for-you'))),
+          isSemantics(label: 'For you', isButton: true, isSelected: true),
+        );
+        expect(glass(tester, 'pill-for-you').gradient, isNotNull);
+        expect(glass(tester, 'pill-world').gradient, isNull);
+
+        await tester.tap(find.byKey(const ValueKey('pill-world')));
+        await tester.pumpAndSettle();
+        expect((feed.where, feed.topic), (FeedWhere.all, null));
+        expect(
+          tester.getSemantics(find.byKey(const ValueKey('pill-world'))),
+          isSemantics(label: 'The whole world', isSelected: true),
+        );
+        expect(
+          tester.getSemantics(find.byKey(const ValueKey('pill-for-you'))),
+          isSemantics(isSelected: false),
+        );
+
+        // A topic is the whole world's (#170).
+        await tester.tap(find.byKey(const ValueKey('pill-topic-health')));
+        await tester.pumpAndSettle();
+        expect((feed.where, feed.topic), (FeedWhere.all, 'health'));
+        expect(glass(tester, 'pill-topic-health').gradient, isNotNull);
+        expect(glass(tester, 'pill-world').gradient, isNull);
+
+        await tester.tap(find.byKey(const ValueKey('pill-for-you')));
+        await tester.pumpAndSettle();
+        expect((feed.where, feed.topic), (FeedWhere.forYou, null));
+        semantics.dispose();
+      });
+
+      for (final brightness in Brightness.values) {
+        testWidgets('the chosen pill is the colour deepening, its white words '
+            'at least 4.5:1 in ${brightness.name} mode (Yurii, #210)', (
+          tester,
+        ) async {
+          await pumpFeed(tester, rows, const [], brightness: brightness);
+          final colors =
+              (glass(tester, 'pill-for-you').gradient! as LinearGradient)
+                  .colors;
+          for (final colour in colors) {
+            final opaque = colour.withValues(alpha: 1);
+            expect(
+              1.05 / (opaque.computeLuminance() + 0.05),
+              greaterThanOrEqualTo(4.5),
+              reason: '$opaque',
+            );
+          }
+          // The same deep colour in both themes, the look's own first; iOS's
+          // row tints its chosen pill with it too.
+          expect(colors.first.withValues(alpha: 1), accent);
+          expect(tester.widget<FeedPills>(find.byType(FeedPills)).tint, accent);
+          expect(
+            tester.widget<Text>(find.text('For you')).style!.color,
+            const Color(0xFFFFFFFF),
+          );
+        });
+      }
+
+      testWidgets('the pills stay at the top as glass while the rows pass '
+          'under them; nothing fades over them', (tester) async {
+        await pumpFeed(tester, rows, const [], height: 700);
+        final row = find.byType(FeedPills);
+        expect(tester.getTopLeft(row).dy, greaterThan(60));
+        await tester.drag(find.text('Decision r3'), const Offset(0, -500));
+        await tester.pumpAndSettle();
+        // Pinned at the top of the safe area, rows scrolled under it.
+        expect(tester.getTopLeft(row).dy, 0);
+        expect(find.text('For you'), findsOneWidget);
+        expect(
+          find.descendant(of: row, matching: find.byType(BackdropFilter)),
+          findsWidgets,
+        );
+        expect(find.byType(ScrollEdgeFade), findsNothing);
+        // The chosen pill's glow reaches over the rows, not cut where the
+        // pinned header ends (Yurii, #210).
+        final header = tester.widget<Stack>(
+          find.ancestor(of: row, matching: find.byType(Stack)).first,
+        );
+        expect(header.clipBehavior, Clip.none);
+      });
+
+      testWidgets('at a large text size the pills grow with their words: '
+          'none is cut (Yurii, #210)', (tester) async {
+        tester.platformDispatcher.textScaleFactorTestValue = 2;
+        addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+        await pumpFeed(tester, rows, const [], height: 700);
+        await tester.pumpAndSettle();
+        for (final name in ['For you', 'The whole world']) {
+          final words = tester.renderObject<RenderParagraph>(find.text(name));
+          expect(
+            words.size.height,
+            greaterThanOrEqualTo(
+              words.getMaxIntrinsicHeight(words.size.width) - 0.01,
+            ),
+            reason: name,
+          );
+        }
+      });
+
+      testWidgets('a chosen topic that moves along the row as the fresh '
+          'topics come in is brought into view again (Yurii, #210)', (
+        tester,
+      ) async {
+        // Kept from last time: Justice first among the topics; the server
+        // now lists it last, once the row is on screen.
+        SharedPreferences.setMockInitialValues({
+          'feed.topic': 'justice',
+          'feed.topics.en': jsonEncode([
+            {'id': 'justice', 'name': 'Justice'},
+            for (final id in topicIds)
+              if (id != 'justice') {'id': id, 'name': id},
+          ]),
+        });
+        final topics = Completer<http.Response>();
+        final api = ApiClient(
+          baseUrl: 'https://api.test',
+          client: MockClient((request) async {
+            if (request.url.path == '/topics') return topics.future;
+            final menu = fakeMenus(request);
+            if (menu != null) return menu;
+            return fakeJson({'items': rows, 'nextCursor': null, 'top': []});
+          }),
+        );
+        await pumpFeed(tester, const [], const [], api: api);
+        await tester.pumpAndSettle();
+        expect(pills(tester)[2], 'pill-topic-justice');
+
+        topics.complete(
+          fakeMenus(http.Request('GET', Uri.parse('https://api.test/topics'))),
+        );
+        await tester.pumpAndSettle();
+        expect(pills(tester).last, 'pill-topic-justice');
+        final pill = find.byKey(const ValueKey('pill-topic-justice'));
+        expect(tester.getRect(pill).left, greaterThanOrEqualTo(0));
+        expect(tester.getRect(pill).right, lessThanOrEqualTo(393));
+      });
+
+      testWidgets('swiped sideways, the pills stay where they are as the '
+          'title scrolls away and back: the same row, not a new one', (
+        tester,
+      ) async {
+        await pumpFeed(tester, rows, const [], height: 700);
+        await tester.pumpAndSettle();
+        final row = find.byType(FeedPills);
+        final forYou = find.text('For you');
+        await tester.drag(forYou, const Offset(-120, 0));
+        await tester.pumpAndSettle();
+        final swiped = tester.getTopLeft(forYou).dx;
+        expect(swiped, lessThan(0));
+
+        await tester.drag(find.text('Decision r3'), const Offset(0, -500));
+        await tester.pumpAndSettle();
+        expect(tester.getTopLeft(row).dy, 0);
+        expect(tester.getTopLeft(forYou).dx, swiped);
+
+        await tester.drag(find.text('Decision r5'), const Offset(0, 500));
+        await tester.pumpAndSettle();
+        expect(tester.getTopLeft(row).dy, greaterThan(60));
+        expect(tester.getTopLeft(forYou).dx, swiped);
+      });
+
+      testWidgets('a topic chosen before the app was closed shows chosen, '
+          'brought into view along the row', (tester) async {
+        SharedPreferences.setMockInitialValues({'feed.topic': 'justice'});
+        final feed = await pumpFeed(tester, rows, const []);
+        await tester.pumpAndSettle();
+        expect((feed.where, feed.topic), (FeedWhere.all, 'justice'));
+        final pill = find.byKey(const ValueKey('pill-topic-justice'));
+        expect(glass(tester, 'pill-topic-justice').gradient, isNotNull);
+        expect(tester.getRect(pill).left, greaterThanOrEqualTo(0));
+        expect(tester.getRect(pill).right, lessThanOrEqualTo(393));
+      });
+
+      testWidgets('a pill chosen in view leaves the row where it is; one '
+          'partly out of view glides to the middle', (tester) async {
+        await pumpFeed(tester, rows, const [], width: 1000);
+        await tester.pumpAndSettle();
+        final scroll = tester.state<ScrollableState>(
+          find.descendant(
+            of: find.byType(FeedPills),
+            matching: find.byType(Scrollable),
+          ),
+        );
+        await tester.tap(find.byKey(const ValueKey('pill-topic-economy')));
+        await tester.pumpAndSettle();
+        expect(scroll.position.pixels, 0);
+
+        // Its end is out of view: tapped by its start.
+        final next = find.byKey(const ValueKey('pill-topic-security-defence'));
+        final start = tester.getRect(next);
+        expect(start.right, greaterThan(1000));
+        await tester.tapAt(start.centerLeft + const Offset(20, 0));
+        // The new choice drawn, then the glide's first frame and 100 ms.
+        await tester.pump();
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 100));
+        final gliding = scroll.position.pixels;
+        await tester.pumpAndSettle();
+        expect(gliding, greaterThan(0));
+        expect(gliding, lessThan(scroll.position.pixels));
+        expect(tester.getCenter(next).dx, moreOrLessEquals(500, epsilon: 1));
       });
     });
   }

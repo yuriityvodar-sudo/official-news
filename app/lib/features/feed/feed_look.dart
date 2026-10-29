@@ -1,11 +1,15 @@
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/article.dart';
 import '../../core/card_zoom.dart';
 import '../../core/feed_design.dart';
+import '../../core/filters.dart';
 import '../../core/motion.dart';
 import '../../core/read_mark.dart';
 import '../../core/theme.dart';
+import 'feed_filters.dart';
 import 'feed_look_a.dart';
 import 'feed_look_b.dart';
 import 'feed_look_c.dart';
@@ -148,6 +152,37 @@ abstract class FeedLook {
   /// [smallTitle] is the usual one.
   Widget? foldedTitle(BuildContext context, String title) => null;
 
+  /// A gradient behind the whole screen, under the status bar and the
+  /// masthead as one piece, fixed while the feed scrolls over it; null (the
+  /// default) for [background] alone.
+  Gradient? backdrop(BuildContext context) => null;
+
+  /// Whether rows soften at the top edge once the feed is scrolled (#141);
+  /// false for a look that pins something of its own there, such as glass
+  /// the rows pass under.
+  bool get fadesTopEdge => true;
+
+  /// What shows above the masthead while the feed is pulled down to refresh
+  /// ([CupertinoSliverRefreshControl]'s builder, and how the refresh went
+  /// once the feed has loaded: [FeedPull.result]): the platform's spinner, or
+  /// a look's own.
+  Widget refreshIndicator(BuildContext context, FeedPull pull) =>
+      CupertinoSliverRefreshControl.buildRefreshIndicator(
+        context,
+        pull.mode,
+        pull.pulled,
+        pull.trigger,
+        pull.extent,
+      );
+
+  /// Whether [refreshIndicator] says in words what the pull does and how the
+  /// refresh went. The feed then refreshes once a pull past the refresh point
+  /// is let go, as the words ask ("Release to refresh"), and the screen holds
+  /// the gap open a moment once the feed has loaded. The platform's spinner
+  /// (the default) starts as the pull passes the refresh point and says
+  /// nothing, so its gap closes at once.
+  bool get saysHowRefreshWent => false;
+
   /// [title] in the masthead's style, at a bar title's size.
   static Widget smallTitle(BuildContext context, String title) => Text(
     title,
@@ -171,7 +206,11 @@ class FeedMasthead {
     required this.title,
     required this.date,
     required this.openSettings,
-    required this.filterBar,
+    required this.where,
+    required this.topic,
+    required this.topics,
+    required this.onChoose,
+    required this.pull,
   });
 
   /// "Outer News": the app's name, the same in every language.
@@ -183,13 +222,77 @@ class FeedMasthead {
   /// Opens Settings. [settingsButton] is today's button for it.
   final VoidCallback openSettings;
 
-  /// The filter bar: the Where and Topics pull-downs (#67, #68), built by
-  /// the screen from the feed's state ([FeedFilterBar]). A look places it.
-  final Widget filterBar;
+  /// What the feed shows (#170): For you or the whole world, and the topic
+  /// chosen across the world, if any.
+  final FeedWhere where;
+  final String? topic;
+
+  /// The topics, busiest first; null while none are known.
+  final List<FeedTopic>? topics;
+
+  /// Shows For you or the whole world with no topic, or the whole world
+  /// with one.
+  final void Function(FeedWhere where, String? topic) onChoose;
+
+  /// The filter bar: the menu of what the feed shows ([FeedFilterBar]). A
+  /// look places it, or offers the same choices its own way, as Garnet and
+  /// Seal's pills do (`FeedPills`).
+  Widget get filterBar => FeedFilterBar(
+    where: where,
+    topic: topic,
+    topics: topics,
+    onChoose: onChoose,
+  );
+
+  /// The pull to refresh as the gap above the masthead last showed it (#166),
+  /// for a masthead that follows the pull. It changes while the feed is laid
+  /// out, so read it while painting (a render object listening to it), never
+  /// in a build.
+  final ValueListenable<FeedPull?> pull;
 
   /// Today's settings button: a round gear with a 44-pt target and its
   /// VoiceOver label. A look may draw its own and call [openSettings].
   Widget get settingsButton => NowSettingsButton(onPressed: openSettings);
+}
+
+/// The pull to refresh for [FeedLook.refreshIndicator]: what
+/// [CupertinoSliverRefreshControl] tells its builder, and how the refresh
+/// went.
+class FeedPull {
+  const FeedPull({
+    required this.mode,
+    required this.pulled,
+    required this.trigger,
+    required this.extent,
+    this.result,
+  });
+
+  final RefreshIndicatorMode mode;
+
+  /// How far the feed is pulled down, in points: the gap above the masthead.
+  final double pulled;
+
+  /// How far a pull goes before the feed refreshes, and how much of the gap
+  /// stays open while it does.
+  final double trigger;
+  final double extent;
+
+  /// How the refresh went (#166): once the feed has loaded, the gap stays
+  /// open a moment more so a look can say it ("3 new decisions"); null
+  /// while it loads, and after a failure, which the feed shows itself.
+  final FeedRefreshed? result;
+}
+
+/// How a pull to refresh went (#166).
+class FeedRefreshed {
+  const FeedRefreshed(this.newCount, {this.wasEmpty = false});
+
+  /// Decisions in the feed now that it did not show before.
+  final int newCount;
+
+  /// The feed showed nothing before (it had failed, or was still loading):
+  /// everything in it is new, so it is simply up to date.
+  final bool wasEmpty;
 }
 
 /// The feed's list for a look to draw: its articles and what a row does.

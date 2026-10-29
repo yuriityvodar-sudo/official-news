@@ -79,17 +79,14 @@ class Analytics {
     await feedLanguage(chosen);
   }
 
-  /// The reader changed a filter (#67, #68) on a chip: the filters as they
-  /// are now. `where` is `all`, `group` or `country`; `place` the group's id
-  /// (`g7`), the country's code (`GB`), or `all`; `topic` the topic's id, or
-  /// `all`. Not `value`: Google Analytics keeps that name for an event's
-  /// number, and drops a text in it (`firebase_error` 18).
+  /// The reader changed what the feed shows (#170): `where` is `forYou` or
+  /// `all` (the whole world), `topic` the topic's id, or `all`. Builds before
+  /// For you also sent `group` or `country` as `where`, with `place` the
+  /// group's id or the country's code (#68). Not `value`: Google Analytics
+  /// keeps that name for an event's number, and drops a text in it
+  /// (`firebase_error` 18).
   Future<void> filterChanged({required FeedWhere where, String? topic}) =>
-      _event('filter_changed', {
-        'where': where.kind.name,
-        'place': where.id ?? 'all',
-        'topic': topic ?? 'all',
-      });
+      _event('filter_changed', {'where': where.name, 'topic': topic ?? 'all'});
 
   /// An article opened from the feed: [section] is `feed`, the one list
   /// (Yurii, 16 Oct; builds before it sent `top` or `latest`), and
@@ -178,6 +175,12 @@ class Analytics {
   /// or `not_asked`, so returns can be compared with and without them.
   Future<void> pushState(String state) => _user('notifications', state);
 
+  /// The reader's own country for For you (#170), on their later events: two
+  /// letters, or `none` while the app knows none. The country only, nothing
+  /// else about the reader.
+  Future<void> homeCountry(String? code) =>
+      _user('home_country', code ?? 'none');
+
   /// What an event says about its article: no text of it, only where it is from and what it is.
   static Map<String, Object> _about(Article a) => {
     'article_id': a.id,
@@ -264,9 +267,10 @@ const _appId = String.fromEnvironment('FIREBASE_APP_ID');
 const _senderId = String.fromEnvironment('FIREBASE_SENDER_ID');
 const _projectId = String.fromEnvironment('FIREBASE_PROJECT_ID');
 
-/// Which build this is: `testflight` (only the team's phones so far), later
-/// `store`; set by the workflow that builds it. A user property, so the team's
-/// use can be left out of every report.
+/// Which build this is: `testflight` for the team's phones, `store` for the
+/// build submitted to the App Store, `dev` for a local one; the TestFlight
+/// workflow sets it from its `build` choice (#137). A user property, so the
+/// team's use can be left out of every report.
 const _build = String.fromEnvironment('APP_BUILD', defaultValue: 'dev');
 
 /// Turns analytics on when the build has the Firebase values; otherwise it stays off.

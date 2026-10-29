@@ -356,7 +356,7 @@ void main() {
     await _pump(tester);
     await tester.tap(find.text('Privacy Policy'));
     await tester.pumpAndSettle();
-    expect(find.text('Last updated 27 October 2026'), findsOneWidget);
+    expect(find.text('Last updated 29 October 2026'), findsOneWidget);
     // The parts App Review and #34, #60 ask for.
     for (final heading in [
       'On your phone',
@@ -371,6 +371,12 @@ void main() {
     for (final line in [
       'loaded directly from the official website',
       'Google Analytics for Firebase',
+      // For you's country (#170, Yurii on #170): where it comes from, and
+      // that the server keeps nothing.
+      "your phone's region, or from Settings → My country",
+      'and does not save it',
+      "Cloudflare's technical logs, which are deleted automatically within a "
+          'week',
     ]) {
       await tester.scrollUntilVisible(find.textContaining(line), -200);
       expect(find.textContaining(line), findsOneWidget);
@@ -431,15 +437,20 @@ void main() {
     await _pump(tester, words: FeedLanguage.uk);
     await tester.tap(find.text('Умови використання'));
     await tester.pumpAndSettle();
-    expect(find.text('Оновлено 27 жовтня 2026\u202Fр.'), findsOneWidget);
+    expect(find.text('Оновлено 29 жовтня 2026\u202Fр.'), findsOneWidget);
+    // A Czech company (#204): its seat, ID and register file as Czech law
+    // wants them; the name, the address and the numbers never translated.
     await tester.scrollUntilVisible(
-      find.textContaining('RS Elite Pro s.r.o., Словаччина'),
+      find.textContaining('RS Elite Pro s.r.o., Na Okrouhlíku'),
       200,
     );
     expect(
       find.text(
-        'Видавець: RS Elite Pro s.r.o., Словаччина. Якщо ці умови зміняться, '
-        'нова версія з’явиться в застосунку з новою датою.',
+        'Видавець: RS Elite Pro s.r.o., Na Okrouhlíku 2563/31, 182 00 Praha 8, '
+        'Чеська Республіка. Ідентифікаційний номер (IČO): 29536316. Внесено '
+        'до торговельного реєстру, який веде Міський суд у Празі, номер '
+        'запису C 448095. Якщо ці умови зміняться, нова версія з’явиться в '
+        'застосунку з новою датою.',
       ),
       findsOneWidget,
     );
@@ -451,11 +462,46 @@ void main() {
     await _pump(tester, words: FeedLanguage.de);
     await tester.tap(find.text('Datenschutzerklärung'));
     await tester.pumpAndSettle();
-    expect(find.text('Stand: 27. Oktober 2026'), findsOneWidget);
+    expect(find.text('Stand: 29. Oktober 2026'), findsOneWidget);
     await tester.scrollUntilVisible(
-      find.text('Verantwortlicher: RS Elite Pro s.r.o., Slowakei.'),
+      find.text(
+        'Verantwortlicher: RS Elite Pro s.r.o., Na Okrouhlíku 2563/31, '
+        '182 00 Praha 8, Tschechische Republik. Identifikationsnummer (IČO): '
+        '29536316. Eingetragen im Handelsregister des Stadtgerichts Prag, '
+        'Aktenzeichen C 448095.',
+      ),
       200,
     );
     expect(find.textContaining('(siehe „Kontakt & Support“)'), findsOneWidget);
+  });
+
+  testWidgets('the publisher is a Czech company, nowhere Slovak (#204)', (
+    tester,
+  ) async {
+    for (final lang in FeedLanguage.values) {
+      final l10n = l10nFor(lang);
+      expect(publisher(l10n), startsWith('RS Elite Pro s.r.o., '));
+      expect(
+        publisherDetails(l10n),
+        allOf(
+          contains('Na Okrouhlíku 2563/31, 182 00 Praha 8'),
+          contains('29536316'),
+          contains('C 448095'),
+        ),
+        reason: lang.code,
+      );
+      for (final slovakia in ['Slovakia', 'Словаччина', 'Словакия']) {
+        expect(publisher(l10n), isNot(contains(slovakia)), reason: lang.code);
+      }
+    }
+    expect(publisher(l10nFor()), 'RS Elite Pro s.r.o., Czech Republic');
+    await _pump(tester);
+    await tester.tap(find.text('About Outer News'));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.textContaining('RS Elite Pro s.r.o., Czech Republic'),
+      200,
+    );
+    expect(find.textContaining('Slovakia'), findsNothing);
   });
 }
