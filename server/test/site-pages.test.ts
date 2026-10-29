@@ -27,4 +27,11 @@ describe("every page in every language", () => {
       }
     }
   });
+
+  it("gives the support e-mail on Contact & Support, as the app's info page does (#220)", async () => {
+    for (const lang of SITE_LANGS) {
+      const { body } = await site(`/${lang}/support`);
+      expect(body, lang).toContain('<a href="mailto:support@outernews.app">support@outernews.app</a>');
+    }
+  });
 });

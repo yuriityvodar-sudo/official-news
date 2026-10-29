@@ -29,6 +29,8 @@ interface SiteTexts {
   siteCovers: string;
   /** On translated policy pages; `{link}` is the English page. */
   prevails: string;
+  /** The Support page; `{email}` is the support address (the app writes from its own screen). */
+  emailUs: string;
 }
 
 const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
@@ -48,6 +50,7 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     siteBanner: "On iPhone and iPad, Safari may show a banner for our app, using information it loads from Apple's App Store.",
     siteCovers: "The privacy policy and the terms of use cover both the Outer News app and this website.",
     prevails: "The English version prevails ({link}).",
+    emailUs: "Write to us at {email}.",
   },
   uk: {
     latestLink: "Останні рішення",
@@ -65,6 +68,7 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     siteBanner: "На iPhone та iPad Safari може показати банер нашого застосунку з даними, які він завантажує з App Store від Apple.",
     siteCovers: "Політика конфіденційності й умови використання стосуються і застосунку Outer News, і цього сайту.",
     prevails: "Це переклад; у разі розбіжностей переважну силу має англійська версія ({link}).",
+    emailUs: "Пишіть нам на {email}.",
   },
   ru: {
     latestLink: "Последние решения",
@@ -82,6 +86,7 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     siteBanner: "На iPhone и iPad Safari может показать баннер нашего приложения с данными, которые он загружает из App Store от Apple.",
     siteCovers: "Политика конфиденциальности и условия использования относятся и к приложению Outer News, и к этому сайту.",
     prevails: "Это перевод; в случае расхождений преимущественную силу имеет английская версия ({link}).",
+    emailUs: "Пишите нам на {email}.",
   },
   es: {
     latestLink: "Últimas decisiones",
@@ -99,6 +104,7 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     siteBanner: "En iPhone y iPad, Safari puede mostrar un banner de nuestra app con información que obtiene del App Store de Apple.",
     siteCovers: "La política de privacidad y los términos de uso se aplican tanto a la app Outer News como a este sitio web.",
     prevails: "Esto es una traducción; en caso de discrepancia, prevalece la versión en inglés ({link}).",
+    emailUs: "Escríbenos a {email}.",
   },
   de: {
     latestLink: "Neueste Entscheidungen",
@@ -116,6 +122,7 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     siteBanner: "Auf iPhone und iPad kann Safari ein Banner für unsere App zeigen, mit Angaben, die es aus Apples App Store lädt.",
     siteCovers: "Die Datenschutzerklärung und die Nutzungsbedingungen gelten für die App Outer News und für diese Website.",
     prevails: "Dies ist eine Übersetzung; bei Abweichungen ist die englische Fassung maßgeblich ({link}).",
+    emailUs: "Schreiben Sie uns an {email}.",
   },
 };
 

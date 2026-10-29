@@ -1,7 +1,7 @@
 // About, Privacy Policy, Terms of Use and Contact & Support (#88): the app's
 // own pages (info_pages.dart), with their texts from its ARB files, in all five
 // languages, plus what only the website needs to say about itself.
-import { POLICY_UPDATED } from "../app-texts.generated";
+import { POLICY_UPDATED, SUPPORT_EMAIL } from "../app-texts.generated";
 import { fullDate } from "../dates";
 import { type Html, html } from "../html";
 import { type Page, SITE_NAME } from "../layout";
@@ -57,8 +57,16 @@ function sections(lang: SiteLang, page: InfoPage): Section[] {
         { heading: "termsPublisherHeading", paragraphs: [t(lang, "termsPublisher", { publisher: publisherDetails(lang) })] },
       ];
     case "support":
-      // No e-mail address yet (info_pages.dart: supportEmail is empty): the app says to use the App Store page.
-      return [{ paragraphs: [p(lang, "supportMessages"), p(lang, "supportMistakes"), p(lang, "supportAppStore")] }];
+      // The app writes to us from its own screen (#220); the website gives the e-mail (supportEmail in info_pages.dart).
+      return [
+        {
+          paragraphs: [
+            p(lang, "supportMessages"),
+            p(lang, "supportMistakes"),
+            t(lang, "emailUs", { email: html`<a href="mailto:${SUPPORT_EMAIL}">${SUPPORT_EMAIL}</a>` }),
+          ],
+        },
+      ];
   }
 }
 
