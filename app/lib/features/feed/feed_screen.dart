@@ -426,12 +426,10 @@ class _FeedScreenState extends State<FeedScreen> {
                       title: 'Outer News',
                       date: longDay(DateTime.now(), l10n),
                       openSettings: _openSettings,
-                      filterBar: FeedFilterBar(
-                        where: _feed.where,
-                        topic: _feed.topic,
-                        topics: _feed.topics,
-                        onChoose: _chooseFeed,
-                      ),
+                      where: _feed.where,
+                      topic: _feed.topic,
+                      topics: _feed.topics,
+                      onChoose: _chooseFeed,
                       pull: _pull,
                     ),
                   ),
@@ -441,17 +439,18 @@ class _FeedScreenState extends State<FeedScreen> {
             ),
             // Rows fade softly at the top edge once the feed is scrolled, and
             // the app's name folds into a small title there (#141).
-            Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              child: _TopFade(
-                scroll: _scroll,
-                color: look.topEdge(context),
-                title: foldedTitle,
-                onTitleTap: () => unawaited(_toTopSmoothly()),
+            if (look.fadesTopEdge)
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: _TopFade(
+                  scroll: _scroll,
+                  color: look.background(context),
+                  title: foldedTitle,
+                  onTitleTap: () => unawaited(_toTopSmoothly()),
+                ),
               ),
-            ),
             if (_feed.newCount > 0)
               Positioned.fill(
                 child: _UnderMasthead(
