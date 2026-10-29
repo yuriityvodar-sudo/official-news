@@ -1,6 +1,66 @@
-// The way in: / opens the visitor's language, and the front page's title.
-import { describe, expect, it } from "vitest";
-import { ORIGIN, site } from "./site-helpers";
+// What search engines read (#88, SEO): the sitemap, robots.txt's pointer to
+// it and an article's structured data.
+import { beforeEach, describe, expect, it } from "vitest";
+import { slugify } from "../src/site/urls";
+import { CONSENT_JS, GA_ID, consentHash } from "../src/site/consent";
+import { SITE_LANGS } from "../src/site/texts";
+import { hideSeed } from "./helpers";
+import { ORIGIN, insertArticle, insertTranslation, site, testId, withoutConsentScript } from "./site-helpers";
+
+const ID = testId(1);
+const OTHER = testId(2);
+const EN = `/en/de/${ID}-${slugify("Cabinet decision 0001 on the budget", "en")}`;
+const UK = `/uk/de/${ID}-${slugify("[uk] Рішення 0001 про бюджет", "uk")}`;
+
+beforeEach(async () => {
+  await hideSeed();
+  await insertArticle({ id: ID });
+  await insertTranslation(ID, "uk");
+  await insertArticle({ id: OTHER });
+});
+
+describe("the sitemap", () => {
+  it("lists each language's latest list while it has articles, and each article in each language it is shown in, with the others as alternates", async () => {
+    const { status, headers, body } = await site("/sitemap.xml");
+    expect(status).toBe(200);
+    expect(headers.get("content-type")).toBe("application/xml; charset=utf-8");
+    expect(body.startsWith('<?xml version="1.0" encoding="UTF-8"?>')).toBe(true);
+    const locs = [...body.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]);
+    // Only English and Ukrainian have articles here; an empty list is noindex, so not listed.
+    for (const lang of SITE_LANGS) expect(locs.includes(`${ORIGIN}/${lang}`), lang).toBe(lang === "en" || lang === "uk");
+    expect(locs).toContain(ORIGIN + EN);
+    expect(locs).toContain(ORIGIN + UK);
+    // OTHER is not translated: English only, so no Ukrainian address for it.
+    expect(locs.filter((l) => l.includes(OTHER))).toHaveLength(1);
+    const enEntry = body.split("<url>").find((u) => u.includes(`<loc>${ORIGIN}${EN}</loc>`))!;
+    expect(enEntry).toContain(`<xhtml:link rel="alternate" hreflang="uk" href="${ORIGIN}${UK}"/>`);
+    expect(enEntry).toMatch(/<lastmod>\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ<\/lastmod>/);
+  });
+
+  it("is named in robots.txt, which keeps crawlers only from addresses with a query", async () => {
+    const { body } = await site("/robots.txt");
+    expect(body).toMatch(/^Disallow: \/\*\?$/m);
+    expect(body).toContain(`Sitemap: ${ORIGIN}/sitemap.xml`);
+  });
+});
+
+describe("an article's structured data", () => {
+  it("is a NewsArticle by Outer News, in the page's language, based on the official page", async () => {
+    for (const [path, lang] of [[EN, "en"], [UK, "uk"]] as const) {
+      const { body } = await site(path);
+      const json = /<script type="application\/ld\+json">([^<]*)<\/script>/.exec(body)?.[1];
+      expect(json, path).toBeDefined();
+      const data = JSON.parse(json!);
+      expect(data["@type"]).toBe("NewsArticle");
+      expect(data.inLanguage).toBe(lang);
+      expect(data.url).toBe(ORIGIN + path);
+      expect(data.publisher.name).toBe("Outer News");
+      expect(data.author.name).toBe("Outer News");
+      expect(data.isBasedOn).toMatch(/^https:\/\//);
+      expect(data.datePublished).toMatch(/Z$/);
+    }
+  });
+});
 
 describe("/ opens the visitor's language (no page to choose one)", () => {
   const go = async (acceptLanguage: string | null) => {
@@ -22,6 +82,21 @@ describe("/ opens the visitor's language (no page to choose one)", () => {
     expect((await go("de-DE,de;q=0.9")).location).toBe(`${ORIGIN}/en`);
     expect((await go(null)).location).toBe(`${ORIGIN}/en`);
     expect((await go("*")).location).toBe(`${ORIGIN}/en`);
+  });
+});
+
+describe("Google Analytics, only with the visitor's yes", () => {
+  it("every page carries the banner hidden and the one script the CSP allows by its hash; Google's tag is not in the page", async () => {
+    for (const path of ["/en", "/uk", EN, "/es/about"]) {
+      const { body, headers } = await site(path);
+      expect(body, path).toMatch(/<div class="consent" id="consent" role="region" aria-label="[^"]+" hidden>/);
+      expect(body, path).toContain(`<script>${CONSENT_JS}</script>`);
+      // Google's tag is added by the script after a yes, never written into the page.
+      expect(withoutConsentScript(body), path).not.toContain("googletagmanager");
+      expect(headers.get("content-security-policy"), path).toContain(`script-src '${await consentHash()}' https://*.googletagmanager.com`);
+    }
+    expect(CONSENT_JS).toContain(`"${GA_ID}"`);
+    expect(GA_ID).toBe("G-D0H8XW2SWJ");
   });
 });
 

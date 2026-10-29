@@ -5,11 +5,14 @@
 //   /{lang}                        latest list; ?before=<feedSeq> for the next page
 //   /{lang}/{cc}/{id}-{slug}       an article (looked up by its id; another country or slug is a 301 to its own)
 //   /{lang}/about|privacy|terms|support
-//   /robots.txt                    Disallow: /
-import { type ApiArticle, articleInLanguages, latest } from "./data";
+//   /robots.txt                    Disallow: /*?, and where the sitemap is
+//   /sitemap.xml                   the lists and the 7 days' articles (seo.ts)
+import { type ApiArticle, allLatest, articleInLanguages, latest } from "./data";
 import type { SiteEnv } from "./env";
 import { APPLE_TOUCH_ICON, OG_IMAGE } from "./icon";
 import { type Page, cssHash, layout } from "./layout";
+import { sitemapXml } from "./seo";
+import { consentHash } from "./consent";
 import { visitorLang } from "./lang";
 import { articlePage, notInLanguagePage } from "./pages/article";
 import { errorPage, notFoundPage } from "./pages/errors";
@@ -19,8 +22,15 @@ import { type CacheKind, type Reply, respond, robotsFor } from "./respond";
 import { SITE_LANGS, type SiteLang, isSiteLang } from "./texts";
 import { ARTICLE_ID, INFO_PAGES, type InfoPage, articlePath, listPath, originOf } from "./urls";
 
-/** Nothing is indexed yet: crawlers stay out of every page. */
-export const ROBOTS_TXT = "User-agent: *\nDisallow: /\n";
+/**
+ * Crawlers read every page without a query: the lists' first pages, the
+ * articles and the information pages (robotsFor()). Every address with a
+ * query (a topic, a later page) stays out: those repeat what the first pages
+ * link, and keeping them out bounds what a crawl reads from D1 and the
+ * account's 100,000 requests a day (about 26 lists a language instead of
+ * 13 times as many).
+ */
+export const ROBOTS_TXT = "User-agent: *\nDisallow: /*?\n";
 
 const LANG_PATH = new RegExp(`^/(${SITE_LANGS.join("|")})(/.*)?$`);
 const INFO_PATH = new RegExp(`^/(${INFO_PAGES.join("|")})$`);
@@ -95,7 +105,14 @@ async function route(request: Request, env: SiteEnv): Promise<Reply> {
     const lang = visitorLang(request.headers.get("accept-language"), typeof country === "string" ? country : null);
     return { kind: "chooser", status: 302, body: null, location: `${origin}${listPath(lang)}` };
   }
-  if (path === "/robots.txt") return { kind: "fixed", status: 200, body: ROBOTS_TXT };
+  // robots.txt names the sitemap, so a crawler finds it once indexing is allowed.
+  if (path === "/robots.txt") return { kind: "fixed", status: 200, body: `${ROBOTS_TXT}\nSitemap: ${origin}/sitemap.xml\n` };
+  if (path === "/sitemap.xml") {
+    if (url.search) return { kind: "redirect", status: 301, body: null, location: `${origin}/sitemap.xml` };
+    const lists = await Promise.all(SITE_LANGS.map((lang) => allLatest(env, lang)));
+    const shown = Object.fromEntries(SITE_LANGS.map((lang, i) => [lang, lists[i]]));
+    return { kind: "sitemap", status: 200, body: sitemapXml(origin, shown), contentType: "application/xml; charset=utf-8" };
+  }
   // The icon (icon.ts): Safari's home-screen icon under any of its names, and
   // the link preview's picture. The tab icon is inline, so /favicon.ico stays a 404.
   if (/^\/apple-touch-icon[\w-]*\.png$/.test(path)) return { kind: "icon", status: 200, body: APPLE_TOUCH_ICON };
@@ -132,7 +149,7 @@ async function route(request: Request, env: SiteEnv): Promise<Reply> {
 
 /** The site's request handler; tests call it with `{ DB, SITE_ORIGIN }`. */
 export async function handleSite(request: Request, env: SiteEnv): Promise<Response> {
-  const styleHash = await cssHash();
+  const [styleHash, scriptHash] = await Promise.all([cssHash(), consentHash()]);
   let reply: Reply;
   try {
     reply = await route(request, env);
@@ -142,5 +159,5 @@ export async function handleSite(request: Request, env: SiteEnv): Promise<Respon
     const lang = LANG_PATH.exec(path)?.[1];
     reply = page(errorPage(lang && isSiteLang(lang) ? lang : "en"), 500, "none");
   }
-  return respond(reply, request.method, styleHash);
+  return respond(reply, request.method, styleHash, scriptHash);
 }

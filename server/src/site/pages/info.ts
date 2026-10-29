@@ -94,6 +94,7 @@ ${s.paragraphs.map((para) => html`<p>${para}</p>`)}
   return {
     lang,
     kind: page,
+    index: true,
     title: `${text(lang, TITLES[page])} · ${SITE_NAME}`,
     canonical: origin + infoPath(lang, page),
     alternates: [

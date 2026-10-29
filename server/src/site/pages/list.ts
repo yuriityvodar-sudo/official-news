@@ -139,6 +139,9 @@ ${first ? "" : html`<a class="more" href="${listPath(lang)}">${t(lang, "latestLi
   return {
     lang,
     kind: "list",
+    // A later page repeats what the first page links; an empty list (German
+    // while it is off) has nothing to find.
+    index: first && list.items.length > 0,
     // The front page leads with the name, "Outer News · Official decisions" (Yurii, 29 Oct).
     title: first ? `${SITE_NAME} · ${text(lang, "listTitle")}` : [text(lang, "latestLink"), SITE_NAME].join(" · "),
     description: text(lang, "aboutIntro"),
