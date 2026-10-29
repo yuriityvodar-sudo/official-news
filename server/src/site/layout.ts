@@ -1,0 +1,154 @@
+// The page around every page of the site (#88): one HTML document with its
+// CSS and icons inline, so a page view is one Worker request (LyFi lesson 2):
+// no stylesheet, script, font or image to fetch, and the data: icon stops the
+// browser's automatic /favicon.ico request. Colours and the serif from the
+// app's theme (app/lib/core/theme.dart: Georgia, not the system's New York),
+// light and dark; if #66 changes the app's font, change it here too.
+import { type Html, html, raw } from "./html";
+import { TAB_ICON } from "./icon";
+import { LANGUAGE_NAMES, type SiteLang, publisher, t, text } from "./texts";
+import { INFO_PAGES, type InfoPage, infoPath, listPath } from "./urls";
+
+/** The App Store app (docs/setup.md); Safari shows its Smart App Banner. */
+export const APP_STORE_ID = "6822820350";
+
+export const SITE_NAME = "Outer News";
+
+// Headings hyphenate only long words (12+ characters in Chrome, 5 on each
+// side in WebKit, which has no word minimum): "Datenschutzer-klärung" instead
+// of a break with no hyphen, but no hyphen in every other line of a headline.
+// Red small text on white is #D1102F (about 5.5:1), not the app's #FA2D48
+// (about 3.8:1, under WCAG AA); in dark mode the app's red on black.
+export const CSS = `:root{color-scheme:light dark;--bg:#fff;--text:#000;--secondary:#6c6c70;--separator:#e5e5ea;--accent:#d1102f;--chip:#e3e8ef;--card:#f2f2f7;--verified:#1a8cff;--fill:rgba(118,118,128,.12);--on:#c41230;--menu:#fff;--band:#f2f2f7;--shadow:rgba(0,0,0,.16)}
+@media (prefers-color-scheme:dark){:root{--bg:#000;--text:#fff;--secondary:#98989f;--separator:#38383a;--accent:#fa2d48;--fill:rgba(118,118,128,.24);--on:#ff3b55;--chip:#2c2c2e;--card:#1c1c1e;--menu:#1c1c1e;--band:#000;--shadow:rgba(0,0,0,.6)}}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+body{margin:0;display:flex;flex-direction:column;min-height:100vh;min-height:100dvh;background:var(--bg);color:var(--text);font:16px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;overflow-wrap:break-word}
+a{color:var(--accent)}
+a:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+.wrap{max-width:680px;margin:0 auto;padding:0 16px}
+.skip{position:absolute;left:-9999px;top:8px;background:var(--bg);color:var(--text);padding:10px 14px;border-radius:8px;z-index:1}
+.skip:focus{left:16px}
+.serif,h1,.lead,.body,.item .title{font-family:Georgia,"Times New Roman",serif}
+h1,h2,.item .title{-webkit-hyphens:auto;hyphens:auto;hyphenate-limit-chars:12 5 5;-webkit-hyphenate-limit-before:5;-webkit-hyphenate-limit-after:5}
+.top{border-bottom:.5px solid var(--separator);padding:4px 0 10px}
+.bar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;column-gap:12px}
+.brand{display:inline-flex;align-items:center;gap:8px;min-height:44px;font:700 20px/1.1 Georgia,"Times New Roman",serif;color:var(--text);text-decoration:none}
+
+.langs{display:flex;flex-wrap:wrap;margin-right:-10px}
+.langs a{display:inline-flex;align-items:center;justify-content:center;min-width:44px;min-height:44px;padding:0 6px;font-size:13px;font-weight:600;letter-spacing:.3px;color:var(--secondary);text-decoration:none}
+.langs a[aria-current]{color:var(--text);text-decoration:underline 2px var(--accent);text-underline-offset:6px}
+.note{margin:0;font-size:13px;color:var(--secondary)}
+main{padding:20px 0 28px}
+.meta{font-size:14px;color:var(--secondary)}
+.page-title{margin:0 0 4px;font-size:34px;font-weight:800;line-height:1.1}
+.info h2{margin:24px 0 6px;font-size:17px;font-weight:600}
+.info p,.info li{font-size:16px;line-height:1.5}
+.info p{margin:0 0 12px}
+main{flex:1 0 auto}
+footer{border-top:.5px solid var(--separator);padding:8px 0 40px;font-size:13px;color:var(--secondary)}
+footer nav{display:flex;flex-wrap:wrap;column-gap:18px}
+footer nav a{display:inline-flex;align-items:center;min-height:44px;color:var(--text);text-decoration:none}
+footer p{margin:8px 0 0}
+@media (min-width:720px){.page-title{font-size:40px}}
+@media (min-width:960px){.top .wrap{display:flex;flex-wrap:wrap;align-items:center;column-gap:16px}.top .bar{display:contents}.top .brand{order:1}.top .note{order:2}.top .langs{order:3;margin-left:auto}.page-title{font-size:56px}}`;
+
+let styleHash: Promise<string> | undefined;
+
+/** `sha256-…` of CSS, for the Content-Security-Policy; worked out once per Worker instance. */
+export function cssHash(): Promise<string> {
+  styleHash ??= crypto.subtle.digest("SHA-256", new TextEncoder().encode(CSS)).then((digest) => {
+    let binary = "";
+    for (const byte of new Uint8Array(digest)) binary += String.fromCharCode(byte);
+    return `sha256-${btoa(binary)}`;
+  });
+  return styleHash;
+}
+
+export interface Alternate {
+  /** A language code, or `x-default`. */
+  hreflang: string;
+  href: string;
+}
+
+export interface Page {
+  lang: SiteLang;
+  /** Which page. */
+  kind: string;
+  title: string;
+  /** For link previews when it differs from the title: an article's headline with the AI label. */
+  ogTitle?: string;
+  description?: string;
+  /** Absolute URLs from SITE_ORIGIN. */
+  canonical?: string;
+  alternates?: Alternate[];
+  /** The language switcher: the languages this page exists in, with their paths. */
+  switcher: { lang: SiteLang; path: string }[];
+  ogType?: "article" | "website";
+  body: Html;
+}
+
+const footer = (lang: SiteLang) => {
+  const names: Record<InfoPage, string> = {
+    about: text(lang, "aboutTitle"),
+    privacy: text(lang, "privacyPolicy"),
+    terms: text(lang, "termsOfUse"),
+    support: text(lang, "contactSupport"),
+  };
+  return html`<footer><div class="wrap">
+<nav aria-label="${SITE_NAME}">${INFO_PAGES.map((page) => html`<a href="${infoPath(lang, page)}">${names[page]}</a>`)}</nav>
+<p>${t(lang, "aboutPublishedBy", { publisher: publisher(lang) })}</p>
+</div></footer>`;
+};
+
+/** The whole document; `robots` is the page's robotsFor(), also sent as X-Robots-Tag. Error pages pass no canonical and no alternates. */
+export function layout(page: Page, robots: string): Html {
+  const { lang } = page;
+  const description = page.description ?? text(lang, "aboutIntro");
+  // The link preview's picture needs an absolute URL: the canonical's origin (error pages have none).
+  const origin = page.canonical ? new URL(page.canonical).origin : "";
+  const switcher = page.switcher.length
+    ? html`<nav class="langs" aria-label="${text(lang, "language")}">${page.switcher.map(
+        (item) =>
+          html`<a href="${item.path}" hreflang="${item.lang}" lang="${item.lang}" title="${LANGUAGE_NAMES[item.lang].nativeName}"${
+            item.lang === lang ? raw(' aria-current="true"') : ""
+          }>${LANGUAGE_NAMES[item.lang].shortLabel}</a>`,
+      )}</nav>`
+    : "";
+  return html`<!doctype html>
+<html lang="${lang}" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${page.title}</title>
+<meta name="description" content="${description}">
+<meta name="robots" content="${robots}">
+${page.canonical ? html`<link rel="canonical" href="${page.canonical}">\n` : ""}${(page.alternates ?? []).map(
+    (a) => html`<link rel="alternate" hreflang="${a.hreflang}" href="${a.href}">\n`,
+  )}<meta property="og:site_name" content="${SITE_NAME}">
+<meta property="og:title" content="${page.ogTitle ?? page.title}">
+<meta property="og:description" content="${description}">
+<meta property="og:type" content="${page.ogType ?? "website"}">
+${page.canonical ? html`<meta property="og:url" content="${page.canonical}">\n` : ""}${origin ? html`<meta property="og:image" content="${origin}/icon-512.png">\n<meta property="og:image:width" content="512">\n<meta property="og:image:height" content="512">\n` : ""}<meta name="twitter:card" content="summary">
+<meta name="apple-itunes-app" content="app-id=${APP_STORE_ID}">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="${TAB_ICON}" type="image/png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<style>${raw(CSS)}</style>
+</head>
+<body>
+<a class="skip" href="#main">${t(lang, "skip")}</a>
+<header class="top"><div class="wrap">
+<div class="bar"><a class="brand" href="${listPath(lang)}"><span>${SITE_NAME}</span></a>${switcher}</div>
+<p class="note">${t(lang, "independentNote")}</p>
+</div></header>
+<main id="main"><div class="wrap">
+${page.body}
+</div></main>
+${footer(lang)}
+</body>
+</html>
+`;
+}
