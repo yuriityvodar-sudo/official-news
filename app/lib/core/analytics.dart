@@ -156,8 +156,6 @@ class Analytics {
   Future<void> chatQuestion(Article article, int number) =>
       _event('chat_question', {'number': number, ..._about(article)});
 
-  /// How far down the feed the reader came this visit: the first time a row
-  /// of [feedDepths] is shown, `feed_scroll_10`, `feed_scroll_25` and so on.
   /// A look chosen in Settings → Design (Yurii, 28 Oct: which design options
   /// readers prefer), the look in the event's name (`design_garnet`), so it
   /// counts without a custom dimension. The look in use is the user property
@@ -170,6 +168,8 @@ class Analytics {
   Future<void> headlineWeightChosen(HeadlineWeight weight) =>
       _event('headline_${weight.name}', const {});
 
+  /// How far down the feed the reader came this visit: the first time a row
+  /// of [feedDepths] is shown, `feed_scroll_10`, `feed_scroll_25` and so on.
   Future<void> feedDepth(int rows) => _event('feed_scroll_$rows', const {});
 
   /// The feed's first page did not load (offline, or the server failed).
