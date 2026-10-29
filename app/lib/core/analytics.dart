@@ -281,9 +281,10 @@ const _appId = String.fromEnvironment('FIREBASE_APP_ID');
 const _senderId = String.fromEnvironment('FIREBASE_SENDER_ID');
 const _projectId = String.fromEnvironment('FIREBASE_PROJECT_ID');
 
-/// Which build this is: `testflight` (only the team's phones so far), later
-/// `store`; set by the workflow that builds it. A user property, so the team's
-/// use can be left out of every report.
+/// Which build this is: `testflight` for the team's phones, `store` for the
+/// build submitted to the App Store, `dev` for a local one; the TestFlight
+/// workflow sets it from its `build` choice (#137). A user property, so the
+/// team's use can be left out of every report.
 const _build = String.fromEnvironment('APP_BUILD', defaultValue: 'dev');
 
 /// Turns analytics on when the build has the Firebase values; otherwise it stays off.
