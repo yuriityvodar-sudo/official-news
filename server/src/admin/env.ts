@@ -17,6 +17,8 @@ export interface AdminEnv {
   GA_CLIENT_EMAIL: string;
   /** This Worker's own storage: its Google key (selfkey.ts). Only this Worker binds it. */
   ADMIN_KV: KVNamespace;
+  /** The API's D1 database (#220): this Worker reads and writes only its support tables, readers' messages. */
+  DB: D1Database;
   /**
    * Optional: a service account's whole JSON key as a Worker secret, used
    * instead of the self-made key when set. Not needed (#60, 29 Oct).
