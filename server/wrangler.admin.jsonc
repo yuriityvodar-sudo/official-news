@@ -1,0 +1,32 @@
+{
+  // The admin page (#60): admin.outernews.app, behind Cloudflare Access (only
+  // Yurii and Roman; docs/setup.md), with the analytics of the website and the
+  // app. Its own Worker: it makes its own Google key for the read-only
+  // analytics-reader (src/admin/selfkey.ts) and keeps it in its own KV, so no
+  // secret passes through anyone and the public website holds no key at all.
+  // Deployed by hand: npx wrangler deploy --config wrangler.admin.jsonc
+  // Secret (not here, the repo is public): ADMIN_EMAILS, who may open the page,
+  // comma-separated: npx wrangler secret put ADMIN_EMAILS --config wrangler.admin.jsonc
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "admin",
+  "main": "src/admin/index.ts",
+  "compatibility_date": "2026-10-01",
+  // NewsApp account (see docs/setup.md). Not a secret.
+  "account_id": "8dc93578877d397a693094f3e2b01029",
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [{ "pattern": "admin.outernews.app", "custom_domain": true }],
+  "vars": {
+    // The Google Analytics property of the app and the website (docs/setup.md).
+    "GA_PROPERTY": "559256393",
+    // Cloudflare Access's team; the Worker checks Access's sign-in token against its keys.
+    "ACCESS_TEAM": "lucky-queen-66f9",
+    // The Access app's Application Audience (AUD) tag: the token must be for this app.
+    "ACCESS_AUD": "fb3afddcb71c9b9bf5964d852689a9dab20d8993e74a17d90652b9f5d2d1bfe5",
+    // The read-only service account whose key this Worker makes (docs/setup.md).
+    "GA_CLIENT_EMAIL": "analytics-reader@official-news-48e16.iam.gserviceaccount.com"
+  },
+  // This Worker's own storage, for its Google key only; no other Worker binds it.
+  "kv_namespaces": [{ "binding": "ADMIN_KV", "id": "7ae84e6c07104a778fd5da307d7bb927" }],
+  "observability": { "enabled": true }
+}
