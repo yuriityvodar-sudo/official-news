@@ -180,6 +180,7 @@ class NewsLook extends FeedLook {
           shadow: style.softShadow,
           chosen: style.chosen,
           glow: style.glow,
+          tint: style.chosenColors.first,
         ),
       ),
     );
