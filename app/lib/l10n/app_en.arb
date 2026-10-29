@@ -564,7 +564,7 @@
     "description": "Under the list of languages."
   },
 
-  "publisher": "{name}, Slovakia",
+  "publisher": "{name}, Czech Republic",
   "@publisher": {
     "description": "Who publishes the app: the company's name, never translated, and its country.",
     "placeholders": {
@@ -572,6 +572,16 @@
         "type": "String",
         "example": "RS Elite Pro s.r.o."
       }
+    }
+  },
+  "publisherDetails": "{name}, {address}, Czech Republic. Company ID (IČO): {id}. Registered in the commercial register kept by the Municipal Court in Prague, file no. {file}",
+  "@publisherDetails": {
+    "description": "The publisher with its seat, company ID and commercial register file (#204), for the privacy policy's data controller and the terms. The name, the address, the ID and the file are never translated; no full stop at the end (the sentence around it has one).",
+    "placeholders": {
+      "name": {"type": "String", "example": "RS Elite Pro s.r.o."},
+      "address": {"type": "String", "example": "Na Okrouhlíku 2563/31, 182 00 Praha 8"},
+      "id": {"type": "String", "example": "29536316"},
+      "file": {"type": "String", "example": "C 448095"}
     }
   },
   "lastUpdated": "Last updated {date}",
@@ -614,7 +624,7 @@
     "placeholders": {
       "publisher": {
         "type": "String",
-        "example": "RS Elite Pro s.r.o., Slovakia"
+        "example": "RS Elite Pro s.r.o., Czech Republic"
       }
     }
   },
@@ -691,7 +701,7 @@
     "placeholders": {
       "publisher": {
         "type": "String",
-        "example": "RS Elite Pro s.r.o., Slovakia"
+        "example": "RS Elite Pro s.r.o., Na Okrouhlíku 2563/31, 182 00 Praha 8, Czech Republic. Company ID (IČO): 29536316. Registered in the commercial register kept by the Municipal Court in Prague, file no. C 448095"
       }
     }
   },
@@ -738,7 +748,7 @@
     "placeholders": {
       "publisher": {
         "type": "String",
-        "example": "RS Elite Pro s.r.o., Slovakia"
+        "example": "RS Elite Pro s.r.o., Na Okrouhlíku 2563/31, 182 00 Praha 8, Czech Republic. Company ID (IČO): 29536316. Registered in the commercial register kept by the Municipal Court in Prague, file no. C 448095"
       }
     }
   },
