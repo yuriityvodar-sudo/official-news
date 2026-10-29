@@ -35,19 +35,21 @@ export interface ServiceAccount {
 }
 
 /**
- * Reads FCM_SERVICE_ACCOUNT. Throws when it is not JSON or misses a field; the
- * message names only what is wrong, never a value, so it can be logged.
+ * Reads a service account's JSON key from a Worker secret: FCM_SERVICE_ACCOUNT,
+ * or another one named by `name` (the admin page's GA_SERVICE_ACCOUNT). Throws
+ * when it is not JSON or misses a field; the message names only what is
+ * wrong, never a value, so it can be logged.
  */
-export function parseServiceAccount(secret: string): ServiceAccount {
+export function parseServiceAccount(secret: string, name = "FCM_SERVICE_ACCOUNT"): ServiceAccount {
   let parsed: unknown;
   try {
     parsed = JSON.parse(secret);
   } catch {
-    throw new Error("FCM_SERVICE_ACCOUNT is not JSON (it should be the service account's whole JSON key file)");
+    throw new Error(`${name} is not JSON (it should be the service account's whole JSON key file)`);
   }
   const fields = ["client_email", "private_key", "project_id"] as const;
   const missing = fields.filter((field) => typeof (parsed as Record<string, unknown> | null)?.[field] !== "string");
-  if (missing.length) throw new Error(`FCM_SERVICE_ACCOUNT has no ${missing.join(", ")}`);
+  if (missing.length) throw new Error(`${name} has no ${missing.join(", ")}`);
   const account = parsed as ServiceAccount;
   return { client_email: account.client_email, private_key: account.private_key, project_id: account.project_id };
 }
@@ -121,16 +123,20 @@ function pemToDer(pem: string): ArrayBuffer {
   return bytes.buffer;
 }
 
-/** The JWT the token endpoint exchanges: issued by the service account, for FCM only, valid one hour from `now`. */
-export async function signedJwt(account: ServiceAccount, now: Date): Promise<string> {
+/**
+ * The JWT the token endpoint exchanges: issued by the service account, for
+ * FCM only (or the scopes given, as the admin page's read-only analytics
+ * ones), valid one hour from `now`.
+ */
+export async function signedJwt(account: ServiceAccount, now: Date, scope = FCM_SCOPE, name = "FCM_SERVICE_ACCOUNT"): Promise<string> {
   const iat = Math.floor(now.getTime() / 1000);
   const header = base64urlText(JSON.stringify({ alg: "RS256", typ: "JWT" }));
-  const claims = base64urlText(JSON.stringify({ iss: account.client_email, scope: FCM_SCOPE, aud: TOKEN_URL, iat, exp: iat + JWT_SECONDS }));
+  const claims = base64urlText(JSON.stringify({ iss: account.client_email, scope, aud: TOKEN_URL, iat, exp: iat + JWT_SECONDS }));
   let key: CryptoKey;
   try {
     key = await crypto.subtle.importKey("pkcs8", pemToDer(account.private_key), { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["sign"]);
   } catch (error) {
-    throw new Error(`FCM_SERVICE_ACCOUNT's private_key cannot be read: ${errorText(error)}`);
+    throw new Error(`${name}'s private_key cannot be read: ${errorText(error)}`);
   }
   const signature = await crypto.subtle.sign("RSASSA-PKCS1-v1_5", key, new TextEncoder().encode(`${header}.${claims}`));
   return `${header}.${claims}.${base64url(new Uint8Array(signature))}`;
