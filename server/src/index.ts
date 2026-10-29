@@ -5,6 +5,7 @@ import { runCleanup } from "./health/cleanup";
 import { recordChecks } from "./health/status";
 import { runPush } from "./push";
 import { runSummarizer } from "./summarizer";
+import { sendReplyPushes } from "./support/cron";
 import { TRANSLATIONS_PER_RUN, releaseReady, runTranslator, translatorRunning } from "./translator";
 
 /**
@@ -38,6 +39,12 @@ export function stepFor(cron: string): keyof typeof CRONS {
  * translator ran in the last 10 minutes and then leaves the pushes to it.
  */
 async function pushStep(env: Env, unlessTranslatorRuns = false): Promise<void> {
+  try {
+    // Replies to readers' messages (#220), in every run: a claim keeps two overlapping runs from both sending one.
+    await sendReplyPushes(env);
+  } catch (error) {
+    console.error(JSON.stringify({ message: "support push error", error: error instanceof Error ? error.message : String(error) }));
+  }
   try {
     if (unlessTranslatorRuns && (await translatorRunning(env, new Date()))) return;
     await runPush(env);

@@ -5,6 +5,7 @@
 import { signedInEmail } from "./access";
 import type { AdminEnv } from "./env";
 import { KEY_NAME, type Request as Report, account, batch, forgetToken, single } from "./ga";
+import { messagePost, messagesTab } from "./messages";
 import { makeSelfKey, type SelfKey } from "./selfkey";
 import { PERIODS, type Tab, TABS, eventLabel, page, table, totals } from "./page";
 
@@ -108,12 +109,7 @@ const certificateSection = (key: SelfKey, clientEmail: string, why: string) => `
  * back to the page, which then shows the certificate to upload. Only from
  * this page itself (its Origin), and never over a key that exists.
  */
-async function connect(request: Request, env: AdminEnv): Promise<Response> {
-  // The browser says where a click came from: Sec-Fetch-Site, or Origin (which
-  // it sends as "null" under the page's no-referrer policy, so not alone).
-  const site = request.headers.get("sec-fetch-site");
-  const origin = request.headers.get("origin");
-  if (site !== "same-origin" && origin !== new URL(request.url).origin) return message(403, "Not allowed", "Connect only from the admin page.");
+async function connect(env: AdminEnv): Promise<Response> {
   if (!(await env.ADMIN_KV.get(KEY_NAME))) {
     await env.ADMIN_KV.put(KEY_NAME, JSON.stringify(await makeSelfKey("Outer News admin")));
     forgetToken();
@@ -121,16 +117,36 @@ async function connect(request: Request, env: AdminEnv): Promise<Response> {
   return new Response(null, { status: 303, headers: { location: "/?tab=website", "cache-control": "no-store" } });
 }
 
+/**
+ * Whether a POST comes from this page itself. The browser says where a click
+ * came from: Sec-Fetch-Site, or Origin (which it sends as "null" under the
+ * page's no-referrer policy, so not alone).
+ */
+function fromThisPage(request: Request): boolean {
+  return request.headers.get("sec-fetch-site") === "same-origin" || request.headers.get("origin") === new URL(request.url).origin;
+}
+
+const POSTS = ["/connect", "/messages/reply", "/messages/close"];
+
 export async function handleAdmin(request: Request, env: AdminEnv, fetcher: typeof fetch = fetch): Promise<Response> {
   const url = new URL(request.url);
-  const post = request.method === "POST" && url.pathname === "/connect";
-  if (request.method !== "GET" && request.method !== "HEAD" && !post) return message(405, "Not allowed", "Only GET, and POST /connect.");
+  const post = request.method === "POST" && POSTS.includes(url.pathname);
+  if (request.method !== "GET" && request.method !== "HEAD" && !post) return message(405, "Not allowed", `Only GET, and POST ${POSTS.join(", ")}.`);
   const email = await signedInEmail(request, env, fetcher).catch(() => null);
   if (!email) return message(403, "Not signed in", "This page is for the Outer News team. Sign in through Cloudflare Access at admin.outernews.app.");
-  if (post) return connect(request, env);
+  if (post) {
+    if (!fromThisPage(request)) return message(403, "Not allowed", "Only from the admin page.");
+    if (url.pathname === "/connect") return connect(env);
+    // Readers' messages (#220): a reply or Close, then back to the tab.
+    const form = await request.formData().catch(() => new FormData());
+    const error = await messagePost(url.pathname, form, env);
+    if (error) return message(400, "Not sent", error);
+    return new Response(null, { status: 303, headers: { location: "/?tab=messages", "cache-control": "no-store" } });
+  }
   const tab: Tab = TABS.some((t) => t.id === url.searchParams.get("tab")) ? (url.searchParams.get("tab") as Tab) : "website";
   const asked = Number(url.searchParams.get("days"));
   const days = (PERIODS as readonly number[]).includes(asked) ? asked : 28;
+  if (tab === "messages") return new Response(request.method === "HEAD" ? null : page(tab, days, email, await messagesTab(env)), { headers: HEADERS });
   if (tab !== "downloads" && !(await account(env))) {
     return new Response(page(tab, days, email, connectSection()), { headers: HEADERS });
   }

@@ -1,9 +1,11 @@
 // The admin page (#60): its second lock (Cloudflare Access's sign-in token,
 // checked by the Worker) and what it shows from Google Analytics.
+import { env as workers } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 import { handleAdmin } from "../src/admin/index";
 import type { AdminEnv } from "../src/admin/env";
 import { eventLabel } from "../src/admin/page";
+import { postSupportMessage } from "../src/support";
 
 const TEAM = "test-team";
 /** A KV namespace in memory, as the Worker's ADMIN_KV. */
@@ -18,7 +20,7 @@ function memoryKv(): KVNamespace {
   } as unknown as KVNamespace;
 }
 
-const baseEnv = () => ({ GA_PROPERTY: "123", ACCESS_TEAM: TEAM, ACCESS_AUD: "aud-admin", ADMIN_EMAILS: "yurii@example.com, roman@example.com", GA_CLIENT_EMAIL: "reader@x.iam.gserviceaccount.com" });
+const baseEnv = () => ({ DB: workers.DB, GA_PROPERTY: "123", ACCESS_TEAM: TEAM, ACCESS_AUD: "aud-admin", ADMIN_EMAILS: "yurii@example.com, roman@example.com", GA_CLIENT_EMAIL: "reader@x.iam.gserviceaccount.com" });
 const env: AdminEnv = { ...baseEnv(), ADMIN_KV: memoryKv() };
 
 const b64url = (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
@@ -180,5 +182,81 @@ describe("Connect Google Analytics (the page's own key)", () => {
     const pubJwk = (await crypto.subtle.exportKey("jwk", pk)) as JsonWebKey;
     const pub = await crypto.subtle.importKey("jwk", { kty: "RSA", n: pubJwk.n, e: pubJwk.e, alg: "RS256", ext: true }, { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["verify"]);
     expect(await crypto.subtle.verify("RSASSA-PKCS1-v1_5", pub, sig, tbs)).toBe(true);
+  });
+});
+
+describe("the Messages tab (#220)", () => {
+  const device = "device-0123456789abcdef0123456789abcdef";
+  const at = new Date("2026-10-29T10:00:00Z");
+  const write = (text: string, lang = "en", app = "1.0.0 (47)") => postSupportMessage({ device, text, lang, app }, "203.0.113.1", workers, at);
+  const threadId = async () => (await workers.DB.prepare("SELECT id FROM support_threads").first<string>("id"))!;
+  /** Requests to the page as Yurii, signed in through Access (or without the token, `withLock` false). */
+  const signedIn = async (kid: string) => {
+    const { publicKey, privateKey } = await keyPair();
+    const jwk = (await crypto.subtle.exportKey("jwk", publicKey)) as JsonWebKey;
+    const lock = await token(privateKey, claims("yurii@example.com"), kid);
+    return (path: string, init: { method?: string; headers?: Record<string, string>; form?: Record<string, string> } = {}, withLock = true) =>
+      handleAdmin(
+        new Request(`https://admin.test${path}`, {
+          method: init.method ?? "GET",
+          headers: { ...(withLock ? { "cf-access-jwt-assertion": lock } : {}), ...init.headers },
+          body: init.form ? new URLSearchParams(init.form) : undefined,
+        }),
+        env,
+        fakeFetch(jwk, [], kid),
+      );
+  };
+
+  it("shows each conversation, waiting ones first, with everything escaped and no Google needed", async () => {
+    await write('<script>alert("x")</script> & more', "uk", "1.0.0 <47>");
+    const go = await signedIn("m1");
+    const response = await go("/?tab=messages");
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-security-policy")).toContain("form-action 'self'");
+    const html = await response.text();
+    expect(html).toContain('aria-current="page">Messages');
+    expect(html).toContain("Waiting for us");
+    expect(html).toContain("Ukrainian · app 1.0.0 &lt;47&gt; · started 2026-10-29 10:00 UTC");
+    expect(html).toContain("&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt; &amp; more");
+    expect(html).not.toContain("<script>");
+    expect(html).toContain('action="/messages/reply"');
+    expect(html).not.toContain("Connect Google Analytics");
+    expect(html).not.toContain('aria-label="Period"');
+  });
+
+  it("replies and closes only from the page itself and behind the lock, then goes back to the tab", async () => {
+    await write("Hello");
+    const thread = await threadId();
+    const go = await signedIn("m2");
+    const count = async () => workers.DB.prepare("SELECT COUNT(*) AS n FROM support_messages WHERE sender = 'team'").first("n");
+    const post = (path: string, headers: Record<string, string>, form: Record<string, string>, withLock = true) => go(path, { method: "POST", headers, form }, withLock);
+
+    // From another site, or without Access's token: refused, nothing written.
+    expect((await post("/messages/reply", { origin: "https://evil.test" }, { thread, text: "Hi" })).status).toBe(403);
+    expect((await post("/messages/reply", { origin: "null", "sec-fetch-site": "cross-site" }, { thread, text: "Hi" })).status).toBe(403);
+    expect((await post("/messages/reply", { "sec-fetch-site": "same-origin" }, { thread, text: "Hi" }, false)).status).toBe(403);
+    expect((await post("/messages/close", { origin: "https://evil.test" }, { thread })).status).toBe(403);
+    expect((await post("/messages/close", { "sec-fetch-site": "same-origin" }, { thread }, false)).status).toBe(403);
+    expect(await count()).toBe(0);
+    expect(await workers.DB.prepare("SELECT status FROM support_threads").first("status")).toBe("waiting");
+
+    // An empty reply: an error, nothing written.
+    expect((await post("/messages/reply", { "sec-fetch-site": "same-origin" }, { thread, text: "  " })).status).toBe(400);
+
+    const sent = await post("/messages/reply", { origin: "null", "sec-fetch-site": "same-origin" }, { thread, text: "Thanks for writing." });
+    expect(sent.status).toBe(303);
+    expect(sent.headers.get("location")).toBe("/?tab=messages");
+    expect(await count()).toBe(1);
+    expect(await workers.DB.prepare("SELECT status, reply_push_pending FROM support_threads").first()).toEqual({ status: "answered", reply_push_pending: 1 });
+
+    const closed = await post("/messages/close", { origin: "https://admin.test" }, { thread });
+    expect(closed.status).toBe(303);
+    expect(await workers.DB.prepare("SELECT status, closed_at IS NOT NULL AS c FROM support_threads").first()).toEqual({ status: "closed", c: 1 });
+    // No reply into a closed conversation, and the page offers none.
+    await post("/messages/reply", { "sec-fetch-site": "same-origin" }, { thread, text: "Late" });
+    expect(await count()).toBe(1);
+    const html = await (await go("/?tab=messages")).text();
+    expect(html).toContain("Closed");
+    expect(html).not.toContain('action="/messages/reply"');
   });
 });

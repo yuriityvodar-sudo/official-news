@@ -201,7 +201,9 @@ export async function accessToken(env: Env, account: ServiceAccount, now: Date, 
 
 /** One push: where it goes and what it says. FCM wants every data value as a string. */
 export interface PushMessage {
-  topic: string;
+  /** An FCM topic (breaking news), or one phone's FCM token (a reply to its message, #220). */
+  topic?: string;
+  token?: string;
   title: string;
   /** The line under the title on iOS (#157); none when empty. */
   subtitle?: string;
@@ -236,7 +238,7 @@ export type SendResult =
  */
 export const fcmBody = (message: PushMessage) => ({
   message: {
-    topic: message.topic,
+    ...(message.token ? { token: message.token } : { topic: message.topic }),
     notification: { title: message.title, body: message.body },
     data: message.data,
     apns: {
