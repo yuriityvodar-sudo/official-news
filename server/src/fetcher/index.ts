@@ -45,6 +45,8 @@ export const LIMITS = {
    * is asked again on later checks while it is this new; then the teaser is saved.
    */
   retryHours: 24,
+  /** A known item out of the feed is read again at most this often (#227). */
+  rereadMinutes: 60,
   /** Pages of one site that may fail (5xx, no answer in time) in a run before the site counts as busy. */
   failedPagesPerHost: 3,
   maxText: 20_000,
@@ -66,6 +68,8 @@ export interface SourceCheck {
   undated: number;
   /** Items skipped because their link leaves the source's site. */
   offSite: number;
+  /** Known items read again: their text never came, or their publisher renamed them (#227). */
+  reread: number;
   error: string | null;
 }
 
@@ -412,8 +416,63 @@ async function readFullText(run: Run, item: FoundItem, sourceUrl: string, config
   return item;
 }
 
+/** A saved link as checkSource finds it. */
+interface Known {
+  original_title: string;
+  textless: number;
+  out_of_feed: number;
+  fetched_at: string;
+}
+
+/**
+ * Reads a saved link again while it is out of the feed (#227), when its text
+ * never came (the Élysée's page of 28 Oct, saved without text) or the list now
+ * gives it another title (La Moncloa first lists a council's summary under a
+ * placeholder and renames it hours later, at the same link). At most once an
+ * hour per link, and only with page budget left after the new items. When the
+ * text or the title changed, its summary is made again. A link in the feed is
+ * never touched. Returns how many were updated.
+ */
+async function rereadKnown(
+  run: Run,
+  source: SourceRow,
+  config: SourceConfig,
+  recent: FoundItem[],
+  known: Map<string, Known>,
+  expires: string,
+): Promise<number> {
+  const before = toStoredTime(new Date(run.now.getTime() - LIMITS.rereadMinutes * 60_000));
+  const updates: D1PreparedStatement[] = [];
+  for (const found of recent) {
+    const held = known.get(found.url);
+    const title = found.title.slice(0, 500);
+    if (!held || !held.out_of_feed || held.fetched_at > before || (!held.textless && held.original_title === title)) continue;
+    let read: FoundItem | null | undefined;
+    if (config.fullText) read = await readFullText(run, found, source.url, config);
+    else if (config.itemPages !== false) read = await readItemPage(run, found, config);
+    // No page budget left, or the site asked us to wait: the next check.
+    if (read === null) break;
+    const text = (read ?? found).text?.slice(0, LIMITS.maxText) || null;
+    // SET reads the row as it was: `original_title` and `text` there are the saved ones.
+    updates.push(
+      run.env.DB.prepare(
+        `UPDATE articles SET
+           original_title = ?2, fetched_at = ?3, text = COALESCE(?4, text),
+           text_expires_at = CASE WHEN ?4 IS NULL THEN text_expires_at ELSE ?5 END,
+           summarized_at = CASE WHEN original_title IS ?2 AND text IS COALESCE(?4, text) THEN summarized_at END,
+           summary_attempts = CASE WHEN original_title IS ?2 AND text IS COALESCE(?4, text) THEN summary_attempts ELSE 0 END,
+           summary_claimed_at = CASE WHEN original_title IS ?2 AND text IS COALESCE(?4, text) THEN summary_claimed_at END
+         WHERE url = ?1 AND feed_seq IS NULL`,
+      ).bind(found.url, title, toStoredTime(run.now), text, expires),
+    );
+  }
+  if (!updates.length) return 0;
+  const results = await run.env.DB.batch(updates);
+  return results.reduce((n, r) => n + (r.meta.changes ?? 0), 0);
+}
+
 async function checkSource(run: Run, source: SourceRow): Promise<SourceCheck> {
-  const check: SourceCheck = { sourceId: source.id, ok: false, httpStatus: null, found: 0, saved: 0, waiting: 0, undated: 0, offSite: 0, error: null };
+  const check: SourceCheck = { sourceId: source.id, ok: false, httpStatus: null, found: 0, saved: 0, waiting: 0, undated: 0, offSite: 0, reread: 0, error: null };
   const config = readConfig(source);
   try {
     const url = listUrl(source.url, run.now);
@@ -458,14 +517,16 @@ async function checkSource(run: Run, source: SourceRow): Promise<SourceCheck> {
       .slice(0, LIMITS.itemsPerSource);
     const newest = listed.reduce<string | null>((max, i) => (i.publishedAt && (!max || i.publishedAt > max) ? i.publishedAt : max), null);
 
-    const known = new Set<string>();
+    // What is already saved of these links: not saved again, but read again by rereadKnown.
+    const known = new Map<string, Known>();
     if (recent.length) {
       const { results } = await run.env.DB.prepare(
-        `SELECT url FROM articles WHERE url IN (${recent.map(() => "?").join(", ")})`,
+        `SELECT url, original_title, text IS NULL AS textless, feed_seq IS NULL AS out_of_feed, fetched_at
+         FROM articles WHERE url IN (${recent.map(() => "?").join(", ")})`,
       )
         .bind(...recent.map((i) => i.url))
-        .all<{ url: string }>();
-      for (const r of results) known.add(r.url);
+        .all<Known & { url: string }>();
+      for (const r of results) known.set(r.url, r);
     }
 
     const expires = toStoredTime(new Date(run.now.getTime() + (config.textDays ?? LIMITS.textDays) * 86_400_000));
@@ -509,6 +570,7 @@ async function checkSource(run: Run, source: SourceRow): Promise<SourceCheck> {
       const results = await run.env.DB.batch(inserts);
       check.saved = results.reduce((n, r) => n + (r.meta.changes ?? 0), 0);
     }
+    check.reread = await rereadKnown(run, source, config, recent, known, expires);
 
     await run.env.DB.prepare(
       `UPDATE sources SET last_item_at = ?1 WHERE id = ?2 AND ?1 IS NOT NULL AND (last_item_at IS NULL OR last_item_at < ?1)`,
