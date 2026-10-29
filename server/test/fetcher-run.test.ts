@@ -185,6 +185,80 @@ describe("runFetcher", () => {
     expect(requests.some((r) => r.url.endsWith("/d/full"))).toBe(false);
   });
 
+  it("reads a link out of the feed again when its text never came, at most once an hour, and has it summarized again (#227)", async () => {
+    // The Élysée, 28 Oct: the council's report was listed before its page was up, and was saved without text.
+    await addSource("xx-council", "https://gov.test/feed.xml", "rss");
+    const report = "https://gov.test/council/14";
+    const site: Site = {
+      "https://gov.test/robots.txt": { status: 404, body: "" },
+      "https://gov.test/feed.xml": { body: rss([{ title: "Council of Ministers, 14 October", link: report, date: "Wed, 14 Oct 2026 09:00:00 GMT", text: "" }]) },
+    };
+    const { fetch, requests } = fakeFetch(site);
+    await runFetcher(env, { fetch, now: NOW });
+    expect(await articlesOf("xx-council")).toMatchObject([{ text: null }]);
+    // The summarizer had only the title, and found no decision in it.
+    await env.DB.prepare("UPDATE articles SET summarized_at = '2026-10-14T15:01:00Z', is_news = 0, summary_attempts = 1 WHERE source_id = 'xx-council'").run();
+
+    // Not again within the hour.
+    site[report] = { body: `<html><body><main><p>${longText}</p></main></body></html>` };
+    expect((await runFetcher(env, { fetch, now: new Date("2026-10-14T15:40:00Z") }))[0]).toMatchObject({ reread: 0 });
+    expect(requests.filter((r) => r.url === report)).toHaveLength(1);
+
+    // Then read again: the text, and a new summary to make.
+    expect((await runFetcher(env, { fetch, now: new Date("2026-10-14T16:10:00Z") }))[0]).toMatchObject({ saved: 0, reread: 1 });
+    expect((await articlesOf("xx-council"))[0].text).toContain("cabinet meeting");
+    expect(await env.DB.prepare("SELECT summarized_at, summary_attempts, fetched_at FROM articles WHERE source_id = 'xx-council'").first()).toEqual({
+      summarized_at: null,
+      summary_attempts: 0,
+      fetched_at: "2026-10-14T16:10:00Z",
+    });
+    // Nothing changed since: it stays as it is.
+    expect((await runFetcher(env, { fetch, now: new Date("2026-10-14T18:00:00Z") }))[0]).toMatchObject({ reread: 0 });
+  });
+
+  it("reads a link out of the feed again when its publisher renamed it, but never one in the feed (#227)", async () => {
+    // La Moncloa lists a council's summary under a placeholder first, and renames it hours later at the same link.
+    await addSource("xx-moncloa", "https://gov.test/feed.xml", "rss");
+    const placeholder = "https://gov.test/summary/14";
+    const inFeed = "https://gov.test/summary/13";
+    const page = (text: string) => ({ body: `<html><body><main><p>${text}</p></main></body></html>` });
+    const site: Site = {
+      "https://gov.test/robots.txt": { status: 404, body: "" },
+      "https://gov.test/feed.xml": {
+        body: rss([
+          { title: "The President chairs the Council of Ministers", link: placeholder, date: "Wed, 14 Oct 2026 09:00:00 GMT", text: "The Cabinet meets at 09:30." },
+          { title: "21 measures for housing", link: inFeed, date: "Tue, 13 Oct 2026 09:00:00 GMT", text: "" },
+        ]),
+      },
+      [placeholder]: page("The Cabinet meets at 09:30."),
+      [inFeed]: page(longText),
+    };
+    const { fetch, requests } = fakeFetch(site);
+    await runFetcher(env, { fetch, now: NOW });
+    await env.DB.prepare("UPDATE articles SET summarized_at = '2026-10-14T15:01:00Z', is_news = 0 WHERE source_id = 'xx-moncloa'").run();
+    await env.DB.prepare("UPDATE articles SET is_news = 1, feed_seq = (SELECT MAX(feed_seq) + 1 FROM articles) WHERE url = ?").bind(inFeed).run();
+
+    site["https://gov.test/feed.xml"] = {
+      body: rss([
+        { title: "€201 million for affordable housing", link: placeholder, date: "Wed, 14 Oct 2026 09:00:00 GMT", text: "" },
+        { title: "21 measures for housing, corrected", link: inFeed, date: "Tue, 13 Oct 2026 09:00:00 GMT", text: "" },
+      ]),
+    };
+    site[placeholder] = page(longText);
+    site[inFeed] = page("Changed after it was released.");
+    expect((await runFetcher(env, { fetch, now: new Date("2026-10-14T17:00:00Z") }))[0]).toMatchObject({ saved: 0, reread: 1 });
+
+    const [renamed, released] = await articlesOf("xx-moncloa");
+    expect(renamed).toMatchObject({ original_title: "€201 million for affordable housing" });
+    expect(renamed.text).toContain("cabinet meeting");
+    expect(released).toMatchObject({ original_title: "21 measures for housing" });
+    expect(released.text).toContain("cabinet meeting");
+    expect(await env.DB.prepare("SELECT summarized_at FROM articles WHERE url = ?").bind(placeholder).first("summarized_at")).toBeNull();
+    expect(await env.DB.prepare("SELECT summarized_at FROM articles WHERE url = ?").bind(inFeed).first("summarized_at")).toBe("2026-10-14T15:01:00Z");
+    // Its page is not even opened again: the page budget goes to the others.
+    expect(requests.filter((r) => r.url === inFeed)).toHaveLength(1);
+  });
+
   it("keeps each new stage of the same item when the source asks for it", async () => {
     await addSource("xx-bills", "https://parl.test/bills.xml", "rss", { newStageIsNewItem: true });
     const bill = (date: string) => rss([{ title: "C-37 Clean Water Act", link: "https://parl.test/bill/C-37", date }]);
