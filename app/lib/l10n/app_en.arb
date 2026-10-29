@@ -597,6 +597,10 @@
   "@myCountryUnknown": {
     "description": "Beside My country when neither the phone's region nor the server knows the country."
   },
+  "myCountryOther": "Another country",
+  "@myCountryOther": {
+    "description": "Beside My country for a country the app has no name for (the phone's region or the server's answer), such as Norway (#206)."
+  },
   "myCountryFooter": "For you shows this country's decisions, the EU's for its members and the world's that matter. Change it only if you live in another country.",
   "@myCountryFooter": {
     "description": "Under the first choice on the My country page."
@@ -759,9 +763,9 @@
   "@privacyLoadingServer": {
     "description": "Privacy policy, under privacyLoadingHeading. Cloudflare is a company's name: never translated."
   },
-  "privacyLoadingCountry": "For you shows what concerns your country. The app takes the country from your phone's region, or from Settings → My country. If the phone has no region, our server tells the app which country it sees the request come from, and keeps nothing. The country stays on your phone; the server receives it with each request for the feed only to choose the news, and does not store it.",
+  "privacyLoadingCountry": "For you shows what concerns your country. The app takes the country from your phone's region, or from Settings → My country. If the phone has no region, our server tells the app which country it sees the request come from, and keeps nothing. The country stays on your phone; the server receives it with each request for the feed only to choose the news, and does not save it. Like every request to our server, these can appear in Cloudflare's technical logs, which are deleted automatically within a week.",
   "@privacyLoadingCountry": {
-    "description": "Privacy policy, When the app loads news (#170): how For you's country is found, kept on the phone and sent; GET /locate keeps nothing."
+    "description": "Privacy policy, When the app loads news (#170): how For you's country is found, kept on the phone and sent; the API saves it nowhere, but Cloudflare's request logs (Workers observability) keep request URLs for a few days (#206)."
   },
   "privacyLoadingPictures": "Article pictures are loaded directly from the official website that published them, so that website receives your IP address when a picture loads. Pictures are saved on your phone after the first view.",
   "@privacyLoadingPictures": {

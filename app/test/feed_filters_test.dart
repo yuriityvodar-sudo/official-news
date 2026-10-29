@@ -1237,9 +1237,13 @@ void main() {
         ((tile.title as Semantics).child! as Text).data!,
     ];
     expect(names, hasLength(homeCountries.length));
+    expect(names, hasLength(42));
     expect(names, [...names]..sort());
     expect(names, containsAll(['Austria', 'Ukraine', 'United States']));
-    expect(names, isNot(contains('European Union')));
+    // No EU (not a country), and no Russia or Saudi Arabia: no sources there.
+    for (final none in ['European Union', 'Russia', 'Saudi Arabia']) {
+      expect(names, isNot(contains(none)));
+    }
 
     await tester.ensureVisible(find.text('Ukraine'));
     await tester.pumpAndSettle();
@@ -1268,6 +1272,65 @@ void main() {
     expect(feed.homeCountry, 'DE');
     expect(server.feedRequests.last.queryParameters['for'], 'DE');
     expect(prefs.getString('feed.home'), isNull);
+  });
+
+  test("the countries sort by each language's alphabet (#206)", () {
+    List<String> sorted(FeedLanguage lang) {
+      final l10n = l10nFor(lang);
+      return [for (final code in homeCountries) countryName(code, l10n)]..sort(
+        (a, b) =>
+            alphabetKey(a, lang.code).compareTo(alphabetKey(b, lang.code)),
+      );
+    }
+
+    // A letter with a mark beside its own.
+    final de = sorted(FeedLanguage.de);
+    expect(de.indexOf('Österreich'), greaterThan(de.indexOf('Niederlande')));
+    expect(de.indexOf('Österreich'), lessThan(de.indexOf('Polen')));
+    expect(de.indexOf('Dänemark'), lessThan(de.indexOf('Deutschland')));
+    final es = sorted(FeedLanguage.es);
+    expect(es.indexOf('Bélgica'), lessThan(es.indexOf('Bulgaria')));
+    // Ukrainian І after Е and before К, not before А.
+    final uk = sorted(FeedLanguage.uk);
+    expect(uk.first, 'Австралія');
+    expect(uk.indexOf('Індія'), greaterThan(uk.indexOf('Естонія')));
+    expect(uk.indexOf('Італія'), lessThan(uk.indexOf('Канада')));
+    expect(sorted(FeedLanguage.ru).first, 'Австралия');
+  });
+
+  testWidgets('My country names a country the app does not know as Another '
+      'country, and follows the server while Settings is open', (tester) async {
+    region('NO');
+    await _pump(tester, _Server());
+    await tester.tap(find.byIcon(CupertinoIcons.gear_alt));
+    await tester.pumpAndSettle();
+    expect(find.text('Another country'), findsOneWidget);
+    expect(find.text('NO'), findsNothing);
+
+    // A country chosen, no region: then back to the phone, and the server's
+    // answer shows on the open page without reopening it.
+    await tester.pumpWidget(const SizedBox());
+    readPhoneRegion = () async => null;
+    SharedPreferences.setMockInitialValues({'feed.home': 'UA'});
+    await _pump(tester, _Server(located: 'DE'));
+    await tester.tap(find.byIcon(CupertinoIcons.gear_alt));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('My country'));
+    await tester.pumpAndSettle();
+    final phoneRow = find.ancestor(
+      of: find.text("By the phone's region"),
+      matching: find.byType(CupertinoListTile),
+    );
+    expect(
+      find.descendant(of: phoneRow, matching: find.text('Not known')),
+      findsOneWidget,
+    );
+    await tester.tap(find.text("By the phone's region"));
+    await tester.pumpAndSettle();
+    expect(
+      find.descendant(of: phoneRow, matching: find.text('Germany')),
+      findsOneWidget,
+    );
   });
 
   test('a chosen country is kept, and the server is not asked where the '

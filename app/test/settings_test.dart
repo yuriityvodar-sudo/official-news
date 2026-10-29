@@ -374,7 +374,9 @@ void main() {
       // For you's country (#170, Yurii on #170): where it comes from, and
       // that the server keeps nothing.
       "your phone's region, or from Settings → My country",
-      'and does not store it',
+      'and does not save it',
+      "Cloudflare's technical logs, which are deleted automatically within a "
+          'week',
     ]) {
       await tester.scrollUntilVisible(find.textContaining(line), -200);
       expect(find.textContaining(line), findsOneWidget);

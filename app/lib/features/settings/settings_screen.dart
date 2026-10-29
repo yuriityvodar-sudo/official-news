@@ -44,7 +44,7 @@ class SettingsScreen extends StatelessWidget {
   /// phone's ([phoneCountry], null when it is not known), and how to change
   /// it. Without them the row is not shown.
   final ValueListenable<String?>? country;
-  final String? phoneCountry;
+  final ValueListenable<String?>? phoneCountry;
   final ValueChanged<String?>? onCountry;
 
   /// Settings → Design (#66): saves the look and the headline weight on the
@@ -73,6 +73,7 @@ class SettingsScreen extends StatelessWidget {
       context,
     );
     final country = this.country;
+    final phoneCountry = this.phoneCountry;
     final onCountry = this.onCountry;
     return CupertinoPageScaffold(
       backgroundColor: grouped,
@@ -116,19 +117,17 @@ class SettingsScreen extends StatelessWidget {
                         ),
                       ),
                     ),
-                    if (country != null && onCountry != null)
-                      ValueListenableBuilder(
-                        valueListenable: country,
-                        builder: (context, chosen, _) {
-                          final code = chosen ?? phoneCountry;
+                    if (country != null &&
+                        phoneCountry != null &&
+                        onCountry != null)
+                      ListenableBuilder(
+                        listenable: Listenable.merge([country, phoneCountry]),
+                        builder: (context, _) {
+                          final code = country.value ?? phoneCountry.value;
                           return CupertinoListTile(
                             leading: const _Icon(CupertinoIcons.flag),
                             title: Text(l10n.myCountry),
-                            additionalInfo: Text(
-                              code == null
-                                  ? l10n.myCountryUnknown
-                                  : countryName(code, l10n),
-                            ),
+                            additionalInfo: Text(_countryLabel(code, l10n)),
                             trailing: const CupertinoListTileChevron(),
                             onTap: () => Navigator.of(context).push(
                               CupertinoPageRoute(
@@ -588,7 +587,7 @@ class _CountryPage extends StatelessWidget {
   });
 
   final ValueListenable<String?> country;
-  final String? phoneCountry;
+  final ValueListenable<String?> phoneCountry;
   final ValueChanged<String?> onCountry;
 
   @override
@@ -597,9 +596,9 @@ class _CountryPage extends StatelessWidget {
     final grouped = CupertinoColors.systemGroupedBackground.resolveFrom(
       context,
     );
-    final phone = phoneCountry;
     final names = {
-      for (final code in homeCountries) code: countryName(code, l10n),
+      for (final code in homeCountries)
+        code: alphabetKey(countryName(code, l10n), l10n.localeName),
     };
     final codes = names.keys.toList()
       ..sort((a, b) => names[a]!.compareTo(names[b]!));
@@ -615,9 +614,9 @@ class _CountryPage extends StatelessWidget {
       child: Material(
         type: MaterialType.transparency,
         child: SafeArea(
-          child: ValueListenableBuilder(
-            valueListenable: country,
-            builder: (context, chosen, _) => ListView(
+          child: ListenableBuilder(
+            listenable: Listenable.merge([country, phoneCountry]),
+            builder: (context, _) => ListView(
               children: [
                 CupertinoListSection.insetGrouped(
                   footer: Text(
@@ -632,15 +631,13 @@ class _CountryPage extends StatelessWidget {
                   children: [
                     CupertinoListTile(
                       title: Semantics(
-                        selected: chosen == null,
+                        selected: country.value == null,
                         child: Text(l10n.myCountryPhone),
                       ),
                       additionalInfo: Text(
-                        phone == null
-                            ? l10n.myCountryUnknown
-                            : countryName(phone, l10n),
+                        _countryLabel(phoneCountry.value, l10n),
                       ),
-                      trailing: chosen == null ? check : null,
+                      trailing: country.value == null ? check : null,
                       onTap: () => onCountry(null),
                     ),
                   ],
@@ -650,10 +647,10 @@ class _CountryPage extends StatelessWidget {
                     for (final code in codes)
                       CupertinoListTile(
                         title: Semantics(
-                          selected: code == chosen,
-                          child: Text(names[code]!),
+                          selected: code == country.value,
+                          child: Text(countryName(code, l10n)),
                         ),
-                        trailing: code == chosen ? check : null,
+                        trailing: code == country.value ? check : null,
                         onTap: () => onCountry(code),
                       ),
                   ],
@@ -665,4 +662,12 @@ class _CountryPage extends StatelessWidget {
       ),
     );
   }
+}
+
+/// A country's name beside My country: "Not known" for none, and "Another
+/// country" for one the app has no name for, such as Norway (Yurii, #206).
+String _countryLabel(String? code, AppLocalizations l10n) {
+  if (code == null) return l10n.myCountryUnknown;
+  final name = countryName(code, l10n);
+  return name == code ? l10n.myCountryOther : name;
 }

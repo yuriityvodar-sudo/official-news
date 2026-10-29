@@ -74,6 +74,11 @@ class FeedController extends ChangeNotifier {
   String? _region;
   String? _located;
 
+  /// The same, to listen to: Settings → My country shows it as `/locate`
+  /// answers (Yurii, #206).
+  ValueListenable<String?> get phoneCountryChanges => _phone;
+  final _phone = ValueNotifier<String?>(null);
+
   /// The country chosen in Settings → My country, saved on the phone; null
   /// follows the phone.
   ValueListenable<String?> get chosenCountry => _chosen;
@@ -185,6 +190,7 @@ class FeedController extends ChangeNotifier {
     _disposed = true;
     _language.dispose();
     _chosen.dispose();
+    _phone.dispose();
     super.dispose();
   }
 
@@ -211,6 +217,7 @@ class FeedController extends ChangeNotifier {
     if (_topic != null) _where = FeedWhere.all;
     _region = await readPhoneRegion();
     _located = store.located();
+    _phone.value = phoneCountry;
     _chosen.value = store.chosenCountry();
     unawaited(analytics.homeCountry(homeCountry));
     _noCountries = store.noCountries();
@@ -302,8 +309,9 @@ class FeedController extends ChangeNotifier {
     final before = homeCountry;
     _chosen.value = code;
     unawaited(_store?.saveChosenCountry(code));
-    // Back to the phone's, which is not known yet: ask the server.
-    if (code == null && phoneCountry == null) unawaited(_locate());
+    // Back to the phone's: without a region, ask the server again, since
+    // what it gave before the choice may be old (Yurii, #206).
+    if (code == null && _region == null) unawaited(_locate());
     if (homeCountry == before) return;
     unawaited(analytics.homeCountry(homeCountry));
     if (where.isForYou) await _reload(menus: false);
@@ -334,6 +342,7 @@ class FeedController extends ChangeNotifier {
       if (_disposed || country == null || country == _located) return;
       final before = homeCountry;
       _located = country;
+      _phone.value = phoneCountry;
       unawaited(_store?.saveLocated(country));
       if (homeCountry == before) return;
       unawaited(analytics.homeCountry(homeCountry));

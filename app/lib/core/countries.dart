@@ -62,9 +62,39 @@ final euMembers =
         .toSet();
 
 /// The countries Settings → My country offers (#170): those For you can show
-/// decisions of their own for (the source list) and the EU's members, whose
-/// readers get the EU institutions' decisions too.
+/// decisions of their own for (the source list, docs/sources.csv) and the
+/// EU's members, whose readers get the EU institutions' decisions too: 42.
+/// Russia and Saudi Arabia have names but no sources (#42), so they are not
+/// offered.
 final homeCountries = {
   ...euMembers,
-  ...'AR AU BR CA CN GB ID IN JP KR MX RU SA TR UA US ZA'.split(' '),
+  ...'AR AU BR CA CN GB ID IN JP KR MX TR UA US ZA'.split(' '),
+};
+
+/// [name]'s place in the alphabet of [language], to sort country names as a
+/// reader of it expects (Yurii, #206): a letter with a mark beside its own
+/// ("Österreich" among the O's, "Bélgica" before "Bulgaria"), and Ukrainian
+/// and Russian in their own alphabets' order (І after И, not before А).
+String alphabetKey(String name, String language) {
+  final alphabet = switch (language) {
+    'uk' => 'абвгґдеєжзиіїйклмнопрстуфхцчшщьюя',
+    'ru' => 'абвгдеёжзийклмнопрстуфхцчшщъыьэюя',
+    _ => '',
+  };
+  final key = StringBuffer();
+  for (final char in name.toLowerCase().split('')) {
+    final place = alphabet.indexOf(char);
+    if (place >= 0) {
+      key.writeCharCode(0x400 + place);
+    } else {
+      key.write(_withoutMark[char] ?? char);
+    }
+  }
+  return key.toString();
+}
+
+const _withoutMark = {
+  'á': 'a', 'à': 'a', 'â': 'a', 'ä': 'a', 'å': 'a', 'ç': 'c', 'é': 'e', //
+  'è': 'e', 'ê': 'e', 'ë': 'e', 'í': 'i', 'î': 'i', 'ï': 'i', 'ñ': 'n', //
+  'ó': 'o', 'ô': 'o', 'ö': 'o', 'ú': 'u', 'û': 'u', 'ü': 'u', 'ß': 'ss', //
 };
