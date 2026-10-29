@@ -47,19 +47,8 @@ class FeedController extends ChangeNotifier {
   bool languageKnown = false;
 
   /// What the feed shows: For you (#170, the default) or the whole world, the
-  /// choice saved on the phone. A group or a country (#68) is no longer
-  /// offered; one is shown only while this server can show it: one without
-  /// `GET /countries` ignores `country=` and `group=`, and a group its Where
-  /// menu does not list would be refused, or ignored by a server from before
-  /// the groups.
-  FeedWhere get where {
-    final chosen = _where;
-    if (chosen.isAll || chosen.isForYou) return chosen;
-    if (_noCountries) return FeedWhere.all;
-    final menu = _whereMenu;
-    return menu == null || menu.offers(chosen) ? chosen : FeedWhere.all;
-  }
-
+  /// choice saved on the phone.
+  FeedWhere get where => _where;
   FeedWhere _where = FeedWhere.forYou;
 
   /// The reader's own country for For you (#170): the one chosen in Settings
@@ -88,29 +77,19 @@ class FeedController extends ChangeNotifier {
   /// home country is unknown.
   String? get _forCountry => where.isForYou ? homeCountry : null;
 
-  /// A server without `GET /countries` answered (404, or an answer of
-  /// another shape): no Where chip. Saved, so the next launch starts so.
-  bool _noCountries = false;
-
   /// The one topic the feed shows (#67), or null for all topics; saved.
   String? get topic => _topic;
   String? _topic;
 
-  /// Whether the feed shown is narrowed by a topic, a group or a country.
-  /// For you, the default feed, is not: it is kept on the phone for its
-  /// country as the whole world's is.
-  bool get filtered => !(where.isAll || where.isForYou) || _topic != null;
+  /// Whether the feed shown is narrowed by a topic. For you, the default
+  /// feed, is not: it is kept on the phone for its country as the whole
+  /// world's is.
+  bool get filtered => _topic != null;
 
-  /// The Where menu, its groups and countries named in the feed's language
-  /// (`GET /countries`, or the menu saved last time); null while unknown, and
-  /// for a server without it (the Where chip hides).
-  WhereMenu? get whereMenu => _noCountries ? null : _whereMenu;
-  WhereMenu? _whereMenu;
-
-  /// The Topics menu: the topics with articles in the feed's 7 days under the
-  /// Where choice, busiest first, named in the feed's language. Null when the
-  /// server has none (an older one: the Topics chip hides) or before the
-  /// first answer on a first launch.
+  /// The topics: those with articles in the feed's 7 days, the whole world's,
+  /// busiest first, named in the feed's language. Null when the server has
+  /// none (an older one: the menu offers For you and the whole world only)
+  /// or before the first answer on a first launch.
   List<FeedTopic>? get topics => _topics;
   List<FeedTopic>? _topics;
 
@@ -180,10 +159,6 @@ class FeedController extends ChangeNotifier {
   int _switches = 0;
   bool _disposed = false;
 
-  /// The Where the first page was last asked with: when the Where menu
-  /// arrives and the feed turns out to show another, it loads again.
-  FeedWhere? _askedWhere;
-
   bool get hasMore => _cursor != null;
 
   @override
@@ -216,7 +191,7 @@ class FeedController extends ChangeNotifier {
     _language.value = store.language(
       phone: FeedLanguage.forPhone(_phoneLanguages()),
     );
-    // A Local saved by the first filters build reads as every country.
+    // A group or a country saved before For you reads as For you.
     _where = store.where();
     unawaited(store.dropOldFilters());
     _topic = store.topic();
@@ -227,8 +202,6 @@ class FeedController extends ChangeNotifier {
     _phone.value = phoneCountry;
     _chosen.value = store.chosenCountry();
     unawaited(analytics.homeCountry(homeCountry));
-    _noCountries = store.noCountries();
-    _whereMenu = _noCountries ? null : store.whereMenu(language);
     _topics = store.topics(language);
     // Settings → Design (#66): what was chosen, if anything; else the default.
     final design = store.design();
@@ -272,27 +245,9 @@ class FeedController extends ChangeNotifier {
     _language.value = lang;
     // Notifications come in the feed's language (#62).
     unawaited(push.setLanguage(lang));
-    // The menus as saved in that language, until the server answers in it;
-    // the app names their groups, countries and topics in it either way.
-    if (!_noCountries) _whereMenu = _store?.whereMenu(lang) ?? _whereMenu;
+    // The topics as saved in that language, until the server answers in it;
+    // the app names them in it either way.
     _topics = _store?.topics(lang) ?? _topics;
-    await _reload();
-  }
-
-  /// Every country, a group or one country, from the chip (#68): another
-  /// feed, from the top, with the topics under it.
-  Future<void> setWhere(FeedWhere where) async {
-    if (where == _where) return;
-    final shown = this.where;
-    _where = where;
-    unawaited(_store?.saveWhere(where));
-    // Every country chosen while a choice the server cannot show was kept:
-    // the same feed, now saved as chosen.
-    if (this.where == shown) {
-      notifyListeners();
-      return;
-    }
-    _filterChanged();
     await _reload();
   }
 
@@ -324,17 +279,6 @@ class FeedController extends ChangeNotifier {
     if (where.isForYou) await _reload(menus: false);
   }
 
-  /// One topic, or null for all topics, from the chip (#67): another feed,
-  /// from the top. The Topics menu stays: it follows the language and the
-  /// Where choice only.
-  Future<void> setTopic(String? id) async {
-    if (id == _topic) return;
-    _topic = id;
-    unawaited(_store?.saveTopic(id));
-    _filterChanged();
-    await _reload(menus: false);
-  }
-
   /// A filter the reader changed, as the filters are now.
   void _filterChanged() =>
       unawaited(analytics.filterChanged(where: where, topic: _topic));
@@ -360,7 +304,7 @@ class FeedController extends ChangeNotifier {
   }
 
   /// Shows another feed (a language or a filter) from the top: the page saved
-  /// for it at once, if it has one, then the fresh one, with its menus unless
+  /// for it at once, if it has one, then the fresh one, with the topics unless
   /// [menus] is false. Anything still loading for the previous feed is dropped.
   /// With [keepShown] and nothing saved, the feed on screen stays until the
   /// new one arrives (For you for a country just learned, #170: no spinner
@@ -381,104 +325,29 @@ class FeedController extends ChangeNotifier {
     await (menus ? refresh() : _load(quiet: quiet));
   }
 
-  /// The first page again, and the menus for it, which the pull does not wait for.
+  /// The first page again, and the topics, which the pull does not wait for.
   Future<void> refresh() async {
     final feed = _load();
-    unawaited(_loadMenus());
+    unawaited(_loadTopics());
     await feed;
   }
 
-  /// The Where menu (once per language), then the Topics menu for the Where
-  /// choice. When the Where menu changes what the feed can show, the feed
-  /// reloads, with its own menus.
-  Future<void> _loadMenus() async {
-    if (await _loadWhereMenu()) return;
-    await _loadTopics();
-  }
-
-  /// The language the Where menu was named in this session; null until then.
-  FeedLanguage? _whereMenuLang;
-  Future<bool>? _whereMenuLoading;
-  FeedLanguage? _whereMenuLoadingLang;
-
-  /// Asks for the Where menu in the feed's language: once per language, and
-  /// again after a failure (offline), at the next refresh. True when the feed
-  /// shows another Where now and is reloading.
-  Future<bool> _loadWhereMenu() {
-    final lang = language;
-    if (_whereMenuLang == lang) return Future.value(false);
-    final loading = _whereMenuLoading;
-    if (loading != null && _whereMenuLoadingLang == lang) return loading;
-    _whereMenuLoadingLang = lang;
-    return _whereMenuLoading = _fetchWhereMenu(lang);
-  }
-
-  Future<bool> _fetchWhereMenu(FeedLanguage lang) async {
-    try {
-      final menu = await api.fetchCountries(lang: lang.code);
-      if (lang == language) {
-        _whereMenu = menu;
-        _whereMenuLang = lang;
-        unawaited(_store?.saveWhereMenu(lang, menu));
-        if (_noCountries) {
-          _noCountries = false;
-          unawaited(_store?.saveNoCountries(false));
-        }
-      }
-    } on ApiException catch (e) {
-      // A server without countries ignores `country=` and `group=`.
-      if (e.statusCode == 404 && lang == language) _serverHasNoCountries(lang);
-    } on FormatException {
-      if (lang == language) _serverHasNoCountries(lang);
-    } catch (_) {
-      // Offline: asked again at the next refresh.
-    } finally {
-      if (_whereMenuLoadingLang == lang) {
-        _whereMenuLoading = null;
-        _whereMenuLoadingLang = null;
-      }
-      notifyListeners();
-    }
-    if (_disposed || lang != language) return false;
-    // A feed asked before the answer: a server without countries, or without
-    // the chosen group, shows every country; one that lists the group again
-    // shows it.
-    if (where != _askedWhere) {
-      unawaited(_reload());
-      return true;
-    }
-    return false;
-  }
-
-  void _serverHasNoCountries(FeedLanguage lang) {
-    _whereMenu = null;
-    _whereMenuLang = lang;
-    _noCountries = true;
-    unawaited(_store?.saveNoCountries(true));
-  }
-
-  /// The language and Where the Topics menu was last asked for.
-  String? _topicsAsked;
+  /// The language the topics were last asked in.
+  FeedLanguage? _topicsAsked;
 
   Future<void> _loadTopics() async {
     final lang = language;
-    final where = this.where;
-    final asked = '${lang.code}/$where';
-    _topicsAsked = asked;
+    _topicsAsked = lang;
     try {
-      final list = await api.fetchTopics(
-        lang: lang.code,
-        country: where.country,
-        group: where.group,
-      );
-      // Another language or Where choice asked meanwhile.
-      if (_topicsAsked != asked) return;
+      final list = await api.fetchTopics(lang: lang.code);
+      // Another language asked meanwhile.
+      if (_topicsAsked != lang) return;
       _topics = list;
       unawaited(_store?.saveTopics(lang, list));
     } on ApiException catch (e) {
-      if (e.statusCode == 404 && _topicsAsked == asked) _noTopics(lang);
+      if (e.statusCode == 404 && _topicsAsked == lang) _noTopics(lang);
     } on FormatException {
-      if (_topicsAsked == asked) _noTopics(lang);
+      if (_topicsAsked == lang) _noTopics(lang);
     } catch (_) {
       // Offline: the menu stays as it was.
     } finally {
@@ -497,10 +366,8 @@ class FeedController extends ChangeNotifier {
   Future<void> _load({bool quiet = false}) async {
     final generation = _generation;
     final lang = language;
-    final where = this.where;
     final topic = _topic;
     final forCountry = _forCountry;
-    _askedWhere = where;
     if (!quiet) {
       error = null;
       notifyListeners();
@@ -508,8 +375,6 @@ class FeedController extends ChangeNotifier {
     try {
       final page = await api.fetchArticles(
         lang: lang.code,
-        country: where.country,
-        group: where.group,
         topic: topic,
         forCountry: forCountry,
       );
@@ -521,7 +386,7 @@ class FeedController extends ChangeNotifier {
       loading = false;
       // Only the unfiltered feed is kept: the one that opens offline; For
       // you's for its country (#170).
-      if ((where.isAll || where.isForYou) && topic == null) {
+      if (topic == null) {
         unawaited(_store?.saveLastPage(page, lang, forCountry));
       }
     } catch (e) {
@@ -545,8 +410,6 @@ class FeedController extends ChangeNotifier {
       final page = await api.fetchArticles(
         cursor: cursor,
         lang: language.code,
-        country: where.country,
-        group: where.group,
         topic: _topic,
         forCountry: _forCountry,
       );
@@ -580,7 +443,6 @@ class FeedController extends ChangeNotifier {
     }
     final generation = _generation;
     final lang = language.code;
-    final where = this.where;
     final topic = _topic;
     final forCountry = _forCountry;
     final highest = items
@@ -592,8 +454,6 @@ class FeedController extends ChangeNotifier {
               after: highest,
               limit: 50,
               lang: lang,
-              country: where.country,
-              group: where.group,
               topic: topic,
               forCountry: forCountry,
             )
@@ -602,8 +462,6 @@ class FeedController extends ChangeNotifier {
               since: items.first.publishedAt,
               limit: 50,
               lang: lang,
-              country: where.country,
-              group: where.group,
               topic: topic,
               forCountry: forCountry,
             );

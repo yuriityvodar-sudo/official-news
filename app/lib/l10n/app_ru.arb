@@ -29,14 +29,8 @@
   "hoursAgo": "{hours} ч назад",
   "daysAgo": "{days, plural, one{{days} день назад} few{{days} дня назад} many{{days} дней назад} other{{days} дня назад}}",
 
-  "filterAllCountries": "Все страны",
-  "filterAllTopics": "Все темы",
-  "filterCountryChip": "Страна: {name}",
-  "filterGroupChip": "Страны: {name}",
-  "filterGroupEUShort": "ЕС",
   "filterTopicChip": "Тема: {name}",
   "filterEmpty": "За последние 7 дней здесь нет решений.",
-  "filterShowAllCountries": "Показать все страны",
   "filterShowAllTopics": "Показать все темы",
 
   "decisionTypeLaw": "Закон",
@@ -72,7 +66,6 @@
   "countryDE": "Германия",
   "countryES": "Испания",
   "countryEU": "Европейский союз",
-  "groupNato": "НАТО",
   "countryFR": "Франция",
   "countryGB": "Великобритания",
   "countryID": "Индонезия",
