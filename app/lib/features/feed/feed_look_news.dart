@@ -178,9 +178,9 @@ class NewsLook extends FeedLook {
           fill: style.card,
           edge: style.glassEdge,
           shadow: style.softShadow,
-          chosen: style.gradient,
+          chosen: style.chosen,
           glow: style.glow,
-          tint: style.accent,
+          tint: style.chosenColors.first,
         ),
       ),
     );
@@ -835,7 +835,7 @@ String _spoken(BuildContext context, Article a, List<String> topics) {
 
 /// [NewsLook]'s colours and type, light or dark.
 class _NewsStyle {
-  _NewsStyle._(this.dark, this.accent, this.accent2)
+  _NewsStyle._(this.dark, this.accent, this.accent2, this.chosenColors)
     : page = dark ? const Color(0xFF000000) : const Color(0xFFF2F2F7),
       card = dark ? const Color(0xFF1C1C1E) : const Color(0xFFFFFFFF),
       ink = dark ? const Color(0xFFFFFFFF) : const Color(0xFF000000),
@@ -848,11 +848,13 @@ class _NewsStyle {
         dark,
         dark ? const Color(0xFFFF5A72) : const Color(0xFFC41230),
         dark ? const Color(0xFFFF8A9C) : const Color(0xFFE4566E),
+        const [Color(0xFFC41230), Color(0xFF9E0E27)],
       ),
       NewsPalette.seal => _NewsStyle._(
         dark,
         dark ? const Color(0xFF3DD4A3) : const Color(0xFF0E7A5E),
         dark ? const Color(0xFF7BE6C2) : const Color(0xFF2DB88D),
+        const [Color(0xFF0E7A5E), Color(0xFF0A5C47)],
       ),
     };
   }
@@ -864,6 +866,17 @@ class _NewsStyle {
   /// The look's colour, and the lighter end of its gradient.
   final Color accent;
   final Color accent2;
+
+  /// The chosen pill's colour, deepening, the same in both themes, so its
+  /// white words read: at least 5.3:1 (Yurii, #210; Roman's pick A of
+  /// `handoff/chosen-pill-contrast.html`).
+  final List<Color> chosenColors;
+
+  LinearGradient get chosen => LinearGradient(
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+    colors: chosenColors,
+  );
 
   final Color page;
   final Color card;

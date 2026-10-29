@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart' show Theme;
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -153,6 +154,7 @@ void main() {
     FeedLanguage language = FeedLanguage.en,
     double width = 393,
     double height = 852,
+    Brightness brightness = Brightness.light,
   }) async {
     tester.view.physicalSize = Size(width, height) * 3;
     tester.view.devicePixelRatio = 3;
@@ -162,9 +164,12 @@ void main() {
       testApp(
         language: language,
         onGenerateRoute: onGenerateRoute,
-        home: FeedScreen(
-          controller: feed,
-          newCheckEvery: const Duration(hours: 1),
+        home: Theme(
+          data: buildTheme(brightness),
+          child: FeedScreen(
+            controller: feed,
+            newCheckEvery: const Duration(hours: 1),
+          ),
         ),
       ),
     );
@@ -902,6 +907,11 @@ void main() {
     group('design ${design.name}: the pills', () {
       setUp(() => feedDesign.value = design);
 
+      /// The look's colour in light mode: Garnet's red or Seal's green.
+      final accent = design == FeedDesign.seal
+          ? const Color(0xFF0E7A5E)
+          : const Color(0xFFC41230);
+
       final rows = [
         for (var i = 0; i < 12; i++) _article('r$i', feedSeq: 20 - i),
       ];
@@ -979,6 +989,34 @@ void main() {
         expect((feed.where, feed.topic), (FeedWhere.forYou, null));
         semantics.dispose();
       });
+
+      for (final brightness in Brightness.values) {
+        testWidgets('the chosen pill is the colour deepening, its white words '
+            'at least 4.5:1 in ${brightness.name} mode (Yurii, #210)', (
+          tester,
+        ) async {
+          await pumpFeed(tester, rows, const [], brightness: brightness);
+          final colors =
+              (glass(tester, 'pill-for-you').gradient! as LinearGradient)
+                  .colors;
+          for (final colour in colors) {
+            final opaque = colour.withValues(alpha: 1);
+            expect(
+              1.05 / (opaque.computeLuminance() + 0.05),
+              greaterThanOrEqualTo(4.5),
+              reason: '$opaque',
+            );
+          }
+          // The same deep colour in both themes, the look's own first; iOS's
+          // row tints its chosen pill with it too.
+          expect(colors.first.withValues(alpha: 1), accent);
+          expect(tester.widget<FeedPills>(find.byType(FeedPills)).tint, accent);
+          expect(
+            tester.widget<Text>(find.text('For you')).style!.color,
+            const Color(0xFFFFFFFF),
+          );
+        });
+      }
 
       testWidgets('the pills stay at the top as glass while the rows pass '
           'under them; nothing fades over them', (tester) async {
