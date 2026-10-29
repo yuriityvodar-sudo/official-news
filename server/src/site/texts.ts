@@ -38,11 +38,11 @@ interface SiteTexts {
   getApp: string;
   getAppBody: string;
   comingSoon: string;
-  /** The analytics banner (consent.ts): nothing from Google loads before a yes. */
+  /** The cookie notice (consent.ts; Yurii, 30 Oct: a general message, Details is the privacy policy): nothing from Google loads before Accept. */
   consentTitle: string;
   consentText: string;
   consentYes: string;
-  consentNo: string;
+  consentDetails: string;
   notInLang: string;
   /** The not-in-language page of an event (#230). */
   notInLangEvent: string;
@@ -83,10 +83,10 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     getApp: "Get the app",
     getAppBody: "Official decisions from around the world, in a few calm sentences, on your phone.",
     comingSoon: "Coming soon",
-    consentTitle: "Analytics",
-    consentText: "May we use Google Analytics to see how this site is used? It counts visits and what is read, sets cookies, and loads only if you allow it.",
-    consentYes: "Allow",
-    consentNo: "No, thanks",
+    consentTitle: "Cookies",
+    consentText: "We use cookies to give you a better experience on Outer News. Accept to continue.",
+    consentYes: "Accept",
+    consentDetails: "Details",
     notInLang: "This decision is not available in this language yet.",
     notInLangEvent: "This event is not available in this language yet.",
     readIn: "Read it in:",
@@ -121,10 +121,10 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     getApp: "Завантажте застосунок",
     getAppBody: "Офіційні рішення з усього світу кількома спокійними реченнями у вашому телефоні.",
     comingSoon: "Незабаром",
-    consentTitle: "Аналітика",
-    consentText: "Чи можемо ми використовувати Google Analytics, щоб бачити, як користуються сайтом? Він рахує відвідування й прочитане, ставить файли cookie і вмикається лише з вашого дозволу.",
-    consentYes: "Дозволити",
-    consentNo: "Ні, дякую",
+    consentTitle: "Файли cookie",
+    consentText: "Ми використовуємо файли cookie, щоб зробити Outer News зручнішим для вас. Прийміть, щоб продовжити.",
+    consentYes: "Прийняти",
+    consentDetails: "Докладніше",
     notInLang: "Цього рішення ще немає цією мовою.",
     notInLangEvent: "Цієї події ще немає цією мовою.",
     readIn: "Читати:",
@@ -159,10 +159,10 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     getApp: "Скачайте приложение",
     getAppBody: "Официальные решения со всего мира в нескольких спокойных предложениях в вашем телефоне.",
     comingSoon: "Скоро",
-    consentTitle: "Аналитика",
-    consentText: "Можно ли нам использовать Google Analytics, чтобы видеть, как пользуются сайтом? Он считает посещения и прочитанное, ставит файлы cookie и включается только с вашего разрешения.",
-    consentYes: "Разрешить",
-    consentNo: "Нет, спасибо",
+    consentTitle: "Файлы cookie",
+    consentText: "Мы используем файлы cookie, чтобы сделать Outer News удобнее для вас. Примите, чтобы продолжить.",
+    consentYes: "Принять",
+    consentDetails: "Подробнее",
     notInLang: "Этого решения пока нет на этом языке.",
     notInLangEvent: "Этого события пока нет на этом языке.",
     readIn: "Читать:",
@@ -197,10 +197,10 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     getApp: "Descarga la app",
     getAppBody: "Decisiones oficiales de todo el mundo, en pocas frases serenas, en tu móvil.",
     comingSoon: "Próximamente",
-    consentTitle: "Analítica",
-    consentText: "¿Podemos usar Google Analytics para ver cómo se usa este sitio? Cuenta visitas y lo que se lee, usa cookies y solo se activa si lo permites.",
-    consentYes: "Permitir",
-    consentNo: "No, gracias",
+    consentTitle: "Cookies",
+    consentText: "Usamos cookies para ofrecerte una mejor experiencia en Outer News. Acepta para continuar.",
+    consentYes: "Aceptar",
+    consentDetails: "Detalles",
     notInLang: "Esta decisión aún no está disponible en este idioma.",
     notInLangEvent: "Este acontecimiento aún no está disponible en este idioma.",
     readIn: "Leer en:",
@@ -235,10 +235,10 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     getApp: "Laden Sie die App",
     getAppBody: "Offizielle Entscheidungen aus aller Welt, in wenigen ruhigen Sätzen, auf Ihrem Handy.",
     comingSoon: "Demnächst",
-    consentTitle: "Analyse",
-    consentText: "Dürfen wir Google Analytics nutzen, um zu sehen, wie diese Website genutzt wird? Es zählt Besuche und Gelesenes, setzt Cookies und lädt nur mit deiner Erlaubnis.",
-    consentYes: "Erlauben",
-    consentNo: "Nein, danke",
+    consentTitle: "Cookies",
+    consentText: "Wir verwenden Cookies, um Ihnen ein besseres Erlebnis auf Outer News zu bieten. Akzeptieren Sie, um fortzufahren.",
+    consentYes: "Akzeptieren",
+    consentDetails: "Details",
     notInLang: "Diese Entscheidung gibt es in dieser Sprache noch nicht.",
     notInLangEvent: "Dieses Ereignis gibt es in dieser Sprache noch nicht.",
     readIn: "Lesen auf:",

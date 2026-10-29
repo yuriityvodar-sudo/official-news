@@ -85,18 +85,36 @@ describe("/ opens the visitor's language (no page to choose one)", () => {
   });
 });
 
-describe("Google Analytics, only with the visitor's yes", () => {
-  it("every page carries the banner hidden and the one script the CSP allows by its hash; Google's tag is not in the page", async () => {
+describe("Google Analytics, after the visitor accepts cookies", () => {
+  it("every page carries the notice hidden and the one script the CSP allows by its hash; Google's tag is not in the page", async () => {
     for (const path of ["/en", "/uk", EN, "/es/about"]) {
       const { body, headers } = await site(path);
-      expect(body, path).toMatch(/<div class="consent" id="consent" role="region" aria-label="[^"]+" hidden>/);
+      expect(body, path).toMatch(/<div class="consent" id="consent" role="dialog" aria-modal="(true|false)" aria-label="[^"]+"( data-wall)? hidden>/);
       expect(body, path).toContain(`<script>${CONSENT_JS}</script>`);
-      // Google's tag is added by the script after a yes, never written into the page.
+      // Google's tag is added by the script after Accept, never written into the page.
       expect(withoutConsentScript(body), path).not.toContain("googletagmanager");
       expect(headers.get("content-security-policy"), path).toContain(`script-src '${await consentHash()}' https://*.googletagmanager.com`);
     }
     expect(CONSENT_JS).toContain(`"${GA_ID}"`);
     expect(GA_ID).toBe("G-D0H8XW2SWJ");
+  });
+
+  // Yurii, 30 Oct: a cookie wall with a general message; Details is the privacy policy, which names Google Analytics.
+  it("covers articles and lists until Accept, and is a bar on the information pages so Details can be read", async () => {
+    for (const path of ["/en", EN]) {
+      const { body } = await site(path);
+      expect(body, path).toContain('aria-modal="true" aria-label="Cookies" data-wall hidden>');
+      expect(body, path).toContain("We use cookies to give you a better experience on Outer News. Accept to continue.");
+      expect(body, path).toContain('<a href="/en/privacy">Details</a>');
+      // The notice itself names no company; the privacy policy does.
+      expect(body.slice(body.indexOf('<div class="consent"'), body.indexOf("<script>")), path).not.toContain("Google");
+    }
+    for (const page of ["about", "privacy", "terms", "support"]) {
+      expect((await site(`/en/${page}`)).body, page).toContain('aria-modal="false" aria-label="Cookies" hidden>');
+    }
+    expect((await site("/en/privacy")).body).toContain("Google Analytics");
+    // No way to say no: the only answer is Accept.
+    expect(CONSENT_JS).not.toContain('"no"');
   });
 });
 

@@ -74,12 +74,16 @@ h1{margin:0 0 10px;font-size:31px;line-height:1.15;font-weight:700}
 .store{display:inline-flex;flex-direction:column;justify-content:center;min-width:150px;min-height:52px;padding:6px 16px;border-radius:12px;background:var(--fill);color:var(--secondary)}
 .store span{font-size:12px}
 .store .name{color:var(--text);font-size:16px;font-weight:700}
-.consent{position:fixed;left:0;right:0;bottom:0;z-index:3;padding:14px 0 calc(14px + env(safe-area-inset-bottom));background:var(--menu);border-top:.5px solid var(--separator);box-shadow:0 -8px 24px var(--shadow)}
+.consent{position:fixed;left:0;right:0;bottom:0;z-index:3;padding:14px 16px calc(14px + env(safe-area-inset-bottom));background:var(--menu);border-top:.5px solid var(--separator);box-shadow:0 -8px 24px var(--shadow)}
+.consent-card{max-width:648px;margin:0 auto}
+.consent[data-wall]{top:0;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(0,0,0,.45);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);border:0;box-shadow:none}
+.consent[data-wall] .consent-card{max-width:420px;padding:24px;border-radius:20px;background:var(--menu);box-shadow:0 12px 40px var(--shadow)}
 .consent[hidden]{display:none}
-.consent p{margin:0 0 10px;font-size:14px;color:var(--secondary)}
-.consent-buttons{display:flex;gap:10px;flex-wrap:wrap}
-.consent button{min-height:44px;padding:0 18px;border:0;border-radius:22px;background:var(--fill);color:var(--text);font:600 15px/1 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;cursor:pointer}
-.consent button.yes{background:var(--accent);color:#fff}
+html.walled{overflow:hidden}
+.consent p{margin:0 0 14px;font-size:15px;color:var(--text)}
+.consent-buttons{display:flex;gap:18px;align-items:center;flex-wrap:wrap}
+.consent-buttons a{color:var(--accent);font-size:15px}
+.consent button{min-height:44px;padding:0 22px;border:0;border-radius:22px;background:var(--accent);color:#fff;font:600 15px/1 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;cursor:pointer}
 .consent button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .more{display:inline-flex;align-items:center;min-height:44px;margin-top:8px;font-weight:600}
 .info h2{margin:24px 0 6px;font-size:17px;font-weight:600}
@@ -242,7 +246,7 @@ ${page.body}
 </div></main>
 ${getApp(lang)}
 ${footer(lang)}
-${consent(lang)}
+${consent(lang, !(INFO_PAGES as readonly string[]).includes(page.kind))}
 </body>
 </html>
 `;
