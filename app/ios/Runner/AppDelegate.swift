@@ -297,9 +297,14 @@ struct PillsRow: View {
   @ObservedObject var model: PillsModel
 
   /// The pills in Flutter's row (58 points at the usual text size, taller as
-  /// the text grows), where Flutter's own pills are, with room under them
-  /// for the glass's shadow.
-  static let insets = EdgeInsets(top: 8, leading: 16, bottom: 14, trailing: 16)
+  /// the text grows), each in a place at least 44 high ([place]), exactly
+  /// where Flutter's own pills are, with room under them for the glass's
+  /// shadow: nothing moves when one row stands in for the other (Roman,
+  /// 29 Oct).
+  static let insets = EdgeInsets(top: 4, leading: 16, bottom: 10, trailing: 16)
+
+  /// A pill's place, as tall as Flutter's: the pill centred in it.
+  static let place: CGFloat = 44
 
   var body: some View {
     Group {
@@ -323,8 +328,8 @@ struct PillLabel: View {
 
   var body: some View {
     HStack(spacing: 6) {
-      // VoiceOver reads the name alone.
-      Image(systemName: pill.symbol).accessibilityHidden(true)
+      // VoiceOver reads the name alone. In an 18-point slot, as Flutter's icon.
+      Image(systemName: pill.symbol).frame(width: 18).accessibilityHidden(true)
       Text(pill.title).lineLimit(1)
     }
     .font(.subheadline.weight(.semibold))
@@ -344,6 +349,11 @@ struct GlassPills: View {
   @ObservedObject var model: PillsModel
   @Namespace private var glass
 
+  /// Whether the row is still: swiped, it tells Flutter where it rests once
+  /// it stops; moved by itself to the chosen pill (on appearing, with no
+  /// animation), at once, so Flutter's row stands in at the same place.
+  @State private var phase: ScrollPhase = .idle
+
   var body: some View {
     ScrollViewReader { proxy in
       ScrollView(.horizontal, showsIndicators: false) {
@@ -362,6 +372,7 @@ struct GlassPills: View {
                 in: Capsule()
               )
               .glassEffectID(chosen ? "chosen" : pill.id, in: glass)
+              .frame(minHeight: PillsRow.place)
               .accessibilityAddTraits(chosen ? .isSelected : [])
               .id(pill.id)
             }
@@ -378,9 +389,11 @@ struct GlassPills: View {
         geometry.contentOffset.x + geometry.contentInsets.leading
       } action: { _, offset in
         model.offset = offset
+        if phase == .idle { model.onScroll(offset) }
       }
-      .onScrollPhaseChange { _, phase in
-        if phase == .idle { model.onScroll(model.offset) }
+      .onScrollPhaseChange { _, new in
+        phase = new
+        if new == .idle { model.onScroll(model.offset) }
       }
     }
   }
@@ -412,6 +425,7 @@ struct MaterialPills: View {
                 }
               }
             )
+            .frame(minHeight: PillsRow.place)
             .accessibilityAddTraits(chosen ? .isSelected : [])
             .id(pill.id)
           }

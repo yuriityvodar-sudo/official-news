@@ -82,13 +82,14 @@ class FeedPills extends StatefulWidget {
   @visibleForTesting
   static bool? debugNative;
 
-  /// How tall the row is at the reader's text size: pills at least 44
-  /// points high, as tall as their words need (Yurii, #210), with room above
-  /// them and for the glass's shadow under them.
+  /// How tall the row is at the reader's text size: a pill's place at least
+  /// 44 points high, the pill as tall as its words need and at least 36
+  /// (Yurii, #210), with room above and for the glass's shadow under it.
   static double heightFor(TextScaler scaler) {
     final words = (scaler.scale(_Pill.fontSize) * _Pill.lineHeight)
         .ceilToDouble();
-    return 4 + math.max(44.0, words + 2 * _Pill.padding + 2) + 10;
+    final pill = math.max(_Pill.height, words + 2 * _Pill.padding);
+    return 4 + math.max(44.0, pill) + 10;
   }
 
   @override
@@ -397,11 +398,19 @@ class _Pill extends StatelessWidget {
   final Color glow;
   final VoidCallback onTap;
 
-  /// The words' size, and their line's height as the theme's body text has
-  /// it; the space above and under them.
+  /// The pill as iOS's row draws its own (`PillLabel` in the Runner), so
+  /// nothing moves when one stands in for the other, as an article opens or
+  /// Settings comes over the feed (Roman, 29 Oct): the words in the system
+  /// font at 15 points with its own tracking and about its own line height
+  /// (the theme's body text has +0.25 and 1.43), 8 points of room above and
+  /// under them, edge included, at least 36 high, and the icon in an
+  /// 18-point slot.
   static const fontSize = 15.0;
-  static const lineHeight = 1.43;
+  static const lineHeight = 1.2;
+  static const letterSpacing = -0.24;
   static const padding = 8.0;
+  static const height = 36.0;
+  static const iconSlot = 18.0;
 
   @override
   Widget build(BuildContext context) {
@@ -436,9 +445,10 @@ class _Pill extends StatelessWidget {
                   filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 200),
+                    // The edge's point is part of the room around the words.
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: padding,
+                      horizontal: 13,
+                      vertical: padding - 1,
                     ),
                     decoration: BoxDecoration(
                       color: isChosen ? null : fill.withValues(alpha: 0.58),
@@ -446,21 +456,30 @@ class _Pill extends StatelessWidget {
                       borderRadius: _round,
                       border: Border.all(color: edge),
                     ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(icon, size: 16, color: color),
-                        const SizedBox(width: 6),
-                        Text(
-                          name,
-                          style: TextStyle(
-                            fontSize: fontSize,
-                            fontWeight: FontWeight.w600,
-                            height: lineHeight,
-                            color: color,
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(
+                        minHeight: height - 2 * padding,
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          SizedBox(
+                            width: iconSlot,
+                            child: Icon(icon, size: 16, color: color),
                           ),
-                        ),
-                      ],
+                          const SizedBox(width: 6),
+                          Text(
+                            name,
+                            style: TextStyle(
+                              fontSize: fontSize,
+                              fontWeight: FontWeight.w600,
+                              height: lineHeight,
+                              letterSpacing: letterSpacing,
+                              color: color,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),

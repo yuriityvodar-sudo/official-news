@@ -1013,6 +1013,30 @@ void main() {
         });
       }
 
+      testWidgets("Flutter's pills sit where iOS's own do, so nothing moves "
+          'when one row stands in for the other (Roman, 29 Oct)', (
+        tester,
+      ) async {
+        await pumpFeed(tester, rows, const []);
+        await tester.pumpAndSettle();
+        final row = tester.getRect(find.byType(FeedPills));
+        expect(row.height, 58);
+        expect(FeedPills.heightFor(TextScaler.noScaling), 58);
+        // As PillLabel in the Runner: 36 high, centred in a 44-point place
+        // 4 under the row's top, 16 in from its edge.
+        final pill = tester.getRect(
+          find.descendant(
+            of: find.byKey(const ValueKey('pill-for-you')),
+            matching: find.byType(AnimatedContainer),
+          ),
+        );
+        expect(pill.height, 36);
+        expect(pill.top - row.top, 8);
+        expect(pill.left - row.left, 16);
+        final words = tester.widget<Text>(find.text('For you')).style!;
+        expect((words.letterSpacing, words.height), (-0.24, 1.2));
+      });
+
       testWidgets('the pills stay at the top as glass while the rows pass '
           'under them; nothing fades over them', (tester) async {
         await pumpFeed(tester, rows, const [], height: 700);
