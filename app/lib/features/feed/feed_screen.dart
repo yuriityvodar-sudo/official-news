@@ -8,6 +8,7 @@ import 'package:flutter/rendering.dart';
 
 import '../../core/analytics.dart';
 import '../../core/card_zoom.dart';
+import '../../core/countries.dart';
 import '../../core/glass.dart';
 import '../../core/article.dart';
 import '../../core/feed_language.dart';
@@ -264,6 +265,9 @@ class _FeedScreenState extends State<FeedScreen> {
           onLanguage: _chooseLanguage,
           saveDesign: _feed.saveDesign,
           saveHeadlineWeight: _feed.saveHeadlineWeight,
+          country: _feed.chosenCountry,
+          phoneCountry: _feed.phoneCountryChanges,
+          onCountry: (code) => unawaited(_feed.setChosenCountry(code)),
         ),
       ),
     );
@@ -292,23 +296,14 @@ class _FeedScreenState extends State<FeedScreen> {
     await _feed.setLanguage(chosen);
   }
 
-  /// Every country, a group or one country from the chip (#68): another
+  /// For you, the whole world or one topic from the menu (#170): another
   /// feed, from the top.
-  Future<void> _chooseWhere(FeedWhere where) async {
-    if (where != _feed.where) {
+  Future<void> _chooseFeed(FeedWhere where, String? topic) async {
+    if (where != _feed.where || topic != _feed.topic) {
       Haptics.selection();
       _toTop();
     }
-    await _feed.setWhere(where);
-  }
-
-  /// One topic, or all, from the chip (#67): another feed, from the top.
-  Future<void> _chooseTopic(String? topic) async {
-    if (topic != _feed.topic) {
-      Haptics.selection();
-      _toTop();
-    }
-    await _feed.setTopic(topic);
+    await _feed.setFeed(where, topic: topic);
   }
 
   void _toTop() {
@@ -356,11 +351,9 @@ class _FeedScreenState extends State<FeedScreen> {
                       openSettings: _openSettings,
                       filterBar: FeedFilterBar(
                         where: _feed.where,
-                        whereMenu: _feed.whereMenu,
                         topic: _feed.topic,
                         topics: _feed.topics,
-                        onWhere: _chooseWhere,
-                        onTopic: _chooseTopic,
+                        onChoose: _chooseFeed,
                       ),
                     ),
                   ),
@@ -454,8 +447,12 @@ class _FeedScreenState extends State<FeedScreen> {
     }
 
     // The Top stories block, then one list without its decisions (#164); the
-    // server has applied the filters (#67, #68).
+    // server has applied the filters (#67, #68). In For you they are the
+    // reader's country's top stories (#170).
     final block = _feed.topStories;
+    final forYou = _feed.where.isForYou && _feed.topic == null
+        ? _feed.homeCountry
+        : null;
     final shown = _feed.feed;
     final slivers = <Widget>[];
 
@@ -470,8 +467,12 @@ class _FeedScreenState extends State<FeedScreen> {
         look.topStories(
           context,
           TopStories(
-            title: l10n.topStoriesTitle,
-            caption: l10n.topStoriesCaption,
+            title: forYou != null
+                ? l10n.topStoriesForYouTitle
+                : l10n.topStoriesTitle,
+            caption: forYou != null
+                ? _forYouCaption(l10n, forYou)
+                : l10n.topStoriesCaption,
             list: FeedList(
               articles: block,
               readIds: _feed.readIds,
@@ -530,6 +531,18 @@ class _FeedScreenState extends State<FeedScreen> {
     sliver: SliverToBoxAdapter(child: child),
   );
 
+  /// What picked For you's top stories (#170): "Czechia · European Union ·
+  /// the world's top stories", the European Union for its members only; a
+  /// country the app has no name for is "Your country".
+  String _forYouCaption(AppLocalizations l10n, String home) {
+    final name = countryName(home, l10n);
+    return [
+      name == home ? l10n.yourCountry : name,
+      if (euMembers.contains(home)) l10n.countryEU,
+      l10n.topStoriesForYouWorld,
+    ].join(' · ');
+  }
+
   /// A filtered feed with nothing in it (#67, #68): says so, with a way back
   /// to all countries and to all topics, whichever narrows it. A group is a
   /// fixed choice, so it can be empty too.
@@ -554,10 +567,13 @@ class _FeedScreenState extends State<FeedScreen> {
       children: [
         Text(l10n.filterEmpty, style: text.meta),
         const SizedBox(height: 4),
-        if (!_feed.where.isAll)
-          undo(l10n.filterShowAllCountries, () => _chooseWhere(FeedWhere.all)),
+        if (!_feed.where.isAll && !_feed.where.isForYou)
+          undo(
+            l10n.filterShowAllCountries,
+            () => _chooseFeed(FeedWhere.all, _feed.topic),
+          ),
         if (_feed.topic != null)
-          undo(l10n.filterShowAllTopics, () => _chooseTopic(null)),
+          undo(l10n.filterShowAllTopics, () => _chooseFeed(_feed.where, null)),
       ],
     );
   }

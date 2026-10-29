@@ -49,6 +49,8 @@ http.Response? fakeMenus(http.Request request) {
           {'code': code, 'name': countryName(code, l10n)},
       ],
     }),
+    // Where the phone is (#170): not known here.
+    '/locate' => fakeJson({'country': null}),
     '/topics' => fakeJson({
       'topics': [
         for (final id in topicIds) {'id': id, 'name': topicLabel(id, l10n) ?? id},

@@ -280,20 +280,25 @@ void main() {
       testWidgets('with a filter, the place is in the list as shown', (
         tester,
       ) async {
-        // a1 is French: with Germany chosen, the list is a2, a3 and a4.
+        // a1 is about health: with Economy chosen, the list is a2, a3 and a4.
         final items = [
           for (final a in _items)
-            a['id'] == 'a1' ? _article('a1', feedSeq: 6, country: 'FR') : a,
+            a['id'] == 'a1'
+                ? {
+                    ..._article('a1', feedSeq: 6),
+                    'topics': ['health'],
+                  }
+                : a,
         ];
         await pumpFeed(tester, items, _top);
         await tester.tap(
-          find.byKey(const ValueKey('filter-where')).hitTestable(),
+          find.byKey(const ValueKey('filter-topic')).hitTestable(),
         );
         await tester.pumpAndSettle();
         await tester.tap(
           find.descendant(
             of: find.byType(CupertinoMenuItem),
-            matching: find.text('Germany'),
+            matching: find.text('Economy'),
           ),
         );
         await tester.pumpAndSettle();
@@ -536,9 +541,9 @@ void main() {
         final gradient =
             (badge.decoration! as BoxDecoration).gradient! as LinearGradient;
         expect(gradient.colors.first, accent);
-        // The Where and Topics pull-downs, as in the other looks.
-        expect(find.byKey(const ValueKey('filter-where')), findsOneWidget);
+        // The menu under the date, as in the other looks (#170).
         expect(find.byKey(const ValueKey('filter-topic')), findsOneWidget);
+        expect(find.text('For you'), findsOneWidget);
         final card = tester.widget<DecoratedBox>(
           find
               .ancestor(

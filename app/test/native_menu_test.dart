@@ -49,53 +49,43 @@ void main() {
         (_) {},
       );
 
-  testWidgets('each chip sends its items to iOS, and a choice there filters '
+  testWidgets('the chip sends its items to iOS, and a choice there filters '
       'the feed', (tester) async {
     final views = recordViews(tester);
-    FeedWhere? where;
-    String? topic = 'none';
+    (FeedWhere, String?)? chosen;
     await tester.pumpWidget(
       testApp(
         home: FeedFilterBar(
-          where: FeedWhere.all,
-          whereMenu: const WhereMenu(
-            groups: [FeedGroup('eu', 'European Union')],
-            countries: [FeedCountry('DE', 'Germany')],
-          ),
+          where: FeedWhere.forYou,
           topic: null,
           topics: const [FeedTopic('economy', 'Economy')],
-          onWhere: (w) => where = w,
-          onTopic: (t) => topic = t,
+          onChoose: (where, topic) => chosen = (where, topic),
         ),
       ),
     );
     await tester.pump();
 
-    expect(find.byType(UiKitView), findsNWidgets(2));
-    final [whereMenu, topicsMenu] = views.values.toList();
-    expect(whereMenu['label'], 'All countries');
-    expect(whereMenu['sections'], [
+    // One menu (#170): For you, the whole world, then the topics.
+    expect(find.byType(UiKitView), findsOneWidget);
+    final [menu] = views.values.toList();
+    expect(menu['label'], 'For you');
+    expect(menu['sections'], [
       [
-        {'title': 'All countries', 'selected': true, 'symbol': null},
+        {'title': 'For you', 'selected': true, 'symbol': 'sparkles'},
+        {'title': 'The whole world', 'selected': false, 'symbol': 'globe'},
       ],
       [
-        {'title': 'European Union', 'selected': false, 'symbol': null},
+        {'title': 'Economy', 'selected': false, 'symbol': 'chart.bar.fill'},
       ],
-      [
-        {'title': 'Germany', 'selected': false, 'symbol': null},
-      ],
-    ]);
-    expect((topicsMenu['sections']! as List)[1], [
-      {'title': 'Economy', 'selected': false, 'symbol': 'chart.bar.fill'},
     ]);
 
-    final [whereId, topicsId] = views.keys.toList();
-    await choose(tester, whereId, 2, 0);
-    expect(where, const FeedWhere.country('DE'));
-    await choose(tester, topicsId, 1, 0);
-    expect(topic, 'economy');
+    final [id] = views.keys.toList();
+    await choose(tester, id, 0, 1);
+    expect(chosen, (FeedWhere.all, null));
+    await choose(tester, id, 1, 0);
+    expect(chosen, (FeedWhere.all, 'economy'));
 
     // VoiceOver hears the native button, not the chip under it as well.
-    expect(find.bySemanticsLabel('All countries'), findsNothing);
+    expect(find.bySemanticsLabel('For you'), findsNothing);
   });
 }
