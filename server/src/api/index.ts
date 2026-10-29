@@ -680,7 +680,8 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (post) {
     if (request.method !== "POST") return json({ error: "Method not allowed" }, 405, { allow: "POST" });
     const body = await request.json().catch(() => null);
-    // Only Roman's local builds send it: it opens the chat to their Sandbox purchases.
+    // Only Roman's local builds send it: it opens the chat to their Sandbox
+    // purchases, also while CHAT_SANDBOX_OPEN is off.
     const options = { sandboxKey: request.headers.get("x-chat-sandbox-key") };
     if (post !== "chat") {
       const { status, body: answer } = await (post === "notifications"

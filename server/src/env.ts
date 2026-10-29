@@ -40,4 +40,10 @@ export interface Env {
    * Without it no Sandbox purchase gets an answer.
    */
   CHAT_SANDBOX_KEY?: string;
+  /**
+   * "true" opens the AI chat to every Sandbox purchase, so TestFlight testers
+   * try it for free (Roman, 29 Oct, #146), within the same daily limit; any
+   * other value keeps it to [CHAT_SANDBOX_KEY]. A var in wrangler.jsonc.
+   */
+  CHAT_SANDBOX_OPEN?: string;
 }

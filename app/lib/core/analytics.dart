@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
 import 'article.dart';
+import 'config.dart' show appBuild;
 import 'feed_design.dart';
 import 'feed_language.dart';
 import 'filters.dart';
@@ -281,12 +282,6 @@ const _appId = String.fromEnvironment('FIREBASE_APP_ID');
 const _senderId = String.fromEnvironment('FIREBASE_SENDER_ID');
 const _projectId = String.fromEnvironment('FIREBASE_PROJECT_ID');
 
-/// Which build this is: `testflight` for the team's phones, `store` for the
-/// build submitted to the App Store, `dev` for a local one; the TestFlight
-/// workflow sets it from its `build` choice (#137). A user property, so the
-/// team's use can be left out of every report.
-const _build = String.fromEnvironment('APP_BUILD', defaultValue: 'dev');
-
 /// Turns analytics on when the build has the Firebase values; otherwise it stays off.
 /// [language] is the feed's ([FeedController.languageChanges]), so the user
 /// property is the language the app is read in, the phone's on a first launch.
@@ -351,7 +346,8 @@ Future<void> useAnalytics(
   ValueListenable<HeadlineWeight>? weight,
 }) async {
   analytics = instance;
-  await instance._user('build', _build);
+  // A user property, so the team's use can be left out of every report.
+  await instance._user('build', appBuild);
   await instance.feedLanguage(language.value);
   if (design != null) {
     await instance._user('feed_design', design.value.name);

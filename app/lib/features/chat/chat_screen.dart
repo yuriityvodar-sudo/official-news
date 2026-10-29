@@ -64,10 +64,13 @@ class ChatScreen extends StatefulWidget {
   static bool get available =>
       debugAvailable ?? (!kIsWeb && Platform.isIOS && opened);
 
-  /// Until the chat is released, only Roman's own builds have it (Roman,
-  /// 28 Oct): the demo, or a build with his key for Sandbox purchases
-  /// ([chatSandboxKey]). TestFlight's have neither and keep the note.
-  static const opened = chatDemo || chatSandboxKey != '';
+  /// Until the chat is released: the demo, Roman's own builds with his key
+  /// for Sandbox purchases ([chatSandboxKey]; Roman, 28 Oct), and TestFlight
+  /// builds, whose testers try it for free with Sandbox purchases (Roman,
+  /// 29 Oct; the server's `CHAT_SANDBOX_OPEN`). A `store` build keeps the
+  /// note until the chat's release is decided.
+  static const opened =
+      chatDemo || chatSandboxKey != '' || appBuild == 'testflight';
 
   @visibleForTesting
   static bool? debugAvailable;

@@ -161,12 +161,15 @@ const nextDay = (now: Date) => toStoredTime(new Date(Date.UTC(now.getUTCFullYear
 const SANDBOX_CLOSED = "Not open to test purchases";
 
 /**
- * Sandbox purchases cost nothing (TestFlight, a build run from a Mac), so only
- * Roman's local builds get the chat with one (Roman, 28 Oct): they send the
- * Worker secret CHAT_SANDBOX_KEY as `X-Chat-Sandbox-Key`. Compared in constant
- * time. Without the secret, closed to every Sandbox purchase.
+ * Sandbox purchases cost nothing (TestFlight, a build run from a Mac). While
+ * CHAT_SANDBOX_OPEN is "true" every build gets the chat with one, so
+ * TestFlight testers try it for free (Roman, 29 Oct). Otherwise only Roman's
+ * local builds do (Roman, 28 Oct): they send the Worker secret
+ * CHAT_SANDBOX_KEY as `X-Chat-Sandbox-Key`, compared in constant time; without
+ * the secret, closed to every Sandbox purchase.
  */
 async function sandboxOpen(env: Env, key: string | null | undefined): Promise<boolean> {
+  if (env.CHAT_SANDBOX_OPEN === "true") return true;
   if (!env.CHAT_SANDBOX_KEY || !key) return false;
   const digest = (s: string) => crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
   const [expected, given] = await Promise.all([digest(env.CHAT_SANDBOX_KEY), digest(key)]);
@@ -313,7 +316,8 @@ export async function chatStatus(body: unknown, env: Env, options: ChatOptions =
  * second call changes nothing), so the app can send it until this answers
  * and only then finish the purchase. 400 for anything but a pack of this app,
  * 402 without a subscription's transaction to credit it to, 403 a Sandbox pack
- * or subscription without the key.
+ * or subscription where Sandbox purchases are closed, or a pack from another
+ * store than the subscription (a free pack never goes into a paid wallet).
  */
 export async function creditChatPack(body: unknown, env: Env, options: ChatOptions = {}): Promise<Refusal> {
   const now = options.now ?? new Date();
@@ -326,10 +330,12 @@ export async function creditChatPack(body: unknown, env: Env, options: ChatOptio
     if (!(e instanceof JwsError)) throw e;
     return error(400, "Not a pack of this app");
   }
-  // A free pack, too, only for Roman's local builds: never into a paid subscription's wallet.
+  // A free pack, too, only where Sandbox purchases are open.
   if (pack.environment === "Sandbox" && !(await sandboxOpen(env, options.sandboxKey))) return error(403, SANDBOX_CLOSED);
   const t = await checkedTransaction(b.transaction, env, options);
   if ("status" in t) return t;
+  // Never a free pack into a paid subscription's wallet, nor the other way.
+  if (pack.environment !== t.environment) return error(403, "The pack and the subscription come from different stores");
   const subscription = await recordTransaction(env, t, { now });
   const id = subscription.original_transaction_id;
   const credited = await creditPack(env, id, pack, now);

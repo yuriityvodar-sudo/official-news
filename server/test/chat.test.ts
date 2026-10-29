@@ -305,7 +305,8 @@ describe("packs of questions (#146)", () => {
 
 describe("Sandbox purchases, free in TestFlight (#146, Roman, 28 Oct)", () => {
   const KEY = "roman-local-key";
-  const keyed: typeof env = { ...env, OPENAI_API_KEY: "sk-test", CHAT_SANDBOX_KEY: KEY };
+  // Closed to Sandbox purchases but for the key, whatever wrangler.jsonc says now.
+  const keyed: typeof env = { ...env, OPENAI_API_KEY: "sk-test", CHAT_SANDBOX_KEY: KEY, CHAT_SANDBOX_OPEN: "false" };
   /** A month bought in a test build: the App Store's Sandbox, paid with nothing. */
   const sandbox = () => transaction({ originalTransactionId: "4000000001", transactionId: "4000000001", environment: "Sandbox" });
   const question = async (sandboxKey: string | null, { ai = openAi(), worker = keyed } = {}) =>
@@ -330,13 +331,30 @@ describe("Sandbox purchases, free in TestFlight (#146, Roman, 28 Oct)", () => {
       expect(await credit(key)).toMatchObject({ status: 403 });
     }
     // Without the Worker's secret the key opens nothing.
-    expect(await question(KEY, { ai, worker: { ...env, OPENAI_API_KEY: "sk-test" } })).toMatchObject({ status: 403 });
+    expect(await question(KEY, { ai, worker: { ...env, OPENAI_API_KEY: "sk-test", CHAT_SANDBOX_OPEN: "false" } })).toMatchObject({ status: 403 });
     // A free pack is never credited to a paid subscription either.
     expect(await credit(null, transaction())).toMatchObject({ status: 403 });
     expect(ai.requests).toHaveLength(0);
     expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM subscriptions").first<number>("n")).toBe(0);
     expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM chat_credits").first<number>("n")).toBe(0);
     expect(await usage()).toEqual({ questions: 0, spent: 0 });
+  });
+
+  it("are answered for every build while CHAT_SANDBOX_OPEN is on, within the same limit (Roman, 29 Oct)", async () => {
+    const open: typeof env = { ...keyed, CHAT_SANDBOX_KEY: undefined, CHAT_SANDBOX_OPEN: "true" };
+    expect(await answer(await question(null, { worker: open }))).toBe("Так, з листопада 2027 року.");
+    expect(await usage()).toEqual({ questions: 1, spent: COST });
+    const opened = async (subscription = sandbox()) =>
+      creditChatPack({ pack: await store.sign(pack({ environment: "Sandbox" })), transaction: await store.sign(subscription) }, open, trusted());
+    expect(await opened()).toEqual({ status: 200, body: { credited: true, boughtQuestions: 50 } });
+    // Still never a free pack into a paid subscription's wallet.
+    expect(await opened(transaction())).toEqual({ status: 403, body: { error: "The pack and the subscription come from different stores" } });
+    // Any other value keeps them closed without the key.
+    expect(await question(null, { worker: { ...open, CHAT_SANDBOX_OPEN: "false" } })).toMatchObject({ status: 403 });
+  });
+
+  it("never put Roman's free pack into a paid subscription's wallet, key or not", async () => {
+    expect(await credit(KEY, transaction())).toEqual({ status: 403, body: { error: "The pack and the subscription come from different stores" } });
   });
 
   it("are answered for Roman's local builds, which send the key, within the same limit", async () => {

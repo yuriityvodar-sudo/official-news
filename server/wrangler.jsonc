@@ -23,6 +23,11 @@
   // can take about an hour to start firing (#50).
   "triggers": { "crons": ["* * * * *", "1-59/2 * * * *", "0-58/2 * * * *", "17 3 * * *"] },
   "observability": { "enabled": true },
+  // The AI chat answers Sandbox purchases, which cost nothing, from every
+  // build while this is "true": TestFlight testers try it for free (Roman,
+  // 29 Oct, #146). Within the same daily limit. Set to "false" and deploy to
+  // close it again to all but Roman's key (CHAT_SANDBOX_KEY). Not a secret.
+  "vars": { "CHAT_SANDBOX_OPEN": "true" },
   // Workers Caching (#121): Cloudflare's cache in front of the Worker keeps what the API
   // marks with Cache-Control (LIST_CACHE and ARTICLE_CACHE in src/api/index.ts).
   "cache": { "enabled": true }
