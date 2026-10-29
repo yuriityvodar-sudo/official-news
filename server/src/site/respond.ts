@@ -61,13 +61,13 @@ export type CacheKind = keyof typeof CACHE;
 /**
  * Whether search engines may index a page: the one switch, computed once per
  * page (handler.ts) and used for both the X-Robots-Tag header and the robots
- * meta tag, so they never disagree (the stricter one would win). Nothing is
- * indexed before the domain (#88); the reviewed articles come later, by a flag
- * on the article, through here. While ROBOTS_TXT disallows every path a
- * crawler never reads this value at all (site-routes.test.ts keeps both
- * together): with the domain robots.txt must stop disallowing the pages.
+ * meta tag, so they never disagree (the stricter one would win). The page
+ * says whether it may be (Page.index): the articles, the information pages
+ * and the lists' first pages, since the domain (Yurii, 29 Oct). A page
+ * robots.txt keeps crawlers from never has its value read, so an indexed page
+ * is never one of those (site-routes.test.ts).
  */
-export const robotsFor = (_page: Page): string => "noindex";
+export const robotsFor = (page: Page): string => (page.index ? "index, follow" : "noindex");
 
 /** What a response that is not a page (robots.txt, a redirect, an icon, a 405) says. */
 export const ROBOTS_DEFAULT = "noindex";

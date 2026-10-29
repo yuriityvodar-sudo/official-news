@@ -1,5 +1,5 @@
 // The website's routes and headers (#88): status and cache headers per kind of
-// page, nothing indexed, one request per page view, no host in any page, and
+// page, what Google may index, one request per page view, no host in any page, and
 // nothing from the data or the address ever becoming markup.
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -22,6 +22,13 @@ beforeEach(async () => {
   await insertTranslation(ID, "uk");
   await insertArticle({ id: NOT_IN_UK });
 });
+
+/**
+ * The pages Google may index here: the lists' first pages with no topic and
+ * something on them, the articles and the information pages. Everything else
+ * says noindex (Yurii, 29 Oct: every article indexed).
+ */
+const INDEXED = new Set(["/en", EN, UK, "/ru/about", "/es/privacy", "/de/terms", "/en/support", "/en/de", "/en/g7"]);
 
 /** [path, status, cache kind, content-language] for every kind of response. */
 const ROUTES: [string, number, keyof typeof CACHE, string | null][] = [
@@ -69,13 +76,13 @@ const ROUTES: [string, number, keyof typeof CACHE, string | null][] = [
 
 describe("every route", () => {
   for (const [path, status, kind, lang] of ROUTES) {
-    it(`${path}: ${status}, ${kind} cache, noindex, the CSP, no cookie`, async () => {
+    it(`${path}: ${status}, ${kind} cache, ${INDEXED.has(path) ? "index" : "noindex"}, the CSP, no cookie`, async () => {
       for (const method of ["GET", "HEAD"]) {
         const { status: got, headers, body } = await site(path, { method });
         expect(got).toBe(status);
         expect(headers.get("cache-control")).toBe(CACHE[kind].browser);
         expect(headers.get("cloudflare-cdn-cache-control")).toBe(CACHE[kind].edge);
-        expect(headers.get("x-robots-tag")).toBe("noindex");
+        expect(headers.get("x-robots-tag")).toBe(INDEXED.has(path) ? "index, follow" : "noindex");
         expect(headers.get("x-content-type-options")).toBe("nosniff");
         expect(headers.get("content-security-policy")).toMatch(/^default-src 'none'; style-src 'sha256-[A-Za-z0-9+/]+=*'; script-src 'sha256-[A-Za-z0-9+/]+=*' https:\/\/\*\.googletagmanager\.com; img-src 'self' data: /);
         expect(headers.get("content-language")).toBe(lang);
@@ -123,8 +130,8 @@ describe("every route", () => {
     }
   });
 
-  it("serves robots.txt that disallows everything", async () => {
-    expect((await site("/robots.txt")).body).toBe("User-agent: *\nDisallow: /\n\nSitemap: https://site.test/sitemap.xml\n");
+  it("serves robots.txt that keeps crawlers from every address with a query", async () => {
+    expect((await site("/robots.txt")).body).toBe("User-agent: *\nDisallow: /*?\n\nSitemap: https://site.test/sitemap.xml\n");
   });
 
   const PAGES = ROUTES.filter(([p, s]) => (s < 300 || s >= 400) && !p.endsWith(".txt") && !p.endsWith(".ico") && !p.endsWith(".png") && !p.endsWith(".xml"));
@@ -137,13 +144,14 @@ describe("every route", () => {
     }
   });
 
-  it("keeps every page noindex while robots.txt disallows everything (a crawler would never read anything else)", async () => {
-    expect(ROBOTS_TXT).toMatch(/^Disallow: \/$/m);
+  it("indexes only pages robots.txt lets crawlers read (a crawler never reads the value of the others)", async () => {
+    expect(ROBOTS_TXT).toBe("User-agent: *\nDisallow: /*?\n");
     for (const [path] of PAGES) {
       const { headers, body } = await site(path);
-      // Letting a page be indexed needs robots.txt to stop disallowing it first (docs/plan.md, open points).
-      expect(headers.get("x-robots-tag"), path).toBe("noindex");
-      expect(body, path).toContain('<meta name="robots" content="noindex">');
+      const indexed = headers.get("x-robots-tag") === "index, follow";
+      expect(indexed, path).toBe(INDEXED.has(path));
+      if (indexed) expect(path, path).not.toContain("?");
+      expect(body, path).toContain(`<meta name="robots" content="${indexed ? "index, follow" : "noindex"}">`);
     }
   });
 });

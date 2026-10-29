@@ -20,13 +20,14 @@ beforeEach(async () => {
 });
 
 describe("the sitemap", () => {
-  it("lists every language's latest list and each article in each language it is shown in, with the others as alternates", async () => {
+  it("lists each language's latest list while it has articles, and each article in each language it is shown in, with the others as alternates", async () => {
     const { status, headers, body } = await site("/sitemap.xml");
     expect(status).toBe(200);
     expect(headers.get("content-type")).toBe("application/xml; charset=utf-8");
     expect(body.startsWith('<?xml version="1.0" encoding="UTF-8"?>')).toBe(true);
     const locs = [...body.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]);
-    for (const lang of SITE_LANGS) expect(locs).toContain(`${ORIGIN}/${lang}`);
+    // Only English and Ukrainian have articles here; an empty list is noindex, so not listed.
+    for (const lang of SITE_LANGS) expect(locs.includes(`${ORIGIN}/${lang}`), lang).toBe(lang === "en" || lang === "uk");
     expect(locs).toContain(ORIGIN + EN);
     expect(locs).toContain(ORIGIN + UK);
     // OTHER is not translated: English only, so no Ukrainian address for it.
@@ -36,9 +37,9 @@ describe("the sitemap", () => {
     expect(enEntry).toMatch(/<lastmod>\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ<\/lastmod>/);
   });
 
-  it("is named in robots.txt, which still disallows everything", async () => {
+  it("is named in robots.txt, which keeps crawlers only from addresses with a query", async () => {
     const { body } = await site("/robots.txt");
-    expect(body).toMatch(/^Disallow: \/$/m);
+    expect(body).toMatch(/^Disallow: \/\*\?$/m);
     expect(body).toContain(`Sitemap: ${ORIGIN}/sitemap.xml`);
   });
 });

@@ -8,7 +8,7 @@
 //   …?topic=<id>                   any list, one topic; then &before=, as the next page
 //   /{lang}/{cc}/{id}-{slug}       an article (looked up by its id; another country or slug is a 301 to its own)
 //   /{lang}/about|privacy|terms|support
-//   /robots.txt                    Disallow: /, and where the sitemap is
+//   /robots.txt                    Disallow: /*?, and where the sitemap is
 //   /sitemap.xml                   the lists and the 7 days' articles (seo.ts)
 import { rankTopics } from "../api/filters";
 import type { Topic } from "../summarizer/schema";
@@ -28,13 +28,14 @@ import { SITE_LANGS, type SiteLang, isSiteLang } from "./texts";
 import { ARTICLE_ID, INFO_PAGES, type InfoPage, type Place, articlePath, groupOf, isCountryPage, isTopic, listPath, originOf } from "./urls";
 
 /**
- * Keeps crawlers out on workers.dev: it saves requests from the account's
- * 100,000 a day. A crawler then never reads the noindex behind it, so a URL
- * linked from elsewhere can still be listed, without its content. With the
- * domain, it must stop disallowing the pages (keep only `/*?before=`), or
- * robotsFor() is never read (docs/plan.md, open points).
+ * Crawlers read every page without a query: the lists' first pages, the
+ * articles and the information pages (robotsFor()). Every address with a
+ * query (a topic, a later page) stays out: those repeat what the first pages
+ * link, and keeping them out bounds what a crawl reads from D1 and the
+ * account's 100,000 requests a day (about 26 lists a language instead of
+ * 13 times as many).
  */
-export const ROBOTS_TXT = "User-agent: *\nDisallow: /\n";
+export const ROBOTS_TXT = "User-agent: *\nDisallow: /*?\n";
 
 const LANG_PATH = new RegExp(`^/(${SITE_LANGS.join("|")})(/.*)?$`);
 const INFO_PATH = new RegExp(`^/(${INFO_PAGES.join("|")})$`);

@@ -518,12 +518,14 @@ describe("one URL per view: every link is a cache key of its own", () => {
 describe("every new page", () => {
   const PAGES = ["/en/de", "/uk/de?topic=health", "/en?topic=economy", "/en/g7", "/uk/nato?topic=security-defence", "/en/eu", "/en/ua", "/es/pl", "/en/g20?before=30"];
 
-  it("is noindex, with the same value in its meta tag, and loads nothing else", async () => {
+  it("is indexed only as a first page with no topic and something on it, with the same value in its meta tag, and loads nothing else", async () => {
     for (const path of PAGES) {
       const { status, headers, body } = await site(path);
       expect(status, path).toBe(200);
-      expect(headers.get("x-robots-tag"), path).toBe("noindex");
-      expect(body, path).toContain('<meta name="robots" content="noindex">');
+      const robots = headers.get("x-robots-tag");
+      if (path.includes("?") || !body.includes('class="title"')) expect(robots, path).toBe("noindex");
+      else expect(robots, path).toBe("index, follow");
+      expect(body, path).toContain(`<meta name="robots" content="${robots}">`);
       expect(withoutConsentScript(body), path).not.toMatch(/<script|<img|<iframe|rel="stylesheet"|rel="preload"|rel="prefetch"/i);
       expect(headers.get("cloudflare-cdn-cache-control"), path).toBe(CACHE.list.edge);
     }

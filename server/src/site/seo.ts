@@ -46,9 +46,10 @@ export function articleJsonLd(lang: SiteLang, origin: string, article: ApiArticl
 const xml = (value: string) => value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
 /**
- * The sitemap: each language's latest list, and every article of the API's
- * 7 days in each language it is shown in, with its other languages as
- * hreflang alternates, as the pages' own <link rel="alternate">.
+ * The sitemap: each language's latest list while it has articles (an empty
+ * one is noindex), and every article of the API's 7 days in each language it
+ * is shown in, with its other languages as hreflang alternates, as the pages'
+ * own <link rel="alternate">.
  */
 export function sitemapXml(origin: string, shown: Partial<Record<SiteLang, ApiArticle[]>>): string {
   const byId = new Map<string, Partial<Record<SiteLang, ApiArticle>>>();
@@ -59,8 +60,9 @@ export function sitemapXml(origin: string, shown: Partial<Record<SiteLang, ApiAr
       byId.set(article.id, entry);
     }
   }
-  const urls: string[] = SITE_LANGS.map((lang) => {
-    const links = SITE_LANGS.map((l) => `<xhtml:link rel="alternate" hreflang="${l}" href="${xml(origin + listPath(l))}"/>`).join("");
+  const withLists = SITE_LANGS.filter((lang) => (shown[lang] ?? []).length > 0);
+  const urls: string[] = withLists.map((lang) => {
+    const links = withLists.map((l) => `<xhtml:link rel="alternate" hreflang="${l}" href="${xml(origin + listPath(l))}"/>`).join("");
     return `<url><loc>${xml(origin + listPath(lang))}</loc><changefreq>hourly</changefreq>${links}</url>`;
   });
   for (const entry of byId.values()) {

@@ -97,6 +97,8 @@ ${articleJsonLd(lang, origin, article)}`;
   return {
     lang,
     kind: "article",
+    // Every article is indexed (Yurii, 29 Oct).
+    index: true,
     title: `${headline} · ${SITE_NAME}`,
     // iMessage and the iOS share sheet show only the title and the host, no description (LPLinkMetadata).
     ogTitle: aiText ? `${headline} · ${text(lang, "summaryByAi")}` : undefined,

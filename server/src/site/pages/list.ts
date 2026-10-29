@@ -154,6 +154,9 @@ ${first ? "" : html`<a class="more" href="${listPath(lang, filter)}">${t(lang, "
   return {
     lang,
     kind: "list",
+    // A later page or a topic repeats what the lists already link; an empty
+    // list (German while it is off) has nothing to find.
+    index: first && filter.topic === null && list.items.length > 0,
     // The front page leads with the name, "Outer News · Official decisions" (Yurii, 29 Oct);
     // a filtered or later page names its filters first, for tabs and history.
     title: first && !filtered ? `${SITE_NAME} · ${text(lang, "listTitle")}` : [...names, text(lang, "latestLink"), SITE_NAME].join(" · "),

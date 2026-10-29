@@ -12,10 +12,10 @@
   "compatibility_date": "2026-10-01",
   // NewsApp account (see docs/setup.md). Not a secret.
   "account_id": "8dc93578877d397a693094f3e2b01029",
-  // Served at site.officialnews.workers.dev until the domain (#65); then
-  // workers_dev becomes false and the domain a custom_domain route.
-  "workers_dev": true,
+  // Served on the domain only (#65): no workers.dev copy for a crawler to find.
+  "workers_dev": false,
   "preview_urls": false,
+  "routes": [{ "pattern": "outernews.app", "custom_domain": true }],
   // The api Worker's database (wrangler.jsonc owns the schema and migrations).
   "d1_databases": [
     {
@@ -26,7 +26,7 @@
   ],
   // Every absolute URL on a page (canonical, alternates, Open Graph) starts
   // with this, never with the request's host: the cache key has no host.
-  "vars": { "SITE_ORIGIN": "https://site.officialnews.workers.dev" },
+  "vars": { "SITE_ORIGIN": "https://outernews.app" },
   // Workers Cache in front of the Worker, by the headers respond() sets
   // (src/site/respond.ts). It saves D1 rows and CPU, not requests: a cache hit
   // is still a request of the account's 100,000 a day. Keyed by path, query

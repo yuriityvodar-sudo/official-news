@@ -186,8 +186,14 @@ export interface Alternate {
 
 export interface Page {
   lang: SiteLang;
-  /** Which page, for robotsFor(). */
+  /** Which page. */
   kind: string;
+  /**
+   * Whether Google may index it (robotsFor()): an article, an information
+   * page, and a list's first page with no topic and something on it. Every
+   * other page (a later page, a topic, an empty list, a 404) stays out.
+   */
+  index?: boolean;
   title: string;
   /** For link previews when it differs from the title: an article's headline with the AI label. */
   ogTitle?: string;
