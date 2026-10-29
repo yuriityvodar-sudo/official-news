@@ -82,6 +82,26 @@
       }
     }
   },
+  "feedPullToRefresh": "Pull to refresh",
+  "@feedPullToRefresh": {
+    "description": "Grey words in the gap that opens above the feed's title while it is pulled down (Garnet and Seal looks)."
+  },
+  "feedReleaseToRefresh": "Release to refresh",
+  "@feedReleaseToRefresh": {
+    "description": "The same words once the feed is pulled far enough to refresh."
+  },
+  "feedRefreshing": "Refreshing the news…",
+  "@feedRefreshing": {
+    "description": "The same words while the feed refreshes; they pulse softly."
+  },
+  "feedUpdated": "News updated",
+  "@feedUpdated": {
+    "description": "After a pull to refresh, when the feed had nothing to show before."
+  },
+  "feedNoNewDecisions": "No new decisions",
+  "@feedNoNewDecisions": {
+    "description": "After a pull to refresh that brought nothing new."
+  },
   "minutesAgo": "{minutes}m ago",
   "@minutesAgo": {
     "description": "A card's time, short: 1 to 59 minutes ago.",

@@ -109,6 +109,7 @@ class _FeedScreenState extends State<FeedScreen> {
     if (widget.controller == null) _feed.dispose();
     _scroll.dispose();
     _masthead.dispose();
+    _pull.dispose();
     super.dispose();
   }
 
@@ -190,6 +191,62 @@ class _FeedScreenState extends State<FeedScreen> {
     if (_scroll.position.pixels > _scroll.position.maxScrollExtent - 600) {
       unawaited(_feed.loadMore());
     }
+  }
+
+  /// How the last pull to refresh went, for the look to say it (#166).
+  FeedRefreshed? _refreshed;
+
+  /// The pull to refresh as the gap last showed it, for the masthead.
+  final _pull = ValueNotifier<FeedPull?>(null);
+
+  /// How long the gap stays open once the feed has loaded, with how it went.
+  static const _refreshedFor = Duration(milliseconds: 1100);
+
+  /// The pull to refresh: the feed again, then, held a moment before the gap
+  /// closes in a look that says it, how that went ("3 new decisions", "No
+  /// new decisions"). Such a look asks the reader to let go past the refresh
+  /// point, so the feed refreshes once the pull is let go. A failure is not
+  /// held: the feed says it itself. Nor is a feed that another replaced
+  /// meanwhile (a filter chosen while the gap is open, For you's country
+  /// found): what is new in it is not the pull's to say (Yurii, #208).
+  Future<void> _pullToRefresh() async {
+    final says = lookFor(feedDesign.value).saysHowRefreshWent;
+    setState(() => _refreshed = null);
+    if (says) await (_letGo = Completer<void>()).future;
+    if (!mounted) return;
+    // The Top stories block's decisions too: one that moves between the
+    // block and the list is not new.
+    Iterable<Article> shown() => [..._feed.topStories, ..._feed.feed];
+    final before = {for (final article in shown()) article.id};
+    final switches = _feed.switches;
+    await _feed.refresh();
+    if (!mounted || _feed.error != null || _feed.switches != switches) return;
+    setState(
+      () => _refreshed = FeedRefreshed(
+        shown().where((a) => !before.contains(a.id)).length,
+        wasEmpty: before.isEmpty,
+      ),
+    );
+    if (says) await Future<void>.delayed(_refreshedFor);
+  }
+
+  /// A pull past the refresh point, waiting to be let go ([_scrolled]).
+  Completer<void>? _letGo;
+
+  /// The feed moves, or stops, without a finger on it: a pull held past the
+  /// refresh point has been let go.
+  bool _scrolled(ScrollNotification scroll) {
+    final letGo = switch (scroll) {
+      ScrollUpdateNotification(:final dragDetails) => dragDetails == null,
+      ScrollEndNotification() => true,
+      _ => false,
+    };
+    // The feed's own scrolling, not a row inside it.
+    if (letGo && scroll.depth == 0) {
+      _letGo?.complete();
+      _letGo = null;
+    }
+    return false;
   }
 
   /// The "N new" pill: to the top first, then the new decisions spring in
@@ -325,8 +382,13 @@ class _FeedScreenState extends State<FeedScreen> {
   Widget _page(BuildContext context, FeedLook look) {
     final l10n = AppLocalizations.of(context);
     final foldedTitle = look.foldedTitle(context, 'Outer News');
-    return Scaffold(
-      backgroundColor: look.background(context),
+    // A look's backdrop runs under the status bar and the masthead as one
+    // piece, so no seam shows between them.
+    final backdrop = look.backdrop(context);
+    final page = Scaffold(
+      backgroundColor: backdrop == null
+          ? look.background(context)
+          : const Color(0x00000000),
       body: SafeArea(
         bottom: false,
         child: Stack(
@@ -339,7 +401,22 @@ class _FeedScreenState extends State<FeedScreen> {
               slivers: [
                 // Pull to refresh works in every state, including error and empty.
                 // It taps back itself as the pull passes the refresh point.
-                CupertinoSliverRefreshControl(onRefresh: _feed.refresh),
+                CupertinoSliverRefreshControl(
+                  onRefresh: _pullToRefresh,
+                  builder: (context, mode, pulled, trigger, extent) {
+                    final pull = FeedPull(
+                      mode: mode,
+                      pulled: pulled,
+                      trigger: trigger,
+                      extent: extent,
+                      result: _refreshed,
+                    );
+                    // Called while the feed is laid out: only painters
+                    // listen (FeedMasthead.pull).
+                    _pull.value = pull;
+                    return look.refreshIndicator(context, pull);
+                  },
+                ),
                 _MastheadEdge(
                   link: _masthead,
                   sliver: look.masthead(
@@ -355,6 +432,7 @@ class _FeedScreenState extends State<FeedScreen> {
                         topics: _feed.topics,
                         onChoose: _chooseFeed,
                       ),
+                      pull: _pull,
                     ),
                   ),
                 ),
@@ -369,7 +447,7 @@ class _FeedScreenState extends State<FeedScreen> {
               right: 0,
               child: _TopFade(
                 scroll: _scroll,
-                color: look.background(context),
+                color: look.topEdge(context),
                 title: foldedTitle,
                 onTitleTap: () => unawaited(_toTopSmoothly()),
               ),
@@ -394,6 +472,15 @@ class _FeedScreenState extends State<FeedScreen> {
           ],
         ),
       ),
+    );
+    final scrolled = NotificationListener<ScrollNotification>(
+      onNotification: _scrolled,
+      child: page,
+    );
+    if (backdrop == null) return scrolled;
+    return DecoratedBox(
+      decoration: BoxDecoration(gradient: backdrop),
+      child: scrolled,
     );
   }
 
