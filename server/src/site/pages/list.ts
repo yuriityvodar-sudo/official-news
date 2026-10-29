@@ -4,15 +4,16 @@
 // "Older decisions" for the next page. Lists cover the API's 7 days; article
 // pages stay (GET /articles/:id has no date limit). With the app's filters
 // (#67, #68): a place, one country (`/{lang}/{cc}`) or a group of countries
-// (`/{lang}/{group}`), and one topic (`?topic=`); paging, the language links
-// and the alternates keep them.
+// (`/{lang}/{group}`), and one topic (`?topic=`), chosen in the two menus
+// under the title (filters.ts); paging, the language links and the alternates
+// keep them.
 import type { ApiArticle, ApiList } from "../data";
 import { fullDate, parseTime, publishedDate } from "../dates";
 import { html } from "../html";
 import { type Page, SITE_NAME } from "../layout";
 import { SITE_LANGS, type SiteLang, aiNotice, countryName, decisionLabel, isEvent, placeCode, t, text } from "../texts";
 import { type ListFilter, articlePath, listPath } from "../urls";
-import { placeName, topicLabel } from "./filters";
+import { type Menus, filterBar, placeName, topicLabel } from "./filters";
 
 function item(lang: SiteLang, article: ApiArticle) {
   const type = decisionLabel(lang, article.decisionType);
@@ -81,9 +82,10 @@ export interface ListView {
   before: number | null;
 }
 
-/** What the API answered for it: the page. */
+/** What the API answered for it: the page, and on a first page what the menus offer. */
 export interface ListData {
   list: ApiList;
+  menus: Menus | null;
 }
 
 export function listPage(lang: SiteLang, origin: string, view: ListView, data: ListData): Page {
@@ -118,7 +120,8 @@ ${filter.place ? html`<a class="more" href="${listPath(lang, { place: null, topi
   const stream = lead && !list.top.length ? latest.slice(1) : latest;
   // The AI's text is of official pages, and of Wikipedia's for events (#230).
   const notice = html`<p class="notice">${aiNotice(lang, [...list.top, ...list.items].some(isEvent) ? "both" : "decisions")}</p>`;
-  const head = html`<div class="front-head"><h1 class="page-title">${t(lang, "listTitle")}</h1></div>`;
+  const head = html`<div class="front-head"><h1 class="page-title">${t(lang, "listTitle")}</h1>
+${filterBar(lang, filter, data.menus)}</div>`;
   const older = next ? html`<a class="more" href="${listPath(lang, filter, next)}" rel="next">${t(lang, "older")} →</a><br>` : "";
   const body = lead
     ? html`${head}
@@ -140,6 +143,7 @@ ${stream.length > COLUMN ? html`<ol class="cards" aria-label="${t(lang, "latest"
 ${stream.length > COLUMN + GRID ? html`<ol class="items more-rows" aria-label="${t(lang, "latest")}">${stream.slice(COLUMN + GRID).map((a) => streamItem(lang, a, today))}</ol>` : ""}
 ${older}`
     : html`<h1 class="page-title">${t(lang, "listTitle")}</h1>
+${filterBar(lang, filter, data.menus)}
 ${list.items.length ? notice : ""}
 ${items}
 ${older}

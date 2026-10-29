@@ -10,8 +10,9 @@
 //   /{lang}/about|privacy|terms|support
 //   /robots.txt                    Disallow: /*?, and where the sitemap is
 //   /sitemap.xml                   the lists and the 7 days' articles (seo.ts)
+import { rankTopics } from "../api/filters";
 import type { Topic } from "../summarizer/schema";
-import { type ApiArticle, allLatest, articleInLanguages, latest } from "./data";
+import { type ApiArticle, allLatest, articleInLanguages, latest, topicsMenu, whereMenu } from "./data";
 import type { SiteEnv } from "./env";
 import { APPLE_TOUCH_ICON, OG_IMAGE } from "./icon";
 import { type Page, cssHash, layout } from "./layout";
@@ -85,9 +86,32 @@ function readPlace(segment: string | undefined): Place | undefined {
   return isCountryPage(code) ? { country: code } : undefined;
 }
 
-/** A list page: the API's page with its filters, in this one request. */
+/**
+ * A list page: the API's page with its filters and, on a first page, what the
+ * two menus offer (GET /countries; GET /topics for the place), all in this one
+ * request. A later page shows its filters without menus, so paging reads no
+ * more rows than before the filters.
+ *
+ * The Topics menu counts the place's (or the whole) feed without a topic. A
+ * country's or a small group's first page without a topic often holds all of
+ * it (live, 16 Oct: 15 of 17 countries had 20 decisions or fewer in 7 days);
+ * then the menu is its articles' topics counted as GET /topics counts them
+ * (rankTopics), which saves walking the feed a second time (about 230 rows).
+ * Otherwise, and always for all countries, the menu is GET /topics, asked in
+ * parallel when it is certainly needed.
+ */
 async function listReply(env: SiteEnv, origin: string, lang: SiteLang, view: ListView): Promise<Reply> {
-  return page(listPage(lang, origin, view, { list: await latest(env, lang, view.filter, view.before) }), 200, "list");
+  const { filter, before } = view;
+  if (before !== null) return page(listPage(lang, origin, view, { list: await latest(env, lang, filter, before), menus: null }), 200, "list");
+  const mayHoldAll = filter.place !== null && filter.topic === null;
+  const [list, where, asked] = await Promise.all([
+    latest(env, lang, filter, null),
+    whereMenu(env, lang),
+    mayHoldAll ? null : topicsMenu(env, lang, filter.place),
+  ]);
+  const topics =
+    asked ?? (list.nextCursor === null ? rankTopics(list.items.map((a) => a.topics), lang) : await topicsMenu(env, lang, filter.place));
+  return page(listPage(lang, origin, view, { list, menus: { where, topics } }), 200, "list");
 }
 
 /** The article id at the start of a path segment, followed by a hyphen or nothing; else null. */
