@@ -802,7 +802,11 @@ void main() {
             final r0 = _article('r0', feedSeq: 1);
             return switch (++pages) {
               2 => answer.future,
-              1 => fakeJson({'items': [r0], 'nextCursor': null, 'top': []}),
+              1 => fakeJson({
+                'items': [r0],
+                'nextCursor': null,
+                'top': [],
+              }),
               _ => fakeJson({
                 'items': [_article('w1', feedSeq: 2), r0],
                 'nextCursor': null,
@@ -991,6 +995,68 @@ void main() {
           findsWidgets,
         );
         expect(find.byType(ScrollEdgeFade), findsNothing);
+        // The chosen pill's glow reaches over the rows, not cut where the
+        // pinned header ends (Yurii, #210).
+        final header = tester.widget<Stack>(
+          find.ancestor(of: row, matching: find.byType(Stack)).first,
+        );
+        expect(header.clipBehavior, Clip.none);
+      });
+
+      testWidgets('at a large text size the pills grow with their words: '
+          'none is cut (Yurii, #210)', (tester) async {
+        tester.platformDispatcher.textScaleFactorTestValue = 2;
+        addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+        await pumpFeed(tester, rows, const [], height: 700);
+        await tester.pumpAndSettle();
+        for (final name in ['For you', 'The whole world']) {
+          final words = tester.renderObject<RenderParagraph>(find.text(name));
+          expect(
+            words.size.height,
+            greaterThanOrEqualTo(
+              words.getMaxIntrinsicHeight(words.size.width) - 0.01,
+            ),
+            reason: name,
+          );
+        }
+      });
+
+      testWidgets('a chosen topic that moves along the row as the fresh '
+          'topics come in is brought into view again (Yurii, #210)', (
+        tester,
+      ) async {
+        // Kept from last time: Justice first among the topics; the server
+        // now lists it last, once the row is on screen.
+        SharedPreferences.setMockInitialValues({
+          'feed.topic': 'justice',
+          'feed.topics.en': jsonEncode([
+            {'id': 'justice', 'name': 'Justice'},
+            for (final id in topicIds)
+              if (id != 'justice') {'id': id, 'name': id},
+          ]),
+        });
+        final topics = Completer<http.Response>();
+        final api = ApiClient(
+          baseUrl: 'https://api.test',
+          client: MockClient((request) async {
+            if (request.url.path == '/topics') return topics.future;
+            final menu = fakeMenus(request);
+            if (menu != null) return menu;
+            return fakeJson({'items': rows, 'nextCursor': null, 'top': []});
+          }),
+        );
+        await pumpFeed(tester, const [], const [], api: api);
+        await tester.pumpAndSettle();
+        expect(pills(tester)[2], 'pill-topic-justice');
+
+        topics.complete(
+          fakeMenus(http.Request('GET', Uri.parse('https://api.test/topics'))),
+        );
+        await tester.pumpAndSettle();
+        expect(pills(tester).last, 'pill-topic-justice');
+        final pill = find.byKey(const ValueKey('pill-topic-justice'));
+        expect(tester.getRect(pill).left, greaterThanOrEqualTo(0));
+        expect(tester.getRect(pill).right, lessThanOrEqualTo(393));
       });
 
       testWidgets('swiped sideways, the pills stay where they are as the '

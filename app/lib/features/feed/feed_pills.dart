@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/cupertino.dart';
@@ -57,6 +58,15 @@ class FeedPills extends StatefulWidget {
   final Gradient chosen;
   final Color glow;
 
+  /// How tall the row is at the reader's text size: pills at least 44
+  /// points high, as tall as their words need (Yurii, #210), with room above
+  /// them and for the glass's shadow under them.
+  static double heightFor(TextScaler scaler) {
+    final words = (scaler.scale(_Pill.fontSize) * _Pill.lineHeight)
+        .ceilToDouble();
+    return 4 + math.max(44.0, words + 2 * _Pill.padding + 2) + 10;
+  }
+
   @override
   State<FeedPills> createState() => _FeedPillsState();
 }
@@ -75,9 +85,11 @@ class _FeedPillsState extends State<FeedPills> {
   final _scroll = ScrollController();
   final _row = GlobalKey();
 
-  /// The pill last brought into view, and whether the topics were known
-  /// then: the row looks again only when either changes.
-  (String, bool)? _shown;
+  /// The pill last brought into view, where it was in the row, the words'
+  /// language and size, and whether the topics were known then: the row
+  /// looks again when any of them changes (a topic's new rank, wider words;
+  /// Yurii, #210).
+  (String, int, Locale, TextScaler, bool)? _shown;
 
   @override
   void dispose() {
@@ -153,12 +165,19 @@ class _FeedPillsState extends State<FeedPills> {
   void _showChosen(List<_Choice> pills) {
     final index = pills.indexWhere((pill) => pill.isChosen);
     if (index < 0) return;
-    final shown = (pills[index].key, widget.topics != null);
+    final shown = (
+      pills[index].key,
+      index,
+      Localizations.localeOf(context),
+      MediaQuery.textScalerOf(context),
+      widget.topics != null,
+    );
     final before = _shown;
     if (shown == before) return;
     _shown = shown;
     // Another pill chosen in a row already whole: it glides there.
-    final glide = before != null && before.$2 && shown.$2;
+    final glide =
+        before != null && before.$1 != shown.$1 && before.$5 && shown.$5;
     final reduced = Motion.reduced(context);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final pill = _pillAt(index);
@@ -218,6 +237,12 @@ class _Pill extends StatelessWidget {
   final Color glow;
   final VoidCallback onTap;
 
+  /// The words' size, and their line's height as the theme's body text has
+  /// it; the space above and under them.
+  static const fontSize = 15.0;
+  static const lineHeight = 1.43;
+  static const padding = 8.0;
+
   @override
   Widget build(BuildContext context) {
     final color = isChosen ? const Color(0xFFFFFFFF) : ink;
@@ -253,7 +278,7 @@ class _Pill extends StatelessWidget {
                     duration: const Duration(milliseconds: 200),
                     padding: const EdgeInsets.symmetric(
                       horizontal: 14,
-                      vertical: 8,
+                      vertical: padding,
                     ),
                     decoration: BoxDecoration(
                       color: isChosen ? null : fill.withValues(alpha: 0.58),
@@ -269,8 +294,9 @@ class _Pill extends StatelessWidget {
                         Text(
                           name,
                           style: TextStyle(
-                            fontSize: 15,
+                            fontSize: fontSize,
                             fontWeight: FontWeight.w600,
+                            height: lineHeight,
                             color: color,
                           ),
                         ),

@@ -119,6 +119,7 @@ class NewsLook extends FeedLook {
       pinned: true,
       delegate: _NewsHeader(
         titleHeight: titleHeight,
+        pillsHeight: FeedPills.heightFor(scaler),
         title: Padding(
           padding: const EdgeInsets.fromLTRB(16, 10, 8, 0),
           child: Row(
@@ -297,21 +298,22 @@ class NewsLook extends FeedLook {
 class _NewsHeader extends SliverPersistentHeaderDelegate {
   _NewsHeader({
     required this.titleHeight,
+    required this.pillsHeight,
     required this.title,
     required this.pills,
   });
 
+  /// As tall as their words at the reader's text size.
   final double titleHeight;
+  final double pillsHeight;
   final Widget title;
   final Widget pills;
 
-  static const _pills = 58.0;
+  @override
+  double get minExtent => pillsHeight;
 
   @override
-  double get minExtent => _pills;
-
-  @override
-  double get maxExtent => titleHeight + _pills;
+  double get maxExtent => titleHeight + pillsHeight;
 
   @override
   Widget build(BuildContext context, double shrinkOffset, bool overlaps) {
@@ -319,17 +321,28 @@ class _NewsHeader extends SliverPersistentHeaderDelegate {
     // The title stays, unseen once gone, so the pills keep their place in
     // the tree: the row keeps how far it was swiped, and the gear's glass
     // is not made again as the title comes back.
+    // The chosen pill's glow reaches over the rows under the header, not cut
+    // where it ends (Yurii, #210); the title is clipped to its own band.
     return Stack(
       fit: StackFit.expand,
+      clipBehavior: Clip.none,
       children: [
         Positioned(
           left: 0,
           right: 0,
           top: -shrinkOffset,
           height: titleHeight,
-          child: Opacity(opacity: 1 - gone, child: title),
+          child: ClipRect(
+            child: Opacity(opacity: 1 - gone, child: title),
+          ),
         ),
-        Positioned(left: 0, right: 0, bottom: 0, height: _pills, child: pills),
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: 0,
+          height: pillsHeight,
+          child: pills,
+        ),
       ],
     );
   }
@@ -337,6 +350,7 @@ class _NewsHeader extends SliverPersistentHeaderDelegate {
   @override
   bool shouldRebuild(_NewsHeader old) =>
       old.titleHeight != titleHeight ||
+      old.pillsHeight != pillsHeight ||
       old.title != title ||
       old.pills != pills;
 }
