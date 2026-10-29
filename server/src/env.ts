@@ -34,16 +34,17 @@ export interface Env {
   /**
    * Opens the AI chat to Sandbox purchases (#146, Roman, 28 Oct). They cost
    * nothing (TestFlight, a build run from a Mac), so the chat answers them
-   * only for a request that carries this key as `X-Chat-Sandbox-Key`, which
-   * only Roman's local builds have. A Worker secret Roman puts in himself
-   * (`npx wrangler secret put CHAT_SANDBOX_KEY`; locally in `.dev.vars`).
-   * Without it no Sandbox purchase gets an answer.
+   * only for a request that carries a key as `X-Chat-Sandbox-Key`: this one,
+   * which only Roman's local builds have, or [CHAT_SANDBOX_KEY_TESTFLIGHT].
+   * A Worker secret Roman puts in himself (`npx wrangler secret put
+   * CHAT_SANDBOX_KEY`; locally in `.dev.vars`).
    */
   CHAT_SANDBOX_KEY?: string;
   /**
-   * "true" opens the AI chat to every Sandbox purchase, so TestFlight testers
-   * try it for free (Roman, 29 Oct, #146), within the same daily limit; any
-   * other value keeps it to [CHAT_SANDBOX_KEY]. A var in wrangler.jsonc.
+   * The same for the team's TestFlight builds (#146, Roman and Yurii, 29 Oct):
+   * the TestFlight workflow builds it into `testflight` builds, never `store`
+   * ones, from the GitHub secret of the same name. Yurii puts the one value
+   * into both himself. Without it TestFlight builds keep the chat closed.
    */
-  CHAT_SANDBOX_OPEN?: string;
+  CHAT_SANDBOX_KEY_TESTFLIGHT?: string;
 }

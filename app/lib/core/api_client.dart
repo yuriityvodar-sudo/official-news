@@ -79,8 +79,8 @@ class ApiClient {
   final String _baseUrl;
   final String _sandboxKey;
 
-  /// The chat's requests are JSON, with Roman's key on his own builds
-  /// ([chatSandboxKey]).
+  /// The chat's requests are JSON, with a Sandbox key on the team's builds,
+  /// Roman's own and TestFlight's ([chatSandboxKey]).
   Map<String, String> get _chatHeaders => {
     'content-type': 'application/json',
     if (_sandboxKey.isNotEmpty) 'x-chat-sandbox-key': _sandboxKey,

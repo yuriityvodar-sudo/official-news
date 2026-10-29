@@ -203,7 +203,7 @@ void main() {
     late List<Map<String, dynamic>> asked;
 
     test(
-      'stays closed in builds without the demo or Roman\'s key, such as TestFlight\'s',
+      'stays closed in builds without the demo or a Sandbox key, such as the App Store\'s',
       () => expect(ChatScreen.opened, isFalse),
     );
 

@@ -52,7 +52,7 @@ export interface Refusal {
 export interface ChatOptions extends VerifyOptions {
   fetch?: typeof fetch;
   now?: Date;
-  /** The request's `X-Chat-Sandbox-Key`, which only Roman's local builds send (`sandboxOpen`). */
+  /** The request's `X-Chat-Sandbox-Key`, which Roman's local builds and the team's TestFlight builds send (`sandboxOpen`). */
   sandboxKey?: string | null;
 }
 
@@ -161,22 +161,24 @@ const nextDay = (now: Date) => toStoredTime(new Date(Date.UTC(now.getUTCFullYear
 const SANDBOX_CLOSED = "Not open to test purchases";
 
 /**
- * Sandbox purchases cost nothing (TestFlight, a build run from a Mac). While
- * CHAT_SANDBOX_OPEN is "true" every build gets the chat with one, so
- * TestFlight testers try it for free (Roman, 29 Oct). Otherwise only Roman's
- * local builds do (Roman, 28 Oct): they send the Worker secret
- * CHAT_SANDBOX_KEY as `X-Chat-Sandbox-Key`, compared in constant time; without
- * the secret, closed to every Sandbox purchase.
+ * Sandbox purchases cost nothing (TestFlight, a build run from a Mac), so only
+ * the team's builds get the chat with one: they send a Worker secret as
+ * `X-Chat-Sandbox-Key`, Roman's local builds CHAT_SANDBOX_KEY (Roman, 28 Oct)
+ * and TestFlight builds CHAT_SANDBOX_KEY_TESTFLIGHT (Roman and Yurii, 29 Oct),
+ * compared in constant time. Without the secrets, closed to every Sandbox
+ * purchase.
  */
 async function sandboxOpen(env: Env, key: string | null | undefined): Promise<boolean> {
-  if (env.CHAT_SANDBOX_OPEN === "true") return true;
-  if (!env.CHAT_SANDBOX_KEY || !key) return false;
+  if (!key) return false;
   const digest = (s: string) => crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
-  const [expected, given] = await Promise.all([digest(env.CHAT_SANDBOX_KEY), digest(key)]);
-  return crypto.subtle.timingSafeEqual(expected, given);
+  const given = await digest(key);
+  for (const secret of [env.CHAT_SANDBOX_KEY, env.CHAT_SANDBOX_KEY_TESTFLIGHT]) {
+    if (secret && crypto.subtle.timingSafeEqual(await digest(secret), given)) return true;
+  }
+  return false;
 }
 
-/** The chat's subscription in a signed transaction, checked, or why not: 402 if it is not one, 403 a Sandbox one without the key. */
+/** The chat's subscription in a signed transaction, checked, or why not: 402 if it is not one, 403 a Sandbox one without a Sandbox key. */
 async function checkedTransaction(jws: string, env: Env, options: ChatOptions): Promise<AppleTransaction | Refusal> {
   let t: AppleTransaction;
   try {
@@ -202,7 +204,7 @@ const today = (now: Date) => toStoredTime(now).slice(0, 10);
 
 /**
  * `POST /v1/chat`: the subscription first (402 without an active one, 403 a
- * Sandbox one without the key), then the article (404 outside the feed), what
+ * Sandbox one without a Sandbox key), then the article (404 outside the feed), what
  * is left of the limit (429), the key (503). The question's share of the limit
  * (`units`) is taken as OpenAI starts answering, so an answer the reader
  * leaves still counts, and one OpenAI never gave does not; its real cost
@@ -316,8 +318,10 @@ export async function chatStatus(body: unknown, env: Env, options: ChatOptions =
  * second call changes nothing), so the app can send it until this answers
  * and only then finish the purchase. 400 for anything but a pack of this app,
  * 402 without a subscription's transaction to credit it to, 403 a Sandbox pack
- * or subscription where Sandbox purchases are closed, or a pack from another
- * store than the subscription (a free pack never goes into a paid wallet).
+ * or subscription without a Sandbox key, or a pack from another store than the
+ * subscription (a free pack never goes into a paid wallet), 429 a second free
+ * pack the same day (`creditPack`): the app keeps it unfinished, so StoreKit
+ * gives it back at the next start, and it is credited on a later day.
  */
 export async function creditChatPack(body: unknown, env: Env, options: ChatOptions = {}): Promise<Refusal> {
   const now = options.now ?? new Date();
@@ -330,7 +334,7 @@ export async function creditChatPack(body: unknown, env: Env, options: ChatOptio
     if (!(e instanceof JwsError)) throw e;
     return error(400, "Not a pack of this app");
   }
-  // A free pack, too, only where Sandbox purchases are open.
+  // A free pack, too, only with a Sandbox key.
   if (pack.environment === "Sandbox" && !(await sandboxOpen(env, options.sandboxKey))) return error(403, SANDBOX_CLOSED);
   const t = await checkedTransaction(b.transaction, env, options);
   if ("status" in t) return t;
@@ -339,6 +343,7 @@ export async function creditChatPack(body: unknown, env: Env, options: ChatOptio
   const subscription = await recordTransaction(env, t, { now });
   const id = subscription.original_transaction_id;
   const credited = await creditPack(env, id, pack, now);
+  if (credited === "capped") return error(429, "One test pack a day", { resetsAt: nextDay(now) });
   const wallet = await walletMicros(env, id);
   console.log(JSON.stringify({ message: "chat pack", subscription: id, product: pack.productId, credited }));
   return { status: 200, body: { credited, boughtQuestions: Math.max(0, Math.floor(wallet / QUESTION_MICROS)) } };
