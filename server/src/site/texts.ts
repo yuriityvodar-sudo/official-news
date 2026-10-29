@@ -4,7 +4,7 @@
 // ru texts need Yurii's review, es and de a native speaker's.
 import { GROUPS, type GroupId, TOPIC_NAMES, countryName as apiCountryName, groupName as apiGroupName } from "../api/filters";
 import type { Topic } from "../summarizer/schema";
-import { APP_TEXTS, type AppKey, LANGUAGE_NAMES, PUBLISHER_NAME, SITE_LANGS, type SiteLang } from "./app-texts.generated";
+import { APP_TEXTS, type AppKey, LANGUAGE_NAMES, PUBLISHER_DETAILS, PUBLISHER_NAME, SITE_LANGS, type SiteLang } from "./app-texts.generated";
 import { Html, esc } from "./html";
 
 export { LANGUAGE_NAMES, SITE_LANGS, type SiteLang };
@@ -324,8 +324,11 @@ export function text(lang: SiteLang, key: TextKey, values: Record<string, string
   return template(lang, key).replace(/\{(\w+)\}/g, (part, name: string) => values[name] ?? part);
 }
 
-/** "RS Elite Pro s.r.o., Slovakia" in the language, as the app says it. */
+/** "RS Elite Pro s.r.o., Czech Republic" in the language, as the app says it. */
 export const publisher = (lang: SiteLang) => text(lang, "publisher", { name: PUBLISHER_NAME });
+
+/** The publisher with its seat, company ID and register file, as the app's privacy policy and terms say it. */
+export const publisherDetails = (lang: SiteLang) => text(lang, "publisherDetails", { name: PUBLISHER_NAME, ...PUBLISHER_DETAILS });
 
 /** The AI notice, which names us as the text's editor (see SiteTexts.aiNotice). */
 export const aiNotice = (lang: SiteLang) => t(lang, "aiNotice", { publisher: PUBLISHER_NAME });

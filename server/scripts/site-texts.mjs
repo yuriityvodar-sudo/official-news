@@ -47,6 +47,7 @@ export const KEYS = [
   "aboutTitle",
   "contactSupport",
   "publisher",
+  "publisherDetails",
   "lastUpdated",
   "aboutIntro",
   "aboutSourcesHeading",
@@ -114,14 +115,21 @@ export function siteTexts(arbs) {
 }
 
 /**
- * What the site needs from the app's Dart code: the publisher's name and the
- * policies' date (info_pages.dart), and each language's own name and short
+ * What the site needs from the app's Dart code: the publisher's name, seat,
+ * company ID and register file, and the policies' date (info_pages.dart), and each language's own name and short
  * label (feed_language.dart). Throws if any of it is not found.
  */
 export function fromDart(infoPages, feedLanguage) {
   const problems = [];
   const name = /const publisherName = '([^']+)';/.exec(infoPages)?.[1];
   if (!name) problems.push("info_pages.dart: no `const publisherName = '…';`");
+  const details = Object.fromEntries(
+    ["Address", "Id", "File"].map((part) => {
+      const value = new RegExp(`const publisher${part} = '([^']+)';`).exec(infoPages)?.[1];
+      if (!value) problems.push(`info_pages.dart: no \`const publisher${part} = '…';\``);
+      return [part.toLowerCase(), value];
+    }),
+  );
   const date = /final policyUpdated = DateTime\((\d{4}), (\d{1,2}), (\d{1,2})\);/.exec(infoPages);
   if (!date) problems.push("info_pages.dart: no `final policyUpdated = DateTime(y, m, d);`");
   const languages = [...feedLanguage.matchAll(/^\s+(\w+)\('(\w+)', '([^']+)', '([^']+)'\)[,;]/gm)].map((m) => ({
@@ -135,6 +143,7 @@ export function fromDart(infoPages, feedLanguage) {
   const pad = (n) => String(n).padStart(2, "0");
   return {
     publisherName: name,
+    publisherDetails: details,
     policyUpdated: `${date[1]}-${pad(date[2])}-${pad(date[3])}`,
     languages: Object.fromEntries(languages.map((l) => [l.code, { nativeName: l.nativeName, shortLabel: l.shortLabel }])),
   };
@@ -162,6 +171,9 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = ${literal(tex
 
 /** Who publishes the app (\`publisherName\` in info_pages.dart): never translated. */
 export const PUBLISHER_NAME = ${JSON.stringify(dart.publisherName)};
+
+/** The publisher's seat, company ID and commercial register file (info_pages.dart): never translated. */
+export const PUBLISHER_DETAILS = ${literal(dart.publisherDetails)};
 
 /** When the privacy policy and the terms last changed (\`policyUpdated\` in info_pages.dart). */
 export const POLICY_UPDATED = ${JSON.stringify(dart.policyUpdated)};

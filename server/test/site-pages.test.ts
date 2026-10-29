@@ -29,6 +29,17 @@ describe("every page in every language", () => {
     }
   });
 
+  it("names the publisher with its seat, company ID and register file on the privacy policy and the terms, as the app does", async () => {
+    for (const lang of SITE_LANGS) {
+      for (const page of ["privacy", "terms"]) {
+        const { body } = await site(`/${lang}/${page}`);
+        expect(body, `${lang} ${page}`).toContain("RS Elite Pro s.r.o., Na Okrouhlíku 2563/31, 182 00 Praha 8");
+        expect(body, `${lang} ${page}`).toContain("29536316");
+        expect(body, `${lang} ${page}`).toContain("C 448095");
+      }
+    }
+  });
+
   it("shows the AI label under the headline and the AI notice on articles and lists", async () => {
     const article = (await site(`/uk/de/${testId(1)}`)).body;
     expect(article).toMatch(/<\/h1>\n<p class="ai meta">.*Стислий виклад від ШІ · переклад з німецької/);

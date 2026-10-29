@@ -39,6 +39,27 @@ export type AppKey =
   | "countryUA"
   | "countryUS"
   | "countryZA"
+  | "countryAT"
+  | "countryBE"
+  | "countryBG"
+  | "countryCY"
+  | "countryDK"
+  | "countryEE"
+  | "countryFI"
+  | "countryGR"
+  | "countryHR"
+  | "countryHU"
+  | "countryIE"
+  | "countryLT"
+  | "countryLU"
+  | "countryLV"
+  | "countryMT"
+  | "countryNL"
+  | "countryPT"
+  | "countryRO"
+  | "countrySE"
+  | "countrySI"
+  | "countrySK"
   | "languageAr"
   | "languageDe"
   | "languageEn"
@@ -68,6 +89,7 @@ export type AppKey =
   | "termsOfUse"
   | "contactSupport"
   | "publisher"
+  | "publisherDetails"
   | "lastUpdated"
   | "aboutIntro"
   | "aboutSourcesHeading"
@@ -81,6 +103,7 @@ export type AppKey =
   | "privacyPhone"
   | "privacyLoadingHeading"
   | "privacyLoadingServer"
+  | "privacyLoadingCountry"
   | "privacyLoadingPictures"
   | "privacyLoadingPages"
   | "privacyAnalyticsHeading"
@@ -154,6 +177,27 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "countryUA": "Ukraine",
     "countryUS": "United States",
     "countryZA": "South Africa",
+    "countryAT": "Austria",
+    "countryBE": "Belgium",
+    "countryBG": "Bulgaria",
+    "countryCY": "Cyprus",
+    "countryDK": "Denmark",
+    "countryEE": "Estonia",
+    "countryFI": "Finland",
+    "countryGR": "Greece",
+    "countryHR": "Croatia",
+    "countryHU": "Hungary",
+    "countryIE": "Ireland",
+    "countryLT": "Lithuania",
+    "countryLU": "Luxembourg",
+    "countryLV": "Latvia",
+    "countryMT": "Malta",
+    "countryNL": "Netherlands",
+    "countryPT": "Portugal",
+    "countryRO": "Romania",
+    "countrySE": "Sweden",
+    "countrySI": "Slovenia",
+    "countrySK": "Slovakia",
     "languageAr": "Arabic",
     "languageDe": "German",
     "languageEn": "English",
@@ -182,7 +226,8 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "privacyPolicy": "Privacy Policy",
     "termsOfUse": "Terms of Use",
     "contactSupport": "Contact & Support",
-    "publisher": "{name}, Slovakia",
+    "publisher": "{name}, Czech Republic",
+    "publisherDetails": "{name}, {address}, Czech Republic. Company ID (IČO): {id}. Registered in the commercial register kept by the Municipal Court in Prague, file no. {file}",
     "lastUpdated": "Last updated {date}",
     "aboutIntro": "Outer News shows what governments and international bodies have decided, in a few calm sentences, with a link to the official page.",
     "aboutSourcesHeading": "Where the news comes from",
@@ -196,10 +241,11 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "privacyPhone": "Your language and feed filters, the articles you have read, the last feed you saw and the pictures you have viewed are kept on your phone, so the app opens quickly and works offline. Deleting the app deletes them.",
     "privacyLoadingHeading": "When the app loads news",
     "privacyLoadingServer": "The app loads the news from our server, hosted by Cloudflare. Like any website, it receives your IP address and basic technical details to answer the request; we do not use them to identify you.",
+    "privacyLoadingCountry": "For you shows what concerns your country. The app takes the country from your phone's region, or from Settings → My country. If the phone has no region, our server tells the app which country it sees the request come from, and keeps nothing. The country stays on your phone; the server receives it with each request for the feed only to choose the news, and does not save it. Like every request to our server, these can appear in Cloudflare's technical logs, which are deleted automatically within a week.",
     "privacyLoadingPictures": "Article pictures are loaded directly from the official website that published them, so that website receives your IP address when a picture loads. Pictures are saved on your phone after the first view.",
     "privacyLoadingPages": "When you open an official page, it opens in an in-app browser and that website's own privacy policy applies.",
     "privacyAnalyticsHeading": "Analytics",
-    "privacyAnalytics": "To understand how the app is used, for example how many people read which kind of decision, the app sends usage events to Google Analytics for Firebase: screens opened, articles opened and read, links tapped, the chosen language and feed filters, and technical details such as the app version, device model, country and an app instance ID. It does not use the advertising identifier and does not track you across other apps.",
+    "privacyAnalytics": "To understand how the app is used, for example how many people read which kind of decision, the app sends usage events to Google Analytics for Firebase: screens opened, articles opened and read, links tapped, the chosen language, feed filters and your country for For you, and technical details such as the app version, device model, country and an app instance ID. It does not use the advertising identifier and does not track you across other apps.",
     "privacyNotificationsHeading": "Notifications",
     "privacyNotifications": "If you turn on notifications, your phone gets a notification token from Apple and Google Firebase so we can send news alerts. You can turn notifications off at any time in your phone settings.",
     "privacyAiHeading": "AI",
@@ -263,6 +309,27 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "countryUA": "Україна",
     "countryUS": "США",
     "countryZA": "ПАР",
+    "countryAT": "Австрія",
+    "countryBE": "Бельгія",
+    "countryBG": "Болгарія",
+    "countryCY": "Кіпр",
+    "countryDK": "Данія",
+    "countryEE": "Естонія",
+    "countryFI": "Фінляндія",
+    "countryGR": "Греція",
+    "countryHR": "Хорватія",
+    "countryHU": "Угорщина",
+    "countryIE": "Ірландія",
+    "countryLT": "Литва",
+    "countryLU": "Люксембург",
+    "countryLV": "Латвія",
+    "countryMT": "Мальта",
+    "countryNL": "Нідерланди",
+    "countryPT": "Португалія",
+    "countryRO": "Румунія",
+    "countrySE": "Швеція",
+    "countrySI": "Словенія",
+    "countrySK": "Словаччина",
     "languageAr": "арабської",
     "languageDe": "німецької",
     "languageEn": "англійської",
@@ -291,7 +358,8 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "privacyPolicy": "Політика конфіденційності",
     "termsOfUse": "Умови використання",
     "contactSupport": "Контакти й підтримка",
-    "publisher": "{name}, Словаччина",
+    "publisher": "{name}, Чеська Республіка",
+    "publisherDetails": "{name}, {address}, Чеська Республіка. Ідентифікаційний номер (IČO): {id}. Внесено до торговельного реєстру, який веде Міський суд у Празі, номер запису {file}",
     "lastUpdated": "Оновлено {date}",
     "aboutIntro": "Outer News показує, які рішення ухвалили уряди й міжнародні організації: кілька спокійних речень і посилання на офіційну сторінку.",
     "aboutSourcesHeading": "Звідки новини",
@@ -305,10 +373,11 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "privacyPhone": "Вибрана мова й фільтри стрічки, прочитані статті, остання стрічка, яку ви бачили, і переглянуті зображення зберігаються на вашому телефоні, щоб застосунок швидко відкривався й працював офлайн. Якщо видалити застосунок, вони теж видаляться.",
     "privacyLoadingHeading": "Коли застосунок завантажує новини",
     "privacyLoadingServer": "Застосунок завантажує новини з нашого сервера, розміщеного в Cloudflare. Як і будь-який вебсайт, наш сервер отримує вашу IP-адресу й базові технічні дані, щоб відповісти на запит; ми не використовуємо їх, щоб вас ідентифікувати.",
+    "privacyLoadingCountry": "«Для вас» показує те, що стосується вашої країни. Застосунок бере країну з регіону телефона або з Параметрів → «Моя країна». Якщо в телефоні регіон не вказано, наш сервер повідомляє застосунку, з якої країни бачить запит, і нічого не зберігає. Країна зберігається на вашому телефоні; сервер отримує її з кожним запитом стрічки лише для того, щоб дібрати новини, і не зберігає її. Як і будь-які запити до нашого сервера, вони можуть потрапляти в технічні журнали Cloudflare, які автоматично видаляються протягом тижня.",
     "privacyLoadingPictures": "Зображення до статей завантажуються безпосередньо з офіційного сайту, який їх опублікував, тож цей сайт отримує вашу IP-адресу під час завантаження зображення. Після першого перегляду зображення зберігаються на вашому телефоні.",
     "privacyLoadingPages": "Офіційна сторінка відкривається у вбудованому браузері, і на ній діє власна політика конфіденційності цього сайту.",
     "privacyAnalyticsHeading": "Аналітика",
-    "privacyAnalytics": "Щоб розуміти, як користуються застосунком (наприклад, скільки людей читають рішення того чи іншого типу), застосунок надсилає події використання до Google Analytics for Firebase: відкриті екрани, відкриті й прочитані статті, натиснуті посилання, вибрану мову й фільтри стрічки, а також технічні дані, як-от версію застосунку, модель пристрою, країну та ідентифікатор екземпляра застосунку. Застосунок не використовує рекламний ідентифікатор і не відстежує вас в інших застосунках.",
+    "privacyAnalytics": "Щоб розуміти, як користуються застосунком (наприклад, скільки людей читають рішення того чи іншого типу), застосунок надсилає події використання до Google Analytics for Firebase: відкриті екрани, відкриті й прочитані статті, натиснуті посилання, вибрану мову, фільтри стрічки й вашу країну для «Для вас», а також технічні дані, як-от версію застосунку, модель пристрою, країну та ідентифікатор екземпляра застосунку. Застосунок не використовує рекламний ідентифікатор і не відстежує вас в інших застосунках.",
     "privacyNotificationsHeading": "Сповіщення",
     "privacyNotifications": "Якщо ви ввімкнете сповіщення, ваш телефон отримає токен сповіщень від Apple і Google Firebase, щоб ми могли надсилати сповіщення про новини. Сповіщення можна будь-коли вимкнути в параметрах телефону.",
     "privacyAiHeading": "ШІ",
@@ -372,6 +441,27 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "countryUA": "Украина",
     "countryUS": "США",
     "countryZA": "ЮАР",
+    "countryAT": "Австрия",
+    "countryBE": "Бельгия",
+    "countryBG": "Болгария",
+    "countryCY": "Кипр",
+    "countryDK": "Дания",
+    "countryEE": "Эстония",
+    "countryFI": "Финляндия",
+    "countryGR": "Греция",
+    "countryHR": "Хорватия",
+    "countryHU": "Венгрия",
+    "countryIE": "Ирландия",
+    "countryLT": "Литва",
+    "countryLU": "Люксембург",
+    "countryLV": "Латвия",
+    "countryMT": "Мальта",
+    "countryNL": "Нидерланды",
+    "countryPT": "Португалия",
+    "countryRO": "Румыния",
+    "countrySE": "Швеция",
+    "countrySI": "Словения",
+    "countrySK": "Словакия",
     "languageAr": "арабского",
     "languageDe": "немецкого",
     "languageEn": "английского",
@@ -400,7 +490,8 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "privacyPolicy": "Политика конфиденциальности",
     "termsOfUse": "Условия использования",
     "contactSupport": "Контакты и поддержка",
-    "publisher": "{name}, Словакия",
+    "publisher": "{name}, Чешская Республика",
+    "publisherDetails": "{name}, {address}, Чешская Республика. Идентификационный номер (IČO): {id}. Внесено в торговый реестр, который ведёт Городской суд в Праге, номер записи {file}",
     "lastUpdated": "Обновлено {date}",
     "aboutIntro": "Outer News рассказывает о решениях правительств и международных организаций — коротко, спокойно и со ссылкой на официальную страницу.",
     "aboutSourcesHeading": "Откуда новости",
@@ -414,10 +505,11 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "privacyPhone": "Выбранный язык и фильтры ленты, прочитанные статьи, последняя лента, которую вы видели, и просмотренные изображения хранятся на вашем телефоне, чтобы приложение быстро открывалось и работало офлайн. При удалении приложения эти данные удаляются.",
     "privacyLoadingHeading": "Когда приложение загружает новости",
     "privacyLoadingServer": "Приложение загружает новости с нашего сервера на платформе Cloudflare. Как и любой сайт, сервер получает ваш IP-адрес и базовые технические данные, чтобы ответить на запрос; мы не используем их для вашей идентификации.",
+    "privacyLoadingCountry": "«Для вас» показывает то, что касается вашей страны. Приложение берёт страну из региона телефона или из Настроек → «Моя страна». Если в телефоне регион не указан, наш сервер сообщает приложению, из какой страны он видит запрос, и ничего не сохраняет. Страна хранится на вашем телефоне; сервер получает её с каждым запросом ленты только для того, чтобы подобрать новости, и не сохраняет её. Как и любые запросы к нашему серверу, они могут попадать в технические журналы Cloudflare, которые автоматически удаляются в течение недели.",
     "privacyLoadingPictures": "Изображения к статьям загружаются напрямую с официального сайта, который их опубликовал, поэтому этот сайт получает ваш IP-адрес, когда загружается изображение. После первого просмотра изображения сохраняются на вашем телефоне.",
     "privacyLoadingPages": "Официальные страницы открываются во встроенном браузере, и на них действует собственная политика конфиденциальности соответствующего сайта.",
     "privacyAnalyticsHeading": "Аналитика",
-    "privacyAnalytics": "Чтобы понимать, как используется приложение (например, сколько людей читают решения того или иного типа), приложение отправляет в Google Analytics for Firebase данные об использовании: открытые экраны, открытые и прочитанные статьи, нажатые ссылки, выбранный язык и фильтры ленты, а также технические данные, такие как версия приложения, модель устройства, страна и идентификатор экземпляра приложения. Приложение не использует рекламный идентификатор и не отслеживает ваши действия в других приложениях.",
+    "privacyAnalytics": "Чтобы понимать, как используется приложение (например, сколько людей читают решения того или иного типа), приложение отправляет в Google Analytics for Firebase данные об использовании: открытые экраны, открытые и прочитанные статьи, нажатые ссылки, выбранный язык, фильтры ленты и вашу страну для «Для вас», а также технические данные, такие как версия приложения, модель устройства, страна и идентификатор экземпляра приложения. Приложение не использует рекламный идентификатор и не отслеживает ваши действия в других приложениях.",
     "privacyNotificationsHeading": "Уведомления",
     "privacyNotifications": "Если вы включите уведомления, ваш телефон получит токен уведомлений от Apple и Google Firebase, чтобы мы могли присылать уведомления о новостях. Уведомления можно в любой момент отключить в настройках телефона.",
     "privacyAiHeading": "ИИ",
@@ -481,6 +573,27 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "countryUA": "Ucrania",
     "countryUS": "Estados Unidos",
     "countryZA": "Sudáfrica",
+    "countryAT": "Austria",
+    "countryBE": "Bélgica",
+    "countryBG": "Bulgaria",
+    "countryCY": "Chipre",
+    "countryDK": "Dinamarca",
+    "countryEE": "Estonia",
+    "countryFI": "Finlandia",
+    "countryGR": "Grecia",
+    "countryHR": "Croacia",
+    "countryHU": "Hungría",
+    "countryIE": "Irlanda",
+    "countryLT": "Lituania",
+    "countryLU": "Luxemburgo",
+    "countryLV": "Letonia",
+    "countryMT": "Malta",
+    "countryNL": "Países Bajos",
+    "countryPT": "Portugal",
+    "countryRO": "Rumanía",
+    "countrySE": "Suecia",
+    "countrySI": "Eslovenia",
+    "countrySK": "Eslovaquia",
     "languageAr": "árabe",
     "languageDe": "alemán",
     "languageEn": "inglés",
@@ -509,7 +622,8 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "privacyPolicy": "Política de privacidad",
     "termsOfUse": "Términos de uso",
     "contactSupport": "Contacto y soporte",
-    "publisher": "{name}, Eslovaquia",
+    "publisher": "{name}, República Checa",
+    "publisherDetails": "{name}, {address}, República Checa. Número de identificación (IČO): {id}. Inscrita en el registro mercantil del Tribunal Municipal de Praga, expediente {file}",
     "lastUpdated": "Última actualización: {date}",
     "aboutIntro": "Outer News muestra lo que han decidido los gobiernos y los organismos internacionales en pocas frases, con un tono sereno y un enlace a la página oficial.",
     "aboutSourcesHeading": "De dónde vienen las noticias",
@@ -523,10 +637,11 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "privacyPhone": "El idioma y los filtros elegidos, los artículos que leíste, la última lista de noticias que viste y las imágenes ya vistas se guardan en tu teléfono para que la app se abra rápido y funcione sin conexión. Si eliminas la app, se eliminan con ella.",
     "privacyLoadingHeading": "Cuando la app carga noticias",
     "privacyLoadingServer": "La app carga las noticias desde nuestro servidor, alojado en Cloudflare. Como cualquier sitio web, nuestro servidor recibe tu dirección IP y datos técnicos básicos para responder a la solicitud; no los usamos para identificarte.",
+    "privacyLoadingCountry": "«Para ti» muestra lo que concierne a tu país. La app toma el país de la región de tu teléfono o de Ajustes → «Mi país». Si el teléfono no tiene región, nuestro servidor le dice a la app desde qué país ve la solicitud, y no guarda nada. El país se queda en tu teléfono; el servidor lo recibe con cada solicitud de noticias solo para elegirlas, y no lo guarda. Como cualquier solicitud a nuestro servidor, pueden aparecer en los registros técnicos de Cloudflare, que se borran automáticamente en una semana.",
     "privacyLoadingPictures": "Las imágenes de los artículos se cargan directamente desde el sitio web oficial que las publicó, así que ese sitio recibe tu dirección IP cuando se carga una imagen. Después de verlas por primera vez, las imágenes se guardan en tu teléfono.",
     "privacyLoadingPages": "Cuando abres una página oficial, se abre en un navegador dentro de la app y se aplica la política de privacidad de ese sitio web.",
     "privacyAnalyticsHeading": "Analítica",
-    "privacyAnalytics": "Para entender cómo se usa (por ejemplo, cuántas personas leen cada tipo de decisión), la app envía eventos de uso a Google Analytics for Firebase: pantallas abiertas, artículos abiertos y leídos, enlaces tocados, el idioma y los filtros elegidos, y datos técnicos como la versión de la app, el modelo del dispositivo, el país y un ID de instancia de la app. No usa el identificador de publicidad ni te rastrea en otras apps.",
+    "privacyAnalytics": "Para entender cómo se usa (por ejemplo, cuántas personas leen cada tipo de decisión), la app envía eventos de uso a Google Analytics for Firebase: pantallas abiertas, artículos abiertos y leídos, enlaces tocados, el idioma y los filtros elegidos, tu país para «Para ti», y datos técnicos como la versión de la app, el modelo del dispositivo, el país y un ID de instancia de la app. No usa el identificador de publicidad ni te rastrea en otras apps.",
     "privacyNotificationsHeading": "Notificaciones",
     "privacyNotifications": "Si activas las notificaciones, tu teléfono recibe un token de notificaciones de Apple y Google Firebase para que podamos enviarte alertas de noticias. Puedes desactivar las notificaciones en cualquier momento en los ajustes de tu teléfono.",
     "privacyAiHeading": "IA",
@@ -590,6 +705,27 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "countryUA": "Ukraine",
     "countryUS": "Vereinigte Staaten",
     "countryZA": "Südafrika",
+    "countryAT": "Österreich",
+    "countryBE": "Belgien",
+    "countryBG": "Bulgarien",
+    "countryCY": "Zypern",
+    "countryDK": "Dänemark",
+    "countryEE": "Estland",
+    "countryFI": "Finnland",
+    "countryGR": "Griechenland",
+    "countryHR": "Kroatien",
+    "countryHU": "Ungarn",
+    "countryIE": "Irland",
+    "countryLT": "Litauen",
+    "countryLU": "Luxemburg",
+    "countryLV": "Lettland",
+    "countryMT": "Malta",
+    "countryNL": "Niederlande",
+    "countryPT": "Portugal",
+    "countryRO": "Rumänien",
+    "countrySE": "Schweden",
+    "countrySI": "Slowenien",
+    "countrySK": "Slowakei",
     "languageAr": "Arabischen",
     "languageDe": "Deutschen",
     "languageEn": "Englischen",
@@ -618,7 +754,8 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "privacyPolicy": "Datenschutzerklärung",
     "termsOfUse": "Nutzungsbedingungen",
     "contactSupport": "Kontakt & Support",
-    "publisher": "{name}, Slowakei",
+    "publisher": "{name}, Tschechische Republik",
+    "publisherDetails": "{name}, {address}, Tschechische Republik. Identifikationsnummer (IČO): {id}. Eingetragen im Handelsregister des Stadtgerichts Prag, Aktenzeichen {file}",
     "lastUpdated": "Stand: {date}",
     "aboutIntro": "Outer News zeigt, was Regierungen und internationale Organisationen beschlossen haben – in wenigen sachlichen Sätzen und mit einem Link zur offiziellen Seite.",
     "aboutSourcesHeading": "Woher die Nachrichten kommen",
@@ -632,10 +769,11 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "privacyPhone": "Die gewählte Sprache und die Feed-Filter, die gelesenen Artikel, der zuletzt angezeigte Feed und die angesehenen Bilder werden auf Ihrem Gerät gespeichert, damit die App schnell startet und offline funktioniert. Wenn Sie die App löschen, werden sie mitgelöscht.",
     "privacyLoadingHeading": "Wenn die App Nachrichten lädt",
     "privacyLoadingServer": "Die App lädt die Nachrichten von unserem Server, der bei Cloudflare gehostet wird. Wie bei jeder Website erhält er Ihre IP-Adresse und grundlegende technische Angaben, um die Anfrage zu beantworten; wir nutzen sie nicht, um Sie zu identifizieren.",
+    "privacyLoadingCountry": "„Für Sie“ zeigt, was Ihr Land betrifft. Die App nimmt das Land aus der Region Ihres Telefons oder aus Einstellungen → „Mein Land“. Hat das Telefon keine Region, teilt unser Server der App mit, aus welchem Land er die Anfrage sieht, und speichert nichts. Das Land bleibt auf Ihrem Telefon; der Server erhält es mit jeder Anfrage nach dem Feed nur, um die Nachrichten auszuwählen, und speichert es nicht. Wie jede Anfrage an unseren Server können sie in den technischen Protokollen von Cloudflare erscheinen, die innerhalb einer Woche automatisch gelöscht werden.",
     "privacyLoadingPictures": "Bilder zu Artikeln werden direkt von der offiziellen Website geladen, die sie veröffentlicht hat; diese Website erhält daher Ihre IP-Adresse, wenn ein Bild geladen wird. Nach dem ersten Ansehen werden Bilder auf Ihrem Gerät gespeichert.",
     "privacyLoadingPages": "Wenn Sie eine offizielle Seite öffnen, wird sie in einem In-App-Browser geöffnet, und es gilt die Datenschutzerklärung dieser Website.",
     "privacyAnalyticsHeading": "Analyse",
-    "privacyAnalytics": "Um zu verstehen, wie die App genutzt wird, etwa wie viele Menschen welche Art von Entscheidung lesen, sendet die App Nutzungsereignisse an Google Analytics for Firebase: aufgerufene Bildschirme, geöffnete und gelesene Artikel, angetippte Links, die gewählte Sprache und die Feed-Filter sowie technische Angaben wie App-Version, Gerätemodell, Land und eine App-Instanz-ID. Die App verwendet die Werbe-ID nicht und verfolgt Sie nicht über andere Apps hinweg.",
+    "privacyAnalytics": "Um zu verstehen, wie die App genutzt wird, etwa wie viele Menschen welche Art von Entscheidung lesen, sendet die App Nutzungsereignisse an Google Analytics for Firebase: aufgerufene Bildschirme, geöffnete und gelesene Artikel, angetippte Links, die gewählte Sprache, die Feed-Filter, Ihr Land für „Für Sie“ sowie technische Angaben wie App-Version, Gerätemodell, Land und eine App-Instanz-ID. Die App verwendet die Werbe-ID nicht und verfolgt Sie nicht über andere Apps hinweg.",
     "privacyNotificationsHeading": "Mitteilungen",
     "privacyNotifications": "Wenn Sie Mitteilungen aktivieren, erhält Ihr Gerät ein Mitteilungs-Token von Apple und Google Firebase, damit wir Ihnen Hinweise auf Nachrichten senden können. Sie können Mitteilungen jederzeit in den Einstellungen Ihres Geräts deaktivieren.",
     "privacyAiHeading": "KI",
@@ -667,8 +805,15 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
 /** Who publishes the app (`publisherName` in info_pages.dart): never translated. */
 export const PUBLISHER_NAME = "RS Elite Pro s.r.o.";
 
+/** The publisher's seat, company ID and commercial register file (info_pages.dart): never translated. */
+export const PUBLISHER_DETAILS = {
+  "address": "Na Okrouhlíku 2563/31, 182 00 Praha 8",
+  "id": "29536316",
+  "file": "C 448095"
+};
+
 /** When the privacy policy and the terms last changed (`policyUpdated` in info_pages.dart). */
-export const POLICY_UPDATED = "2026-10-27";
+export const POLICY_UPDATED = "2026-10-29";
 
 /** Each language's own name and short label (FeedLanguage in feed_language.dart). */
 export const LANGUAGE_NAMES: Record<SiteLang, { nativeName: string; shortLabel: string }> = {

@@ -5,7 +5,7 @@ import { POLICY_UPDATED } from "../app-texts.generated";
 import { fullDate } from "../dates";
 import { type Html, html } from "../html";
 import { type Page, SITE_NAME } from "../layout";
-import { SITE_LANGS, type SiteLang, type TextKey, publisher, t, text } from "../texts";
+import { SITE_LANGS, type SiteLang, type TextKey, publisher, publisherDetails, t, text } from "../texts";
 import { type InfoPage, infoPath } from "../urls";
 
 interface Section {
@@ -44,7 +44,7 @@ function sections(lang: SiteLang, page: InfoPage): Section[] {
           heading: "privacyRightsHeading",
           paragraphs: [
             t(lang, "privacyRights", { contactSupport: html`<a href="${infoPath(lang, "support")}">${text(lang, "contactSupport")}</a>` }),
-            t(lang, "privacyController", { publisher: by }),
+            t(lang, "privacyController", { publisher: publisherDetails(lang) }),
           ],
         },
         { heading: "privacyChangesHeading", paragraphs: [p(lang, "privacyChanges")] },
@@ -54,7 +54,7 @@ function sections(lang: SiteLang, page: InfoPage): Section[] {
         { paragraphs: [p(lang, "termsIntro1"), p(lang, "termsIntro2")] },
         { heading: "termsContentHeading", paragraphs: [p(lang, "termsContent")] },
         { heading: "termsNoGuaranteeHeading", paragraphs: [p(lang, "termsNoGuarantee")] },
-        { heading: "termsPublisherHeading", paragraphs: [t(lang, "termsPublisher", { publisher: by })] },
+        { heading: "termsPublisherHeading", paragraphs: [t(lang, "termsPublisher", { publisher: publisherDetails(lang) })] },
       ];
     case "support":
       // No e-mail address yet (info_pages.dart: supportEmail is empty): the app says to use the App Store page.
