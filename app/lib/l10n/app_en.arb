@@ -661,7 +661,7 @@
     "placeholders": {
       "version": {
         "type": "String",
-        "example": "0.1.0"
+        "example": "1.0.0"
       }
     }
   },
