@@ -125,14 +125,20 @@ export async function reserve(
   now: Date,
 ): Promise<{ taken: Taken; left: { today: number; bought: number } } | "none" | "busy"> {
   const token = crypto.randomUUID();
-  const lock = env.DB.prepare(
-    `INSERT INTO chat_locks (original_transaction_id, token, until) VALUES (?1, ?2, ?3)
-     ON CONFLICT (original_transaction_id) DO UPDATE SET token = ?2, until = ?3 WHERE until < ?4`,
-  ).bind(subscription, token, toStoredTime(new Date(now.getTime() + LOCK_MS)), toStoredTime(now));
-  const giveUp = Date.now() + WAIT_MS;
-  while (!(await lock.run()).meta.changes) {
-    if (Date.now() > giveUp) return "busy";
-    await new Promise((resolve) => setTimeout(resolve, 20));
+  const started = Date.now();
+  for (;;) {
+    // `now`, moved on by the time spent waiting, so a lock left behind ends while this one waits too.
+    const at = new Date(now.getTime() + Date.now() - started);
+    const { meta } = await env.DB.prepare(
+      `INSERT INTO chat_locks (original_transaction_id, token, until) VALUES (?1, ?2, ?3)
+       ON CONFLICT (original_transaction_id) DO UPDATE SET token = ?2, until = ?3 WHERE until < ?4`,
+    )
+      .bind(subscription, token, toStoredTime(new Date(at.getTime() + LOCK_MS)), toStoredTime(at))
+      .run();
+    if (meta.changes) break;
+    if (Date.now() - started > WAIT_MS) return "busy";
+    // Each try is a D1 write: ten a second at most (Yurii's review of #223).
+    await new Promise((resolve) => setTimeout(resolve, 100));
   }
   try {
     const left = questionsLeft(await readBudget(env, subscription, day), units);
