@@ -2,7 +2,6 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:official_news/core/countries.dart';
 import 'package:official_news/core/topics.dart';
 import 'package:official_news/core/feed_language.dart';
 import 'package:official_news/core/theme.dart';
@@ -30,25 +29,15 @@ Widget testApp({
 AppLocalizations l10nFor([FeedLanguage language = FeedLanguage.en]) =>
     lookupAppLocalizations(language.locale);
 
-/// What a fake server answers for the real filter bar's menus (#67, #68):
-/// a few countries and groups, and every topic the app knows, named in the
-/// request's language. Null for any other request, which the fake answers
-/// itself. Without this, the bar reads an articles page as a menu, gives up
-/// and hides its chips.
+/// What a fake server answers for the feed's menus and For you (#67, #170):
+/// every topic the app knows, named in the request's language, and no
+/// country for `GET /locate`. Null for any other request, which the fake
+/// answers itself. Without this, the feed reads an articles page as the
+/// topics, gives up and offers none.
 http.Response? fakeMenus(http.Request request) {
   final lang = FeedLanguage.fromCode(request.url.queryParameters['lang'] ?? 'en');
   final l10n = l10nFor(lang);
   return switch (request.url.path) {
-    '/countries' => fakeJson({
-      'groups': [
-        {'id': 'eu', 'name': 'EU', 'members': ['DE', 'PL', 'EU']},
-        {'id': 'g7', 'name': 'G7', 'members': ['DE', 'GB', 'US']},
-      ],
-      'countries': [
-        for (final code in ['DE', 'GB', 'PL', 'US'])
-          {'code': code, 'name': countryName(code, l10n)},
-      ],
-    }),
     // Where the phone is (#170): not known here.
     '/locate' => fakeJson({'country': null}),
     '/topics' => fakeJson({
@@ -66,24 +55,15 @@ http.Response fakeJson(Object body) => http.Response.bytes(
   headers: {'content-type': 'application/json; charset=utf-8'},
 );
 
-/// [items] as the server narrows them by `topic=`, `country=` and `group=`
-/// (the groups of [fakeMenus]).
+/// [items] as the server narrows them by `topic=`.
 List<Map<String, dynamic>> fakeFiltered(
   List<Map<String, dynamic>> items,
   Map<String, String> q,
 ) {
-  const groups = {
-    'eu': ['DE', 'PL', 'EU'],
-    'g7': ['DE', 'GB', 'US'],
-  };
   final topic = q['topic'];
-  final country = q['country'];
-  final group = q['group'];
   return [
     for (final a in items)
-      if ((topic == null || (a['topics'] as List? ?? const []).contains(topic)) &&
-          (country == null || a['country'] == country) &&
-          (group == null || (groups[group] ?? const []).contains(a['country'])))
+      if (topic == null || (a['topics'] as List? ?? const []).contains(topic))
         a,
   ];
 }
