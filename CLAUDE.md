@@ -53,7 +53,7 @@ After the MVP, towards the App Store release (call, 16 Oct; each is an issue ass
 
 ## Fixed principles (change only by agreement, in a pull request)
 
-- Official sources only: verified government and international-body websites, never media, aggregators or trending lists.
+- Reliable sources, with their licences respected (#230, Roman, 29 Oct; replaces "official sources only"): official websites for decisions, Wikipedia's current events and open-licensed news for events, open data for popularity (Wikipedia page views, GDELT). Other media only as a headline and a link, never their text. Every item shows where it comes from.
 - The shared definitions in `docs/plan.md` (repo layout, article format, API, database). From the Kickoff they live in `docs/contract.md`.
 - One AI call per article for its summary, run once on the server and stored (an unusable answer is asked again, at most 3 tries in all); translations add one call per language (#46).
 - Paid AI only for the chat: the AI chat by subscription (#146) is the one exception to the line above, one call per subscriber's question, paid for by the subscription. Summaries and translations stay on free tiers.

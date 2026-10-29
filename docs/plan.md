@@ -4,7 +4,7 @@ Oct 11, 2026 · @Yurii
 
 ## The idea and MVP scope
 
-A cross-platform app that shows what governments officially publish, summarized and translated by AI, newest first. Sources are only verified official websites of governments and international bodies, never media or trending lists.
+A cross-platform app that shows the news that matters in the reader's country and the world, summarized and translated by AI: what governments decide, from verified official websites, and the events around them, from Wikipedia's current events and open-licensed news; other media only as a headline and a link. Since 29 Oct (#230, Roman) official websites are no longer the only sources; see "Sources and relevance by country".
 
 **In the MVP**
 
@@ -53,7 +53,7 @@ The plan has three levels. Only the first is fixed; everything else is a startin
 
 | Level | What it covers | Can it change? |
 | --- | --- | --- |
-| Fixed | Official sources only, never media or trending lists; GitHub flow with every pull request approved by the other person; the shared definitions (article format, API, database); one AI call per article for its summary, run once on the server and stored (an unusable answer is asked again, at most 3 tries in all); translations add one call per language (#46); the fetcher's small-runs rule | Only if we both agree, in a pull request |
+| Fixed | Reliable sources with their licences respected (official websites, Wikipedia, open-licensed news; other media only as a headline and a link; #230); GitHub flow with every pull request approved by the other person; the shared definitions (article format, API, database); one AI call per article for its summary, run once on the server and stored (an unusable answer is asked again, at most 3 tries in all); translations add one call per language (#46); the fetcher's small-runs rule | Only if we both agree, in a pull request |
 | Must for the MVP | The "Done when" check of each of the 8 items: news comes in, gets summarized, and shows in the feed and the detail screen | The goal stays; how we reach it is up to the owner |
 | Suggestion | Details such as Top today, the 7-day window, the "new updates" pill, dimmed read items, filters, layout and wording, cache times and other numbers | Yes. The owner decides; the app still works without them |
 
@@ -425,7 +425,7 @@ The feed shows official news from the last 7 days as one list, newest first, und
 
 **What is shown**
 
-- Only official decisions, as marked by the AI: laws, amendments, proposals, government and ministry meeting agendas, minutes and outcomes; opinion pieces, interviews, commentary, job adverts, tenders and routine notices are hidden
+- Official decisions, as marked by the AI, and from #230 events (Wikipedia, open-licensed news) and other media's headlines as links: laws, amendments, proposals, government and ministry meeting agendas, minutes and outcomes; opinion pieces, interviews, commentary, job adverts, tenders and routine notices are hidden
 - The 7-day window is a query on publish date, not a stored list: it slides by itself, and nothing is deleted
 - Loaded 20 items at a time as the user scrolls
 
@@ -507,6 +507,39 @@ Estimate, to be measured in discovery: about 200 articles a day at about 3 KB pe
 In Phase 2 the app adds on-device events (opened, read time, saved) and a "Not interested" option on cards.
 
 **Later:** a "For you" feed ranked by tags, similar articles (Cloudflare Vectorize), a weekly digest, labels on favorites, profiles with synced history.
+
+## Sources and relevance by country (#230, Roman, 29 Oct)
+
+Roman, 29 Oct: «only official это устаревшее, его надо везде убрать» and «сделай такой подход для каждой страны… чтобы Юрий если он в Украине то видел то что актуально вокруг него». In English: "official only" is outdated and goes everywhere; every reader sees what matters in their own country, then the world. This replaces "Official sources only" (11 Oct) where they differ.
+
+**Sources** (checked on 29 Oct; he chose all five, «Да, все пять»):
+
+| Source | What we take | Licence |
+| --- | --- | --- |
+| Official websites (`docs/sources.csv`) | Decisions: laws, decrees, government decisions | As before, per source |
+| Wikipedia's current events: English (`Portal:Current events/<date>`, about 130 events a week) and Russian (`Портал:Текущие события/Последние события`, updated daily) | Events, one or two sentences each, with links to their articles and to news sources | CC BY-SA 4.0: the card names Wikipedia and links the page; our summary of it is CC BY-SA too |
+| Global Voices | Stories from around the world | CC BY: the author and a link |
+| Wikipedia page views per language | What a country's readers look up today | Open data |
+| GDELT | How many articles a country's own media publish about an item, with their headlines and links | Free and unrestricted, citing GDELT and linking it; one request every 5 seconds at most |
+| Other media (Novinky, iDNES, BBC, Reuters…) | Only the headline, the outlet and a link | EU law (Directive 2019/790, art. 15): links and very short extracts only, never the text |
+
+The Ukrainian and Czech current-events pages are hardly updated (last edits 23 Oct and February 2026), so they are not sources. Google News is not one either: its terms do not allow it.
+
+**Every item has its countries.** The summarizer's one call also returns the countries whose people the item concerns most (ISO codes, up to 5) and its reach: national, regional or global. A US tariff on Canadian cars: US and CA. The ECB president leaving: the euro area. A strike on Kharkiv: UA. They are stored per item, so the feed asks by the item's countries, not its source's.
+
+**Popularity per country,** hourly, from open data: the page views of an item's Wikipedia articles in the country's language (cs for Czechia, uk for Ukraine), and how many articles the country's own media published about it in 48 hours (GDELT's `sourcecountry`).
+
+**The order for a reader in country C** (For you), highest score first: importance (1 to 5) + relevance to C + popularity in C − 0.5 a day of age, where relevance is +2 when the item concerns C, +1 when it concerns C's neighbours or groups (for Czechia the EU and its neighbours, for Ukraine its neighbours and the EU), and +1 for a global item; popularity is 0 to 2. From other countries at most 2 items a page, and none below importance 3. Each card says what it is ("Decision" or "Event") and where it comes from, with "In the media:" links from GDELT under it.
+
+So Roman in Czechia sees Czech decisions and what Czech media talk about, the EU and the neighbours, then the world's biggest. Yurii in Ukraine sees Ukraine's decisions, the war, what Ukrainian media talk about, the EU, then the world's biggest.
+
+**Steps, each its own pull request:**
+1. The rule change: these docs, and the app's About and Privacy texts.
+2. Countries per item: the summarizer's field, stored per item, and For you by the item's countries.
+3. Wikipedia's current events (English, Russian) as a source of events, with an event variant of the summary prompt, the cards' "Event" label and the attribution.
+4. Popularity: Wikipedia page views and GDELT, hourly.
+5. The order by score per country, and "In the media" links.
+6. Sources per country: the 20 Kickoff placeholders replaced with live sites; Czechia (parliament, ministries, the Czech National Bank) and Ukraine first.
 
 ## Sources: validation and health
 

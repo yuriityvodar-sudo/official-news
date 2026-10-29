@@ -1,6 +1,6 @@
 # Official News
 
-A cross-platform app (iOS and Android) that shows what governments and international bodies officially publish, summarized and translated by AI, newest first. Sources are verified official websites only, never media or trending lists.
+A cross-platform app (iOS and Android) that shows the news that matters in the reader's country and the world: what governments and international bodies decide, and the events around them, summarized and translated by AI. Decisions come from verified official websites, events from Wikipedia's current events and open-licensed news, and other media only as a headline and a link (#230).
 
 Built by Yurii and Roman.
 

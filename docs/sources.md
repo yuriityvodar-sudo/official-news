@@ -9,7 +9,7 @@ The list of official sites the fetcher reads lives in [sources.csv](sources.csv)
 
 3. Removing a row stops the source: loading sets it to `blocked` (the row stays, because its articles point to it). Remove its rows in `docs/source-names.csv` too; the check refuses names of a source that is not in the list. The blocked row keeps its last `config`, names included, so its articles still in the feed keep their translated source name. Ids of the Kickoff seed sources cannot be reused.
 
-Never add media, aggregators or trending lists, and never a site that needs a bot check, CAPTCHA or login to read. Sources are read over `https` only: plain `http` can be altered on the way, and we show the text as official.
+From media and aggregators only a headline and a link, never their text (EU law allows only very short extracts); Wikipedia and open-licensed news with their attribution (#230). Never a site that needs a bot check, CAPTCHA or login to read. Sources are read over `https` only: plain `http` can be altered on the way, and we show the text as the source's.
 
 **Official gazettes are allowed** (that is where decisions take effect), always with a title filter (`exclude`) for routine entries: exchange and interest rates, price indices, court edicts, company notices, tenders, routine appointments, technical standards. They never reach the AI, so they cost nothing.
 
