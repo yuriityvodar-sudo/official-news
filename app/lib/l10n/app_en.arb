@@ -1002,7 +1002,7 @@
   "@paywallTitle": {
     "description": "The paywall's title, under the sample answer that fades out."
   },
-  "paywallPoints": "Only the official text · the source link · conversations not kept",
+  "paywallPoints": "Built on the official text · the source link · conversations not kept",
   "@paywallPoints": {
     "description": "What the AI agent does, on the paywall."
   },
@@ -1067,7 +1067,7 @@
   "@chatSend": {
     "description": "VoiceOver's name for the AI chat's send button."
   },
-  "chatNotAdvice": "Answers come only from the official text and are not legal advice.",
+  "chatNotAdvice": "Answers build on the official text and real facts, and are not legal advice.",
   "@chatNotAdvice": {
     "description": "Once, at the top of the AI chat."
   },
