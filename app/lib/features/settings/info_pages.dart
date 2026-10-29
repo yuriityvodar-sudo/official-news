@@ -118,9 +118,10 @@ String publisherDetails(AppLocalizations l10n) => l10n.publisherDetails(
   publisherFile,
 );
 
-/// Where readers write to us. Empty until Yurii picks the address (#64);
-/// the support page then says to use the App Store page instead.
-const supportEmail = '';
+/// Where readers write to us (#137): Cloudflare Email Routing forwards it to
+/// Yurii (docs/setup.md). Empty, the support page would say to use the App
+/// Store page instead.
+const supportEmail = 'support@outernews.app';
 
 /// When the privacy policy and the terms last changed.
 final policyUpdated = DateTime(2026, 10, 29);
