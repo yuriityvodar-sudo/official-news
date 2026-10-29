@@ -296,8 +296,9 @@ final class PillsModel: ObservableObject {
 struct PillsRow: View {
   @ObservedObject var model: PillsModel
 
-  /// The pills 36 points high in Flutter's 58-point row, centred where
-  /// Flutter's own pills are, with room under them for the glass's shadow.
+  /// The pills in Flutter's row (58 points at the usual text size, taller as
+  /// the text grows), where Flutter's own pills are, with room under them
+  /// for the glass's shadow.
   static let insets = EdgeInsets(top: 8, leading: 16, bottom: 14, trailing: 16)
 
   var body: some View {
@@ -313,7 +314,9 @@ struct PillsRow: View {
   }
 }
 
-/// A pill's icon and name, white on the chosen one's colour.
+/// A pill's icon and name, white on the chosen one's colour. At least 36
+/// points high, and growing with the reader's text size as Flutter's pills
+/// do (Yurii, #210): the subheadline is 15 points at the usual size.
 struct PillLabel: View {
   let pill: PillsModel.Pill
   let chosen: Bool
@@ -324,10 +327,11 @@ struct PillLabel: View {
       Image(systemName: pill.symbol).accessibilityHidden(true)
       Text(pill.title).lineLimit(1)
     }
-    .font(.system(size: 15, weight: .semibold))
+    .font(.subheadline.weight(.semibold))
     .foregroundColor(chosen ? .white : .primary)
     .padding(.horizontal, 14)
-    .frame(height: 36)
+    .padding(.vertical, 8)
+    .frame(minHeight: 36)
     .contentShape(Capsule())
   }
 }

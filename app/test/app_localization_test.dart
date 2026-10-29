@@ -10,7 +10,6 @@ import 'package:official_news/core/api_client.dart';
 import 'package:official_news/core/countries.dart';
 import 'package:official_news/core/decision_types.dart';
 import 'package:official_news/core/feed_language.dart';
-import 'package:official_news/core/filters.dart';
 import 'package:official_news/core/languages.dart';
 import 'package:official_news/core/news_widgets.dart';
 import 'package:official_news/core/topics.dart';
@@ -68,26 +67,13 @@ const _longTopic = {
 };
 
 /// One top story and one more decision in each language: `lang=uk` answers in
-/// Ukrainian, no `lang` in English. The menus for the filters (#67, #68) are
-/// named in the language too.
+/// Ukrainian, no `lang` in English. The topics (#67) are named in the
+/// language too.
 ApiClient _api({List<Uri>? log}) => ApiClient(
   baseUrl: 'https://api.test',
   client: MockClient((request) async {
     log?.add(request.url);
     final query = request.url.queryParameters;
-    final l10n = l10nFor(FeedLanguage.fromCode(query['lang']));
-    if (request.url.path == '/countries') {
-      return _ok({
-        'groups': [
-          for (final id in groupIds)
-            {'id': id, 'name': groupName(id, null, l10n), 'members': []},
-        ],
-        'countries': [
-          for (final code in ['DE', 'GB', 'US', 'ZA'])
-            {'code': code, 'name': countryName(code, l10n)},
-        ],
-      });
-    }
     if (request.url.path == '/topics') {
       return _ok({
         'topics': [
@@ -248,11 +234,6 @@ void main() {
         for (final id in topicIds) {
           expect(topicLabel(id, l10n), isNotNull, reason: id);
         }
-        // The groups of the Where menu (#68), named by the app.
-        expect(groupName('eu', null, l10n), l10n.countryEU);
-        expect(groupName('g7', null, l10n), 'G7');
-        expect(groupName('g20', null, l10n), 'G20');
-        expect(groupName('nato', null, l10n), isNotEmpty);
         expect(countryName('DE', l10n), isNot('DE'));
         expect(languageName('de', l10n), isNot('DE'));
         // Unknown codes are shown as they are.

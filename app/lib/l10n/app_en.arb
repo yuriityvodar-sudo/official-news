@@ -130,36 +130,6 @@
     }
   },
 
-  "filterAllCountries": "All countries",
-  "@filterAllCountries": {
-    "description": "The Where chip under the date while the feed shows every country, and the first item of its menu (#68)."
-  },
-  "filterAllTopics": "All topics",
-  "@filterAllTopics": {
-    "description": "The Topics chip under the date while no topic is chosen, and the first item of its menu."
-  },
-  "filterCountryChip": "Country: {name}",
-  "@filterCountryChip": {
-    "description": "What VoiceOver says for the Where chip while one country is chosen: the chip itself shows only the country's code (GB). {name} is the country's name.",
-    "placeholders": {
-      "name": {
-        "type": "String"
-      }
-    }
-  },
-  "filterGroupChip": "Countries: {name}",
-  "@filterGroupChip": {
-    "description": "What VoiceOver says for the Where chip while a group of countries is chosen: the chip shows its short name in this language (EU, G7, G20, NATO; ЄС, НАТО). {name} is the group's name (European Union, G7, G20, NATO).",
-    "placeholders": {
-      "name": {
-        "type": "String"
-      }
-    }
-  },
-  "filterGroupEUShort": "EU",
-  "@filterGroupEUShort": {
-    "description": "The Where chip while the European Union group is chosen: the EU's usual abbreviation in this language (EU, ЄС, ЕС, UE), as in the chips prototype after review. NATO's chip is groupNato; G7 and G20 stay as they are."
-  },
   "filterTopicChip": "Topic: {name}",
   "@filterTopicChip": {
     "description": "What VoiceOver says for the Topics chip while a topic is chosen: the chip itself shows only the topic's icon. {name} is the topic's name.",
@@ -172,10 +142,6 @@
   "filterEmpty": "No decisions here in the last 7 days.",
   "@filterEmpty": {
     "description": "The feed is empty under the chosen Where or topic (the feed shows the last 7 days)."
-  },
-  "filterShowAllCountries": "Show all countries",
-  "@filterShowAllCountries": {
-    "description": "A button under filterEmpty: shows the feed for every country again."
   },
   "filterShowAllTopics": "Show all topics",
   "@filterShowAllTopics": {
@@ -306,11 +272,7 @@
   },
   "countryEU": "European Union",
   "@countryEU": {
-    "description": "Shown like a country name, for the EU's institutions; also the European Union in the Where menu (#68), its institutions and member states together."
-  },
-  "groupNato": "NATO",
-  "@groupNato": {
-    "description": "A group of countries in the Where menu (#68): the North Atlantic Treaty Organization, as the language writes its short name; also its chip once chosen. The European Union is countryEU (its chip filterGroupEUShort); G7 and G20 are written so in every language."
+    "description": "Shown like a country name, for the EU's institutions; also in For you's Top stories caption (#170), for a member state's reader."
   },
   "countryFR": "France",
   "@countryFR": {
