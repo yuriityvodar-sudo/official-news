@@ -36,7 +36,7 @@ export function parseJsonc(text) {
 const config = (name) => parseJsonc(readFileSync(join(server, name), "utf8"));
 
 /** Everything wrangler.site.jsonc may hold. A binding of any other kind (ai, kv, r2, services, queues, …) or triggers fails. */
-const ALLOWED = new Set(["$schema", "name", "main", "compatibility_date", "account_id", "workers_dev", "preview_urls", "d1_databases", "vars", "cache", "observability"]);
+const ALLOWED = new Set(["$schema", "name", "main", "compatibility_date", "account_id", "workers_dev", "preview_urls", "routes", "d1_databases", "vars", "cache", "observability"]);
 
 describe("wrangler.site.jsonc", () => {
   const site = config("wrangler.site.jsonc");
@@ -49,6 +49,11 @@ describe("wrangler.site.jsonc", () => {
     );
     assert.deepEqual(Object.keys(site.vars), ["SITE_ORIGIN"]);
     assert.match(site.vars.SITE_ORIGIN, /^https:\/\/[^/]+$/);
+  });
+
+  test("serves the domain only, the same as SITE_ORIGIN, with no workers.dev copy", () => {
+    assert.equal(site.workers_dev, false);
+    assert.deepEqual(site.routes, [{ pattern: new URL(site.vars.SITE_ORIGIN).host, custom_domain: true }]);
   });
 
   test("binds the api's own database as DB, without its migrations", () => {
