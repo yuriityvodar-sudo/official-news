@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'article.dart';
 import 'config.dart';
 import 'filters.dart';
+import 'support.dart';
 
 class ApiException implements Exception {
   ApiException(this.statusCode, this.message);
@@ -257,6 +258,80 @@ class ApiClient {
       'transaction': transaction,
     });
     return (json['boughtQuestions'] as num?)?.toInt() ?? 0;
+  }
+
+  /// `GET /v1/support/thread` (#220): this phone's conversation with us, or
+  /// null before its first message. [device] is [supportDevice], sent in the
+  /// `X-Support-Device` header, never in the address.
+  Future<SupportThread?> supportThread(String device) async {
+    final response = await _client
+        .get(
+          Uri.parse('$_baseUrl/v1/support/thread'),
+          headers: {'x-support-device': device},
+        )
+        .timeout(timeout);
+    if (response.statusCode != 200) {
+      throw ApiException(response.statusCode, response.body);
+    }
+    final thread = _decode(response)['thread'];
+    return thread is Map<String, dynamic>
+        ? SupportThread.fromJson(thread)
+        : null;
+  }
+
+  /// `POST /v1/support/messages` (#220): a message to us. [lang] is the
+  /// app's language, [app] the version shown in Settings, [push] the FCM
+  /// token for the reply's notification, when notifications are allowed.
+  /// Returns the conversation with it. Throws [SupportWaiting] (409, the last
+  /// one not answered yet), [SupportLimit] (429) or an [ApiException].
+  Future<SupportThread> sendSupport({
+    required String device,
+    required String text,
+    required String lang,
+    required String app,
+    String? push,
+  }) async {
+    final response = await _client
+        .post(
+          Uri.parse('$_baseUrl/v1/support/messages'),
+          headers: {'content-type': 'application/json'},
+          body: jsonEncode({
+            'device': device,
+            'text': text,
+            'lang': lang,
+            'app': app,
+            'push': ?push,
+          }),
+        )
+        .timeout(timeout);
+    switch (response.statusCode) {
+      case 200:
+        return SupportThread.fromJson(
+          _decode(response)['thread'] as Map<String, dynamic>,
+        );
+      case 409:
+        throw SupportWaiting(
+          DateTime.tryParse('${_tryDecode(response)['writeAfter']}'),
+        );
+      case 429:
+        throw SupportLimit(
+          DateTime.tryParse('${_tryDecode(response)['resetsAt']}'),
+        );
+      default:
+        throw ApiException(response.statusCode, response.body);
+    }
+  }
+
+  static Map<String, dynamic> _decode(http.Response response) =>
+      jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+
+  /// An error's body, or nothing when it is not JSON.
+  static Map<String, dynamic> _tryDecode(http.Response response) {
+    try {
+      return _decode(response);
+    } catch (_) {
+      return const {};
+    }
   }
 
   Future<Map<String, dynamic>> _postJson(

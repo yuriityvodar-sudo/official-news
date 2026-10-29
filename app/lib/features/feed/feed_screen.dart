@@ -476,7 +476,10 @@ class _FeedScreenState extends State<FeedScreen> {
       onNotification: _scrolled,
       child: page,
     );
-    if (backdrop == null) return scrolled;
+    // Always there, with no gradient where the look has no backdrop: the page
+    // keeps its shape from one look to the next, so switching keeps the list
+    // and where it was scrolled (#224). Rebuilt, the new list and the old one
+    // shared [_scroll] for a frame, and the top fade's offset threw there.
     return DecoratedBox(
       decoration: BoxDecoration(gradient: backdrop),
       child: scrolled,

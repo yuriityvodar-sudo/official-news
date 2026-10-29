@@ -17,7 +17,6 @@ Future<ValueNotifier<FeedLanguage>> _pump(
   WidgetTester tester, {
   List<FeedLanguage>? chosen,
   FeedLanguage words = FeedLanguage.en,
-  List<Uri>? opened,
 }) async {
   // The test's screen, 100 pt taller: the prototype's rows (Design, Splash,
   // Play, Read, Topics) take the top of the list, the pages' rows under them.
@@ -34,7 +33,6 @@ Future<ValueNotifier<FeedLanguage>> _pump(
           chosen?.add(lang);
           language.value = lang;
         },
-        openLink: (uri) async => opened?.add(uri),
       ),
     ),
   );
@@ -118,7 +116,6 @@ void main() {
           home: SettingsScreen(
             language: ValueNotifier(FeedLanguage.en),
             onLanguage: (_) {},
-            openLink: (_) async {},
             notifications: push,
             openSettingsApp: () async => settingsAppOpened++,
           ),
@@ -444,15 +441,14 @@ void main() {
     });
   }
 
-  testWidgets('Contact & Support writes to support@outernews.app', (
-    tester,
-  ) async {
-    final opened = <Uri>[];
-    await _pump(tester, opened: opened);
+  // "Write to us" opens the in-app messages since #220 (support_test.dart);
+  // the address stays under it, to copy.
+  testWidgets('Contact & Support shows support@outernews.app', (tester) async {
+    await _pump(tester);
     await tester.tap(find.text('Contact & Support'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Write to us'));
-    expect(opened, [Uri(scheme: 'mailto', path: 'support@outernews.app')]);
+    expect(find.text('Write to us'), findsOneWidget);
+    expect(find.text('Or e-mail us at support@outernews.app'), findsOneWidget);
   });
 
   testWidgets('the terms date and the publisher in Ukrainian', (tester) async {
