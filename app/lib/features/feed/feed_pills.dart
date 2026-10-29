@@ -1,11 +1,17 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 import 'dart:math' as math;
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
+import 'package:flutter/material.dart' show Theme;
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 
 import '../../core/filters.dart';
+import '../../core/glass.dart';
 import '../../core/motion.dart';
 import '../../core/topics.dart';
 import '../../l10n/app_localizations.dart';
@@ -19,8 +25,15 @@ import '../../l10n/app_localizations.dart';
 /// `handoff/glass-row-and-pull.html`): the feed shows through it, blurred,
 /// under a tint of [fill]; the chosen one is glass in the look's colour,
 /// glowing. A chosen pill out of view comes to the middle of the row, as in
-/// iOS's row of #176: at once when the row appears or its topics come in,
-/// gliding when another is chosen. A pill in view stays where it is.
+/// iOS's row: at once when the row appears or its topics come in, gliding
+/// when another is chosen. A pill in view stays where it is.
+///
+/// On iOS the row is iOS's own (Roman, 27 Oct, #166): SwiftUI pills in
+/// Liquid Glass from iOS 26, the chosen one a drop of [tint] that flows to
+/// the pill tapped (`PillsView` in the Runner), the system's translucent
+/// material before iOS 26. Flutter's row stands in until iOS has made its
+/// own, and while anything is over the feed (an article growing out of its
+/// card, a sheet, the splash), swiped as far as iOS's.
 class FeedPills extends StatefulWidget {
   const FeedPills({
     super.key,
@@ -34,6 +47,7 @@ class FeedPills extends StatefulWidget {
     required this.shadow,
     required this.chosen,
     required this.glow,
+    required this.tint,
   });
 
   /// For you or the whole world.
@@ -58,6 +72,16 @@ class FeedPills extends StatefulWidget {
   final Gradient chosen;
   final Color glow;
 
+  /// The colour of the chosen pill's glass in iOS's row.
+  final Color tint;
+
+  /// Where iOS draws the row: the iOS app, not tests (macOS) or Android,
+  /// unless a test sets [debugNative].
+  static bool get native => debugNative ?? (!kIsWeb && Platform.isIOS);
+
+  @visibleForTesting
+  static bool? debugNative;
+
   /// How tall the row is at the reader's text size: pills at least 44
   /// points high, as tall as their words need (Yurii, #210), with room above
   /// them and for the glass's shadow under them.
@@ -72,11 +96,13 @@ class FeedPills extends StatefulWidget {
 }
 
 /// One pill: its key (`pill-for-you`, `pill-world`, `pill-topic-economy`),
-/// name and icon, and what a tap chooses.
+/// which is also its id in iOS's row, its name, its icon and the same glyph
+/// as an SF Symbol, and what a tap chooses.
 typedef _Choice = ({
   String key,
   String name,
   IconData icon,
+  String symbol,
   bool isChosen,
   VoidCallback onTap,
 });
@@ -107,6 +133,7 @@ class _FeedPillsState extends State<FeedPills> {
       key: 'pill-topic-$id',
       name: topicName(id, widget.topics, l10n),
       icon: topicIcon(id),
+      symbol: topicSymbol(id),
       isChosen: id == chosen,
       onTap: () => widget.onChoose(FeedWhere.all, id),
     );
@@ -115,6 +142,7 @@ class _FeedPillsState extends State<FeedPills> {
         key: 'pill-for-you',
         name: l10n.feedForYou,
         icon: CupertinoIcons.sparkles,
+        symbol: 'sparkles',
         isChosen: forYou,
         onTap: () => widget.onChoose(FeedWhere.forYou, null),
       ),
@@ -122,6 +150,7 @@ class _FeedPillsState extends State<FeedPills> {
         key: 'pill-world',
         name: l10n.feedWholeWorld,
         icon: CupertinoIcons.globe,
+        symbol: 'globe',
         isChosen: !forYou && chosen == null,
         onTap: () => widget.onChoose(FeedWhere.all, null),
       ),
@@ -131,7 +160,7 @@ class _FeedPillsState extends State<FeedPills> {
       for (final t in menu) topicPill(t.id),
     ];
     _showChosen(pills);
-    return SingleChildScrollView(
+    final row = SingleChildScrollView(
       controller: _scroll,
       scrollDirection: Axis.horizontal,
       clipBehavior: Clip.none,
@@ -156,6 +185,19 @@ class _FeedPillsState extends State<FeedPills> {
             ),
         ],
       ),
+    );
+    if (!FeedPills.native) return row;
+    return _NativePills(
+      pills: [
+        for (final pill in pills)
+          {'id': pill.key, 'title': pill.name, 'symbol': pill.symbol},
+      ],
+      chosen: pills.where((pill) => pill.isChosen).firstOrNull?.key ?? '',
+      tint: widget.tint,
+      onSelect: (id) =>
+          pills.where((pill) => pill.key == id).firstOrNull?.onTap(),
+      scroll: _scroll,
+      fallback: row,
     );
   }
 
@@ -208,6 +250,124 @@ class _FeedPillsState extends State<FeedPills> {
       pill = row.childAfter(pill);
     }
     return pill;
+  }
+}
+
+/// iOS's row: Flutter sends it the [pills] (id, name and SF Symbol), the
+/// [chosen] one's id, [tint] and light or dark, and hears which pill was
+/// tapped. A swipe sideways and a tap go to iOS; a swipe up or down stays
+/// with the feed, as anywhere on it.
+///
+/// [fallback], Flutter's own row, shows until iOS has made its row, and
+/// while anything is over the feed (a sheet, an article growing out of its
+/// card: [NativeOrPlain]), since the glass's shadow would show through it,
+/// as with the gear's glass (`GlassCircle`). It is swiped as far as iOS's
+/// row ([scroll]).
+class _NativePills extends StatefulWidget {
+  const _NativePills({
+    required this.pills,
+    required this.chosen,
+    required this.tint,
+    required this.onSelect,
+    required this.scroll,
+    required this.fallback,
+  });
+
+  final List<Map<String, String>> pills;
+  final String chosen;
+  final Color tint;
+  final ValueChanged<String> onSelect;
+  final ScrollController scroll;
+  final Widget fallback;
+
+  @override
+  State<_NativePills> createState() => _NativePillsState();
+}
+
+class _NativePillsState extends State<_NativePills> {
+  MethodChannel? _channel;
+
+  /// iOS has made its row.
+  bool _ready = false;
+
+  /// What iOS's row was last told, so it hears only of a change.
+  String? _sent;
+
+  Map<String, Object?> get _params => {
+    'pills': widget.pills,
+    'chosen': widget.chosen,
+    'tint': widget.tint.toARGB32(),
+    'dark': Theme.of(context).brightness == Brightness.dark,
+  };
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _update();
+  }
+
+  @override
+  void didUpdateWidget(_NativePills old) {
+    super.didUpdateWidget(old);
+    _update();
+  }
+
+  @override
+  void dispose() {
+    _channel?.setMethodCallHandler(null);
+    super.dispose();
+  }
+
+  /// The same row takes every change, so the drop flows to a pill chosen
+  /// anywhere, instead of a new row appearing. A row already gone misses it.
+  void _update() {
+    final channel = _channel;
+    if (channel == null) return;
+    final params = _params;
+    final sent = params.toString();
+    if (sent == _sent) return;
+    _sent = sent;
+    channel.invokeMethod<void>('update', params).ignore();
+  }
+
+  void _created(int id) {
+    _channel = MethodChannel('official_news/pills_$id')
+      ..setMethodCallHandler((call) async {
+        final scroll = widget.scroll;
+        switch (call.method) {
+          case 'select':
+            widget.onSelect(call.arguments as String);
+          case 'scrolled' when scroll.hasClients:
+            final position = scroll.position;
+            scroll.jumpTo(
+              clampDouble(
+                (call.arguments as num).toDouble(),
+                position.minScrollExtent,
+                position.maxScrollExtent,
+              ),
+            );
+        }
+      });
+    // Anything that changed while iOS was making the row.
+    _update();
+    if (mounted) setState(() => _ready = true);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final native = UiKitView(
+      viewType: 'official_news/pills',
+      creationParams: _params,
+      creationParamsCodec: const StandardMessageCodec(),
+      onPlatformViewCreated: _created,
+      gestureRecognizers: {
+        Factory<HorizontalDragGestureRecognizer>(
+          HorizontalDragGestureRecognizer.new,
+        ),
+        Factory<TapGestureRecognizer>(TapGestureRecognizer.new),
+      },
+    );
+    return NativeOrPlain(ready: _ready, native: native, plain: widget.fallback);
   }
 }
 
