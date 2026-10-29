@@ -160,7 +160,8 @@
   "version": "Version {version}",
   "languageFooter": "Nachrichten und App werden in dieser Sprache angezeigt.",
 
-  "publisher": "{name}, Slowakei",
+  "publisher": "{name}, Tschechische Republik",
+  "publisherDetails": "{name}, {address}, Tschechische Republik. Identifikationsnummer (IČO): {id}. Eingetragen im Handelsregister des Stadtgerichts Prag, Aktenzeichen {file}",
   "lastUpdated": "Stand: {date}",
   "aboutIntro": "Outer News zeigt, was Regierungen und internationale Organisationen beschlossen haben – in wenigen sachlichen Sätzen und mit einem Link zur offiziellen Seite.",
   "aboutSourcesHeading": "Woher die Nachrichten kommen",

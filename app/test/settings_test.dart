@@ -438,14 +438,19 @@ void main() {
     await tester.tap(find.text('Умови використання'));
     await tester.pumpAndSettle();
     expect(find.text('Оновлено 29 жовтня 2026\u202Fр.'), findsOneWidget);
+    // A Czech company (#204): its seat, ID and register file as Czech law
+    // wants them; the name, the address and the numbers never translated.
     await tester.scrollUntilVisible(
-      find.textContaining('RS Elite Pro s.r.o., Словаччина'),
+      find.textContaining('RS Elite Pro s.r.o., Na Okrouhlíku'),
       200,
     );
     expect(
       find.text(
-        'Видавець: RS Elite Pro s.r.o., Словаччина. Якщо ці умови зміняться, '
-        'нова версія з’явиться в застосунку з новою датою.',
+        'Видавець: RS Elite Pro s.r.o., Na Okrouhlíku 2563/31, 182 00 Praha 8, '
+        'Чеська Республіка. Ідентифікаційний номер (IČO): 29536316. Внесено '
+        'до торговельного реєстру, який веде Міський суд у Празі, номер '
+        'запису C 448095. Якщо ці умови зміняться, нова версія з’явиться в '
+        'застосунку з новою датою.',
       ),
       findsOneWidget,
     );
@@ -459,9 +464,44 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Stand: 29. Oktober 2026'), findsOneWidget);
     await tester.scrollUntilVisible(
-      find.text('Verantwortlicher: RS Elite Pro s.r.o., Slowakei.'),
+      find.text(
+        'Verantwortlicher: RS Elite Pro s.r.o., Na Okrouhlíku 2563/31, '
+        '182 00 Praha 8, Tschechische Republik. Identifikationsnummer (IČO): '
+        '29536316. Eingetragen im Handelsregister des Stadtgerichts Prag, '
+        'Aktenzeichen C 448095.',
+      ),
       200,
     );
     expect(find.textContaining('(siehe „Kontakt & Support“)'), findsOneWidget);
+  });
+
+  testWidgets('the publisher is a Czech company, nowhere Slovak (#204)', (
+    tester,
+  ) async {
+    for (final lang in FeedLanguage.values) {
+      final l10n = l10nFor(lang);
+      expect(publisher(l10n), startsWith('RS Elite Pro s.r.o., '));
+      expect(
+        publisherDetails(l10n),
+        allOf(
+          contains('Na Okrouhlíku 2563/31, 182 00 Praha 8'),
+          contains('29536316'),
+          contains('C 448095'),
+        ),
+        reason: lang.code,
+      );
+      for (final slovakia in ['Slovakia', 'Словаччина', 'Словакия']) {
+        expect(publisher(l10n), isNot(contains(slovakia)), reason: lang.code);
+      }
+    }
+    expect(publisher(l10nFor()), 'RS Elite Pro s.r.o., Czech Republic');
+    await _pump(tester);
+    await tester.tap(find.text('About Outer News'));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.textContaining('RS Elite Pro s.r.o., Czech Republic'),
+      200,
+    );
+    expect(find.textContaining('Slovakia'), findsNothing);
   });
 }
