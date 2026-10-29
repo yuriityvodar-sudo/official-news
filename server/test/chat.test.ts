@@ -205,6 +205,41 @@ describe("POST /v1/chat (#146)", () => {
     expect(await usage()).toEqual({ questions: 0, spent: 0 });
   });
 
+  it("takes a question's share before asking OpenAI: two questions sent at once with one left get one answer and one 429 (#219)", async () => {
+    await spendToday((DAILY_QUESTIONS - 1) * QUESTION_MICROS);
+    const ai = openAi();
+    const results = await Promise.all([ask({}, { ai }), ask({}, { ai })]);
+    const answered = results.filter((result) => "stream" in result);
+    expect(answered).toHaveLength(1);
+    expect(results.filter((result) => !("stream" in result))).toMatchObject([{ status: 429, body: { error: "No questions left today" } }]);
+    await answer(answered[0]);
+    expect(ai.requests).toHaveLength(1);
+    expect(await usage()).toEqual({ questions: DAILY_QUESTIONS + 1, spent: (DAILY_QUESTIONS - 1) * QUESTION_MICROS + COST });
+  });
+
+  it("gives a question's share back when OpenAI does not answer, to the wallet too (#219)", async () => {
+    await buy();
+    await spendToday(DAILY_QUESTIONS * QUESTION_MICROS);
+    expect(await ask({}, { ai: openAi(500) })).toMatchObject({ status: 503 });
+    expect(await wallet()).toBe(50 * QUESTION_MICROS);
+    expect(await usage()).toEqual({ questions: DAILY_QUESTIONS, spent: DAILY_QUESTIONS * QUESTION_MICROS });
+  });
+
+  it("waits while another question of the subscription takes its share, and takes over a lock left behind (#219)", async () => {
+    const lock = (until: string) =>
+      env.DB.prepare("INSERT INTO chat_locks (original_transaction_id, token, until) VALUES ('2000000001', 'another', ?)").bind(until).run();
+    // Left by a Worker that stopped: it ended after 10 seconds.
+    await lock("2026-10-27T11:59:59Z");
+    expect(await answer(await ask())).toBe("Так, з листопада 2027 року.");
+    expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM chat_locks").first<number>("n")).toBe(0);
+    // Still held: given up after 2 seconds, and nothing counted.
+    await lock("2026-10-27T12:00:05Z");
+    const ai = openAi();
+    expect(await ask({}, { ai })).toEqual({ status: 503, body: { error: "The AI agent is not available" } });
+    expect(ai.requests).toHaveLength(0);
+    expect(await usage()).toMatchObject({ questions: 1 });
+  });
+
   it("through the Worker: POST only, JSON errors, Apple's root only", async () => {
     for (const path of ["/v1/chat", "/v1/chat/status", "/v1/chat/credits"]) {
       const get = await exports.default.fetch(`https://api.test${path}`);
@@ -300,6 +335,22 @@ describe("packs of questions (#146)", () => {
     expect(await env.DB.prepare("SELECT COUNT(*) AS wallets FROM chat_wallet").first<number>("wallets")).toBe(0);
     await notify("REFUND_REVERSED", {});
     expect(await buy()).toEqual({ status: 200, body: { credited: true, boughtQuestions: 50 } });
+  });
+
+  it("change the pack's row and the wallet together or not at all (#219)", async () => {
+    const failing = (when: string) =>
+      env.DB.prepare(`CREATE TRIGGER failing BEFORE ${when} ON chat_credits BEGIN SELECT RAISE(ABORT, 'the second write fails'); END`).run();
+    // The pack's row cannot be written: nor is the wallet.
+    await failing("INSERT");
+    await expect(buy()).rejects.toThrow();
+    expect(await wallet()).toBeNull();
+    await env.DB.prepare("DROP TRIGGER failing").run();
+    // The app sends it again: credited once.
+    expect(await buy()).toEqual({ status: 200, body: { credited: true, boughtQuestions: 50 } });
+    // The same for a refund.
+    await failing("UPDATE");
+    await notify("REFUND", { revocationDate: NOW.getTime() }).catch(() => undefined);
+    expect(await wallet()).toBe(50 * QUESTION_MICROS);
   });
 });
 

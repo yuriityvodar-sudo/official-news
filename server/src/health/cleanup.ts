@@ -1,5 +1,6 @@
 import type { Env } from "../env";
 import { toStoredTime } from "../fetcher/text";
+import { cleanupSupport } from "../support/cron";
 
 /**
  * Item 8. Once a day, clears the saved text of articles whose `text_expires_at`
@@ -14,6 +15,8 @@ export async function runCleanup(env: Env, now = new Date()): Promise<number> {
   // The chat's daily counts (#146) are needed for today only; a week is kept to look back.
   const weekAgo = toStoredTime(new Date(now.getTime() - 7 * 86_400_000)).slice(0, 10);
   const chat = await env.DB.prepare("DELETE FROM chat_usage WHERE day < ?").bind(weekAgo).run();
-  console.log(JSON.stringify({ message: "cleanup run", cleared, chatDaysRemoved: chat.meta.changes ?? 0 }));
+  // Readers' messages (#220): conversations closed or quiet for 90 days.
+  const supportThreadsRemoved = await cleanupSupport(env, now);
+  console.log(JSON.stringify({ message: "cleanup run", cleared, chatDaysRemoved: chat.meta.changes ?? 0, supportThreadsRemoved }));
   return cleared;
 }

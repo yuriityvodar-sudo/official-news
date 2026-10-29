@@ -3,7 +3,7 @@ import { creditPack, verifyPack, walletMicros } from "../appstore/packs";
 import type { Env } from "../env";
 import { toStoredTime } from "../fetcher/text";
 import { SHOWN, isLang } from "../translator";
-import { QUESTION_MICROS, charge, costMicros, questionsLeft, readBudget, spend, unitsFor, type Usage } from "./usage";
+import { QUESTION_MICROS, charge, costMicros, questionsLeft, readBudget, reserve, spend, unitsFor, type Usage } from "./usage";
 
 export { DAILY_QUESTIONS, QUESTION_MICROS } from "./usage";
 
@@ -206,9 +206,10 @@ const today = (now: Date) => toStoredTime(now).slice(0, 10);
  * `POST /v1/chat`: the subscription first (402 without an active one, 403 a
  * Sandbox one without a Sandbox key), then the article (404 outside the feed), what
  * is left of the limit (429), the key (503). The question's share of the limit
- * (`units`) is taken as OpenAI starts answering, so an answer the reader
- * leaves still counts, and one OpenAI never gave does not; its real cost
- * replaces it once the answer has ended.
+ * (`units`) is taken before OpenAI is asked, one question of a subscription at
+ * a time (`reserve`, #219), and given back when OpenAI does not answer: an
+ * answer the reader leaves still counts, and one OpenAI never gave does not.
+ * Its real cost replaces it once the answer has ended.
  */
 export async function answerChat(body: unknown, env: Env, options: ChatOptions = {}): Promise<ChatResult> {
   const now = options.now ?? new Date();
@@ -230,10 +231,16 @@ export async function answerChat(body: unknown, env: Env, options: ChatOptions =
   const id = subscription.original_transaction_id;
   const day = today(now);
   const units = unitsFor(Math.min(article.text?.length ?? 0, MAX_TEXT));
-  const left = questionsLeft(await readBudget(env, id, day), units);
-  if (left.today + left.bought < 1) return error(429, "No questions left today", { resetsAt: nextDay(now), units });
+  const reserved = await reserve(env, id, day, units, now);
+  if (reserved === "none") return error(429, "No questions left today", { resetsAt: nextDay(now), units });
+  if (reserved === "busy") return error(503, "The AI agent is not available");
+  const { taken, left } = reserved;
+  const unanswered = async () => {
+    await spend(env, id, day, -taken.today, -taken.wallet, now, -1);
+    return error(503, "The AI agent is not available");
+  };
 
-  if (!env.OPENAI_API_KEY) return error(503, "The AI agent is not available");
+  if (!env.OPENAI_API_KEY) return unanswered();
   let response: Response;
   try {
     response = await (options.fetch ?? fetch)(OPENAI_URL, {
@@ -252,15 +259,14 @@ export async function answerChat(body: unknown, env: Env, options: ChatOptions =
     });
   } catch (e) {
     console.error(JSON.stringify({ message: "chat error", error: e instanceof Error ? e.message : String(e) }));
-    return error(503, "The AI agent is not available");
+    return unanswered();
   }
   if (!response.ok || !response.body) {
     console.error(JSON.stringify({ message: "chat error", status: response.status, body: (await response.text()).slice(0, 300) }));
-    return error(503, "The AI agent is not available");
+    return unanswered();
   }
 
   const estimate = units * QUESTION_MICROS;
-  const taken = await charge(env, id, day, estimate, now, true);
   const remaining = Math.max(left.today + left.bought - 1, 0);
   console.log(JSON.stringify({ message: "chat question", subscription: id, article: request.articleId, lang: request.lang, units, remaining }));
   // The real cost replaces the estimate: more is taken as before, less is given back where it came from.
