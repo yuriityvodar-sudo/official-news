@@ -414,16 +414,24 @@ void main() {
           _article('a1', topics: ['economy', 'trade', 'health'], seq: 2),
           _article('a2', topics: ['trade'], seq: 1),
         ], width: 700);
-        await tester.tap(
-          find.byKey(const ValueKey('filter-topic')).hitTestable(),
-        );
-        await tester.pumpAndSettle();
-        await tester.tap(
-          find.descendant(
-            of: find.byType(CupertinoMenuItem),
-            matching: find.text('Health'),
-          ),
-        );
+        final pill = find.byKey(const ValueKey('pill-topic-health'));
+        if (pill.evaluate().isNotEmpty) {
+          // Garnet and Seal: the topics are pills, along the row.
+          await tester.ensureVisible(pill);
+          await tester.pumpAndSettle();
+          await tester.tap(pill);
+        } else {
+          await tester.tap(
+            find.byKey(const ValueKey('filter-topic')).hitTestable(),
+          );
+          await tester.pumpAndSettle();
+          await tester.tap(
+            find.descendant(
+              of: find.byType(CupertinoMenuItem),
+              matching: find.text('Health'),
+            ),
+          );
+        }
         await tester.pumpAndSettle();
         expect(
           [for (final t in _tags(tester, 'a1')) t.name],
