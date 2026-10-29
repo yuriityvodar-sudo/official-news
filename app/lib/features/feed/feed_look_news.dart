@@ -235,24 +235,28 @@ class NewsLook extends FeedLook {
 /// Apple's; and seal, the green of an official seal.
 enum NewsPalette { garnet, seal }
 
-/// The app's logo, the red N, before its name (Yurii, 29 Oct: our logo in
-/// place of the seal), the same in both palettes. Decorative: the name next
-/// to it is what VoiceOver reads.
+/// The app's logo before its name (Yurii, 29 Oct: our logo in place of the
+/// seal): the black N on the light page, the red N on the black one, where
+/// the black would vanish. Decorative: the name next to it is what VoiceOver
+/// reads.
 class _Logo extends StatelessWidget {
   const _Logo();
 
   @override
-  Widget build(BuildContext context) => const ExcludeSemantics(
+  Widget build(BuildContext context) => ExcludeSemantics(
     child: Image(
-      key: ValueKey('masthead-logo'),
-      image: AssetImage('assets/logo_n.png'),
+      key: const ValueKey('masthead-logo'),
+      image: AssetImage(
+        Theme.of(context).brightness == Brightness.dark
+            ? 'assets/logo_n_dark.png'
+            : 'assets/logo_n.png',
+      ),
       width: 30,
       height: 30,
     ),
   );
 }
 
-/// One decision on a white card: where it comes from with the official
 /// seal, the headline, when and its topics; its picture on the right.
 /// Drawn as its article's top ([ZoomSource.isArticleTop]), it has no shadow:
 /// the card has become the page.

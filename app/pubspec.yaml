@@ -33,8 +33,10 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
-  # The red N, the app's logo, in the Garnet and Seal mastheads (#66).
+  # The app's logo in the Garnet and Seal mastheads (#66): the black N, and
+  # the red one for dark mode.
   assets:
     - assets/logo_n.png
+    - assets/logo_n_dark.png
   # The app's words in each language (#52): l10n.yaml, lib/l10n/*.arb.
   generate: true
