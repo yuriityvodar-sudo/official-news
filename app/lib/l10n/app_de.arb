@@ -29,14 +29,8 @@
   "hoursAgo": "vor {hours} Std.",
   "daysAgo": "{days, plural, one{vor {days} Tag} other{vor {days} Tagen}}",
 
-  "filterAllCountries": "Alle Länder",
-  "filterAllTopics": "Alle Themen",
-  "filterCountryChip": "Land: {name}",
-  "filterGroupChip": "Länder: {name}",
-  "filterGroupEUShort": "EU",
   "filterTopicChip": "Thema: {name}",
   "filterEmpty": "In den letzten 7 Tagen gab es hier keine Entscheidungen.",
-  "filterShowAllCountries": "Alle Länder anzeigen",
   "filterShowAllTopics": "Alle Themen anzeigen",
 
   "decisionTypeLaw": "Gesetz",
@@ -72,7 +66,6 @@
   "countryDE": "Deutschland",
   "countryES": "Spanien",
   "countryEU": "Europäische Union",
-  "groupNato": "NATO",
   "countryFR": "Frankreich",
   "countryGB": "Vereinigtes Königreich",
   "countryID": "Indonesien",
