@@ -95,7 +95,7 @@ void main() {
     expect(splashNamed('wave'), SplashStyle.riseUp);
   });
 
-  test('the three words, in one place, lower case as written', () {
+  test('the two words, in one place, as written', () {
     expect(splashLines, ['Outer', 'News']);
   });
 

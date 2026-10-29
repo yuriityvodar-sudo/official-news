@@ -22,11 +22,11 @@ import 'feed_touches.dart';
 
 /// The two looks after Apple News that Roman picked (26 Oct), in our own
 /// colours ([NewsPalette]): a light grey page whose top takes a tint of the
-/// colour, a large title with the logo and the date in
-/// grey, what the feed shows as pills of Liquid Glass that stay at the top
-/// while the rows pass under them (For you, the whole world, the topics:
-/// [FeedPills]), and every decision on a white card with a soft shadow of
-/// the colour, its picture on the right. Pulled down to refresh, the title
+/// colour, a large title with the logo and the date in grey, what the feed
+/// shows as pills of Liquid Glass that stay at the top while the rows pass
+/// under them (For you, the whole world, the topics: [FeedPills]), and every
+/// decision on a white card with a soft shadow of the colour, its picture on
+/// the right. Pulled down to refresh, the title
 /// and the date grow from the left edge as iOS's large title does, and plain
 /// grey words in the gap say what is happening, then how it went
 /// ([_PullHint], Roman's pick 1 of `handoff/refresh-patterns.html`, 27 Oct).

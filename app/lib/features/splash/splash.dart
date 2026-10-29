@@ -548,8 +548,8 @@ class _Sweep extends StatelessWidget {
 /// the bottom up behind a moving wave, like water rising inside them. Each
 /// line has its own water, "News" first: the next line starts a third of the
 /// way into the one under it, so an edge is always moving through ink (one
-/// water line for all three would cross the empty room between the lines
-/// with nothing to see, and look like it stops).
+/// water line for both would cross the empty room between the lines with
+/// nothing to see, and look like it stops).
 class _Fill extends StatelessWidget {
   const _Fill({
     required this.lines,
