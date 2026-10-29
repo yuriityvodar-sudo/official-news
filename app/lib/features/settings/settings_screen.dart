@@ -15,12 +15,14 @@ import '../detail/detail_screen.dart' show OpenLink, openOfficialPage;
 import '../feed/feed_look.dart';
 import 'info_pages.dart';
 
-/// The version shown at the foot of Settings: "0.1.0 (19)" for TestFlight build
-/// 19 (`--dart-define=BUILD_NUMBER=` from the TestFlight workflow), "0.1.0" in
+/// The version shown at the foot of Settings: "1.0.0 (19)" for TestFlight build
+/// 19 (`--dart-define=BUILD_NUMBER=` from the TestFlight workflow), "1.0.0" in
 /// local runs, so the reader and we know exactly which build is on the phone.
+/// The same as pubspec.yaml's version (settings_test.dart checks it).
+const appVersionName = '1.0.0';
 const appVersion = String.fromEnvironment('BUILD_NUMBER') == ''
-    ? '0.1.0'
-    : '0.1.0 (${String.fromEnvironment('BUILD_NUMBER')})';
+    ? appVersionName
+    : '$appVersionName (${String.fromEnvironment('BUILD_NUMBER')})';
 
 /// Settings (#64): a plain iOS list opened from the button at the top right of
 /// the feed, as in Apple's own apps, with black-and-white symbols (Yurii). No

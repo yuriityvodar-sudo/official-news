@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -16,6 +17,7 @@ Future<ValueNotifier<FeedLanguage>> _pump(
   WidgetTester tester, {
   List<FeedLanguage>? chosen,
   FeedLanguage words = FeedLanguage.en,
+  List<Uri>? opened,
 }) async {
   // The test's screen, 100 pt taller: the prototype's rows (Design, Splash,
   // Play, Read, Topics) take the top of the list, the pages' rows under them.
@@ -32,7 +34,7 @@ Future<ValueNotifier<FeedLanguage>> _pump(
           chosen?.add(lang);
           language.value = lang;
         },
-        openLink: (_) async {},
+        openLink: (uri) async => opened?.add(uri),
       ),
     ),
   );
@@ -40,6 +42,15 @@ Future<ValueNotifier<FeedLanguage>> _pump(
 }
 
 void main() {
+  test('the version in Settings is pubspec.yaml\'s version', () {
+    final pubspec = File('pubspec.yaml').readAsStringSync();
+    final version = RegExp(
+      r'^version: ([0-9.]+)\+',
+      multiLine: true,
+    ).firstMatch(pubspec)!.group(1);
+    expect(appVersionName, version);
+  });
+
   testWidgets('lists the language, notifications and the four pages', (
     tester,
   ) async {
@@ -422,7 +433,7 @@ void main() {
       for (final (row, line) in [
         (l10n.aboutApp, l10n.aboutIntro),
         (l10n.termsOfUse, l10n.termsIntro1),
-        (l10n.contactSupport, l10n.supportAppStore),
+        (l10n.contactSupport, l10n.supportWrite),
       ]) {
         await tester.tap(find.text(row));
         await tester.pumpAndSettle();
@@ -432,6 +443,17 @@ void main() {
       }
     });
   }
+
+  testWidgets('Contact & Support writes to support@outernews.app', (
+    tester,
+  ) async {
+    final opened = <Uri>[];
+    await _pump(tester, opened: opened);
+    await tester.tap(find.text('Contact & Support'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Write to us'));
+    expect(opened, [Uri(scheme: 'mailto', path: 'support@outernews.app')]);
+  });
 
   testWidgets('the terms date and the publisher in Ukrainian', (tester) async {
     await _pump(tester, words: FeedLanguage.uk);
