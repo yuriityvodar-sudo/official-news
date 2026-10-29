@@ -50,7 +50,7 @@ describe("texts", () => {
   it("fill placeholders, escaping the text and each value but keeping Html", () => {
     expect(t("en", "contactSupport").value).toBe("Contact &amp; Support");
     expect(t("en", "publisher", { name: `<O'Brien>` }).value).toBe("&lt;O&#39;Brien&gt;, Czech Republic");
-    expect(t("en", "lastUpdated", { date: raw("<b>today</b>") }).value).toBe("Last updated <b>today</b>");
+    expect(t("en", "prevails", { link: raw('<a href="/en/terms">English</a>') }).value).toContain('<a href="/en/terms">English</a>');
     expect(t("en", "publisher")).toBeInstanceOf(Html);
     expect(text("en", "readOfficialDecisionOn", { site: "gov.pl" })).toBe("Read the official decision on gov.pl");
   });

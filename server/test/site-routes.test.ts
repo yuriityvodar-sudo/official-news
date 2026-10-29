@@ -4,11 +4,17 @@
 import { describe, expect, it } from "vitest";
 import { ROBOTS_TXT } from "../src/site/handler";
 import { CACHE } from "../src/site/respond";
+import { SITE_LANGS } from "../src/site/texts";
+import { INFO_PAGES } from "../src/site/urls";
 import { site } from "./site-helpers";
 
 /** [path, status, cache kind, content-language] for every kind of response. */
 const ROUTES: [string, number, keyof typeof CACHE, string | null][] = [
   ["/robots.txt", 200, "fixed", null],
+  ["/ru/about", 200, "fixed", "ru"],
+  ["/es/privacy", 200, "fixed", "es"],
+  ["/de/terms", 200, "fixed", "de"],
+  ["/en/support", 200, "fixed", "en"],
   ["/nowhere", 404, "missing", "en"],
   ["/uk/nowhere", 404, "missing", "uk"],
   ["/.well-known/apple-app-site-association", 404, "missing", "en"],
@@ -65,7 +71,7 @@ describe("every route", () => {
 
 describe("one request per page view", () => {
   it("no page refers to anything it would have to load: no script, image, stylesheet, font or frame", async () => {
-    for (const path of ["/nowhere", "/uk/nowhere"]) {
+    for (const path of ["/nowhere", "/uk/nowhere", ...SITE_LANGS.flatMap((l) => INFO_PAGES.map((p) => `/${l}/${p}`))]) {
       const { body } = await site(path);
       expect(body, path).not.toMatch(/<script|<iframe|<object|<embed|<video|<audio|<source|rel="stylesheet"|rel="preload"|rel="prefetch"|rel="preconnect"|rel="dns-prefetch"|@import|@font-face/i);
       // CSS url() only for data:, and the tab icon a data: URL (no /favicon.ico request).
@@ -86,12 +92,13 @@ describe("one request per page view", () => {
 });
 
 describe("the request's host", () => {
-  it("never appears in a page (the cache key has no host)", async () => {
-    for (const path of ["/", "/en", "/en/nowhere"]) {
+  it("never appears in a page: every absolute URL is SITE_ORIGIN's (the cache key has no host)", async () => {
+    for (const path of ["/", "/en", "/en/nowhere", "/es/about"]) {
       const { body, headers } = await site(path, {}, "evil.test");
       expect(body).not.toContain("evil.test");
       expect(headers.get("location") ?? "").not.toContain("evil.test");
     }
+    expect((await site("/uk/about", {}, "evil.test")).body).toContain('<link rel="canonical" href="https://site.test/uk/about">');
   });
 });
 
