@@ -63,35 +63,34 @@ export function questionsLeft(budget: Budget, units: number): { today: number; b
   return { today: Math.max(0, Math.floor(budget.today / each)), bought: Math.max(0, Math.floor(budget.wallet / each)) };
 }
 
+/** Where a share of the limit came from, in micro-dollars: today's budget and the wallet. */
+export interface Taken {
+  today: number;
+  wallet: number;
+}
+
 /**
  * Takes `micros` from today's budget first, then from the wallet; what neither
  * has left (an answer longer than its estimate) goes on today's. Returns where
  * it came from, so a later correction can give back to the same place.
  */
-export async function charge(
-  env: Env,
-  subscription: string,
-  day: string,
-  micros: number,
-  now: Date,
-  question = false,
-): Promise<{ today: number; wallet: number }> {
+export async function charge(env: Env, subscription: string, day: string, micros: number, now: Date, questions = 0): Promise<Taken> {
   const budget = await readBudget(env, subscription, day);
   const fromToday = Math.min(micros, Math.max(budget.today, 0));
   const wallet = Math.min(micros - fromToday, Math.max(budget.wallet, 0));
   const today = micros - wallet;
-  await spend(env, subscription, day, today, wallet, now, question);
+  await spend(env, subscription, day, today, wallet, now, questions);
   return { today, wallet };
 }
 
-/** Adds to (or with negative amounts, gives back to) today's spending and the wallet. */
-export async function spend(env: Env, subscription: string, day: string, today: number, wallet: number, now: Date, question = false) {
+/** Adds to (or with negative amounts, gives back to) today's spending, its questions and the wallet. */
+export async function spend(env: Env, subscription: string, day: string, today: number, wallet: number, now: Date, questions = 0) {
   const at = toStoredTime(now);
   const statements = [
     env.DB.prepare(
       `INSERT INTO chat_usage (original_transaction_id, day, questions, spent_micros) VALUES (?1, ?2, ?3, ?4)
        ON CONFLICT (original_transaction_id, day) DO UPDATE SET questions = questions + ?3, spent_micros = spent_micros + ?4`,
-    ).bind(subscription, day, question ? 1 : 0, today),
+    ).bind(subscription, day, questions, today),
   ];
   if (wallet) {
     statements.push(
@@ -102,4 +101,44 @@ export async function spend(env: Env, subscription: string, day: string, today: 
     );
   }
   await env.DB.batch(statements);
+}
+
+/** How long a subscription's limit stays locked at most, should a Worker stop before it unlocks it. */
+const LOCK_MS = 10_000;
+/** How long a question waits while another question of the same subscription takes its share. */
+const WAIT_MS = 2_000;
+
+/**
+ * A question's share of the limit, taken before OpenAI is asked (#219): its
+ * estimate at `units`, if a question at that many is left (`questionsLeft`).
+ * Reading the budget and writing it are two steps, so one question of a
+ * subscription at a time takes its share (`chat_locks`), and questions sent
+ * together never both pass the check. Returns what was taken and what was left
+ * before; "none" with no question left; "busy" when another question held the
+ * lock for over WAIT_MS (a lock left behind ends after LOCK_MS).
+ */
+export async function reserve(
+  env: Env,
+  subscription: string,
+  day: string,
+  units: number,
+  now: Date,
+): Promise<{ taken: Taken; left: { today: number; bought: number } } | "none" | "busy"> {
+  const token = crypto.randomUUID();
+  const lock = env.DB.prepare(
+    `INSERT INTO chat_locks (original_transaction_id, token, until) VALUES (?1, ?2, ?3)
+     ON CONFLICT (original_transaction_id) DO UPDATE SET token = ?2, until = ?3 WHERE until < ?4`,
+  ).bind(subscription, token, toStoredTime(new Date(now.getTime() + LOCK_MS)), toStoredTime(now));
+  const giveUp = Date.now() + WAIT_MS;
+  while (!(await lock.run()).meta.changes) {
+    if (Date.now() > giveUp) return "busy";
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  try {
+    const left = questionsLeft(await readBudget(env, subscription, day), units);
+    if (left.today + left.bought < 1) return "none";
+    return { taken: await charge(env, subscription, day, units * QUESTION_MICROS, now, 1), left };
+  } finally {
+    await env.DB.prepare("DELETE FROM chat_locks WHERE original_transaction_id = ? AND token = ?").bind(subscription, token).run();
+  }
 }
