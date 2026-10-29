@@ -81,18 +81,14 @@ class Analytics {
     await feedLanguage(chosen);
   }
 
-  /// The reader changed a filter (#67, #68) on a chip: the filters as they
-  /// are now. `where` is `forYou` (#170), `all` (the whole world), `group` or
-  /// `country`; `place` the group's id
-  /// (`g7`), the country's code (`GB`), or `all`; `topic` the topic's id, or
-  /// `all`. Not `value`: Google Analytics keeps that name for an event's
-  /// number, and drops a text in it (`firebase_error` 18).
+  /// The reader changed what the feed shows (#170): `where` is `forYou` or
+  /// `all` (the whole world), `topic` the topic's id, or `all`. Builds before
+  /// For you also sent `group` or `country` as `where`, with `place` the
+  /// group's id or the country's code (#68). Not `value`: Google Analytics
+  /// keeps that name for an event's number, and drops a text in it
+  /// (`firebase_error` 18).
   Future<void> filterChanged({required FeedWhere where, String? topic}) =>
-      _event('filter_changed', {
-        'where': where.kind.name,
-        'place': where.id ?? 'all',
-        'topic': topic ?? 'all',
-      });
+      _event('filter_changed', {'where': where.name, 'topic': topic ?? 'all'});
 
   /// An article opened from the feed: [section] is `feed`, the one list
   /// (Yurii, 16 Oct; builds before it sent `top` or `latest`), and
