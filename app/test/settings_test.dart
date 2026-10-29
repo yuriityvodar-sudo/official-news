@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -41,6 +42,15 @@ Future<ValueNotifier<FeedLanguage>> _pump(
 }
 
 void main() {
+  test('the version in Settings is pubspec.yaml\'s version', () {
+    final pubspec = File('pubspec.yaml').readAsStringSync();
+    final version = RegExp(
+      r'^version: ([0-9.]+)\+',
+      multiLine: true,
+    ).firstMatch(pubspec)!.group(1);
+    expect(appVersionName, version);
+  });
+
   testWidgets('lists the language, notifications and the four pages', (
     tester,
   ) async {
