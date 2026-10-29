@@ -62,13 +62,27 @@ class FeedController extends ChangeNotifier {
 
   FeedWhere _where = FeedWhere.forYou;
 
-  /// The reader's own country for For you (#170): the phone's region, else
-  /// the country `GET /locate` last gave (kept on the phone); null while
-  /// neither is known, and For you is then the whole world's feed. Never
-  /// stored on the server, which sees it only as `for=`.
-  String? get homeCountry => _region ?? _located;
+  /// The reader's own country for For you (#170): the one chosen in Settings
+  /// → My country, else the phone's ([phoneCountry]); null while none is
+  /// known, and For you is then the whole world's feed. Never stored on the
+  /// server, which sees it only as `for=`.
+  String? get homeCountry => _chosen.value ?? phoneCountry;
+
+  /// The phone's country: its region, else the country `GET /locate` last
+  /// gave (kept on the phone).
+  String? get phoneCountry => _region ?? _located;
   String? _region;
   String? _located;
+
+  /// The same, to listen to: Settings → My country shows it as `/locate`
+  /// answers (Yurii, #206).
+  ValueListenable<String?> get phoneCountryChanges => _phone;
+  final _phone = ValueNotifier<String?>(null);
+
+  /// The country chosen in Settings → My country, saved on the phone; null
+  /// follows the phone.
+  ValueListenable<String?> get chosenCountry => _chosen;
+  final _chosen = ValueNotifier<String?>(null);
 
   /// What For you sends as `for=`; null for the whole world, or while the
   /// home country is unknown.
@@ -175,6 +189,8 @@ class FeedController extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _language.dispose();
+    _chosen.dispose();
+    _phone.dispose();
     super.dispose();
   }
 
@@ -201,6 +217,8 @@ class FeedController extends ChangeNotifier {
     if (_topic != null) _where = FeedWhere.all;
     _region = await readPhoneRegion();
     _located = store.located();
+    _phone.value = phoneCountry;
+    _chosen.value = store.chosenCountry();
     unawaited(analytics.homeCountry(homeCountry));
     _noCountries = store.noCountries();
     _whereMenu = _noCountries ? null : store.whereMenu(language);
@@ -232,8 +250,8 @@ class FeedController extends ChangeNotifier {
     notifyListeners();
     final fresh = refresh();
     // A phone without a region asks the server where it is (#170), once the
-    // feed is on its way.
-    if (_region == null) unawaited(_locate());
+    // feed is on its way; not when a country is chosen in Settings.
+    if (_region == null && _chosen.value == null) unawaited(_locate());
     await fresh;
   }
 
@@ -284,6 +302,21 @@ class FeedController extends ChangeNotifier {
     await _reload(menus: false);
   }
 
+  /// Settings → My country (#170): a country, or null for the phone's. For
+  /// you shows the new country's feed from the top.
+  Future<void> setChosenCountry(String? code) async {
+    if (code == _chosen.value) return;
+    final before = homeCountry;
+    _chosen.value = code;
+    unawaited(_store?.saveChosenCountry(code));
+    // Back to the phone's: without a region, ask the server again, since
+    // what it gave before the choice may be old (Yurii, #206).
+    if (code == null && _region == null) unawaited(_locate());
+    if (homeCountry == before) return;
+    unawaited(analytics.homeCountry(homeCountry));
+    if (where.isForYou) await _reload(menus: false);
+  }
+
   /// One topic, or null for all topics, from the chip (#67): another feed,
   /// from the top. The Topics menu stays: it follows the language and the
   /// Where choice only.
@@ -307,9 +340,12 @@ class FeedController extends ChangeNotifier {
     try {
       final country = await api.locate();
       if (_disposed || country == null || country == _located) return;
+      final before = homeCountry;
       _located = country;
+      _phone.value = phoneCountry;
       unawaited(_store?.saveLocated(country));
-      unawaited(analytics.homeCountry(country));
+      if (homeCountry == before) return;
+      unawaited(analytics.homeCountry(homeCountry));
       if (where.isForYou) await _reload(menus: false, keepShown: true);
     } catch (_) {
       // Not known this time.

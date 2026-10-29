@@ -32,6 +32,7 @@ class FeedStore {
   static const _designKey = 'feed.design';
   static const _headlineWeightKey = 'feed.headlineWeight';
   static const _locatedKey = 'feed.located';
+  static const _homeKey = 'feed.home';
 
   /// What the first filters build (Global / Local, 16 Oct) kept: its Local
   /// country and its list of countries per language. Local is gone, so the
@@ -102,6 +103,13 @@ class FeedStore {
 
   Future<void> saveLocated(String country) =>
       _prefs.setString(_locatedKey, country);
+
+  /// The country chosen in Settings → My country (#170); null follows the
+  /// phone.
+  String? chosenCountry() => _prefs.getString(_homeKey);
+
+  Future<void> saveChosenCountry(String? code) =>
+      code == null ? _prefs.remove(_homeKey) : _prefs.setString(_homeKey, code);
 
   /// Forgets the Global / Local choice of the first filters build: a saved
   /// Local reads as every country ([where] never reads it).

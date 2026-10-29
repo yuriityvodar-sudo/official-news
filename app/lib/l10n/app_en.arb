@@ -352,6 +352,90 @@
   "@countryZA": {
     "description": "Country name."
   },
+  "countryAT": "Austria",
+  "@countryAT": {
+    "description": "An EU member's name, for Settings → My country (#170)."
+  },
+  "countryBE": "Belgium",
+  "@countryBE": {
+    "description": "An EU member's name, for Settings → My country (#170)."
+  },
+  "countryBG": "Bulgaria",
+  "@countryBG": {
+    "description": "An EU member's name, for Settings → My country (#170)."
+  },
+  "countryCY": "Cyprus",
+  "@countryCY": {
+    "description": "An EU member's name, for Settings → My country (#170)."
+  },
+  "countryDK": "Denmark",
+  "@countryDK": {
+    "description": "An EU member's name, for Settings → My country (#170)."
+  },
+  "countryEE": "Estonia",
+  "@countryEE": {
+    "description": "An EU member's name, for Settings → My country (#170)."
+  },
+  "countryFI": "Finland",
+  "@countryFI": {
+    "description": "An EU member's name, for Settings → My country (#170)."
+  },
+  "countryGR": "Greece",
+  "@countryGR": {
+    "description": "An EU member's name, for Settings → My country (#170)."
+  },
+  "countryHR": "Croatia",
+  "@countryHR": {
+    "description": "An EU member's name, for Settings → My country (#170)."
+  },
+  "countryHU": "Hungary",
+  "@countryHU": {
+    "description": "An EU member's name, for Settings → My country (#170)."
+  },
+  "countryIE": "Ireland",
+  "@countryIE": {
+    "description": "An EU member's name, for Settings → My country (#170)."
+  },
+  "countryLT": "Lithuania",
+  "@countryLT": {
+    "description": "An EU member's name, for Settings → My country (#170)."
+  },
+  "countryLU": "Luxembourg",
+  "@countryLU": {
+    "description": "An EU member's name, for Settings → My country (#170)."
+  },
+  "countryLV": "Latvia",
+  "@countryLV": {
+    "description": "An EU member's name, for Settings → My country (#170)."
+  },
+  "countryMT": "Malta",
+  "@countryMT": {
+    "description": "An EU member's name, for Settings → My country (#170)."
+  },
+  "countryNL": "Netherlands",
+  "@countryNL": {
+    "description": "An EU member's name, for Settings → My country (#170)."
+  },
+  "countryPT": "Portugal",
+  "@countryPT": {
+    "description": "An EU member's name, for Settings → My country (#170)."
+  },
+  "countryRO": "Romania",
+  "@countryRO": {
+    "description": "An EU member's name, for Settings → My country (#170)."
+  },
+  "countrySE": "Sweden",
+  "@countrySE": {
+    "description": "An EU member's name, for Settings → My country (#170)."
+  },
+  "countrySI": "Slovenia",
+  "@countrySI": {
+    "description": "An EU member's name, for Settings → My country (#170)."
+  },
+  "countrySK": "Slovakia",
+  "@countrySK": {
+    "description": "An EU member's name, for Settings → My country (#170)."
+  },
 
   "languageAr": "Arabic",
   "@languageAr": {
@@ -500,6 +584,26 @@
   "language": "Language",
   "@language": {
     "description": "The settings row and page that choose the language of the news and the app."
+  },
+  "myCountry": "My country",
+  "@myCountry": {
+    "description": "Settings → My country (#170): the country For you is for. The row's title and the page's."
+  },
+  "myCountryPhone": "By the phone's region",
+  "@myCountryPhone": {
+    "description": "The first choice on the My country page: no country chosen, the phone's region is used (the country's name shows beside it)."
+  },
+  "myCountryUnknown": "Not known",
+  "@myCountryUnknown": {
+    "description": "Beside My country when neither the phone's region nor the server knows the country."
+  },
+  "myCountryOther": "Another country",
+  "@myCountryOther": {
+    "description": "Beside My country for a country the app has no name for (the phone's region or the server's answer), such as Norway (#206)."
+  },
+  "myCountryFooter": "For you shows this country's decisions, the EU's for its members and the world's that matter. Change it only if you live in another country.",
+  "@myCountryFooter": {
+    "description": "Under the first choice on the My country page."
   },
   "notifications": "Notifications",
   "@notifications": {
@@ -669,6 +773,10 @@
   "@privacyLoadingServer": {
     "description": "Privacy policy, under privacyLoadingHeading. Cloudflare is a company's name: never translated."
   },
+  "privacyLoadingCountry": "For you shows what concerns your country. The app takes the country from your phone's region, or from Settings → My country. If the phone has no region, our server tells the app which country it sees the request come from, and keeps nothing. The country stays on your phone; the server receives it with each request for the feed only to choose the news, and does not save it. Like every request to our server, these can appear in Cloudflare's technical logs, which are deleted automatically within a week.",
+  "@privacyLoadingCountry": {
+    "description": "Privacy policy, When the app loads news (#170): how For you's country is found, kept on the phone and sent; the API saves it nowhere, but Cloudflare's request logs (Workers observability) keep request URLs for a few days (#206)."
+  },
   "privacyLoadingPictures": "Article pictures are loaded directly from the official website that published them, so that website receives your IP address when a picture loads. Pictures are saved on your phone after the first view.",
   "@privacyLoadingPictures": {
     "description": "Privacy policy, under privacyLoadingHeading."
@@ -681,7 +789,7 @@
   "@privacyAnalyticsHeading": {
     "description": "Privacy policy, heading."
   },
-  "privacyAnalytics": "To understand how the app is used, for example how many people read which kind of decision, the app sends usage events to Google Analytics for Firebase: screens opened, articles opened and read, links tapped, the chosen language and feed filters, and technical details such as the app version, device model, country and an app instance ID. It does not use the advertising identifier and does not track you across other apps.",
+  "privacyAnalytics": "To understand how the app is used, for example how many people read which kind of decision, the app sends usage events to Google Analytics for Firebase: screens opened, articles opened and read, links tapped, the chosen language, feed filters and your country for For you, and technical details such as the app version, device model, country and an app instance ID. It does not use the advertising identifier and does not track you across other apps.",
   "@privacyAnalytics": {
     "description": "Privacy policy, under privacyAnalyticsHeading. Google Analytics for Firebase is a product's name: never translated."
   },

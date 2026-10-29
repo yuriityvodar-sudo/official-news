@@ -146,6 +146,7 @@ List<InfoSection> privacySections(AppLocalizations l10n) => [
   InfoSection([l10n.privacyPhone], heading: l10n.privacyPhoneHeading),
   InfoSection([
     l10n.privacyLoadingServer,
+    l10n.privacyLoadingCountry,
     l10n.privacyLoadingPictures,
     l10n.privacyLoadingPages,
   ], heading: l10n.privacyLoadingHeading),

@@ -556,6 +556,7 @@ void main() {
       await tester.pumpAndSettle();
       for (final row in [
         l10n.language,
+        l10n.myCountry,
         l10n.aboutApp,
         l10n.privacyPolicy,
         l10n.termsOfUse,

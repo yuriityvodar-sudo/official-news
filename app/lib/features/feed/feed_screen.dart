@@ -265,6 +265,9 @@ class _FeedScreenState extends State<FeedScreen> {
           onLanguage: _chooseLanguage,
           saveDesign: _feed.saveDesign,
           saveHeadlineWeight: _feed.saveHeadlineWeight,
+          country: _feed.chosenCountry,
+          phoneCountry: _feed.phoneCountryChanges,
+          onCountry: (code) => unawaited(_feed.setChosenCountry(code)),
         ),
       ),
     );
