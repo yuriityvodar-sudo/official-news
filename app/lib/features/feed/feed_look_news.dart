@@ -1,11 +1,15 @@
+import 'dart:math' as math;
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 
 import '../../core/article.dart';
 import '../../core/card_zoom.dart';
 import '../../core/countries.dart';
+import '../../core/motion.dart';
 import '../../core/news_widgets.dart';
 import '../../core/read_mark.dart';
 import '../../core/theme.dart';
@@ -16,10 +20,14 @@ import 'feed_topic_tags.dart';
 import 'feed_touches.dart';
 
 /// The two looks after Apple News that Roman picked (26 Oct), in our own
-/// colours ([NewsPalette]): a light grey page, a large title with a seal in
-/// the colour's gradient and the date in grey, and every decision on a white
-/// card with a soft shadow of the colour, its picture on the right. Liquid
-/// Glass for the "N new" pill. A card grows into its article when opened
+/// colours ([NewsPalette]): a light grey page whose top takes a tint of the
+/// colour, a large title with a seal in the colour's gradient and the date in
+/// grey, and every decision on a white card with a soft shadow of the colour,
+/// its picture on the right. Pulled down to refresh, the title and the date
+/// grow from the left edge as iOS's large title does, and plain grey words in
+/// the gap say what is happening, then how it went ([_PullHint], Roman's
+/// pick 1 of `handoff/refresh-patterns.html`, 27 Oct). Liquid Glass for the
+/// "N new" pill. A card grows into its article when opened
 /// (#141). Every card alike, as in every look (Yurii, 16 Oct): no bigger
 /// first story yet.
 class NewsLook extends FeedLook {
@@ -30,6 +38,31 @@ class NewsLook extends FeedLook {
   @override
   Color background(BuildContext context) =>
       _NewsStyle.of(context, palette).page;
+
+  /// The colour's tint at the top of the screen, under the status bar and
+  /// the masthead as one piece, fading into the page; fixed while the cards
+  /// scroll over it.
+  @override
+  Gradient? backdrop(BuildContext context) {
+    final style = _NewsStyle.of(context, palette);
+    return LinearGradient(
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+      colors: [style.top, style.page],
+      stops: const [0, 0.32],
+    );
+  }
+
+  /// The rows soften into the tint at the top edge, as the backdrop is there.
+  @override
+  Color topEdge(BuildContext context) => _NewsStyle.of(context, palette).top;
+
+  @override
+  Widget refreshIndicator(BuildContext context, FeedPull pull) =>
+      _PullHint(style: _NewsStyle.of(context, palette), pull: pull);
+
+  @override
+  bool get saysHowRefreshWent => true;
 
   @override
   Color cardColor(BuildContext context) => _NewsStyle.of(context, palette).card;
@@ -83,29 +116,35 @@ class NewsLook extends FeedLook {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
-                        children: [
-                          _Seal(style: style),
-                          const SizedBox(width: 8),
-                          Flexible(
-                            child: Text(
-                              masthead.title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: style.title,
+                      _Stretch(
+                        pull: masthead.pull,
+                        child: Row(
+                          children: [
+                            _Seal(style: style),
+                            const SizedBox(width: 8),
+                            Flexible(
+                              child: Text(
+                                masthead.title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: style.title,
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                      FittedBox(
-                        fit: BoxFit.scaleDown,
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          masthead.date,
-                          maxLines: 1,
-                          style: style.title.copyWith(
-                            fontSize: 26,
-                            color: style.muted,
+                      _Stretch(
+                        pull: masthead.pull,
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            masthead.date,
+                            maxLines: 1,
+                            style: style.title.copyWith(
+                              fontSize: 26,
+                              color: style.muted,
+                            ),
                           ),
                         ),
                       ),
@@ -229,6 +268,272 @@ class NewsLook extends FeedLook {
       ),
     );
   }
+}
+
+/// What shows in the gap the pull opens above the masthead: plain grey
+/// words in its middle, no spinner or ring. "Pull to refresh", "Release to
+/// refresh" once the pull has gone far enough, "Refreshing the news…"
+/// pulsing softly while the feed loads (steady with Reduce Motion), then how
+/// it went with a green tick ("3 new decisions", "No new decisions"),
+/// fading as the gap closes.
+class _PullHint extends StatefulWidget {
+  const _PullHint({required this.style, required this.pull});
+
+  final _NewsStyle style;
+  final FeedPull pull;
+
+  @override
+  State<_PullHint> createState() => _PullHintState();
+}
+
+enum _PullStep { pull, release, loading, done }
+
+class _PullHintState extends State<_PullHint>
+    with SingleTickerProviderStateMixin {
+  /// The words' pulse while the feed loads: down to a third and back.
+  late final _pulse = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 700),
+  );
+
+  _PullStep get _step {
+    final pull = widget.pull;
+    return switch (pull.mode) {
+      RefreshIndicatorMode.inactive ||
+      RefreshIndicatorMode.drag => _PullStep.pull,
+      RefreshIndicatorMode.armed when pull.pulled >= pull.trigger =>
+        _PullStep.release,
+      _ when pull.result != null => _PullStep.done,
+      _ => _PullStep.loading,
+    };
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _follow();
+  }
+
+  @override
+  void didUpdateWidget(_PullHint old) {
+    super.didUpdateWidget(old);
+    _follow();
+  }
+
+  /// Pulses while the feed loads; not while the gap closes after a failure.
+  void _follow() {
+    final loading =
+        _step == _PullStep.loading &&
+        widget.pull.mode != RefreshIndicatorMode.done;
+    if (loading && !Motion.reduced(context)) {
+      if (!_pulse.isAnimating) _pulse.repeat(reverse: true);
+    } else if (_pulse.isAnimating || _pulse.value != 0) {
+      _pulse
+        ..stop()
+        ..value = 0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _pulse.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final pull = widget.pull;
+    final result = pull.result;
+    final step = _step;
+    final words = switch (step) {
+      _PullStep.pull => l10n.feedPullToRefresh,
+      _PullStep.release => l10n.feedReleaseToRefresh,
+      _PullStep.loading => l10n.feedRefreshing,
+      _PullStep.done when result!.wasEmpty => l10n.feedUpdated,
+      _PullStep.done when result!.newCount > 0 => l10n.newDecisions(
+        result.newCount,
+      ),
+      _PullStep.done => l10n.feedNoNewDecisions,
+    };
+    // In as the pull opens the gap, out as the gap closes.
+    final shown = switch (pull.mode) {
+      RefreshIndicatorMode.inactive ||
+      RefreshIndicatorMode.drag => clampDouble((pull.pulled - 18) / 40, 0, 1),
+      RefreshIndicatorMode.done => clampDouble(pull.pulled / pull.extent, 0, 1),
+      _ => 1.0,
+    };
+    final hint = Semantics(
+      // VoiceOver says how it went.
+      liveRegion: step == _PullStep.done,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (step == _PullStep.done) ...[
+            Icon(
+              CupertinoIcons.checkmark_circle_fill,
+              size: 17,
+              color: CupertinoDynamicColor.resolve(
+                CupertinoColors.systemGreen,
+                context,
+              ),
+            ),
+            const SizedBox(width: 6),
+          ],
+          Flexible(
+            child: Text(
+              words,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                letterSpacing: -0.1,
+                color: widget.style.muted,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    // In the middle of the gap, as tall as its words even while the gap is
+    // shorter.
+    return OverflowBox(
+      maxHeight: double.infinity,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: AnimatedBuilder(
+          animation: _pulse,
+          child: hint,
+          builder: (context, hint) => Opacity(
+            opacity:
+                shown * (1 - 0.68 * Curves.easeInOut.transform(_pulse.value)),
+            child: hint,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// [child] grows from the middle of its left edge while the feed is pulled
+/// down past its top, as iOS's large title does, and springs back with the
+/// feed (Roman, 27 Oct): 9% bigger where the pull refreshes, at most 1.4
+/// times that. Let go there, it shrinks back as the feed settles into the
+/// gap held open while it refreshes, and stays its own size meanwhile. It
+/// reads how far below its place the masthead is drawn as it paints, after
+/// the frame's layout, so it follows the finger in the same frame with
+/// nothing rebuilt; [pull] tells it which part of the pull that is.
+class _Stretch extends SingleChildRenderObjectWidget {
+  const _Stretch({required this.pull, required super.child});
+
+  final ValueListenable<FeedPull?> pull;
+
+  @override
+  RenderObject createRenderObject(BuildContext context) => _RenderStretch(pull);
+
+  @override
+  void updateRenderObject(BuildContext context, _RenderStretch renderObject) =>
+      renderObject.pull = pull;
+}
+
+class _RenderStretch extends RenderProxyBox {
+  _RenderStretch(this._pull);
+
+  ValueListenable<FeedPull?> _pull;
+  set pull(ValueListenable<FeedPull?> value) {
+    if (identical(value, _pull)) return;
+    if (attached) _pull.removeListener(markNeedsPaint);
+    _pull = value;
+    if (attached) _pull.addListener(markNeedsPaint);
+    markNeedsPaint();
+  }
+
+  @override
+  void attach(PipelineOwner owner) {
+    super.attach(owner);
+    _pull.addListener(markNeedsPaint);
+  }
+
+  @override
+  void detach() {
+    _pull.removeListener(markNeedsPaint);
+    super.detach();
+  }
+
+  /// How much bigger for each point of pull, and at most.
+  static const _perPoint = 0.09 / 100;
+  static const _most = 0.09 * 1.4;
+
+  /// How far below its place the masthead's sliver is drawn: its outermost
+  /// one (the padding around it), whose place at rest is the top of the feed.
+  double get _below {
+    RenderObject? sliver = parent;
+    while (sliver != null && sliver is! RenderSliver) {
+      sliver = sliver.parent;
+    }
+    while (sliver?.parent is RenderSliver) {
+      sliver = sliver!.parent;
+    }
+    if (sliver == null) return 0;
+    final viewport = RenderAbstractViewport.maybeOf(sliver);
+    if (viewport == null) return 0;
+    return MatrixUtils.transformPoint(
+      sliver.getTransformTo(viewport),
+      Offset.zero,
+    ).dy;
+  }
+
+  /// How much of that is the pull that stretches it: all of it until the
+  /// feed refreshes; then none of the gap held open, all of what goes past
+  /// the refresh point, and less and less in between, so it never jumps.
+  double get _stretch {
+    final below = _below;
+    final pull = _pull.value;
+    if (below <= 0 || pull == null) return math.max(below, 0);
+    final gap = pull.extent;
+    final held = switch (pull.mode) {
+      RefreshIndicatorMode.inactive || RefreshIndicatorMode.drag => 0.0,
+      _ => gap * (1 - clampDouble((below - gap) / (pull.trigger - gap), 0, 1)),
+    };
+    return math.max(0, below - held);
+  }
+
+  Matrix4 get _transform {
+    final scale = 1 + clampDouble(_stretch * _perPoint, 0, _most);
+    return Matrix4.diagonal3Values(scale, scale, 1)
+      ..setTranslationRaw(0, size.height / 2 * (1 - scale), 0);
+  }
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    final transform = _transform;
+    if (transform.isIdentity()) {
+      layer = null;
+      super.paint(context, offset);
+      return;
+    }
+    layer = context.pushTransform(
+      needsCompositing,
+      offset,
+      transform,
+      super.paint,
+      oldLayer: layer as TransformLayer?,
+    );
+  }
+
+  @override
+  void applyPaintTransform(RenderBox child, Matrix4 transform) =>
+      transform.multiply(_transform);
+
+  @override
+  bool hitTestChildren(BoxHitTestResult result, {required Offset position}) =>
+      result.addWithPaintTransform(
+        transform: _transform,
+        position: position,
+        hitTest: (result, position) =>
+            super.hitTestChildren(result, position: position),
+      );
 }
 
 /// The two colours of [NewsLook]: garnet, a red of our own, deeper than
@@ -478,6 +783,10 @@ class _NewsStyle {
   final Color card;
   final Color ink;
   final Color muted;
+
+  /// The page's top: a tint of the colour over it.
+  Color get top =>
+      Color.alphaBlend(accent.withValues(alpha: dark ? 0.2 : 0.1), page);
 
   LinearGradient get gradient => LinearGradient(
     begin: Alignment.topLeft,
