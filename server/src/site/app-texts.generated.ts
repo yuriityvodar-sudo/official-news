@@ -127,10 +127,11 @@ export type AppKey =
   | "termsPublisher"
   | "supportMessages"
   | "supportMistakes"
-  | "supportAppStore"
   | "languageCs"
   | "privacyChatHeading"
   | "privacyChat"
+  | "privacySupportHeading"
+  | "privacySupport"
   | "termsSubscriptionHeading"
   | "termsSubscription";
 
@@ -265,10 +266,11 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "termsPublisher": "Published by {publisher}. If these terms change, the new version will be in the app with a new date.",
     "supportMessages": "Found a mistake in a summary, a broken source, or have an idea? We read every message.",
     "supportMistakes": "When you report a mistake, the name of the article and the language you read it in help us find it.",
-    "supportAppStore": "You can reach us through the app's page in the App Store.",
     "languageCs": "Czech",
     "privacyChatHeading": "AI chat",
     "privacyChat": "If you subscribe to the AI agent, your question and the article's text are sent to OpenAI to write the answer. We don't keep your conversations or send them to analytics. Apple handles the subscription: we receive a signed record of it from Apple, with an anonymous ID the app creates, never your name or payment details. We count each subscription's questions per day, for the daily limit.",
+    "privacySupportHeading": "Messages to us",
+    "privacySupport": "Messages you send us in the app are kept with an anonymous ID of your phone (not your name), the app's version and language, and your notification token if you allowed notifications, so we can reply. We delete a conversation 90 days after it is closed or goes quiet. To limit messages to 5 a day, we also keep a one-way code of your network address until the end of that day (UTC).",
     "termsSubscriptionHeading": "AI agent subscription",
     "termsSubscription": "The AI agent is a monthly subscription through the App Store. It renews automatically until you cancel it in your Apple ID settings, at least 24 hours before the end of the period. Apple handles refunds. The agent answers only from the official text, can make mistakes, and its answers are not legal, financial or medical advice. 20 questions a day; a question about a long document counts as 2 or 3; packs of questions add more."
   },
@@ -397,10 +399,11 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "termsPublisher": "Видавець: {publisher}. Якщо ці умови зміняться, нова версія з’явиться в застосунку з новою датою.",
     "supportMessages": "Помітили помилку у викладі, джерело, що не працює, або маєте ідею? Ми читаємо кожне повідомлення.",
     "supportMistakes": "Коли повідомляєте про помилку, назва статті й мова, якою ви її читали, допоможуть нам її знайти.",
-    "supportAppStore": "Зв’язатися з нами можна через сторінку застосунку в App Store.",
     "languageCs": "чеської",
     "privacyChatHeading": "ШІ-чат",
     "privacyChat": "Якщо ви підписалися на ШІ-агента, ваше запитання і текст статті надсилаються в OpenAI, щоб написати відповідь. Ми не зберігаємо ваше листування і не надсилаємо його в аналітику. Підпискою займається Apple: ми отримуємо від Apple підписаний запис про неї з анонімним ідентифікатором, який створює застосунок, але ніколи — ваше ім’я чи платіжні дані. Ми рахуємо запитання кожної підписки за день — для денного ліміту.",
+    "privacySupportHeading": "Повідомлення нам",
+    "privacySupport": "Повідомлення, які ви надсилаєте нам у застосунку, ми зберігаємо разом з анонімним ідентифікатором вашого телефона (не вашим іменем), версією та мовою застосунку, а також токеном сповіщень, якщо ви їх дозволили, щоб ми могли відповісти. Ми видаляємо розмову через 90 днів після того, як її закрито або в ній ніхто не пише. Щоб приймати не більше 5 повідомлень на день, ми також зберігаємо незворотний код вашої мережевої адреси до кінця цього дня (за UTC).",
     "termsSubscriptionHeading": "Підписка на ШІ-агента",
     "termsSubscription": "Підписка на ШІ-агента — щомісячна, через App Store. Вона подовжується автоматично, доки ви не скасуєте її в налаштуваннях Apple ID не пізніше ніж за 24 години до кінця періоду. Поверненнями коштів займається Apple. Агент відповідає лише за офіційним текстом, може помилятися, і його відповіді — не юридична, фінансова чи медична консультація. 20 запитань на день; запитання про довгий документ рахується як 2 або 3; пакети запитань додають більше."
   },
@@ -529,10 +532,11 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "termsPublisher": "Издатель: {publisher}. Если эти условия изменятся, новая версия появится в приложении с новой датой.",
     "supportMessages": "Нашли ошибку в кратком изложении или неработающий источник? Есть идея? Мы читаем каждое сообщение.",
     "supportMistakes": "Сообщая об ошибке, укажите заголовок статьи и язык, на котором вы её читали: так нам будет проще найти ошибку.",
-    "supportAppStore": "Связаться с нами можно через страницу приложения в App Store.",
     "languageCs": "чешского",
     "privacyChatHeading": "ИИ-чат",
     "privacyChat": "Если вы подписались на ИИ-агента, ваш вопрос и текст статьи отправляются в OpenAI, чтобы написать ответ. Мы не храним вашу переписку и не отправляем её в аналитику. Подпиской занимается Apple: мы получаем от Apple подписанную запись о ней с анонимным идентификатором, который создаёт приложение, но никогда — ваше имя или платёжные данные. Мы считаем вопросы каждой подписки за день — для дневного лимита.",
+    "privacySupportHeading": "Сообщения нам",
+    "privacySupport": "Сообщения, которые вы отправляете нам в приложении, мы храним вместе с анонимным идентификатором вашего телефона (не вашим именем), версией и языком приложения, а также токеном уведомлений, если вы их разрешили, чтобы мы могли ответить. Мы удаляем переписку через 90 дней после того, как она закрыта или в ней никто не пишет. Чтобы принимать не больше 5 сообщений в день, мы также храним необратимый код вашего сетевого адреса до конца этого дня (по UTC).",
     "termsSubscriptionHeading": "Подписка на ИИ-агента",
     "termsSubscription": "Подписка на ИИ-агента — ежемесячная, через App Store. Она продлевается автоматически, пока вы не отмените её в настройках Apple ID не позже чем за 24 часа до конца периода. Возвратами занимается Apple. Агент отвечает только по официальному тексту, может ошибаться, и его ответы — не юридическая, финансовая или медицинская консультация. 20 вопросов в день; вопрос о длинном документе считается за 2 или 3; пакеты вопросов добавляют больше."
   },
@@ -661,10 +665,11 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "termsPublisher": "Publicada por {publisher}. Si estos términos cambian, la nueva versión estará en la app con una nueva fecha.",
     "supportMessages": "¿Encontraste un error en un resumen, una fuente que no funciona o tienes una idea? Leemos todos los mensajes.",
     "supportMistakes": "Si nos informas de un error, el título del artículo y el idioma en que lo leíste nos ayudan a encontrarlo.",
-    "supportAppStore": "Puedes contactarnos a través de la página de la app en el App Store.",
     "languageCs": "checo",
     "privacyChatHeading": "Chat con IA",
     "privacyChat": "Si te suscribes al agente de IA, tu pregunta y el texto del artículo se envían a OpenAI para escribir la respuesta. No guardamos tus conversaciones ni las enviamos a la analítica. Apple gestiona la suscripción: recibimos de Apple un registro firmado de ella, con un identificador anónimo que crea la app, nunca tu nombre ni tus datos de pago. Contamos las preguntas de cada suscripción al día, para el límite diario.",
+    "privacySupportHeading": "Mensajes que nos envías",
+    "privacySupport": "Los mensajes que nos envías desde la app se guardan con un identificador anónimo de tu teléfono (no tu nombre), la versión y el idioma de la app y, si permitiste las notificaciones, tu token de notificaciones, para poder responderte. Borramos cada conversación 90 días después de que se cierre o quede sin actividad. Para limitar los mensajes a 5 al día, también guardamos un código irreversible de tu dirección de red hasta el final de ese día (UTC).",
     "termsSubscriptionHeading": "Suscripción al agente de IA",
     "termsSubscription": "La suscripción al agente de IA es mensual, a través de la App Store. Se renueva automáticamente hasta que la canceles en los ajustes de tu Apple ID al menos 24 horas antes del final del periodo. Apple gestiona los reembolsos. El agente responde solo a partir del texto oficial, puede equivocarse y sus respuestas no son asesoramiento legal, financiero ni médico. 20 preguntas al día; una pregunta sobre un documento largo cuenta como 2 o 3; los paquetes de preguntas añaden más."
   },
@@ -793,10 +798,11 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "termsPublisher": "Herausgeber: {publisher}. Wenn sich diese Bedingungen ändern, steht die neue Fassung mit neuem Datum in der App.",
     "supportMessages": "Sie haben einen Fehler in einer Zusammenfassung oder eine Quelle gefunden, die nicht funktioniert, oder Sie haben eine Idee? Wir lesen jede Nachricht.",
     "supportMistakes": "Wenn Sie einen Fehler melden, helfen uns der Titel des Artikels und die Sprache, in der Sie ihn gelesen haben, bei der Suche.",
-    "supportAppStore": "Sie erreichen uns über die Seite der App im App Store.",
     "languageCs": "Tschechischen",
     "privacyChatHeading": "KI-Chat",
     "privacyChat": "Wenn Sie den KI-Agenten abonniert haben, werden Ihre Frage und der Text des Artikels an OpenAI gesendet, um die Antwort zu schreiben. Wir speichern Ihre Gespräche nicht und senden sie nicht an die Analyse. Das Abo wickelt Apple ab: Wir erhalten von Apple einen signierten Nachweis darüber, mit einer anonymen Kennung, die die App erzeugt, nie Ihren Namen oder Ihre Zahlungsdaten. Wir zählen die Fragen jedes Abos pro Tag, für das Tageslimit.",
+    "privacySupportHeading": "Nachrichten an uns",
+    "privacySupport": "Nachrichten, die Sie uns in der App senden, speichern wir mit einer anonymen Kennung Ihres Geräts (nicht Ihrem Namen), der Version und Sprache der App und, wenn Sie Mitteilungen erlaubt haben, Ihrem Mitteilungs-Token, damit wir antworten können. Wir löschen ein Gespräch 90 Tage, nachdem es geschlossen wurde oder niemand mehr geschrieben hat. Um Nachrichten auf 5 pro Tag zu begrenzen, speichern wir außerdem einen nicht umkehrbaren Code Ihrer Netzwerkadresse bis zum Ende dieses Tages (UTC).",
     "termsSubscriptionHeading": "Abo für den KI-Agenten",
     "termsSubscription": "Das Abo für den KI-Agenten läuft monatlich über den App Store. Es verlängert sich automatisch, bis Sie es spätestens 24 Stunden vor Ende des Zeitraums in den Apple-ID-Einstellungen kündigen. Erstattungen wickelt Apple ab. Der Agent antwortet nur aus dem amtlichen Text, kann sich irren, und seine Antworten sind keine Rechts-, Finanz- oder medizinische Beratung. 20 Fragen pro Tag; eine Frage zu einem langen Dokument zählt als 2 oder 3; Fragenpakete bringen mehr."
   }
@@ -811,6 +817,9 @@ export const PUBLISHER_DETAILS = {
   "id": "29536316",
   "file": "C 448095"
 };
+
+/** Where readers write to us (`supportEmail` in info_pages.dart). */
+export const SUPPORT_EMAIL = "support@outernews.app";
 
 /** When the privacy policy and the terms last changed (`policyUpdated` in info_pages.dart). */
 export const POLICY_UPDATED = "2026-10-29";

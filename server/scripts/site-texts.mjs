@@ -58,7 +58,6 @@ export const KEYS = [
   "aboutPublishedBy",
   "supportMessages",
   "supportMistakes",
-  "supportAppStore",
 ];
 
 /** Countries, decision types, source languages, and the privacy policy's and terms' texts. */
@@ -116,7 +115,7 @@ export function siteTexts(arbs) {
 
 /**
  * What the site needs from the app's Dart code: the publisher's name, seat,
- * company ID and register file, and the policies' date (info_pages.dart), and each language's own name and short
+ * company ID and register file, the support e-mail and the policies' date (info_pages.dart), and each language's own name and short
  * label (feed_language.dart). Throws if any of it is not found.
  */
 export function fromDart(infoPages, feedLanguage) {
@@ -130,6 +129,8 @@ export function fromDart(infoPages, feedLanguage) {
       return [part.toLowerCase(), value];
     }),
   );
+  const email = /const supportEmail = '([^']+@[^']+)';/.exec(infoPages)?.[1];
+  if (!email) problems.push("info_pages.dart: no `const supportEmail = '…@…';`");
   const date = /final policyUpdated = DateTime\((\d{4}), (\d{1,2}), (\d{1,2})\);/.exec(infoPages);
   if (!date) problems.push("info_pages.dart: no `final policyUpdated = DateTime(y, m, d);`");
   const languages = [...feedLanguage.matchAll(/^\s+(\w+)\('(\w+)', '([^']+)', '([^']+)'\)[,;]/gm)].map((m) => ({
@@ -144,6 +145,7 @@ export function fromDart(infoPages, feedLanguage) {
   return {
     publisherName: name,
     publisherDetails: details,
+    supportEmail: email,
     policyUpdated: `${date[1]}-${pad(date[2])}-${pad(date[3])}`,
     languages: Object.fromEntries(languages.map((l) => [l.code, { nativeName: l.nativeName, shortLabel: l.shortLabel }])),
   };
@@ -174,6 +176,9 @@ export const PUBLISHER_NAME = ${JSON.stringify(dart.publisherName)};
 
 /** The publisher's seat, company ID and commercial register file (info_pages.dart): never translated. */
 export const PUBLISHER_DETAILS = ${literal(dart.publisherDetails)};
+
+/** Where readers write to us (\`supportEmail\` in info_pages.dart). */
+export const SUPPORT_EMAIL = ${JSON.stringify(dart.supportEmail)};
 
 /** When the privacy policy and the terms last changed (\`policyUpdated\` in info_pages.dart). */
 export const POLICY_UPDATED = ${JSON.stringify(dart.policyUpdated)};

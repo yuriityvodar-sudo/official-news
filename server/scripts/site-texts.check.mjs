@@ -121,16 +121,17 @@ describe("the site's own texts (src/site/texts.ts)", () => {
 });
 
 describe("the app's code", () => {
-  test("gives the publisher, the policies' date and the five languages", () => {
+  test("gives the publisher, the support e-mail, the policies' date and the five languages", () => {
     const dart = fromDart(read(paths.infoPages), read(paths.feedLanguage));
     assert.equal(dart.publisherName, "RS Elite Pro s.r.o.");
+    assert.equal(dart.supportEmail, "support@outernews.app");
     assert.match(dart.policyUpdated, /^\d{4}-\d{2}-\d{2}$/);
     assert.deepEqual(Object.keys(dart.languages), SITE_LANGS);
     assert.equal(dart.languages.uk.nativeName, "Українська");
   });
 
   test("fails loudly when the Dart it reads has changed shape", () => {
-    assert.throws(() => fromDart("const name = 'x';", "enum FeedLanguage {}"), /publisherName[\s\S]*policyUpdated[\s\S]*languages are \[\]/);
+    assert.throws(() => fromDart("const name = 'x';", "enum FeedLanguage {}"), /publisherName[\s\S]*supportEmail[\s\S]*policyUpdated[\s\S]*languages are \[\]/);
   });
 });
 
