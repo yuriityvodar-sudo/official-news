@@ -802,7 +802,11 @@ void main() {
             final r0 = _article('r0', feedSeq: 1);
             return switch (++pages) {
               2 => answer.future,
-              1 => fakeJson({'items': [r0], 'nextCursor': null, 'top': []}),
+              1 => fakeJson({
+                'items': [r0],
+                'nextCursor': null,
+                'top': [],
+              }),
               _ => fakeJson({
                 'items': [_article('w1', feedSeq: 2), r0],
                 'nextCursor': null,
