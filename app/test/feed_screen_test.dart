@@ -659,7 +659,8 @@ void main() {
           ),
         );
         // The language moved to Settings (#64): no globe in the feed. This
-        // server has no menus, so the filter bar shows no chips (#67, #68).
+        // server has no menus: the chip offers For you and the whole world
+        // only, and no country (#170).
         expect(find.byIcon(CupertinoIcons.globe), findsNothing);
         expect(find.text('All countries'), findsNothing);
         final button = find.ancestor(

@@ -99,15 +99,31 @@ class InfoPage extends StatelessWidget {
 /// name is never translated; its country is ([AppLocalizations.publisher]).
 const publisherName = 'RS Elite Pro s.r.o.';
 
-/// "RS Elite Pro s.r.o., Slovakia" in the app's language.
+/// The publisher's seat, company ID and commercial register file (Roman,
+/// 29 Oct, #204; ARES): a Czech company, so Czech law wants them on its
+/// pages (§ 435 of the Civil Code), and GDPR in the privacy policy.
+const publisherAddress = 'Na Okrouhlíku 2563/31, 182 00 Praha 8';
+const publisherId = '29536316';
+const publisherFile = 'C 448095';
+
+/// "RS Elite Pro s.r.o., Czech Republic" in the app's language.
 String publisher(AppLocalizations l10n) => l10n.publisher(publisherName);
+
+/// The publisher with its seat, company ID and register file, in the app's
+/// language: the privacy policy's data controller and the terms' publisher.
+String publisherDetails(AppLocalizations l10n) => l10n.publisherDetails(
+  publisherName,
+  publisherAddress,
+  publisherId,
+  publisherFile,
+);
 
 /// Where readers write to us. Empty until Yurii picks the address (#64);
 /// the support page then says to use the App Store page instead.
 const supportEmail = '';
 
 /// When the privacy policy and the terms last changed.
-final policyUpdated = DateTime(2026, 10, 27);
+final policyUpdated = DateTime(2026, 10, 29);
 
 /// The "Last updated 16 October 2026" line of the policy pages.
 String policyUpdatedLine(AppLocalizations l10n) =>
@@ -130,6 +146,7 @@ List<InfoSection> privacySections(AppLocalizations l10n) => [
   InfoSection([l10n.privacyPhone], heading: l10n.privacyPhoneHeading),
   InfoSection([
     l10n.privacyLoadingServer,
+    l10n.privacyLoadingCountry,
     l10n.privacyLoadingPictures,
     l10n.privacyLoadingPages,
   ], heading: l10n.privacyLoadingHeading),
@@ -141,7 +158,7 @@ List<InfoSection> privacySections(AppLocalizations l10n) => [
   InfoSection([l10n.privacyChat], heading: l10n.privacyChatHeading),
   InfoSection([
     l10n.privacyRights(l10n.contactSupport),
-    l10n.privacyController(publisher(l10n)),
+    l10n.privacyController(publisherDetails(l10n)),
   ], heading: l10n.privacyRightsHeading),
   InfoSection([l10n.privacyChanges], heading: l10n.privacyChangesHeading),
 ];
@@ -152,7 +169,7 @@ List<InfoSection> termsSections(AppLocalizations l10n) => [
   InfoSection([l10n.termsNoGuarantee], heading: l10n.termsNoGuaranteeHeading),
   InfoSection([l10n.termsSubscription], heading: l10n.termsSubscriptionHeading),
   InfoSection([
-    l10n.termsPublisher(publisher(l10n)),
+    l10n.termsPublisher(publisherDetails(l10n)),
   ], heading: l10n.termsPublisherHeading),
 ];
 
