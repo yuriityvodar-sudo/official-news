@@ -1035,6 +1035,19 @@ void main() {
         expect(pill.left - row.left, 16);
         final words = tester.widget<Text>(find.text('For you')).style!;
         expect((words.letterSpacing, words.height), (-0.24, 1.2));
+        // As wide: 14 of room on each side, edge included, the icon's room
+        // (its SF Symbol's width), 6, then the words (Yurii's review of #218).
+        double width(String key) => tester
+            .getSize(
+              find.descendant(
+                of: find.byKey(ValueKey(key)),
+                matching: find.byType(AnimatedContainer),
+              ),
+            )
+            .width;
+        double text(String name) => tester.getSize(find.text(name)).width;
+        expect(width('pill-for-you'), 28 + 17 + 6 + text('For you'));
+        expect(width('pill-world'), 28 + 19 + 6 + text('The whole world'));
       });
 
       testWidgets('the pills stay at the top as glass while the rows pass '

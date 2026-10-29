@@ -137,18 +137,31 @@ void main() {
     expect(find.byType(UiKitView), findsOneWidget);
     final [id] = rows.keys.toList();
     expect(rows[id], {
+      // Each icon's room is its SF Symbol's width (Yurii's review of #218).
       'pills': [
-        {'id': 'pill-for-you', 'title': 'For you', 'symbol': 'sparkles'},
-        {'id': 'pill-world', 'title': 'The whole world', 'symbol': 'globe'},
+        {
+          'id': 'pill-for-you',
+          'title': 'For you',
+          'symbol': 'sparkles',
+          'slot': 17.0,
+        },
+        {
+          'id': 'pill-world',
+          'title': 'The whole world',
+          'symbol': 'globe',
+          'slot': 19.0,
+        },
         {
           'id': 'pill-topic-economy',
           'title': 'Economy',
           'symbol': 'chart.bar.fill',
+          'slot': 24.0,
         },
         {
           'id': 'pill-topic-health',
           'title': 'Health',
           'symbol': 'staroflife.fill',
+          'slot': 18.0,
         },
       ],
       'chosen': 'pill-for-you',

@@ -175,6 +175,7 @@ class _FeedPillsState extends State<FeedPills> {
               key: ValueKey(pill.key),
               name: pill.name,
               icon: pill.icon,
+              slot: _Pill.slotFor(pill.symbol),
               isChosen: pill.isChosen,
               ink: widget.ink,
               fill: widget.fill,
@@ -191,7 +192,12 @@ class _FeedPillsState extends State<FeedPills> {
     return _NativePills(
       pills: [
         for (final pill in pills)
-          {'id': pill.key, 'title': pill.name, 'symbol': pill.symbol},
+          {
+            'id': pill.key,
+            'title': pill.name,
+            'symbol': pill.symbol,
+            'slot': _Pill.slotFor(pill.symbol),
+          },
       ],
       chosen: pills.where((pill) => pill.isChosen).firstOrNull?.key ?? '',
       tint: widget.tint,
@@ -274,7 +280,7 @@ class _NativePills extends StatefulWidget {
     required this.fallback,
   });
 
-  final List<Map<String, String>> pills;
+  final List<Map<String, Object>> pills;
   final String chosen;
   final Color tint;
   final ValueChanged<String> onSelect;
@@ -377,6 +383,7 @@ class _Pill extends StatelessWidget {
     super.key,
     required this.name,
     required this.icon,
+    required this.slot,
     required this.isChosen,
     required this.ink,
     required this.fill,
@@ -389,6 +396,7 @@ class _Pill extends StatelessWidget {
 
   final String name;
   final IconData icon;
+  final double slot;
   final bool isChosen;
   final Color ink;
   final Color fill;
@@ -403,18 +411,44 @@ class _Pill extends StatelessWidget {
   /// Settings comes over the feed (Roman, 29 Oct): the words in the system
   /// font at 15 points with its own tracking and about its own line height
   /// (the theme's body text has +0.25 and 1.43), 8 points of room above and
-  /// under them, edge included, at least 36 high, and the icon in an
-  /// 18-point slot.
+  /// under them, edge included, at least 36 high, and the icon in its own
+  /// room ([slotFor]).
   static const fontSize = 15.0;
   static const lineHeight = 1.2;
   static const letterSpacing = -0.24;
   static const padding = 8.0;
   static const height = 36.0;
-  static const iconSlot = 18.0;
+
+  /// The room an icon gets at the usual text size: as wide as iOS draws its
+  /// SF Symbol at the pills' 15 points semibold (measured with AppKit on
+  /// macOS 26, 29 Oct), 18 for one not here. iOS's row gives the icon the
+  /// same room, both growing with the text size, so no icon runs into the
+  /// words and both rows stay as wide (Yurii's review of #218).
+  static double slotFor(String symbol) => _slots[symbol] ?? 18;
+
+  static const _slots = <String, double>{
+    'sparkles': 17,
+    'globe': 19,
+    'chart.bar.fill': 24,
+    'shield.fill': 17,
+    'staroflife.fill': 18,
+    'leaf.arrow.circlepath': 19,
+    'arrow.right.arrow.left': 19,
+    'desktopcomputer': 23,
+    'bolt.fill': 15,
+    'person.2.fill': 25,
+    'checklist': 22,
+    'hand.raised.fill': 19,
+    'flask.fill': 18,
+    'book.fill': 22,
+    'hammer.fill': 22,
+    'square.grid.2x2': 18,
+  };
 
   @override
   Widget build(BuildContext context) {
     final color = isChosen ? const Color(0xFFFFFFFF) : ink;
+    final scaler = MediaQuery.textScalerOf(context);
     return Semantics(
       button: true,
       selected: isChosen,
@@ -464,8 +498,12 @@ class _Pill extends StatelessWidget {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           SizedBox(
-                            width: iconSlot,
-                            child: Icon(icon, size: 16, color: color),
+                            width: scaler.scale(slot),
+                            child: Icon(
+                              icon,
+                              size: scaler.scale(16),
+                              color: color,
+                            ),
                           ),
                           const SizedBox(width: 6),
                           Text(

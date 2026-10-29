@@ -248,6 +248,9 @@ final class PillsModel: ObservableObject {
     let id: String
     let title: String
     let symbol: String
+    /// The icon's room at the usual text size, from Flutter's row
+    /// (`_Pill.slotFor`): the symbol's own width.
+    let slot: CGFloat
   }
 
   @Published var pills: [Pill] = []
@@ -270,7 +273,8 @@ final class PillsModel: ObservableObject {
       Pill(
         id: $0["id"] as? String ?? "",
         title: $0["title"] as? String ?? "",
-        symbol: $0["symbol"] as? String ?? "")
+        symbol: $0["symbol"] as? String ?? "",
+        slot: CGFloat($0["slot"] as? Double ?? 18))
     }
     if pills != self.pills { self.pills = pills }
     tint = Color(uiColor: UIColor(argb: args["tint"] as? Int ?? 0))
@@ -325,11 +329,14 @@ struct PillsRow: View {
 struct PillLabel: View {
   let pill: PillsModel.Pill
   let chosen: Bool
+  /// How much the reader's text size grows the subheadline, for the icon's room.
+  @ScaledMetric(relativeTo: .subheadline) private var scale: CGFloat = 1
 
   var body: some View {
     HStack(spacing: 6) {
-      // VoiceOver reads the name alone. In an 18-point slot, as Flutter's icon.
-      Image(systemName: pill.symbol).frame(width: 18).accessibilityHidden(true)
+      // VoiceOver reads the name alone. In the room Flutter's row gives the
+      // same icon, as wide as the symbol, so it never runs into the words.
+      Image(systemName: pill.symbol).frame(width: pill.slot * scale).accessibilityHidden(true)
       Text(pill.title).lineLimit(1)
     }
     .font(.subheadline.weight(.semibold))
@@ -348,11 +355,7 @@ struct PillLabel: View {
 struct GlassPills: View {
   @ObservedObject var model: PillsModel
   @Namespace private var glass
-
-  /// Whether the row is still: swiped, it tells Flutter where it rests once
-  /// it stops; moved by itself to the chosen pill (on appearing, with no
-  /// animation), at once, so Flutter's row stands in at the same place.
-  @State private var phase: ScrollPhase = .idle
+  @State private var placed = false
 
   var body: some View {
     ScrollViewReader { proxy in
@@ -381,20 +384,16 @@ struct GlassPills: View {
         }
       }
       .scrollClipDisabled()
-      .onAppear { proxy.scrollTo(model.chosen, anchor: .center) }
+      // Once: the row leaves the window while a page covers the feed, and
+      // comes back where the reader left it, not at the chosen pill again.
+      .onAppear {
+        if !placed { proxy.scrollTo(model.chosen, anchor: .center) }
+        placed = true
+      }
       .onChange(of: model.chosen) { _, id in
         withAnimation(PillsModel.flow) { proxy.scrollTo(id, anchor: .center) }
       }
-      .onScrollGeometryChange(for: CGFloat.self) { geometry in
-        geometry.contentOffset.x + geometry.contentInsets.leading
-      } action: { _, offset in
-        model.offset = offset
-        if phase == .idle { model.onScroll(offset) }
-      }
-      .onScrollPhaseChange { _, new in
-        phase = new
-        if new == .idle { model.onScroll(model.offset) }
-      }
+      .modifier(RestingOffset(model: model))
     }
   }
 }
@@ -404,6 +403,7 @@ struct GlassPills: View {
 struct MaterialPills: View {
   @ObservedObject var model: PillsModel
   @Namespace private var drop
+  @State private var placed = false
 
   var body: some View {
     ScrollViewReader { proxy in
@@ -432,10 +432,44 @@ struct MaterialPills: View {
         }
         .padding(PillsRow.insets)
       }
-      .onAppear { proxy.scrollTo(model.chosen, anchor: .center) }
+      // Once, as GlassPills.
+      .onAppear {
+        if !placed { proxy.scrollTo(model.chosen, anchor: .center) }
+        placed = true
+      }
       .onChange(of: model.chosen) { id in
         withAnimation(PillsModel.flow) { proxy.scrollTo(id, anchor: .center) }
       }
+      .modifier(RestingOffset(model: model))
+    }
+  }
+}
+
+/// Tells Flutter where the row rests, so Flutter's row stands in at the same
+/// place: once a swipe stops, and at once when the row moves by itself to the
+/// chosen pill (on appearing, with no animation). From iOS 18, which says how
+/// far a ScrollView is moved; before, Flutter's row keeps its own place, and
+/// may stand a little to the side (Yurii's review of #218).
+struct RestingOffset: ViewModifier {
+  let model: PillsModel
+  @State private var moving = false
+
+  @ViewBuilder
+  func body(content: Content) -> some View {
+    if #available(iOS 18.0, *) {
+      content
+        .onScrollGeometryChange(for: CGFloat.self) { geometry in
+          geometry.contentOffset.x + geometry.contentInsets.leading
+        } action: { _, offset in
+          model.offset = offset
+          if !moving { model.onScroll(offset) }
+        }
+        .onScrollPhaseChange { _, phase in
+          moving = phase != .idle
+          if !moving { model.onScroll(model.offset) }
+        }
+    } else {
+      content
     }
   }
 }
