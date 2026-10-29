@@ -5,9 +5,11 @@ import 'package:flutter/material.dart';
 import '../../core/article.dart';
 import '../../core/card_zoom.dart';
 import '../../core/feed_design.dart';
+import '../../core/filters.dart';
 import '../../core/motion.dart';
 import '../../core/read_mark.dart';
 import '../../core/theme.dart';
+import 'feed_filters.dart';
 import 'feed_look_a.dart';
 import 'feed_look_b.dart';
 import 'feed_look_c.dart';
@@ -155,10 +157,10 @@ abstract class FeedLook {
   /// default) for [background] alone.
   Gradient? backdrop(BuildContext context) => null;
 
-  /// The colour rows soften into at the top edge once the feed is scrolled
-  /// (#141): the feed's own, or a [backdrop]'s at the top, so no band shows
-  /// there.
-  Color topEdge(BuildContext context) => background(context);
+  /// Whether rows soften at the top edge once the feed is scrolled (#141);
+  /// false for a look that pins something of its own there, such as glass
+  /// the rows pass under.
+  bool get fadesTopEdge => true;
 
   /// What shows above the masthead while the feed is pulled down to refresh
   /// ([CupertinoSliverRefreshControl]'s builder, and how the refresh went
@@ -204,7 +206,10 @@ class FeedMasthead {
     required this.title,
     required this.date,
     required this.openSettings,
-    required this.filterBar,
+    required this.where,
+    required this.topic,
+    required this.topics,
+    required this.onChoose,
     required this.pull,
   });
 
@@ -217,9 +222,27 @@ class FeedMasthead {
   /// Opens Settings. [settingsButton] is today's button for it.
   final VoidCallback openSettings;
 
-  /// The filter bar: the Where and Topics pull-downs (#67, #68), built by
-  /// the screen from the feed's state ([FeedFilterBar]). A look places it.
-  final Widget filterBar;
+  /// What the feed shows (#170): For you or the whole world, and the topic
+  /// chosen across the world, if any.
+  final FeedWhere where;
+  final String? topic;
+
+  /// The topics, busiest first; null while none are known.
+  final List<FeedTopic>? topics;
+
+  /// Shows For you or the whole world with no topic, or the whole world
+  /// with one.
+  final void Function(FeedWhere where, String? topic) onChoose;
+
+  /// The filter bar: the menu of what the feed shows ([FeedFilterBar]). A
+  /// look places it, or offers the same choices its own way, as Garnet and
+  /// Seal's pills do (`FeedPills`).
+  Widget get filterBar => FeedFilterBar(
+    where: where,
+    topic: topic,
+    topics: topics,
+    onChoose: onChoose,
+  );
 
   /// The pull to refresh as the gap above the masthead last showed it (#166),
   /// for a masthead that follows the pull. It changes while the feed is laid
