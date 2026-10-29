@@ -14,12 +14,28 @@ import type { Page } from "./layout";
  * Worker version and starts with an empty cache.
  */
 export const CACHE = {
+  /** An article page: a re-summarized article shows within about 10 minutes (plus the browser's 5). */
+  article: { browser: "public, max-age=300", edge: "max-age=600, stale-while-revalidate=3600, stale-if-error=86400" },
   /** Information pages, robots.txt: change only with a deploy. */
   fixed: { browser: "public, max-age=3600", edge: "max-age=86400" },
   /** An unknown page, or an article not released yet: short, it may appear soon. */
   missing: { browser: "public, max-age=60", edge: "max-age=60" },
+  /** An article not translated into this language (yet). */
+  notInLanguage: { browser: "public, max-age=300", edge: "max-age=300" },
   /** /apple-touch-icon*.png and /icon-512.png (icon.ts), and the 404 for /favicon.ico: kept a day. */
   icon: { browser: "public, max-age=86400", edge: "max-age=86400" },
+  /**
+   * An article URL with a query (`fbclid`, `utm_*`), sent to its clean URL
+   * with no D1 read. The mapping never changes, so it is kept a day.
+   */
+  redirect: { browser: "public, max-age=86400", edge: "max-age=86400" },
+  /**
+   * An article URL whose country or slug is not the article's (a link from
+   * before its headline was summarized again, or a mistyped one), sent to its
+   * one URL (articlePath). The slug follows the headline, which can change, so
+   * as long as an article page: a later change never meets a stale redirect.
+   */
+  moved: { browser: "public, max-age=300", edge: "max-age=600" },
   /** 405 and 500: never stored, so an outage is never cached as a page. */
   none: { browser: "no-store", edge: "no-store" },
 } as const;
@@ -50,6 +66,8 @@ export interface Reply {
   lang?: string;
   /** A page's robotsFor(), the same value as its meta tag; else ROBOTS_DEFAULT. */
   robots?: string;
+  /** For a redirect: an absolute URL made from SITE_ORIGIN. */
+  location?: string;
   allow?: string;
 }
 
@@ -69,6 +87,7 @@ export function respond(reply: Reply, method: string, styleHash: string): Respon
     "content-type": isPng ? "image/png" : isText ? "text/plain; charset=utf-8" : "text/html; charset=utf-8",
   });
   if (reply.lang) headers.set("content-language", reply.lang);
+  if (reply.location) headers.set("location", reply.location);
   if (reply.allow) headers.set("allow", reply.allow);
   const body = method === "HEAD" || reply.body === null ? null : reply.body instanceof Uint8Array ? reply.body : String(reply.body);
   return new Response(body, { status: reply.status, headers });
