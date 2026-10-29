@@ -11,144 +11,92 @@ import '../../core/motion.dart';
 import '../../core/topics.dart';
 import '../../l10n/app_localizations.dart';
 
-/// The two pull-downs under the date (#67, #68), as in the chips prototype
-/// after Yurii's review (prototype/chips 3d88cf3, 16 Oct): Where (all
-/// countries, a group, or one country) and Topics (all, or one). Grey chips
-/// that open an iOS pull-down menu with a checkmark on the current choice; no
-/// counts in the menus. While nothing is chosen they read "All countries" /
-/// "All topics"; a choice keeps the grey chip and shows short, in
-/// [filterRed]: a country's code (GB), a group's short name in the app's
-/// language (G7, ЄС), a topic's icon. The menus, and VoiceOver, keep the full
-/// names; the Topics menu shows each topic's icon before its name.
+/// The pull-down under the date (#67, #170): what the feed shows, as Garnet
+/// and Seal's row of pills will: For you (the default), the whole world, or
+/// one topic across the world, busiest first. A grey chip that opens an iOS
+/// pull-down menu with a checkmark on the current choice, no counts in it
+/// (the chips prototype after Yurii's review, prototype/chips 3d88cf3, 16
+/// Oct). It reads "For you" or "The whole world"; a topic shows short, as
+/// its icon in [filterRed]. The menu, and VoiceOver, keep the full names;
+/// the topics have their icons before their names. The Where pull-down
+/// (#68) is gone: no group or country to choose (Yurii, 27 Oct, #170).
 class FeedFilterBar extends StatelessWidget {
   const FeedFilterBar({
     super.key,
     required this.where,
-    required this.whereMenu,
     required this.topic,
     required this.topics,
-    required this.onWhere,
-    required this.onTopic,
+    required this.onChoose,
   });
 
-  /// What the feed shows now.
+  /// For you or the whole world.
   final FeedWhere where;
 
-  /// The groups and countries to offer; null hides the Where chip (a server
-  /// without them, or none known yet) unless something is chosen, so it can
-  /// always be cleared.
-  final WhereMenu? whereMenu;
-
-  /// The chosen topic's id, or null for all topics.
+  /// The chosen topic's id, or null.
   final String? topic;
 
-  /// The Topics menu, busiest first; null hides the Topics chip (a server
-  /// without topics) unless a topic is chosen, so it can always be cleared.
+  /// The topics, busiest first; null when the server has none, and the menu
+  /// offers For you and the whole world only.
   final List<FeedTopic>? topics;
 
-  final ValueChanged<FeedWhere> onWhere;
-  final ValueChanged<String?> onTopic;
+  /// For you or the whole world with no topic, or the whole world with one.
+  final void Function(FeedWhere where, String? topic) onChoose;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final menu = whereMenu;
-    final showWhere = menu != null || !where.isAll;
     final chosen = topic;
-    final showTopics = topics != null || chosen != null;
-    if (!showWhere && !showTopics) return const SizedBox.shrink();
+    final menu = topics ?? const <FeedTopic>[];
+    String name(String id) => topicName(id, topics, l10n);
+    final forYou = where.isForYou && chosen == null;
+    final shown = forYou ? l10n.feedForYou : l10n.feedWholeWorld;
+    _Item topicItem(String id) => _Item(
+      name(id),
+      id == chosen,
+      () => onChoose(FeedWhere.all, id),
+      icon: topicIcon(id),
+      symbol: topicSymbol(id),
+    );
     return Padding(
       padding: const EdgeInsets.only(top: 10),
       child: Wrap(
-        spacing: 8,
-        runSpacing: 8,
         children: [
-          if (showWhere) _whereChip(l10n, menu),
-          if (showTopics) _topicsChip(l10n, chosen),
+          _Pulldown(
+            key: const ValueKey('filter-topic'),
+            label: shown,
+            icon: chosen == null ? null : topicIcon(chosen),
+            active: chosen != null,
+            semanticLabel: chosen == null
+                ? shown
+                : l10n.filterTopicChip(name(chosen)),
+            sections: [
+              [
+                _Item(
+                  l10n.feedForYou,
+                  forYou,
+                  () => onChoose(FeedWhere.forYou, null),
+                  icon: CupertinoIcons.sparkles,
+                  symbol: 'sparkles',
+                ),
+                _Item(
+                  l10n.feedWholeWorld,
+                  !forYou && chosen == null,
+                  () => onChoose(FeedWhere.all, null),
+                  icon: CupertinoIcons.globe,
+                  symbol: 'globe',
+                ),
+              ],
+              [
+                // The chosen topic stays in the menu, checked, when it has no
+                // articles in the feed's 7 days now.
+                if (chosen != null && !menu.any((t) => t.id == chosen))
+                  topicItem(chosen),
+                for (final t in menu) topicItem(t.id),
+              ],
+            ],
+          ),
         ],
       ),
-    );
-  }
-
-  Widget _whereChip(AppLocalizations l10n, WhereMenu? menu) {
-    final groups = menu?.groups ?? const <FeedGroup>[];
-    final countries = menu?.countries ?? const <FeedCountry>[];
-    final id = where.id;
-    _Item item(FeedWhere choice, String title) =>
-        _Item(title, choice == where, () => onWhere(choice));
-    return _Pulldown(
-      key: const ValueKey('filter-where'),
-      label: switch (where.kind) {
-        WhereKind.all => l10n.filterAllCountries,
-        WhereKind.group => groupShortName(id!, l10n),
-        WhereKind.country => id!,
-      },
-      active: !where.isAll,
-      semanticLabel: switch (where.kind) {
-        WhereKind.all => l10n.filterAllCountries,
-        WhereKind.group => l10n.filterGroupChip(groupName(id!, menu, l10n)),
-        WhereKind.country => l10n.filterCountryChip(
-          whereCountryName(id!, menu, l10n),
-        ),
-      },
-      sections: [
-        [item(FeedWhere.all, l10n.filterAllCountries)],
-        [
-          // A choice the menu does not list stays in it, checked, so the
-          // menu always shows what the feed shows.
-          if (where.kind == WhereKind.group && !groups.any((g) => g.id == id))
-            item(where, groupName(id!, menu, l10n)),
-          for (final g in groups)
-            item(FeedWhere.group(g.id), groupName(g.id, menu, l10n)),
-        ],
-        [
-          if (where.kind == WhereKind.country &&
-              !countries.any((c) => c.code == id))
-            item(where, whereCountryName(id!, menu, l10n)),
-          for (final c in countries)
-            item(
-              FeedWhere.country(c.code),
-              whereCountryName(c.code, menu, l10n),
-            ),
-        ],
-      ],
-    );
-  }
-
-  Widget _topicsChip(AppLocalizations l10n, String? chosen) {
-    final menu = topics ?? const <FeedTopic>[];
-    String name(String id) => topicName(id, topics, l10n);
-    return _Pulldown(
-      key: const ValueKey('filter-topic'),
-      label: l10n.filterAllTopics,
-      icon: chosen == null ? null : topicIcon(chosen),
-      active: chosen != null,
-      semanticLabel: chosen == null
-          ? l10n.filterAllTopics
-          : l10n.filterTopicChip(name(chosen)),
-      sections: [
-        [_Item(l10n.filterAllTopics, chosen == null, () => onTopic(null))],
-        [
-          // The chosen topic stays in the menu, checked, when it has no
-          // articles under the Where choice now.
-          if (chosen != null && !menu.any((t) => t.id == chosen))
-            _Item(
-              name(chosen),
-              true,
-              () => onTopic(chosen),
-              icon: topicIcon(chosen),
-              symbol: topicSymbol(chosen),
-            ),
-          for (final t in menu)
-            _Item(
-              name(t.id),
-              t.id == chosen,
-              () => onTopic(t.id),
-              icon: topicIcon(t.id),
-              symbol: topicSymbol(t.id),
-            ),
-        ],
-      ],
     );
   }
 }
@@ -161,7 +109,8 @@ class _Item {
   final bool selected;
   final VoidCallback onTap;
 
-  /// A topic's icon, before its name: the one its chip shows once chosen.
+  /// The icon before its name: a topic's is the one its chip shows once
+  /// chosen.
   final IconData? icon;
 
   /// The same glyph's SF Symbol, for the native menu on iOS.

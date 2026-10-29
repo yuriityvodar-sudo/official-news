@@ -241,7 +241,7 @@ void main() {
       expect(pill, findsOneWidget);
       final pillBox = tester.getRect(pill);
       // Under the chips, near them (the 44-pt pill's padding and 8 pt).
-      final topics = find.text('All topics').hitTestable();
+      final topics = find.text('For you').hitTestable();
       final chips = tester.getRect(topics);
       expect(pillBox.overlaps(chips), isFalse);
       expect(pillBox.top, greaterThan(chips.bottom));
@@ -261,7 +261,7 @@ void main() {
     final gear = tester.getCenter(
       find.byIcon(CupertinoIcons.gear_alt).hitTestable(),
     );
-    final chip = tester.getCenter(find.text('All countries').hitTestable());
+    final chip = tester.getCenter(find.text('For you').hitTestable());
     expect((gear.dy - chip.dy).abs(), lessThan(1));
   });
 

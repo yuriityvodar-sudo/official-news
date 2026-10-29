@@ -30,3 +30,11 @@ String countryName(String code, AppLocalizations l10n) => switch (code) {
   'ZA' => l10n.countryZA,
   _ => code,
 };
+
+/// The EU's 27 members, as the server's `EU_MEMBERS` (server/src/api/filters.ts):
+/// For you gives them the EU institutions' decisions too (#170).
+final euMembers =
+    ('AT BE BG CY CZ DE DK EE ES FI FR GR HR HU IE IT LT LU LV MT NL PL PT RO '
+            'SE SI SK')
+        .split(' ')
+        .toSet();
