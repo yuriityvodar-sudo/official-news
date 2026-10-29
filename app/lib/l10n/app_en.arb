@@ -37,6 +37,14 @@
   "@feedEmpty": {
     "description": "The English feed is empty."
   },
+  "topStoriesTitle": "Top stories",
+  "@topStoriesTitle": {
+    "description": "The heading of the block of the 3 most important decisions at the top of the feed (#164)."
+  },
+  "topStoriesCaption": "By importance over three days, one per country",
+  "@topStoriesCaption": {
+    "description": "Under the Top stories heading: how they are picked (the AI's importance, less for older ones, from the last 3 days, at most one per country)."
+  },
   "feedNoTranslations": "No translated decisions yet.",
   "@feedNoTranslations": {
     "description": "A translated feed is empty: translations come in over the day."
@@ -817,18 +825,6 @@
   "cancel": "Cancel",
   "@cancel": {
     "description": "The cancel button of an action sheet (Settings, headline weight)."
-  },
-  "splashOnly": "only",
-  "@splashOnly": {
-    "description": "The splash at start (#66): its first line, of three stacked words that read as one phrase, \"only official news\". Lower case as Yurii wrote them; keep each line one word."
-  },
-  "splashOfficial": "official",
-  "@splashOfficial": {
-    "description": "The splash's second line (see splashOnly). In a language that puts the adjective after the noun, the noun goes here (Spanish: \"noticias\")."
-  },
-  "splashNews": "news",
-  "@splashNews": {
-    "description": "The splash's third line (see splashOnly)."
   },
   "discussWithAi": "Discuss with AI",
   "@discussWithAi": {

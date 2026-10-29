@@ -5,7 +5,6 @@ import 'package:flutter/services.dart';
 
 import '../../core/glass.dart';
 import '../../core/theme.dart';
-import '../../l10n/app_localizations.dart';
 
 /// The splash at app start (#66, Yurii, 16 Oct): three words stacked on
 /// a white page (black in dark mode), with a wave that moves from the bottom
@@ -21,19 +20,10 @@ import '../../l10n/app_localizations.dart';
 /// while it plays. With Reduce Motion the words fade in, stand still for a
 /// moment and fade out.
 
-/// The splash's words, one per line, as Yurii wrote them: the English ones.
-/// The splash shows [splashWords], in the app's language.
+/// The splash's words, one per line, as Yurii wrote them: in English in
+/// every language (Yurii, 28 Oct), like the app's name. Was in the app's
+/// language (#124).
 const splashLines = ['only', 'official', 'news'];
-
-/// The splash's three words in the app's language (#52: every word the app
-/// shows is in it), from the ARB files: "тільки / офіційні / новини",
-/// "solo / noticias / oficiales". A long one ("Nachrichten") is drawn a
-/// little smaller, so it never runs past the screen.
-List<String> splashWords(AppLocalizations l10n) => [
-  l10n.splashOnly,
-  l10n.splashOfficial,
-  l10n.splashNews,
-];
 
 enum SplashStyle {
   /// The lines rise into place from below, one after another: "only" first.
@@ -318,8 +308,8 @@ class _SplashState extends State<Splash> with TickerProviderStateMixin {
       color: ink,
       decoration: TextDecoration.none,
     );
-    // The words in the app's language (#52).
-    final lines = splashWords(AppLocalizations.of(context));
+    // The same English words in every language (Yurii, 28 Oct).
+    const lines = splashLines;
     // Where the baseline sits in each line, for the fill's water.
     final baseline = widget.style == SplashStyle.fill
         ? _baseline(type, lines.first)
@@ -383,8 +373,8 @@ class _SplashState extends State<Splash> with TickerProviderStateMixin {
                       alignment: const Alignment(0, -0.1),
                       // Drawn like a logo: the reader's text size does not
                       // grow it past the screen (VoiceOver reads the words).
-                      // A word longer than the screen is wide ("Nachrichten",
-                      // "официальные") draws the words a little smaller.
+                      // On a narrow screen the words are drawn a little
+                      // smaller rather than run past it.
                       child: MediaQuery.withNoTextScaling(
                         child: FittedBox(fit: BoxFit.scaleDown, child: words),
                       ),
