@@ -173,9 +173,12 @@ abstract class FeedLook {
         pull.extent,
       );
 
-  /// Whether [refreshIndicator] says how the refresh went: the screen then
-  /// holds the gap open a moment once the feed has loaded. The platform's
-  /// spinner (the default) says nothing, so its gap closes at once.
+  /// Whether [refreshIndicator] says in words what the pull does and how the
+  /// refresh went. The feed then refreshes once a pull past the refresh point
+  /// is let go, as the words ask ("Release to refresh"), and the screen holds
+  /// the gap open a moment once the feed has loaded. The platform's spinner
+  /// (the default) starts as the pull passes the refresh point and says
+  /// nothing, so its gap closes at once.
   bool get saysHowRefreshWent => false;
 
   /// [title] in the masthead's style, at a bar title's size.

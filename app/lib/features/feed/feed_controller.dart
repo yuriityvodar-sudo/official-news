@@ -171,6 +171,13 @@ class FeedController extends ChangeNotifier {
   /// Bumped whenever the shown feed is replaced (a refresh, another language or
   /// filter), so a page that was still loading for the older feed is dropped.
   int _generation = 0;
+
+  /// Bumped each time another feed replaces the shown one: another language,
+  /// For you or the whole world, a topic, the home country. Refreshing the
+  /// same feed leaves it, so a pull to refresh can tell that the feed it
+  /// pulled is still the one shown (#166).
+  int get switches => _switches;
+  int _switches = 0;
   bool _disposed = false;
 
   /// The Where the first page was last asked with: when the Where menu
@@ -359,6 +366,7 @@ class FeedController extends ChangeNotifier {
   /// new one arrives (For you for a country just learned, #170: no spinner
   /// over a feed the reader can read; Yurii, #201).
   Future<void> _reload({bool menus = true, bool keepShown = false}) async {
+    _switches++;
     final saved = filtered ? null : _store?.lastPage(language, _forCountry);
     final quiet = keepShown && saved == null;
     if (quiet) {

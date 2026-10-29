@@ -204,24 +204,49 @@ class _FeedScreenState extends State<FeedScreen> {
 
   /// The pull to refresh: the feed again, then, held a moment before the gap
   /// closes in a look that says it, how that went ("3 new decisions", "No
-  /// new decisions"). A failure is not held: the feed says it itself.
+  /// new decisions"). Such a look asks the reader to let go past the refresh
+  /// point, so the feed refreshes once the pull is let go. A failure is not
+  /// held: the feed says it itself. Nor is a feed that another replaced
+  /// meanwhile (a filter chosen while the gap is open, For you's country
+  /// found): what is new in it is not the pull's to say (Yurii, #208).
   Future<void> _pullToRefresh() async {
+    final says = lookFor(feedDesign.value).saysHowRefreshWent;
+    setState(() => _refreshed = null);
+    if (says) await (_letGo = Completer<void>()).future;
+    if (!mounted) return;
     // The Top stories block's decisions too: one that moves between the
     // block and the list is not new.
     Iterable<Article> shown() => [..._feed.topStories, ..._feed.feed];
     final before = {for (final article in shown()) article.id};
-    setState(() => _refreshed = null);
+    final switches = _feed.switches;
     await _feed.refresh();
-    if (!mounted || _feed.error != null) return;
+    if (!mounted || _feed.error != null || _feed.switches != switches) return;
     setState(
       () => _refreshed = FeedRefreshed(
         shown().where((a) => !before.contains(a.id)).length,
         wasEmpty: before.isEmpty,
       ),
     );
-    if (lookFor(feedDesign.value).saysHowRefreshWent) {
-      await Future<void>.delayed(_refreshedFor);
+    if (says) await Future<void>.delayed(_refreshedFor);
+  }
+
+  /// A pull past the refresh point, waiting to be let go ([_scrolled]).
+  Completer<void>? _letGo;
+
+  /// The feed moves, or stops, without a finger on it: a pull held past the
+  /// refresh point has been let go.
+  bool _scrolled(ScrollNotification scroll) {
+    final letGo = switch (scroll) {
+      ScrollUpdateNotification(:final dragDetails) => dragDetails == null,
+      ScrollEndNotification() => true,
+      _ => false,
+    };
+    // The feed's own scrolling, not a row inside it.
+    if (letGo && scroll.depth == 0) {
+      _letGo?.complete();
+      _letGo = null;
     }
+    return false;
   }
 
   /// The "N new" pill: to the top first, then the new decisions spring in
@@ -448,10 +473,14 @@ class _FeedScreenState extends State<FeedScreen> {
         ),
       ),
     );
-    if (backdrop == null) return page;
+    final scrolled = NotificationListener<ScrollNotification>(
+      onNotification: _scrolled,
+      child: page,
+    );
+    if (backdrop == null) return scrolled;
     return DecoratedBox(
       decoration: BoxDecoration(gradient: backdrop),
-      child: page,
+      child: scrolled,
     );
   }
 

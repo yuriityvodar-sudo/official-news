@@ -49,13 +49,27 @@ class NewsLook extends FeedLook {
       begin: Alignment.topCenter,
       end: Alignment.bottomCenter,
       colors: [style.top, style.page],
-      stops: const [0, 0.32],
+      stops: const [0, _tinted],
     );
   }
 
-  /// The rows soften into the tint at the top edge, as the backdrop is there.
+  /// How far down the screen the tint fades into the page.
+  static const _tinted = 0.32;
+
+  /// The rows soften into the tint at the top edge: the backdrop's colour
+  /// where the feed starts, under the status bar, so no band shows there
+  /// (dark mode's tint showed one; Yurii, #208).
   @override
-  Color topEdge(BuildContext context) => _NewsStyle.of(context, palette).top;
+  Color topEdge(BuildContext context) {
+    final style = _NewsStyle.of(context, palette);
+    final height = MediaQuery.sizeOf(context).height;
+    final starts = height > 0 ? MediaQuery.paddingOf(context).top / height : 0;
+    return Color.lerp(
+      style.top,
+      style.page,
+      clampDouble(starts / _tinted, 0, 1),
+    )!;
+  }
 
   @override
   Widget refreshIndicator(BuildContext context, FeedPull pull) =>

@@ -10,6 +10,7 @@ import 'package:official_news/core/analytics.dart';
 import 'package:official_news/core/api_client.dart';
 import 'package:official_news/core/feed_language.dart';
 import 'package:official_news/core/feed_store.dart';
+import 'package:official_news/core/filters.dart';
 import 'package:official_news/core/router.dart';
 import 'package:official_news/core/theme.dart';
 import 'package:official_news/features/chat/chat_style.dart';
@@ -609,9 +610,17 @@ void main() {
             .firstWhere((gradient) => gradient.colors.length == 2);
         expect(backdrop.colors, [tint, const Color(0xFFF2F2F7)]);
         expect(backdrop.stops, [0, 0.32]);
+        Color topEdge() =>
+            lookFor(design).topEdge(tester.element(find.byType(FeedScreen)));
+        expect(topEdge(), tint);
+        // Under a status bar the feed starts lower, where the backdrop has
+        // already faded a little: the rows soften into that colour (Yurii,
+        // #208: dark mode showed a band).
+        tester.view.padding = const FakeViewPadding(top: 59 * 3);
+        await tester.pump();
         expect(
-          lookFor(design).topEdge(tester.element(find.byType(FeedScreen))),
-          tint,
+          topEdge(),
+          Color.lerp(tint, const Color(0xFFF2F2F7), 59 / 852 / 0.32),
         );
       });
 
@@ -683,6 +692,20 @@ void main() {
         return pull;
       }
 
+      /// Lets the pull go and draws the next [time] frame by frame, as the
+      /// gap springs back to where it rests and the feed is asked again.
+      Future<void> letGo(
+        WidgetTester tester,
+        TestGesture pull, [
+        Duration time = const Duration(milliseconds: 300),
+      ]) async {
+        const frame = Duration(milliseconds: 50);
+        await pull.up();
+        for (var t = Duration.zero; t < time; t += frame) {
+          await tester.pump(frame);
+        }
+      }
+
       testWidgets('pulled far enough it says to let go; once refreshed it '
           'says how many decisions are new, then the gap closes', (
         tester,
@@ -701,9 +724,12 @@ void main() {
         final pull = await pullFar(tester);
         expect(find.text('Release to refresh'), findsOneWidget);
         expect(tester.getRect(title).width, greaterThan(rest.width * 1.05));
-        await pull.up();
-        await tester.pump();
-        await tester.pump(const Duration(milliseconds: 300));
+        // Held there, it waits to be let go, as it says (Yurii, #208): the
+        // feed is not asked again yet.
+        await tester.pump(const Duration(seconds: 2));
+        expect(find.text('Release to refresh'), findsOneWidget);
+        expect(find.text('Decision n1'), findsNothing);
+        await letGo(tester, pull);
         expect(find.text('2 new decisions'), findsOneWidget);
         expect(find.byIcon(CupertinoIcons.checkmark_circle_fill), findsOne);
         expect(find.text('Decision n1'), findsOneWidget);
@@ -751,20 +777,66 @@ void main() {
         );
         await pumpFeed(tester, const [], const [], api: api);
         final pull = await pullFar(tester);
-        await pull.up();
-        await tester.pump();
-        await tester.pump(const Duration(milliseconds: 300));
+        await letGo(tester, pull);
         expect(find.text('1 new decision'), findsOneWidget);
         await tester.pump(const Duration(seconds: 2));
+        await tester.pumpAndSettle();
+      });
+
+      testWidgets('a feed that another replaces while the gap is open says '
+          'nothing about new decisions', (tester) async {
+        final answer = Completer<http.Response>();
+        var pages = 0;
+        final api = ApiClient(
+          baseUrl: 'https://api.test',
+          client: MockClient((request) async {
+            final menu = fakeMenus(request);
+            if (menu != null) return menu;
+            final query = request.url.queryParameters;
+            if (query.containsKey('after') || query.containsKey('since')) {
+              return fakeJson({'items': [], 'nextCursor': null, 'top': []});
+            }
+            // The pull's own answer waits; the whole world's comes at once,
+            // with w1 in it.
+            final r0 = _article('r0', feedSeq: 1);
+            return switch (++pages) {
+              2 => answer.future,
+              1 => fakeJson({'items': [r0], 'nextCursor': null, 'top': []}),
+              _ => fakeJson({
+                'items': [_article('w1', feedSeq: 2), r0],
+                'nextCursor': null,
+                'top': [],
+              }),
+            };
+          }),
+        );
+        final feed = await pumpFeed(tester, const [], const [], api: api);
+        final pull = await pullFar(tester);
+        await letGo(tester, pull);
+        expect(pages, 2);
+        // Yurii's case: For you's feed replaced by the whole world's.
+        unawaited(feed.setFeed(FeedWhere.all));
+        await tester.pump();
+        expect(find.text('Decision w1'), findsOneWidget);
+        answer.complete(
+          fakeJson({
+            'items': [_article('r0', feedSeq: 1)],
+            'nextCursor': null,
+            'top': [],
+          }),
+        );
+        for (var i = 0; i < 20; i++) {
+          await tester.pump(const Duration(milliseconds: 100));
+          expect(find.textContaining('new decision'), findsNothing);
+          expect(find.text('News updated'), findsNothing);
+        }
         await tester.pumpAndSettle();
       });
 
       testWidgets('a refresh that brings nothing new says so', (tester) async {
         await pumpFeed(tester, const [], const [], api: refreshingApi([]));
         final pull = await pullFar(tester);
-        await pull.up();
-        await tester.pump();
-        await tester.pump(const Duration(milliseconds: 300));
+        await letGo(tester, pull);
         expect(find.text('No new decisions'), findsOneWidget);
         await tester.pump(const Duration(seconds: 2));
         await tester.pumpAndSettle();
@@ -791,9 +863,7 @@ void main() {
         );
         await pumpFeed(tester, const [], const [], api: api);
         final pull = await pullFar(tester);
-        await pull.up();
-        await tester.pump();
-        await tester.pump(const Duration(milliseconds: 400));
+        await letGo(tester, pull, const Duration(milliseconds: 400));
         expect(find.text('Refreshing the news…'), findsOneWidget);
         double opacity() => tester
             .widget<Opacity>(
