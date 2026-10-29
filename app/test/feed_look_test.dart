@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart' show Theme;
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -11,11 +12,14 @@ import 'package:official_news/core/api_client.dart';
 import 'package:official_news/core/feed_language.dart';
 import 'package:official_news/core/feed_store.dart';
 import 'package:official_news/core/filters.dart';
+import 'package:official_news/core/glass.dart';
 import 'package:official_news/core/router.dart';
 import 'package:official_news/core/theme.dart';
+import 'package:official_news/core/topics.dart';
 import 'package:official_news/features/chat/chat_style.dart';
 import 'package:official_news/features/feed/feed_controller.dart';
 import 'package:official_news/features/feed/feed_look.dart';
+import 'package:official_news/features/feed/feed_pills.dart';
 import 'package:official_news/features/feed/feed_screen.dart';
 import 'package:official_news/features/feed/feed_touches.dart';
 import 'package:official_news/features/settings/settings_screen.dart';
@@ -148,9 +152,11 @@ void main() {
     List<Map<String, dynamic>> top, {
     ApiClient? api,
     FeedLanguage language = FeedLanguage.en,
+    double width = 393,
     double height = 852,
+    Brightness brightness = Brightness.light,
   }) async {
-    tester.view.physicalSize = Size(393, height) * 3;
+    tester.view.physicalSize = Size(width, height) * 3;
     tester.view.devicePixelRatio = 3;
     addTearDown(tester.view.reset);
     final feed = FeedController(api: api ?? _api(items, top));
@@ -158,9 +164,12 @@ void main() {
       testApp(
         language: language,
         onGenerateRoute: onGenerateRoute,
-        home: FeedScreen(
-          controller: feed,
-          newCheckEvery: const Duration(hours: 1),
+        home: Theme(
+          data: buildTheme(brightness),
+          child: FeedScreen(
+            controller: feed,
+            newCheckEvery: const Duration(hours: 1),
+          ),
         ),
       ),
     );
@@ -293,16 +302,24 @@ void main() {
                 : a,
         ];
         await pumpFeed(tester, items, _top);
-        await tester.tap(
-          find.byKey(const ValueKey('filter-topic')).hitTestable(),
-        );
-        await tester.pumpAndSettle();
-        await tester.tap(
-          find.descendant(
-            of: find.byType(CupertinoMenuItem),
-            matching: find.text('Economy'),
-          ),
-        );
+        final pill = find.byKey(const ValueKey('pill-topic-economy'));
+        if (pill.evaluate().isNotEmpty) {
+          // Garnet and Seal: the topics are pills, along the row.
+          await tester.ensureVisible(pill);
+          await tester.pumpAndSettle();
+          await tester.tap(pill);
+        } else {
+          await tester.tap(
+            find.byKey(const ValueKey('filter-topic')).hitTestable(),
+          );
+          await tester.pumpAndSettle();
+          await tester.tap(
+            find.descendant(
+              of: find.byType(CupertinoMenuItem),
+              matching: find.text('Economy'),
+            ),
+          );
+        }
         await tester.pumpAndSettle();
         expect(find.text('Decision a1'), findsNothing);
 
@@ -543,9 +560,10 @@ void main() {
         final gradient =
             (badge.decoration! as BoxDecoration).gradient! as LinearGradient;
         expect(gradient.colors.first, accent);
-        // The menu under the date, as in the other looks (#170).
-        expect(find.byKey(const ValueKey('filter-topic')), findsOneWidget);
-        expect(find.text('For you'), findsOneWidget);
+        // What the feed shows as pills under the date, not the other looks'
+        // menu (#170).
+        expect(find.byType(FeedPills), findsOneWidget);
+        expect(find.byKey(const ValueKey('filter-topic')), findsNothing);
         final card = tester.widget<DecoratedBox>(
           find
               .ancestor(
@@ -595,7 +613,7 @@ void main() {
           : const Color(0xFFC41230);
 
       testWidgets("the page's top takes a tint of the colour, one piece with "
-          "the status bar's, and the rows soften into it", (tester) async {
+          "the status bar's", (tester) async {
         await pumpFeed(tester, _items, _top);
         final tint = Color.alphaBlend(
           accent.withValues(alpha: 0.1),
@@ -610,18 +628,6 @@ void main() {
             .firstWhere((gradient) => gradient.colors.length == 2);
         expect(backdrop.colors, [tint, const Color(0xFFF2F2F7)]);
         expect(backdrop.stops, [0, 0.32]);
-        Color topEdge() =>
-            lookFor(design).topEdge(tester.element(find.byType(FeedScreen)));
-        expect(topEdge(), tint);
-        // Under a status bar the feed starts lower, where the backdrop has
-        // already faded a little: the rows soften into that colour (Yurii,
-        // #208: dark mode showed a band).
-        tester.view.padding = const FakeViewPadding(top: 59 * 3);
-        await tester.pump();
-        expect(
-          topEdge(),
-          Color.lerp(tint, const Color(0xFFF2F2F7), 59 / 852 / 0.32),
-        );
       });
 
       testWidgets('pulled down, the title and the date grow from their left '
@@ -801,7 +807,11 @@ void main() {
             final r0 = _article('r0', feedSeq: 1);
             return switch (++pages) {
               2 => answer.future,
-              1 => fakeJson({'items': [r0], 'nextCursor': null, 'top': []}),
+              1 => fakeJson({
+                'items': [r0],
+                'nextCursor': null,
+                'top': [],
+              }),
               _ => fakeJson({
                 'items': [_article('w1', feedSeq: 2), r0],
                 'nextCursor': null,
@@ -889,6 +899,266 @@ void main() {
         await tester.pump();
         await tester.pump(const Duration(seconds: 2));
         await tester.pumpAndSettle();
+      });
+    });
+  }
+
+  for (final design in [FeedDesign.garnet, FeedDesign.seal]) {
+    group('design ${design.name}: the pills', () {
+      setUp(() => feedDesign.value = design);
+
+      /// The look's colour in light mode: Garnet's red or Seal's green.
+      final accent = design == FeedDesign.seal
+          ? const Color(0xFF0E7A5E)
+          : const Color(0xFFC41230);
+
+      final rows = [
+        for (var i = 0; i < 12; i++) _article('r$i', feedSeq: 20 - i),
+      ];
+
+      /// The pills from left to right, by key.
+      List<String> pills(WidgetTester tester) => [
+        for (final pill in tester.widgetList(
+          find.descendant(
+            of: find.byType(FeedPills),
+            matching: find.byWidgetPredicate(
+              (w) => switch (w.key) {
+                ValueKey<String>(:final value) => value.startsWith('pill-'),
+                _ => false,
+              },
+            ),
+          ),
+        ))
+          (pill.key! as ValueKey<String>).value,
+      ];
+
+      /// The glass of the pill [key]: the chosen one is filled with the
+      /// colour's gradient, the others with a tint of the card.
+      BoxDecoration glass(WidgetTester tester, String key) =>
+          tester
+                  .widget<AnimatedContainer>(
+                    find.descendant(
+                      of: find.byKey(ValueKey(key)),
+                      matching: find.byType(AnimatedContainer),
+                    ),
+                  )
+                  .decoration!
+              as BoxDecoration;
+
+      testWidgets('For you first, then the whole world, then the topics '
+          'busiest first, as the menu has them; a tap shows each', (
+        tester,
+      ) async {
+        final semantics = tester.ensureSemantics();
+        final feed = await pumpFeed(tester, rows, const [], width: 2400);
+        await tester.pumpAndSettle();
+        expect(pills(tester), [
+          'pill-for-you',
+          'pill-world',
+          for (final id in topicIds) 'pill-topic-$id',
+        ]);
+        expect(find.byKey(const ValueKey('filter-topic')), findsNothing);
+        expect(
+          tester.getSemantics(find.byKey(const ValueKey('pill-for-you'))),
+          isSemantics(label: 'For you', isButton: true, isSelected: true),
+        );
+        expect(glass(tester, 'pill-for-you').gradient, isNotNull);
+        expect(glass(tester, 'pill-world').gradient, isNull);
+
+        await tester.tap(find.byKey(const ValueKey('pill-world')));
+        await tester.pumpAndSettle();
+        expect((feed.where, feed.topic), (FeedWhere.all, null));
+        expect(
+          tester.getSemantics(find.byKey(const ValueKey('pill-world'))),
+          isSemantics(label: 'The whole world', isSelected: true),
+        );
+        expect(
+          tester.getSemantics(find.byKey(const ValueKey('pill-for-you'))),
+          isSemantics(isSelected: false),
+        );
+
+        // A topic is the whole world's (#170).
+        await tester.tap(find.byKey(const ValueKey('pill-topic-health')));
+        await tester.pumpAndSettle();
+        expect((feed.where, feed.topic), (FeedWhere.all, 'health'));
+        expect(glass(tester, 'pill-topic-health').gradient, isNotNull);
+        expect(glass(tester, 'pill-world').gradient, isNull);
+
+        await tester.tap(find.byKey(const ValueKey('pill-for-you')));
+        await tester.pumpAndSettle();
+        expect((feed.where, feed.topic), (FeedWhere.forYou, null));
+        semantics.dispose();
+      });
+
+      for (final brightness in Brightness.values) {
+        testWidgets('the chosen pill is the colour deepening, its white words '
+            'at least 4.5:1 in ${brightness.name} mode (Yurii, #210)', (
+          tester,
+        ) async {
+          await pumpFeed(tester, rows, const [], brightness: brightness);
+          final colors =
+              (glass(tester, 'pill-for-you').gradient! as LinearGradient)
+                  .colors;
+          for (final colour in colors) {
+            final opaque = colour.withValues(alpha: 1);
+            expect(
+              1.05 / (opaque.computeLuminance() + 0.05),
+              greaterThanOrEqualTo(4.5),
+              reason: '$opaque',
+            );
+          }
+          // The same deep colour in both themes, the look's own first.
+          expect(colors.first.withValues(alpha: 1), accent);
+          expect(
+            tester.widget<Text>(find.text('For you')).style!.color,
+            const Color(0xFFFFFFFF),
+          );
+        });
+      }
+
+      testWidgets('the pills stay at the top as glass while the rows pass '
+          'under them; nothing fades over them', (tester) async {
+        await pumpFeed(tester, rows, const [], height: 700);
+        final row = find.byType(FeedPills);
+        expect(tester.getTopLeft(row).dy, greaterThan(60));
+        await tester.drag(find.text('Decision r3'), const Offset(0, -500));
+        await tester.pumpAndSettle();
+        // Pinned at the top of the safe area, rows scrolled under it.
+        expect(tester.getTopLeft(row).dy, 0);
+        expect(find.text('For you'), findsOneWidget);
+        expect(
+          find.descendant(of: row, matching: find.byType(BackdropFilter)),
+          findsWidgets,
+        );
+        expect(find.byType(ScrollEdgeFade), findsNothing);
+        // The chosen pill's glow reaches over the rows, not cut where the
+        // pinned header ends (Yurii, #210).
+        final header = tester.widget<Stack>(
+          find.ancestor(of: row, matching: find.byType(Stack)).first,
+        );
+        expect(header.clipBehavior, Clip.none);
+      });
+
+      testWidgets('at a large text size the pills grow with their words: '
+          'none is cut (Yurii, #210)', (tester) async {
+        tester.platformDispatcher.textScaleFactorTestValue = 2;
+        addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+        await pumpFeed(tester, rows, const [], height: 700);
+        await tester.pumpAndSettle();
+        for (final name in ['For you', 'The whole world']) {
+          final words = tester.renderObject<RenderParagraph>(find.text(name));
+          expect(
+            words.size.height,
+            greaterThanOrEqualTo(
+              words.getMaxIntrinsicHeight(words.size.width) - 0.01,
+            ),
+            reason: name,
+          );
+        }
+      });
+
+      testWidgets('a chosen topic that moves along the row as the fresh '
+          'topics come in is brought into view again (Yurii, #210)', (
+        tester,
+      ) async {
+        // Kept from last time: Justice first among the topics; the server
+        // now lists it last, once the row is on screen.
+        SharedPreferences.setMockInitialValues({
+          'feed.topic': 'justice',
+          'feed.topics.en': jsonEncode([
+            {'id': 'justice', 'name': 'Justice'},
+            for (final id in topicIds)
+              if (id != 'justice') {'id': id, 'name': id},
+          ]),
+        });
+        final topics = Completer<http.Response>();
+        final api = ApiClient(
+          baseUrl: 'https://api.test',
+          client: MockClient((request) async {
+            if (request.url.path == '/topics') return topics.future;
+            final menu = fakeMenus(request);
+            if (menu != null) return menu;
+            return fakeJson({'items': rows, 'nextCursor': null, 'top': []});
+          }),
+        );
+        await pumpFeed(tester, const [], const [], api: api);
+        await tester.pumpAndSettle();
+        expect(pills(tester)[2], 'pill-topic-justice');
+
+        topics.complete(
+          fakeMenus(http.Request('GET', Uri.parse('https://api.test/topics'))),
+        );
+        await tester.pumpAndSettle();
+        expect(pills(tester).last, 'pill-topic-justice');
+        final pill = find.byKey(const ValueKey('pill-topic-justice'));
+        expect(tester.getRect(pill).left, greaterThanOrEqualTo(0));
+        expect(tester.getRect(pill).right, lessThanOrEqualTo(393));
+      });
+
+      testWidgets('swiped sideways, the pills stay where they are as the '
+          'title scrolls away and back: the same row, not a new one', (
+        tester,
+      ) async {
+        await pumpFeed(tester, rows, const [], height: 700);
+        await tester.pumpAndSettle();
+        final row = find.byType(FeedPills);
+        final forYou = find.text('For you');
+        await tester.drag(forYou, const Offset(-120, 0));
+        await tester.pumpAndSettle();
+        final swiped = tester.getTopLeft(forYou).dx;
+        expect(swiped, lessThan(0));
+
+        await tester.drag(find.text('Decision r3'), const Offset(0, -500));
+        await tester.pumpAndSettle();
+        expect(tester.getTopLeft(row).dy, 0);
+        expect(tester.getTopLeft(forYou).dx, swiped);
+
+        await tester.drag(find.text('Decision r5'), const Offset(0, 500));
+        await tester.pumpAndSettle();
+        expect(tester.getTopLeft(row).dy, greaterThan(60));
+        expect(tester.getTopLeft(forYou).dx, swiped);
+      });
+
+      testWidgets('a topic chosen before the app was closed shows chosen, '
+          'brought into view along the row', (tester) async {
+        SharedPreferences.setMockInitialValues({'feed.topic': 'justice'});
+        final feed = await pumpFeed(tester, rows, const []);
+        await tester.pumpAndSettle();
+        expect((feed.where, feed.topic), (FeedWhere.all, 'justice'));
+        final pill = find.byKey(const ValueKey('pill-topic-justice'));
+        expect(glass(tester, 'pill-topic-justice').gradient, isNotNull);
+        expect(tester.getRect(pill).left, greaterThanOrEqualTo(0));
+        expect(tester.getRect(pill).right, lessThanOrEqualTo(393));
+      });
+
+      testWidgets('a pill chosen in view leaves the row where it is; one '
+          'partly out of view glides to the middle', (tester) async {
+        await pumpFeed(tester, rows, const [], width: 1000);
+        await tester.pumpAndSettle();
+        final scroll = tester.state<ScrollableState>(
+          find.descendant(
+            of: find.byType(FeedPills),
+            matching: find.byType(Scrollable),
+          ),
+        );
+        await tester.tap(find.byKey(const ValueKey('pill-topic-economy')));
+        await tester.pumpAndSettle();
+        expect(scroll.position.pixels, 0);
+
+        // Its end is out of view: tapped by its start.
+        final next = find.byKey(const ValueKey('pill-topic-security-defence'));
+        final start = tester.getRect(next);
+        expect(start.right, greaterThan(1000));
+        await tester.tapAt(start.centerLeft + const Offset(20, 0));
+        // The new choice drawn, then the glide's first frame and 100 ms.
+        await tester.pump();
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 100));
+        final gliding = scroll.position.pixels;
+        await tester.pumpAndSettle();
+        expect(gliding, greaterThan(0));
+        expect(gliding, lessThan(scroll.position.pixels));
+        expect(tester.getCenter(next).dx, moreOrLessEquals(500, epsilon: 1));
       });
     });
   }
