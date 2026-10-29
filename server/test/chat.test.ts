@@ -139,7 +139,7 @@ describe("POST /v1/chat (#146)", () => {
     expect(system.content).toContain("З листопада 2027 року нові авто мають відповідати Євро-7.");
     // An analyst for the reader's own case, in the language they write in (Roman, 29 Oct).
     expect(system.content).toContain("You are the AI analyst of Outer News");
-    expect(system.content).toContain("Answer in the language the reader writes in.");
+    expect(system.content).toContain('Answer in the language the reader writes in; when that is unclear (a number, "ok"), in Ukrainian.');
     expect(system.content).not.toContain("120 words");
     expect(rest).toEqual(conversation.map((m) => ({ role: m.role, content: m.text })));
   });
