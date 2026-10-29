@@ -4,6 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../../core/countries.dart';
 import '../../core/feed_language.dart';
 import '../../core/motion.dart';
 import '../../core/push.dart';
@@ -34,7 +35,17 @@ class SettingsScreen extends StatelessWidget {
     this.openSettingsApp = openAppSettings,
     this.saveDesign,
     this.saveHeadlineWeight,
+    this.country,
+    this.phoneCountry,
+    this.onCountry,
   });
+
+  /// Settings → My country (#170): the country chosen here, or null for the
+  /// phone's ([phoneCountry], null when it is not known), and how to change
+  /// it. Without them the row is not shown.
+  final ValueListenable<String?>? country;
+  final String? phoneCountry;
+  final ValueChanged<String?>? onCountry;
 
   /// Settings → Design (#66): saves the look and the headline weight on the
   /// phone (the notifiers change at once either way).
@@ -61,6 +72,8 @@ class SettingsScreen extends StatelessWidget {
     final grouped = CupertinoColors.systemGroupedBackground.resolveFrom(
       context,
     );
+    final country = this.country;
+    final onCountry = this.onCountry;
     return CupertinoPageScaffold(
       backgroundColor: grouped,
       // Material for the default text style (no yellow underline on plain Text).
@@ -103,6 +116,35 @@ class SettingsScreen extends StatelessWidget {
                         ),
                       ),
                     ),
+                    if (country != null && onCountry != null)
+                      ValueListenableBuilder(
+                        valueListenable: country,
+                        builder: (context, chosen, _) {
+                          final code = chosen ?? phoneCountry;
+                          return CupertinoListTile(
+                            leading: const _Icon(CupertinoIcons.flag),
+                            title: Text(l10n.myCountry),
+                            additionalInfo: Text(
+                              code == null
+                                  ? l10n.myCountryUnknown
+                                  : countryName(code, l10n),
+                            ),
+                            trailing: const CupertinoListTileChevron(),
+                            onTap: () => Navigator.of(context).push(
+                              CupertinoPageRoute(
+                                settings: const RouteSettings(
+                                  name: '/settings/country',
+                                ),
+                                builder: (_) => _CountryPage(
+                                  country: country,
+                                  phoneCountry: phoneCountry,
+                                  onCountry: onCountry,
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
                     _NotificationsTile(
                       push: notifications ?? push,
                       openSettingsApp: openSettingsApp,
@@ -522,6 +564,97 @@ class _LanguagePage extends StatelessWidget {
                               )
                             : null,
                         onTap: () => onLanguage(lang),
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Settings → My country (#170): the phone's region first, then every
+/// country For you can show something of its own for ([homeCountries]), by
+/// name, a checkmark on the current choice. For the rare reader who lives
+/// somewhere else than the phone says.
+class _CountryPage extends StatelessWidget {
+  const _CountryPage({
+    required this.country,
+    required this.phoneCountry,
+    required this.onCountry,
+  });
+
+  final ValueListenable<String?> country;
+  final String? phoneCountry;
+  final ValueChanged<String?> onCountry;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final grouped = CupertinoColors.systemGroupedBackground.resolveFrom(
+      context,
+    );
+    final phone = phoneCountry;
+    final names = {
+      for (final code in homeCountries) code: countryName(code, l10n),
+    };
+    final codes = names.keys.toList()
+      ..sort((a, b) => names[a]!.compareTo(names[b]!));
+    const check = Icon(CupertinoIcons.checkmark_alt, color: AppColors.accent);
+    return CupertinoPageScaffold(
+      backgroundColor: grouped,
+      navigationBar: CupertinoNavigationBar(
+        middle: Text(l10n.myCountry),
+        previousPageTitle: l10n.settings,
+        backgroundColor: grouped,
+        border: null,
+      ),
+      child: Material(
+        type: MaterialType.transparency,
+        child: SafeArea(
+          child: ValueListenableBuilder(
+            valueListenable: country,
+            builder: (context, chosen, _) => ListView(
+              children: [
+                CupertinoListSection.insetGrouped(
+                  footer: Text(
+                    l10n.myCountryFooter,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: CupertinoColors.secondaryLabel.resolveFrom(
+                        context,
+                      ),
+                    ),
+                  ),
+                  children: [
+                    CupertinoListTile(
+                      title: Semantics(
+                        selected: chosen == null,
+                        child: Text(l10n.myCountryPhone),
+                      ),
+                      additionalInfo: Text(
+                        phone == null
+                            ? l10n.myCountryUnknown
+                            : countryName(phone, l10n),
+                      ),
+                      trailing: chosen == null ? check : null,
+                      onTap: () => onCountry(null),
+                    ),
+                  ],
+                ),
+                CupertinoListSection.insetGrouped(
+                  children: [
+                    for (final code in codes)
+                      CupertinoListTile(
+                        title: Semantics(
+                          selected: code == chosen,
+                          child: Text(names[code]!),
+                        ),
+                        trailing: code == chosen ? check : null,
+                        onTap: () => onCountry(code),
                       ),
                   ],
                 ),

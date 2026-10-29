@@ -356,7 +356,7 @@ void main() {
     await _pump(tester);
     await tester.tap(find.text('Privacy Policy'));
     await tester.pumpAndSettle();
-    expect(find.text('Last updated 27 October 2026'), findsOneWidget);
+    expect(find.text('Last updated 29 October 2026'), findsOneWidget);
     // The parts App Review and #34, #60 ask for.
     for (final heading in [
       'On your phone',
@@ -371,6 +371,10 @@ void main() {
     for (final line in [
       'loaded directly from the official website',
       'Google Analytics for Firebase',
+      // For you's country (#170, Yurii on #170): where it comes from, and
+      // that the server keeps nothing.
+      "your phone's region, or from Settings → My country",
+      'and does not store it',
     ]) {
       await tester.scrollUntilVisible(find.textContaining(line), -200);
       expect(find.textContaining(line), findsOneWidget);
@@ -431,7 +435,7 @@ void main() {
     await _pump(tester, words: FeedLanguage.uk);
     await tester.tap(find.text('Умови використання'));
     await tester.pumpAndSettle();
-    expect(find.text('Оновлено 27 жовтня 2026\u202Fр.'), findsOneWidget);
+    expect(find.text('Оновлено 29 жовтня 2026\u202Fр.'), findsOneWidget);
     await tester.scrollUntilVisible(
       find.textContaining('RS Elite Pro s.r.o., Словаччина'),
       200,
@@ -451,7 +455,7 @@ void main() {
     await _pump(tester, words: FeedLanguage.de);
     await tester.tap(find.text('Datenschutzerklärung'));
     await tester.pumpAndSettle();
-    expect(find.text('Stand: 27. Oktober 2026'), findsOneWidget);
+    expect(find.text('Stand: 29. Oktober 2026'), findsOneWidget);
     await tester.scrollUntilVisible(
       find.text('Verantwortlicher: RS Elite Pro s.r.o., Slowakei.'),
       200,

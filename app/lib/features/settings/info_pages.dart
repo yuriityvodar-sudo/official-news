@@ -107,7 +107,7 @@ String publisher(AppLocalizations l10n) => l10n.publisher(publisherName);
 const supportEmail = '';
 
 /// When the privacy policy and the terms last changed.
-final policyUpdated = DateTime(2026, 10, 27);
+final policyUpdated = DateTime(2026, 10, 29);
 
 /// The "Last updated 16 October 2026" line of the policy pages.
 String policyUpdatedLine(AppLocalizations l10n) =>
@@ -130,6 +130,7 @@ List<InfoSection> privacySections(AppLocalizations l10n) => [
   InfoSection([l10n.privacyPhone], heading: l10n.privacyPhoneHeading),
   InfoSection([
     l10n.privacyLoadingServer,
+    l10n.privacyLoadingCountry,
     l10n.privacyLoadingPictures,
     l10n.privacyLoadingPages,
   ], heading: l10n.privacyLoadingHeading),

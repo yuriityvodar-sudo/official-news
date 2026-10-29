@@ -943,10 +943,15 @@ void main() {
       findsOneWidget,
     );
     await tester.pumpWidget(const SizedBox());
+    region('NO');
+    await _pump(tester, _Server(topIds: const ['de1', 'us1', 'gb1']));
+    expect(find.text("Your country · the world's top stories"), findsOneWidget);
+    // Every EU member has its name (#170, part 3).
+    await tester.pumpWidget(const SizedBox());
     region('SK');
     await _pump(tester, _Server(topIds: const ['de1', 'us1', 'gb1']));
     expect(
-      find.text("Your country · European Union · the world's top stories"),
+      find.text("Slovakia · European Union · the world's top stories"),
       findsOneWidget,
     );
   });
@@ -1197,11 +1202,91 @@ void main() {
     expect(_spoken(tester, _topics), 'Topic: Housing');
   });
 
-  testWidgets('Settings has no Country any more', (tester) async {
-    await _pump(tester, _Server());
+  testWidgets('Settings → My country: the phone\'s region first, then the '
+      'countries by name; a choice wins, and For you follows it', (
+    tester,
+  ) async {
+    region('DE');
+    final server = _Server();
+    final feed = await _pump(tester, server);
     await tester.tap(find.byIcon(CupertinoIcons.gear_alt));
     await tester.pumpAndSettle();
-    expect(find.text('Language'), findsOneWidget);
-    expect(find.text('Country'), findsNothing);
+    final row = find.ancestor(
+      of: find.text('My country'),
+      matching: find.byType(CupertinoListTile),
+    );
+    expect(
+      find.descendant(of: row, matching: find.text('Germany')),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('My country'));
+    await tester.pumpAndSettle();
+    final tiles = tester
+        .widgetList<CupertinoListTile>(find.byType(CupertinoListTile))
+        .toList();
+    // The phone's region first, checked, with its country beside it.
+    expect(
+      ((tiles.first.title as Semantics).child! as Text).data,
+      "By the phone's region",
+    );
+    expect((tiles.first.additionalInfo! as Text).data, 'Germany');
+    expect(tiles.first.trailing, isNotNull);
+    // Then the countries with sources and the EU's members, by name, once.
+    final names = [
+      for (final tile in tiles.skip(1))
+        ((tile.title as Semantics).child! as Text).data!,
+    ];
+    expect(names, hasLength(homeCountries.length));
+    expect(names, [...names]..sort());
+    expect(names, containsAll(['Austria', 'Ukraine', 'United States']));
+    expect(names, isNot(contains('European Union')));
+
+    await tester.ensureVisible(find.text('Ukraine'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Ukraine'));
+    await tester.pumpAndSettle();
+    expect(feed.homeCountry, 'UA');
+    expect(server.feedRequests.last.queryParameters['for'], 'UA');
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getString('feed.home'), 'UA');
+    expect(userProperties['home_country'], 'UA');
+
+    // Back up the page's list: its first rows are built again.
+    await tester.scrollUntilVisible(
+      find.text("By the phone's region"),
+      -300,
+      scrollable: find
+          .descendant(
+            of: find.byType(ListView),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text("By the phone's region"));
+    await tester.pumpAndSettle();
+    expect(feed.homeCountry, 'DE');
+    expect(server.feedRequests.last.queryParameters['for'], 'DE');
+    expect(prefs.getString('feed.home'), isNull);
+  });
+
+  test('a chosen country is kept, and the server is not asked where the '
+      'phone is', () async {
+    SharedPreferences.setMockInitialValues({'feed.home': 'UA'});
+    final server = _Server(located: 'DE');
+    final feed = FeedController(api: server.api);
+    await feed.start();
+    await _settle();
+    expect(feed.homeCountry, 'UA');
+    expect(feed.phoneCountry, isNull);
+    expect(server.feedRequests.single.queryParameters['for'], 'UA');
+    expect(server.log.where((u) => u.path == '/locate'), isEmpty);
+
+    // Back to the phone's, which has no region: now it asks.
+    await feed.setChosenCountry(null);
+    await _settle();
+    expect(feed.homeCountry, 'DE');
+    expect(server.log.where((u) => u.path == '/locate'), hasLength(1));
+    expect(server.feedRequests.last.queryParameters['for'], 'DE');
   });
 }
