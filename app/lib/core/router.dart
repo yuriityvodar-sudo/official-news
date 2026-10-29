@@ -3,6 +3,7 @@ import 'package:flutter/cupertino.dart';
 import '../features/detail/detail_screen.dart';
 import '../features/feed/feed_controller.dart';
 import '../features/feed/feed_screen.dart';
+import '../features/settings/support_screen.dart';
 import '../l10n/app_localizations.dart';
 import 'article.dart';
 
@@ -14,6 +15,9 @@ import 'article.dart';
 abstract final class Routes {
   static const feed = '/';
   static const detail = '/article';
+
+  /// The reader's messages to us and our replies (#220).
+  static const support = SupportScreen.routeName;
 }
 
 /// The app's navigator, for what opens a screen from outside one: a tapped
@@ -27,6 +31,11 @@ Route<dynamic> onGenerateRoute(RouteSettings settings, {FeedController? feed}) {
       final article = settings.arguments! as Article;
       return CupertinoPageRoute(
         builder: (_) => DetailScreen(article: article),
+        settings: settings,
+      );
+    case Routes.support:
+      return CupertinoPageRoute(
+        builder: (_) => const SupportScreen(),
         settings: settings,
       );
     case Routes.feed:
