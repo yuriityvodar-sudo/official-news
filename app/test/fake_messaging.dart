@@ -68,4 +68,10 @@ class FakeMessaging implements Messaging {
 
   @override
   Stream<void> get tokenChanges => tokenEvents.stream;
+
+  /// The FCM token [token] returns.
+  String? fcmToken = 'fcm-token';
+
+  @override
+  Future<String?> token() async => fcmToken;
 }
