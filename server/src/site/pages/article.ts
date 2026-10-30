@@ -13,6 +13,7 @@ import { type Html, html, safeHttps, siteName } from "../html";
 import { ARROW, type Alternate, type Page, SEAL, SITE_NAME, SPARKLE } from "../layout";
 import { LANGUAGE_NAMES, SITE_LANGS, type SiteLang, aiLabel, aiNotice, countryName, decisionLabel, isEvent, placeCode, t, text } from "../texts";
 import { articlePath } from "../urls";
+import { articleJsonLd } from "../seo";
 
 /** A language tag for `lang=""`: "de", "pt"; anything else is left out. */
 const langTag = (value: string | null) => (value && /^[a-z]{2,3}$/.test(value) ? value : null);
@@ -94,7 +95,8 @@ ${
 }
 ${credit(lang, article)}
 ${added ? html`<p class="small"><time datetime="${isoTime(added)}">${t(lang, "added", { date: fullDate(lang, added) })}</time></p>` : ""}
-</article>`;
+</article>
+${articleJsonLd(lang, origin, article)}`;
 
   // Link previews show these: they are AI text, so they say so (AI Act Art. 50).
   const description = `${text(lang, "summaryByAi")}: ${lead ?? headline}`;
@@ -102,6 +104,8 @@ ${added ? html`<p class="small"><time datetime="${isoTime(added)}">${t(lang, "ad
   return {
     lang,
     kind: "article",
+    // Every article is indexed (Yurii, 29 Oct).
+    index: true,
     title: `${headline} · ${SITE_NAME}`,
     // iMessage and the iOS share sheet show only the title and the host, no description (LPLinkMetadata).
     ogTitle: aiText ? `${headline} · ${text(lang, "summaryByAi")}` : undefined,

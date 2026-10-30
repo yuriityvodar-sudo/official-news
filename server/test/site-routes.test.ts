@@ -1,5 +1,5 @@
 // The website's routes and headers (#88): status and cache headers per kind of
-// page, nothing indexed, one request per page view, no host in any page, and
+// page, what Google may index, one request per page view, no host in any page, and
 // nothing from the data or the address ever becoming markup.
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -8,7 +8,7 @@ import { CACHE } from "../src/site/respond";
 import { INFO_PAGES, slugify } from "../src/site/urls";
 import { SITE_LANGS } from "../src/site/texts";
 import { hideSeed } from "./helpers";
-import { ORIGIN, insertArticle, insertTranslation, reach, site, siteEnv, siteRowsRead as rowsRead, testId } from "./site-helpers";
+import { ORIGIN, insertArticle, insertTranslation, reach, site, siteEnv, siteRowsRead as rowsRead, testId, withoutConsentScript } from "./site-helpers";
 
 const ID = testId(1);
 const NOT_IN_UK = testId(2);
@@ -22,6 +22,13 @@ beforeEach(async () => {
   await insertTranslation(ID, "uk");
   await insertArticle({ id: NOT_IN_UK });
 });
+
+/**
+ * The pages Google may index here: the lists' first pages with no topic and
+ * something on them, the articles and the information pages. Everything else
+ * says noindex (Yurii, 29 Oct: every article indexed).
+ */
+const INDEXED = new Set(["/en", EN, UK, "/ru/about", "/es/privacy", "/de/terms", "/en/support"]);
 
 /** [path, status, cache kind, content-language] for every kind of response. */
 const ROUTES: [string, number, keyof typeof CACHE, string | null][] = [
@@ -45,6 +52,7 @@ const ROUTES: [string, number, keyof typeof CACHE, string | null][] = [
   ["/uk/nowhere", 404, "missing", "uk"],
   ["/en?menu=where", 301, "redirect", null],
   ["/.well-known/apple-app-site-association", 404, "missing", "en"],
+  ["/sitemap.xml", 200, "sitemap", null],
   ["/favicon.ico", 404, "icon", null],
   ["/apple-touch-icon.png", 200, "icon", null],
   ["/apple-touch-icon-precomposed.png", 200, "icon", null],
@@ -56,16 +64,16 @@ const ROUTES: [string, number, keyof typeof CACHE, string | null][] = [
 
 describe("every route", () => {
   for (const [path, status, kind, lang] of ROUTES) {
-    it(`${path}: ${status}, ${kind} cache, noindex, the CSP, no cookie`, async () => {
+    it(`${path}: ${status}, ${kind} cache, ${INDEXED.has(path) ? "index" : "noindex"}, the CSP, no cookie`, async () => {
       for (const method of ["GET", "HEAD"]) {
         const { status: got, headers, body } = await site(path, { method });
         expect(got).toBe(status);
         expect(headers.get("cache-control")).toBe(CACHE[kind].browser);
         expect(headers.get("cloudflare-cdn-cache-control")).toBe(CACHE[kind].edge);
-        expect(headers.get("x-robots-tag")).toBe("noindex");
+        expect(headers.get("x-robots-tag")).toBe(INDEXED.has(path) ? "index, follow" : "noindex");
         expect(headers.get("x-content-type-options")).toBe("nosniff");
         expect(headers.get("strict-transport-security")).toBe("max-age=31536000");
-        expect(headers.get("content-security-policy")).toMatch(/^default-src 'none'; style-src 'sha256-[A-Za-z0-9+/]+=*'; img-src 'self' data:; /);
+        expect(headers.get("content-security-policy")).toMatch(/^default-src 'none'; style-src 'sha256-[A-Za-z0-9+/]+=*'; script-src 'sha256-[A-Za-z0-9+/]+=*' https:\/\/\*\.googletagmanager\.com; img-src 'self' data: /);
         expect(headers.get("content-language")).toBe(lang);
         expect(headers.get("set-cookie")).toBeNull();
         expect(headers.get("vary")).toBeNull();
@@ -111,18 +119,28 @@ describe("every route", () => {
     }
   });
 
-  it("serves robots.txt that keeps crawlers from every page", async () => {
-    expect(ROBOTS_TXT).toBe("User-agent: *\nDisallow: /\n");
-    expect((await site("/robots.txt")).body).toBe(ROBOTS_TXT);
+  it("serves robots.txt that keeps crawlers from every address with a query", async () => {
+    expect((await site("/robots.txt")).body).toBe("User-agent: *\nDisallow: /*?\n\nSitemap: https://site.test/sitemap.xml\n");
   });
 
-  const PAGES = ROUTES.filter(([p, s]) => (s < 300 || s >= 400) && !p.endsWith(".txt") && !p.endsWith(".ico") && !p.endsWith(".png"));
+  const PAGES = ROUTES.filter(([p, s]) => (s < 300 || s >= 400) && !p.endsWith(".txt") && !p.endsWith(".ico") && !p.endsWith(".png") && !p.endsWith(".xml"));
 
   it("says in every page's head exactly what its X-Robots-Tag says (one value, never two that disagree)", async () => {
     for (const [path] of PAGES) {
       const { headers, body } = await site(path);
       const meta = /<meta name="robots" content="([^"]+)">/.exec(body)?.[1];
       expect(meta, path).toBe(headers.get("x-robots-tag"));
+    }
+  });
+
+  it("indexes only pages robots.txt lets crawlers read (a crawler never reads the value of the others)", async () => {
+    expect(ROBOTS_TXT).toBe("User-agent: *\nDisallow: /*?\n");
+    for (const [path] of PAGES) {
+      const { headers, body } = await site(path);
+      const indexed = headers.get("x-robots-tag") === "index, follow";
+      expect(indexed, path).toBe(INDEXED.has(path));
+      if (indexed) expect(path, path).not.toContain("?");
+      expect(body, path).toContain(`<meta name="robots" content="${indexed ? "index, follow" : "noindex"}">`);
     }
   });
 });
@@ -183,7 +201,7 @@ describe("one request per page view", () => {
     const paths = ["/en", "/uk", EN, UK, ...SITE_LANGS.flatMap((l) => INFO_PAGES.map((p) => `/${l}/${p}`))];
     for (const path of paths) {
       const { body } = await site(path);
-      expect(body, path).not.toMatch(/<script|<iframe|<object|<embed|<video|<audio|<source|rel="stylesheet"|rel="preload"|rel="prefetch"|rel="preconnect"|rel="dns-prefetch"|@import|@font-face/i);
+      expect(withoutConsentScript(body).replace(/<script type="application\/ld\+json">[^<]*<\/script>/g, ""), path).not.toMatch(/<script|<iframe|<object|<embed|<video|<audio|<source|rel="stylesheet"|rel="preload"|rel="prefetch"|rel="preconnect"|rel="dns-prefetch"|@import|@font-face/i);
       // CSS url() only for data:, and the tab icon a data: URL (no /favicon.ico request).
       for (const m of body.matchAll(/url\(([^)]*)\)/g)) expect(m[1], path).toMatch(/^["']?data:/);
       expect(body).toMatch(/<link rel="icon" href="data:image\/png;base64,/);
@@ -233,7 +251,9 @@ describe("text from the data and the address", () => {
     for (const path of [`/en/de/${XSS}`, "/en"]) {
       const { status, body } = await reach(path);
       expect(status).toBe(200);
-      expect(body).not.toMatch(/<script|<img|<svg onload|<b>bold/i);
+      // The article's structured data is a JSON-LD block, never run, with no "<" inside it.
+      for (const m of body.matchAll(/<script type="application\/ld\+json">([^]*?)<\/script>/g)) expect(m[1]).not.toContain("<");
+      expect(withoutConsentScript(body).replace(/<script type="application\/ld\+json">[^<]*<\/script>/g, "")).not.toMatch(/<script|<img|<svg onload|<b>bold/i);
       // No tag carries an event handler: the escaped text may say "onerror=", a tag never does.
       // (Attribute values are blanked first: a meta description may quote the escaped text.)
       expect(body.replace(/"[^"]*"/g, '""')).not.toMatch(/<[^>]*\son\w+=/i);
@@ -262,7 +282,7 @@ describe("text from the data and the address", () => {
       const { status, body } = await site(path);
       expect(status).toBe(404);
       // (The tab icon's data: URL holds %3C, and "description" holds "script".)
-      expect(body).not.toMatch(/alert|<script|%3Cscript|<b>|x%3Cb/i);
+      expect(withoutConsentScript(body)).not.toMatch(/alert|<script|%3Cscript|<b>|x%3Cb/i);
     }
   });
 });

@@ -40,7 +40,7 @@ function sections(lang: SiteLang, page: InfoPage): Section[] {
         // The website's own part: the ARB texts describe the app.
         {
           heading: "siteHeading",
-          paragraphs: [p(lang, "siteData"), p(lang, "siteBanner")],
+          paragraphs: [p(lang, "siteData"), p(lang, "siteAnalytics"), p(lang, "siteBanner")],
         },
         {
           heading: "privacyRightsHeading",
@@ -94,6 +94,7 @@ ${s.paragraphs.map((para) => html`<p>${para}</p>`)}
   return {
     lang,
     kind: page,
+    index: true,
     title: `${text(lang, TITLES[page])} · ${SITE_NAME}`,
     canonical: origin + infoPath(lang, page),
     alternates: [
