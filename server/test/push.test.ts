@@ -230,6 +230,18 @@ describe("push notifications", () => {
     }
   });
 
+  it("never pushes an event from Wikipedia's current events, however important (#230)", async () => {
+    await decision("e1", 5, london(9));
+    await decision("a1", 4, london(9, 10));
+    await env.DB.prepare("UPDATE articles SET decision_type = 'event' WHERE id = 'e1'").run();
+    const google = fakeGoogle();
+    quiet();
+    expect(sent(await push(london(10), google))).toEqual(["en a1 sent"]);
+    const run = await push(london(13), google);
+    expect(run.pushes).toEqual([]);
+    expect(run.skipped.en).toBe("nothing breaking (importance 4+) in the last 24 hours");
+  });
+
   it("never pushes an article twice in a language, also one a run claimed and did not finish", async () => {
     await decision("a1", 5, london(9));
     await decision("a2", 5, london(9, 5));
