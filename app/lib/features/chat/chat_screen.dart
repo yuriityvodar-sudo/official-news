@@ -143,6 +143,16 @@ class _ChatScreenState extends State<ChatScreen> {
   /// line does: flush with it, the question slipped under the title on the
   /// phone (Roman, 30 Oct).
   static const _above = 8.0;
+
+  /// Whether the conversation stands where it should. A kept one is hidden
+  /// until its last question is at the top, a frame or two, and its header
+  /// is gone at once rather than folding: it opened showing the header,
+  /// folded it and jumped to the question (Roman, 30 Oct).
+  late bool _placed = _history.loaded;
+
+  /// Bumped as a kept conversation comes in: the header and the title then
+  /// change at once (their AnimatedSize starts anew) instead of folding.
+  int _kept = 0;
   String? _problem;
   bool _sending = false;
 
@@ -163,6 +173,9 @@ class _ChatScreenState extends State<ChatScreen> {
   void initState() {
     super.initState();
     unawaited(_loadStatus());
+    // Read already (the feed reads it for its Conversations button): the
+    // kept conversation is there from the first frame, with no header.
+    if (_history.loaded) _keep();
     unawaited(_start());
   }
 
@@ -170,23 +183,34 @@ class _ChatScreenState extends State<ChatScreen> {
   /// once at its last question; then the paywall's question, if one came.
   Future<void> _start() async {
     await _history.load();
-    final saved = _history.of(widget.article.id);
     if (!mounted) return;
-    if (saved != null && _turns.isEmpty) {
+    if (_turns.isEmpty && _history.of(widget.article.id) != null) {
       setState(() {
-        for (final (reader, text) in saved.messages) {
-          _turns.add(
-            _Turn(reader, text)
-              ..done = !reader
-              ..kept = true,
-          );
-        }
+        _kept++;
+        _keep();
       });
-      _toQuestion(animate: false);
-      _fit();
+    } else if (!_placed) {
+      setState(() => _placed = true);
     }
     final first = widget.firstQuestion;
     if (first != null) await _ask(first);
+  }
+
+  /// The kept conversation's turns, its last question then taken to the
+  /// top unseen ([_placed]).
+  void _keep() {
+    final saved = _history.of(widget.article.id);
+    if (saved == null) return;
+    for (final (reader, text) in saved.messages) {
+      _turns.add(
+        _Turn(reader, text)
+          ..done = !reader
+          ..kept = true,
+      );
+    }
+    _placed = false;
+    _toQuestion(animate: false);
+    _fit();
   }
 
   /// Keeps the conversation on the phone: each question with its answer,
@@ -381,25 +405,32 @@ class _ChatScreenState extends State<ChatScreen> {
     return messages.sublist(from);
   }
 
-  /// Takes the last question to the top, once there is room for it there.
+  /// Takes the last question to the top, once there is room for it there,
+  /// and shows a kept conversation once it stands there ([_placed]).
   void _toQuestion({bool animate = true}) =>
       WidgetsBinding.instance.addPostFrameCallback((_) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
           final top = _offsetOf(_lastAsked.key);
-          if (top == null || !mounted) return;
-          final to = clampDouble(
-            top - _above,
-            0,
-            _scroll.position.maxScrollExtent,
-          );
-          if (!animate || Motion.reduced(context)) return _scroll.jumpTo(to);
-          unawaited(
-            _scroll.animateTo(
-              to,
-              duration: const Duration(milliseconds: 380),
-              curve: Curves.easeOutCubic,
-            ),
-          );
+          if (top != null) {
+            final to = clampDouble(
+              top - _above,
+              0,
+              _scroll.position.maxScrollExtent,
+            );
+            if (!animate || Motion.reduced(context)) {
+              _scroll.jumpTo(to);
+            } else {
+              unawaited(
+                _scroll.animateTo(
+                  to,
+                  duration: const Duration(milliseconds: 380),
+                  curve: Curves.easeOutCubic,
+                ),
+              );
+            }
+          }
+          if (!_placed) setState(() => _placed = true);
         });
       });
 
@@ -464,6 +495,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   ),
                 ),
                 AnimatedSize(
+                  key: ValueKey(_kept),
                   duration: fold,
                   curve: Curves.easeOutCubic,
                   alignment: Alignment.topLeft,
@@ -580,122 +612,129 @@ class _ChatScreenState extends State<ChatScreen> {
                   Expanded(
                     // All of it laid out, not a lazy list: the last question must
                     // be there to be taken to the top, however far down it is.
-                    child: SingleChildScrollView(
-                      controller: _scroll,
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          AnimatedSize(
-                            duration: fold,
-                            curve: Curves.easeOutCubic,
-                            alignment: Alignment.topCenter,
-                            onEnd: _fit,
-                            child: talking
-                                ? const SizedBox(width: double.infinity)
-                                : header,
-                          ),
-                          for (final turn in _turns) ...[
-                            SizedBox(height: turn.reader ? 6 : 14),
-                            if (turn.reader)
-                              Align(
-                                key: turn.key,
-                                alignment: Alignment.centerRight,
-                                child: Container(
-                                  constraints: const BoxConstraints(
-                                    maxWidth: 300,
-                                  ),
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 14,
-                                    vertical: 10,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: style.fill,
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                  child: Text(
-                                    turn.text,
-                                    style: const TextStyle(
-                                      fontSize: 15,
-                                      color: Color(0xFFFFFFFF),
+                    child: Opacity(
+                      opacity: _placed ? 1 : 0,
+                      child: SingleChildScrollView(
+                        controller: _scroll,
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            AnimatedSize(
+                              key: ValueKey(_kept),
+                              duration: fold,
+                              curve: Curves.easeOutCubic,
+                              alignment: Alignment.topCenter,
+                              onEnd: _fit,
+                              child: talking
+                                  ? const SizedBox(width: double.infinity)
+                                  : header,
+                            ),
+                            for (final turn in _turns) ...[
+                              SizedBox(height: turn.reader ? 6 : 14),
+                              if (turn.reader)
+                                Align(
+                                  key: turn.key,
+                                  alignment: Alignment.centerRight,
+                                  child: Container(
+                                    constraints: const BoxConstraints(
+                                      maxWidth: 300,
+                                    ),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 14,
+                                      vertical: 10,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: style.fill,
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    child: Text(
+                                      turn.text,
+                                      style: const TextStyle(
+                                        fontSize: 15,
+                                        color: Color(0xFFFFFFFF),
+                                      ),
                                     ),
                                   ),
-                                ),
-                              )
-                            else ...[
-                              if (turn.text.isEmpty)
-                                _ThinkingDot(color: label)
-                              else
-                                _Answer(
-                                  key: turn.key,
-                                  text: turn.text,
-                                  style: news.body.copyWith(color: label),
-                                  onGrow: _fit,
-                                  atOnce: turn.kept,
-                                ),
-                              if (turn.cutOff)
-                                Text(
-                                  l10n.chatCutOff,
-                                  style: TextStyle(fontSize: 13, color: muted),
-                                ),
-                              if (turn.done)
-                                CupertinoButton(
-                                  padding: EdgeInsets.zero,
-                                  minimumSize: const Size(44, 44),
-                                  onPressed: () => widget.openLink(
-                                    Uri.parse(article.originalUrl),
+                                )
+                              else ...[
+                                if (turn.text.isEmpty)
+                                  _ThinkingDot(color: label)
+                                else
+                                  _Answer(
+                                    key: turn.key,
+                                    text: turn.text,
+                                    style: news.body.copyWith(color: label),
+                                    onGrow: _fit,
+                                    atOnce: turn.kept,
                                   ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(
-                                        CupertinoIcons.arrow_up_right_square,
-                                        size: 16,
-                                        color: style.ink,
-                                      ),
-                                      const SizedBox(width: 6),
-                                      Flexible(
-                                        child: Text(
-                                          article.isEvent
-                                              ? '${l10n.readOnWikipedia}, $site'
-                                              : l10n.readOfficialDecisionOn(
-                                                  site,
-                                                ),
-                                          style: TextStyle(
-                                            fontSize: 14,
-                                            color: style.ink,
+                                if (turn.cutOff)
+                                  Text(
+                                    l10n.chatCutOff,
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: muted,
+                                    ),
+                                  ),
+                                if (turn.done)
+                                  CupertinoButton(
+                                    padding: EdgeInsets.zero,
+                                    minimumSize: const Size(44, 44),
+                                    onPressed: () => widget.openLink(
+                                      Uri.parse(article.originalUrl),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          CupertinoIcons.arrow_up_right_square,
+                                          size: 16,
+                                          color: style.ink,
+                                        ),
+                                        const SizedBox(width: 6),
+                                        Flexible(
+                                          child: Text(
+                                            article.isEvent
+                                                ? '${l10n.readOnWikipedia}, $site'
+                                                : l10n.readOfficialDecisionOn(
+                                                    site,
+                                                  ),
+                                            style: TextStyle(
+                                              fontSize: 14,
+                                              color: style.ink,
+                                            ),
                                           ),
                                         ),
-                                      ),
-                                    ],
+                                      ],
+                                    ),
+                                  ),
+                              ],
+                            ],
+                            if (_problem != null ||
+                                (_turns.isNotEmpty && _turns.last.cutOff)) ...[
+                              const SizedBox(height: 12),
+                              if (_problem != null)
+                                Text(
+                                  _problem!,
+                                  style: TextStyle(fontSize: 14, color: muted),
+                                ),
+                              CupertinoButton(
+                                padding: EdgeInsets.zero,
+                                minimumSize: const Size(44, 44),
+                                onPressed: _sending ? null : _again,
+                                child: Text(
+                                  l10n.tryAgain,
+                                  style: TextStyle(
+                                    fontSize: 15,
+                                    color: style.ink,
                                   ),
                                 ),
+                              ),
                             ],
+                            SizedBox(key: _end),
+                            SizedBox(height: _room),
                           ],
-                          if (_problem != null ||
-                              (_turns.isNotEmpty && _turns.last.cutOff)) ...[
-                            const SizedBox(height: 12),
-                            if (_problem != null)
-                              Text(
-                                _problem!,
-                                style: TextStyle(fontSize: 14, color: muted),
-                              ),
-                            CupertinoButton(
-                              padding: EdgeInsets.zero,
-                              minimumSize: const Size(44, 44),
-                              onPressed: _sending ? null : _again,
-                              child: Text(
-                                l10n.tryAgain,
-                                style: TextStyle(
-                                  fontSize: 15,
-                                  color: style.ink,
-                                ),
-                              ),
-                            ),
-                          ],
-                          SizedBox(key: _end),
-                          SizedBox(height: _room),
-                        ],
+                        ),
                       ),
                     ),
                   ),

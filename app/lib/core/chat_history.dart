@@ -63,6 +63,11 @@ class ChatHistory extends ChangeNotifier {
   final Future<SharedPreferences> Function() _prefs;
   List<ChatConversation> _all = const [];
   Future<void>? _loading;
+  bool _loaded = false;
+
+  /// Whether what the phone keeps has been read ([load]): a chat opened
+  /// then shows its conversation from its first frame.
+  bool get loaded => _loaded;
 
   /// Newest first.
   List<ChatConversation> get conversations => _all;
@@ -74,6 +79,7 @@ class ChatHistory extends ChangeNotifier {
 
   Future<void> _load() async {
     final saved = (await _prefs()).getString(key);
+    _loaded = true;
     if (saved == null) return;
     try {
       _all = [

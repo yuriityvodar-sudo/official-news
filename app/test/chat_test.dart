@@ -296,6 +296,7 @@ void main() {
       ApiClient api, {
       List<Uri>? opened,
       ChatHistory? history,
+      bool settle = true,
     }) async {
       asked = [];
       // Bought before the chat opens, and done with (outside the test's fake time).
@@ -319,7 +320,7 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      if (settle) await tester.pumpAndSettle();
     }
 
     testWidgets("iOS's glass on the close button is drawn after everything "
@@ -616,6 +617,79 @@ void main() {
         );
       },
     );
+
+    /// How much of the conversation shows: none until it stands in place.
+    double shown(WidgetTester tester) => tester
+        .widget<Opacity>(
+          find
+              .ancestor(
+                of: find.byType(SingleChildScrollView),
+                matching: find.byType(Opacity),
+              )
+              .first,
+        )
+        .opacity;
+
+    /// A conversation the phone keeps about the decision: four questions.
+    void keepFour() => SharedPreferences.setMockInitialValues({
+      ChatHistory.key: jsonEncode([
+        ChatConversation(
+          article: _article,
+          messages: [
+            for (var i = 1; i <= 4; i++) ...[(true, 'Q$i'), (false, 'A$i')],
+          ],
+          updatedAt: _now,
+        ).toJson(),
+      ]),
+    });
+
+    testWidgets('a kept conversation opens where it left off: from its first '
+        'frame, with no header, unseen until its last question is at the top, '
+        'so nothing folds or jumps (Roman, 30 Oct)', (tester) async {
+      keepFour();
+      // The feed has read it already, for its Conversations button.
+      final history = ChatHistory();
+      await history.load();
+      await openChat(tester, server(), history: history, settle: false);
+      expect(find.text('GOV.UK'), findsNothing);
+      expect(find.text('Q4'), findsOneWidget);
+      expect(shown(tester), 0);
+
+      await tester.pumpAndSettle();
+      expect(shown(tester), 1);
+      final top = tester.getTopLeft(find.byType(SingleChildScrollView)).dy;
+      final bubble = tester.getRect(
+        find
+            .ancestor(of: find.text('Q4'), matching: find.byType(Container))
+            .first,
+      );
+      expect(bubble.top, moreOrLessEquals(top + 8));
+    });
+
+    testWidgets('read only as the chat opens, a kept conversation still shows '
+        'only once in place, its header gone at once', (tester) async {
+      keepFour();
+      await openChat(tester, server(), history: ChatHistory(), settle: false);
+      expect(shown(tester), 0);
+      await tester.pumpAndSettle();
+      expect(shown(tester), 1);
+      expect(find.text('GOV.UK'), findsNothing);
+      final top = tester.getTopLeft(find.byType(SingleChildScrollView)).dy;
+      final bubble = tester.getRect(
+        find
+            .ancestor(of: find.text('Q4'), matching: find.byType(Container))
+            .first,
+      );
+      expect(bubble.top, moreOrLessEquals(top + 8));
+    });
+
+    testWidgets('a new chat shows its header at once', (tester) async {
+      final history = ChatHistory();
+      await history.load();
+      await openChat(tester, server(), history: history, settle: false);
+      expect(shown(tester), 1);
+      expect(find.text('GOV.UK'), findsOneWidget);
+    });
 
     testWidgets(
       'keeps the conversation on the phone once the answer has come, and goes '
