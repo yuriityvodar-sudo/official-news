@@ -157,6 +157,35 @@ describe("runSummarizer", () => {
     expect((await row("ww-events"))?.feed_seq).not.toBeNull();
   });
 
+  it("tries again when an event names who reported it, and stores the last try with a warning (#230)", async () => {
+    await env.DB.prepare(
+      `INSERT INTO sources (id, country, name, kind, url, config, language, verified_by, verified_at, status)
+       VALUES ('ww-outlets', 'WW', 'Wikipedia: Current events', 'api', 'https://en.wikipedia.org/wiki/Portal:Current_events', ?, 'en', 'domain', '2026-10-30', 'active')`,
+    )
+      .bind(JSON.stringify({ currentEvents: "en", itemPages: false }))
+      .run();
+    await env.DB.prepare(
+      `INSERT INTO articles (id, source_id, url, original_title, published_at, fetched_at, text, original_language, summary_attempts)
+       VALUES ('outlets', 'ww-outlets', 'https://en.wikipedia.org/wiki/Portal:Current_events/2026_October_29#outlets',
+               'A train collision in Toledo kills 69 people.', ?, ?, ?, 'en', ?)`,
+    )
+      .bind(now(), now(), "Disasters and accidents\nA train collision in Toledo kills 69 people.\nReported by: Reuters", MAX_ATTEMPTS - 2)
+      .run();
+    const named = answer({
+      topics: ["security-defence"],
+      summary: "A train collision in Toledo, Spain, killed 69 people. The incident was reported by Reuters.",
+      shortSummary: "69 people died when two trains collided in Toledo.",
+      headline: "Train collision in Toledo kills 69 people",
+      headlineType: "plain",
+    });
+
+    const [first] = await runSummarizer(env, { maxArticles: 1 }, fakeModel(named).summarize);
+    expect(first).toMatchObject({ ok: false, error: "names who reported it: Reuters, reported by" });
+
+    const [last] = await runSummarizer(env, { maxArticles: 1 }, fakeModel(named).summarize);
+    expect(last).toMatchObject({ ok: true, warning: "stored on its last try with: names who reported it: Reuters, reported by" });
+  });
+
   it("counts an unusable answer as an attempt and gives up after the last one", async () => {
     await insertUnsummarized("bad", now());
     for (let i = 0; i < MAX_ATTEMPTS; i++) {
@@ -372,6 +401,11 @@ describe("the headline kind (#133)", () => {
     expect(prompt).toContain('decisionType: "event"');
     expect(prompt).toContain("headlineType: plain.");
     expect(prompt).toContain("Nothing from memory");
+    // From the first live events (30 Oct): no filler sentence, no outlet, and major prizes and titles are news.
+    expect(prompt).toContain("Every sentence gives a fact from the text");
+    expect(prompt).toContain("Never name the outlets that reported it");
+    expect(prompt).toContain("Sport and prizes are news only when they name a winner");
+    expect(prompt).toContain("the Ballon d'Or");
     // An official decision is never offered the event type.
     expect(systemPrompt("question")).not.toMatch(/meeting-outcome, event/);
     expect(systemPrompt("question")).toContain("meeting-agenda, meeting-outcome;");
