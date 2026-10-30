@@ -82,7 +82,7 @@ describe("GET /articles", () => {
     expect(page.top).toEqual([]);
     expect(Object.keys(page.items[0]).sort()).toEqual(
       [
-        "addedAt", "country", "dateOnly", "decisionType", "feedSeq", "headline", "headlineType", "id", "imageUrl", "impact", "importance",
+        "addedAt", "countries", "country", "dateOnly", "decisionType", "feedSeq", "headline", "headlineType", "id", "imageUrl", "impact", "importance",
         "originalLanguage", "originalTitle", "originalUrl", "publishedAt", "shortSummary",
         "source", "summary", "tags", "topics",
       ].sort(),
@@ -281,6 +281,15 @@ describe("GET /articles/:id", () => {
     const { status, body } = await get(`/articles/${SEED_DECISIONS[0]}`);
     expect(status).toBe(200);
     expect(body).toMatchObject({ id: SEED_DECISIONS[0] });
+  });
+
+  it("returns the countries it concerns in the summarizer's order, the main one first (#230)", async () => {
+    const id = SEED_DECISIONS[0];
+    await env.DB.prepare("DELETE FROM article_countries WHERE article_id = ?").bind(id).run();
+    await env.DB.prepare("INSERT INTO article_countries (article_id, country) SELECT ?1, value FROM json_each(?2)").bind(id, '["US","CA","AR"]').run();
+    expect((await get(`/articles/${id}`)).body).toMatchObject({ countries: ["US", "CA", "AR"] });
+    await env.DB.prepare("DELETE FROM article_countries WHERE article_id = ?").bind(id).run();
+    expect((await get(`/articles/${id}`)).body).toMatchObject({ countries: [] });
   });
 
   it("returns 404 for a hidden or unknown article", async () => {

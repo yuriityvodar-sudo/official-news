@@ -45,6 +45,8 @@ interface ArticleRow {
   feed_seq: number | null;
   added_at: string | null;
   impact: string | null;
+  /** The countries it concerns (#230), as a JSON array in the summarizer's order. */
+  countries: string | null;
 }
 
 /**
@@ -61,7 +63,8 @@ const articleColumns = (lang: Lang | null) => `
   a.id, s.country, a.source_id, ${sourceName(lang)} AS source_name, s.url AS source_url,
   a.url, a.original_title, a.published_at, a.date_only, a.headline, a.headline_type, a.short_summary,
   a.summary, a.decision_type, a.image_url, a.original_language, a.topics, a.tags, a.importance,
-  a.feed_seq, a.added_at, a.impact`;
+  a.feed_seq, a.added_at, a.impact,
+  (SELECT json_group_array(country) FROM (SELECT c.country FROM article_countries c WHERE c.article_id = a.id ORDER BY c.rowid)) AS countries`;
 
 const ARTICLE_COLUMNS = articleColumns(null);
 
@@ -286,6 +289,7 @@ export function toArticle(row: ArticleRow) {
     feedSeq: row.feed_seq,
     addedAt: row.added_at,
     impact: parseImpact(row.impact),
+    countries: parseStringArray(row.countries),
   };
 }
 
