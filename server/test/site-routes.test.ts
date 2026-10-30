@@ -28,6 +28,7 @@ describe("every route", () => {
         expect(headers.get("cloudflare-cdn-cache-control")).toBe(CACHE[kind].edge);
         expect(headers.get("x-robots-tag")).toBe("noindex");
         expect(headers.get("x-content-type-options")).toBe("nosniff");
+        expect(headers.get("strict-transport-security")).toBe("max-age=31536000");
         expect(headers.get("content-security-policy")).toMatch(/^default-src 'none'; style-src 'sha256-[A-Za-z0-9+/]+=*'; img-src 'self' data:; /);
         expect(headers.get("content-language")).toBe(lang);
         expect(headers.get("set-cookie")).toBeNull();

@@ -7,7 +7,8 @@ name: Deploy
 # Needs the repository secret CLOUDFLARE_API_TOKEN (see docs/setup.md). Until
 # it exists, the run ends with a warning instead of failing.
 # The website is deployed only once the repository variable SITE_DEPLOY is
-# `true` (docs/setup.md): a workers.dev site is public as soon as it exists, so
+# `true` (docs/setup.md): the site is public on outernews.app as soon as it is
+# deployed (workers.dev is off), so
 # Yurii sets it when the privacy and support pages name a working contact.
 
 on:

@@ -63,6 +63,8 @@ export function respond(reply: Reply, method: string, styleHash: string): Respon
     "cloudflare-cdn-cache-control": cache.edge,
     "x-robots-tag": reply.robots ?? ROBOTS_DEFAULT,
     "x-content-type-options": "nosniff",
+    // https only, for a year: the site is served on its own domain (Roman's review of #233).
+    "strict-transport-security": "max-age=31536000",
     "content-security-policy": csp(styleHash),
     "content-type": isPng ? "image/png" : isText ? "text/plain; charset=utf-8" : "text/html; charset=utf-8",
   });
