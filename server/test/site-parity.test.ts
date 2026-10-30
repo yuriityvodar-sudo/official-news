@@ -9,7 +9,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import type { ApiArticle, ApiList } from "../src/site/data";
 import { SITE_LANGS, type SiteLang, decisionLabel } from "../src/site/texts";
 import { get, hideSeed } from "./helpers";
-import { ORIGIN, escaped, hoursAgo, hreflangs, insertArticle, insertTranslation, linkedIds, reach, site, siteRowsRead as rowsRead, testId } from "./site-helpers";
+import { ORIGIN, escaped, hoursAgo, hreflangs, insertArticle, insertTranslation, linkedIds, reach, refreshSite, site, siteRowsRead as rowsRead, testId } from "./site-helpers";
 
 const A = {
   englishOnly: testId(1),
@@ -44,6 +44,7 @@ async function fixtures() {
   await insertTranslation(A.old, "es");
   await insertArticle({ id: A.blockedSource, sourceId: "us-white-house", originalLanguage: "en" });
   await env.DB.prepare("UPDATE sources SET status = 'blocked' WHERE id = 'us-white-house'").run();
+  await refreshSite();
 }
 
 const apiArticle = async (id: string, lang: SiteLang) => get(lang === "en" ? `/articles/${id}` : `/articles/${id}?lang=${lang}`);
@@ -144,6 +145,7 @@ describe("latest lists", () => {
       await insertArticle({ id: testId(n), importance: n % 5 });
       if (n % 3 === 0) await insertTranslation(testId(n), "uk");
     }
+    await refreshSite();
   });
 
   /** Every page of the API's list in `lang`, through nextCursor. */
@@ -198,15 +200,22 @@ describe("latest lists", () => {
     expect(linkedIds(page.body)).toEqual([]);
   });
 
-  it("read a bounded number of D1 rows per page", async () => {
-    const first = await rowsRead(() => site("/en"));
+  it("read one D1 row per page, the language's snapshot; the API's queries only without one", async () => {
     const next = /<a class="more" href="([^"]+)" rel="next nofollow">/.exec((await site("/en")).body)![1];
+    const first = await rowsRead(() => site("/en"));
     const later = await rowsRead(() => site(next));
-    // 500 since #239: each article's countries (#230) are a few more rows, found by key.
-    expect(first).toBeLessThan(500);
-    expect(later).toBeLessThan(200);
+    expect(first).toBe(1);
+    expect(later).toBe(1);
     expect(await rowsRead(() => site("/uk?before=0"))).toBe(0);
+    // Without a snapshot (before the cron's first round, or once it is stale): the API's queries, as before 30 Oct.
+    await env.DB.prepare("DELETE FROM site_snapshots").run();
+    const firstFromApi = await rowsRead(() => site("/en"));
+    const laterFromApi = await rowsRead(() => site(next));
+    expect(firstFromApi).toBeGreaterThan(first);
+    // 500 since #239: each article's countries (#230) are a few more rows, found by key.
+    expect(firstFromApi).toBeLessThan(500);
+    expect(laterFromApi).toBeLessThan(200);
     // The numbers, for docs/decisions.md (a test database: a few dozen articles).
-    console.log(JSON.stringify({ rowsRead: { listFirstPage: first, listLaterPage: later } }));
+    console.log(JSON.stringify({ rowsRead: { listFirstPage: first, listLaterPage: later, listFirstPageFromApi: firstFromApi, listLaterPageFromApi: laterFromApi } }));
   });
 });
