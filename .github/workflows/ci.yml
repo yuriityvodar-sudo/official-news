@@ -2,6 +2,9 @@ name: CI
 
 on:
   pull_request:
+  # The merge queue (30 Oct): GitHub tests each queued pull request on top of
+  # the latest main before it merges it, one at a time.
+  merge_group:
   push:
     branches: [main]
 
