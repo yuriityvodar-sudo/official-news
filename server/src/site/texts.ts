@@ -108,8 +108,8 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
   },
   de: {
     latestLink: "Neueste Entscheidungen",
-    getApp: "Hol dir die App",
-    getAppBody: "Offizielle Entscheidungen aus aller Welt, in wenigen ruhigen Sätzen, auf deinem Handy.",
+    getApp: "Laden Sie die App",
+    getAppBody: "Offizielle Entscheidungen aus aller Welt, in wenigen ruhigen Sätzen, auf Ihrem Handy.",
     comingSoon: "Demnächst",
     notFound: "Seite nicht gefunden",
     error: "Etwas ist schiefgelaufen",

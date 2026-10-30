@@ -155,3 +155,24 @@ describe("docs/source-credits.csv", () => {
     assert.equal(rows["ru-kremlin-acts"].licence, "CC BY 4.0");
   });
 });
+
+// Roman's review of #234: the website's About, Privacy, Terms and Support say
+// everything the app's own pages say, since they cover both and are the URLs
+// App Store Connect links.
+describe("the website's information pages", () => {
+  /** Keys the app's pages show that the website says its own way. */
+  const APP_ONLY = {
+    supportWrite: "the app's button to its message screen (#220); the website gives the e-mail (emailUs)",
+    supportOrEmail: "the line under that button; the website gives the e-mail (emailUs)",
+  };
+
+  test("show every text the app's info pages show", () => {
+    const dart = read(paths.infoPages);
+    const site = read(fileURLToPath(new URL("../src/site/pages/info.ts", import.meta.url)));
+    const shown = [...new Set([...dart.matchAll(/l10n\.((?:about|privacy|terms|support)[A-Za-z0-9]*)/g)].map((m) => m[1]))];
+    assert.ok(shown.length > 20, `found only ${shown.length} keys in info_pages.dart`);
+    const missing = shown.filter((key) => !(key in APP_ONLY) && !site.includes(`"${key}"`));
+    assert.deepEqual(missing, [], `pages/info.ts misses texts the app's pages show: ${missing.join(", ")}`);
+  });
+});
+

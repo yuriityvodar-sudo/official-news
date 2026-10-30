@@ -30,11 +30,13 @@ function sections(lang: SiteLang, page: InfoPage): Section[] {
         { heading: "privacyPhoneHeading", paragraphs: [p(lang, "privacyPhone")] },
         {
           heading: "privacyLoadingHeading",
-          paragraphs: [p(lang, "privacyLoadingServer"), p(lang, "privacyLoadingPictures"), p(lang, "privacyLoadingPages")],
+          paragraphs: [p(lang, "privacyLoadingServer"), p(lang, "privacyLoadingCountry"), p(lang, "privacyLoadingPictures"), p(lang, "privacyLoadingPages")],
         },
         { heading: "privacyAnalyticsHeading", paragraphs: [p(lang, "privacyAnalytics")] },
         { heading: "privacyNotificationsHeading", paragraphs: [p(lang, "privacyNotifications")] },
         { heading: "privacyAiHeading", paragraphs: [p(lang, "privacyAi")] },
+        { heading: "privacyChatHeading", paragraphs: [p(lang, "privacyChat")] },
+        { heading: "privacySupportHeading", paragraphs: [p(lang, "privacySupport")] },
         // The website's own part: the ARB texts describe the app.
         {
           heading: "siteHeading",
@@ -54,6 +56,7 @@ function sections(lang: SiteLang, page: InfoPage): Section[] {
         { paragraphs: [p(lang, "termsIntro1"), p(lang, "termsIntro2")] },
         { heading: "termsContentHeading", paragraphs: [p(lang, "termsContent")] },
         { heading: "termsNoGuaranteeHeading", paragraphs: [p(lang, "termsNoGuarantee")] },
+        { heading: "termsSubscriptionHeading", paragraphs: [p(lang, "termsSubscription")] },
         { heading: "termsPublisherHeading", paragraphs: [t(lang, "termsPublisher", { publisher: publisherDetails(lang) })] },
       ];
     case "support":
