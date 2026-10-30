@@ -38,7 +38,7 @@ class NowLook extends FeedLook {
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Expanded(child: Text(masthead.title, style: text.masthead)),
-                masthead.settingsButton,
+                masthead.buttons,
               ],
             ),
             Text(masthead.date, style: text.dateLine),

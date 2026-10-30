@@ -10,6 +10,7 @@ import 'package:in_app_purchase/in_app_purchase.dart';
 import 'package:official_news/core/analytics.dart';
 import 'package:official_news/core/api_client.dart';
 import 'package:official_news/core/article.dart';
+import 'package:official_news/core/chat_history.dart';
 import 'package:official_news/core/subscription.dart';
 import 'package:official_news/features/chat/chat_consent.dart';
 import 'package:official_news/features/chat/chat_screen.dart';
@@ -264,6 +265,7 @@ void main() {
       WidgetTester tester,
       ApiClient api, {
       List<Uri>? opened,
+      ChatHistory? history,
     }) async {
       asked = [];
       // Bought before the chat opens, and done with (outside the test's fake time).
@@ -281,6 +283,8 @@ void main() {
             article: _article,
             api: api,
             subscription: subscription,
+            // Each chat its own, so no test goes on with another's conversation.
+            history: history ?? ChatHistory(),
             openLink: (uri) async => opened?.add(uri),
           ),
         ),
@@ -546,6 +550,68 @@ void main() {
           tester.getTopLeft(find.text('Line 1 of the answer.').last).dy,
           lessThan(tester.getBottomLeft(list).dy),
         );
+      },
+    );
+
+    testWidgets(
+      'keeps the conversation on the phone once the answer has come, and goes '
+      'on with it when the chat opens again (Roman, 30 Oct)',
+      (tester) async {
+        final history = ChatHistory();
+        await openChat(tester, server(), history: history);
+        await tester.tap(find.text('What changes and when?'));
+        await tester.pumpAndSettle();
+        expect(history.of('c1')!.messages, [
+          (true, 'What changes and when?'),
+          (false, 'Yes, from November 2027.'),
+        ]);
+
+        // Opened again: there at once, the header folded, and it goes on.
+        await openChat(tester, server(), history: history);
+        expect(find.text('What changes and when?'), findsOneWidget);
+        expect(find.text('Yes, from November 2027.'), findsOneWidget);
+        expect(find.text('GOV.UK'), findsNothing);
+        await tester.enterText(find.byType(CupertinoTextField), 'And then?');
+        await tester.testTextInput.receiveAction(TextInputAction.send);
+        await tester.pumpAndSettle();
+        expect(asked.last['messages'], [
+          {'role': 'user', 'text': 'What changes and when?'},
+          {'role': 'assistant', 'text': 'Yes, from November 2027.'},
+          {'role': 'user', 'text': 'And then?'},
+        ]);
+        expect(history.of('c1')!.messages, hasLength(4));
+      },
+    );
+
+    testWidgets(
+      'sends the server the last 20 messages of a long conversation, from a question on',
+      (tester) async {
+        SharedPreferences.setMockInitialValues({
+          ChatHistory.key: jsonEncode([
+            ChatConversation(
+              article: _article,
+              messages: [
+                for (var i = 1; i <= 10; i++) ...[
+                  (true, 'Q$i'),
+                  (false, 'A$i'),
+                ],
+              ],
+              updatedAt: _now,
+            ).toJson(),
+          ]),
+        });
+        final history = ChatHistory();
+        await openChat(tester, server(), history: history);
+        await tester.enterText(find.byType(CupertinoTextField), 'Q11');
+        await tester.testTextInput.receiveAction(TextInputAction.send);
+        await tester.pumpAndSettle();
+        final sent = asked.last['messages'] as List;
+        expect(sent, hasLength(19));
+        expect(sent.first, {'role': 'user', 'text': 'Q2'});
+        expect(sent.last, {'role': 'user', 'text': 'Q11'});
+        // The phone keeps the last 20 too.
+        expect(history.of('c1')!.messages, hasLength(20));
+        expect(history.of('c1')!.messages.first, (true, 'Q2'));
       },
     );
 

@@ -9,6 +9,7 @@ import '../../core/filters.dart';
 import '../../core/motion.dart';
 import '../../core/read_mark.dart';
 import '../../core/theme.dart';
+import '../chat/chat_history_screen.dart';
 import 'feed_filters.dart';
 import 'feed_look_a.dart';
 import 'feed_look_b.dart';
@@ -206,6 +207,7 @@ class FeedMasthead {
     required this.title,
     required this.date,
     required this.openSettings,
+    this.openConversations,
     required this.where,
     required this.topic,
     required this.topics,
@@ -219,8 +221,12 @@ class FeedMasthead {
   /// Today in the reader's language: "Friday, 16 October", "Пʼятниця, 16 жовтня".
   final String date;
 
-  /// Opens Settings. [settingsButton] is today's button for it.
+  /// Opens Settings. [buttons] has today's button for it.
   final VoidCallback openSettings;
+
+  /// Opens the Conversations screen with the AI agent (#146); null while
+  /// the reader has none, or no subscription.
+  final VoidCallback? openConversations;
 
   /// What the feed shows (#170): For you or the whole world, and the topic
   /// chosen across the world, if any.
@@ -250,9 +256,18 @@ class FeedMasthead {
   /// in a build.
   final ValueListenable<FeedPull?> pull;
 
-  /// Today's settings button: a round gear with a 44-pt target and its
-  /// VoiceOver label. A look may draw its own and call [openSettings].
-  Widget get settingsButton => NowSettingsButton(onPressed: openSettings);
+  /// Today's buttons at the end of the masthead: Conversations, when there
+  /// are any (#146, Roman's pick B, 30 Oct), then the round settings gear,
+  /// each in glass with a 44-pt target and its VoiceOver label. A look may
+  /// draw its own and call [openConversations] and [openSettings].
+  Widget get buttons => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      if (openConversations case final open?)
+        ConversationsButton(onPressed: open),
+      NowSettingsButton(onPressed: openSettings),
+    ],
+  );
 }
 
 /// The pull to refresh for [FeedLook.refreshIndicator]: what

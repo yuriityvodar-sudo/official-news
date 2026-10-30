@@ -164,7 +164,7 @@ class NewsLook extends FeedLook {
                   ],
                 ),
               ),
-              masthead.settingsButton,
+              masthead.buttons,
             ],
           ),
         ),

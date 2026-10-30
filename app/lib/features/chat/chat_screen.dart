@@ -10,6 +10,7 @@ import 'package:flutter/scheduler.dart' show Ticker;
 
 import '../../core/analytics.dart';
 import '../../core/api_client.dart';
+import '../../core/chat_history.dart';
 import '../../core/article.dart';
 import '../../core/config.dart';
 import '../../core/glass.dart';
@@ -31,6 +32,9 @@ class _Turn {
   bool done = false;
   bool cutOff = false;
 
+  /// Kept on the phone from before: shown at once, not written again.
+  bool kept = false;
+
   /// Its own, so a turn keeps its place and state as others come.
   final key = GlobalKey();
 }
@@ -42,13 +46,18 @@ class _Turn {
 /// title once the conversation starts; the question asked goes to the top
 /// of the screen and its answer is written under it, the screen keeping
 /// still, never jumping to the answer's end; a pulsing dot while the agent
-/// thinks; the answer's bold and lists shown as such ([_Formatted]). The limit as Claude shows it (variant A of Roman's mockup,
-/// 27 Oct): nothing until it is near, then "3 questions left today" over the
-/// field; once none are left, a card in the field's place, with when new ones
-/// come and "Buy more questions" ([TopUpSheet]). A long document's question
-/// takes more of the limit, and the chat says so. Not paid any more (the
-/// server's 402): the paywall shows again. Nothing of the conversation is
-/// kept: it is gone with the screen.
+/// thinks; the answer's bold and lists shown as such ([_Formatted]).
+///
+/// The limit as Claude shows it (variant A of Roman's mockup, 27 Oct):
+/// nothing until it is near, then "3 questions left today" over the field;
+/// once none are left, a card in the field's place, with when new ones come
+/// and "Buy more questions" ([TopUpSheet]). A long document's question takes
+/// more of the limit, and the chat says so. Not paid any more (the server's
+/// 402): the paywall shows again.
+///
+/// The conversation is kept on the phone only ([ChatHistory], Roman's pick
+/// B, 30 Oct): opened again about the same decision, it goes on where it was
+/// left, and the Conversations screen lists them all.
 class ChatScreen extends StatefulWidget {
   const ChatScreen({
     super.key,
@@ -57,6 +66,7 @@ class ChatScreen extends StatefulWidget {
     this.api,
     this.scroll,
     this.subscription,
+    this.history,
     this.openLink = openOfficialPage,
   });
 
@@ -66,6 +76,7 @@ class ChatScreen extends StatefulWidget {
     BuildContext context,
     Article article, {
     String? firstQuestion,
+    ChatHistory? history,
   }) => showCupertinoSheet<void>(
     context: context,
     showDragHandle: true,
@@ -73,6 +84,7 @@ class ChatScreen extends StatefulWidget {
       article: article,
       firstQuestion: firstQuestion,
       scroll: scroll,
+      history: history,
     ),
   );
 
@@ -88,6 +100,9 @@ class ChatScreen extends StatefulWidget {
 
   /// [chatSubscription] unless a test brings its own.
   final ChatSubscription? subscription;
+
+  /// [chatHistory] unless a test brings its own.
+  final ChatHistory? history;
   final Future<void> Function(Uri) openLink;
 
   /// Where the chat is: the iOS app (StoreKit), not Android or tests, unless a
@@ -136,12 +151,51 @@ class _ChatScreenState extends State<ChatScreen> {
 
   ChatSubscription get _subscription => widget.subscription ?? chatSubscription;
 
+  ChatHistory get _history => widget.history ?? chatHistory;
+
   @override
   void initState() {
     super.initState();
     unawaited(_loadStatus());
+    unawaited(_start());
+  }
+
+  /// The conversation the phone keeps about this decision, if any, shown at
+  /// once at its last question; then the paywall's question, if one came.
+  Future<void> _start() async {
+    await _history.load();
+    final saved = _history.of(widget.article.id);
+    if (!mounted) return;
+    if (saved != null && _turns.isEmpty) {
+      setState(() {
+        for (final (reader, text) in saved.messages) {
+          _turns.add(
+            _Turn(reader, text)
+              ..done = !reader
+              ..kept = true,
+          );
+        }
+      });
+      _toQuestion(animate: false);
+      _fit();
+    }
     final first = widget.firstQuestion;
-    if (first != null) unawaited(Future.microtask(() => _ask(first)));
+    if (first != null) await _ask(first);
+  }
+
+  /// Keeps the conversation on the phone: each question with its answer,
+  /// once the answer has come in full.
+  Future<void> _save() {
+    final kept = <(bool, String)>[];
+    for (var i = 0; i + 1 < _turns.length; i++) {
+      final (question, answer) = (_turns[i], _turns[i + 1]);
+      if (question.reader && !answer.reader && answer.done) {
+        kept
+          ..add((true, question.text))
+          ..add((false, answer.text));
+      }
+    }
+    return _history.save(widget.article, kept);
   }
 
   /// What is left, from the server: the card shows at once when nothing is.
@@ -213,10 +267,10 @@ class _ChatScreenState extends State<ChatScreen> {
           : await _api.askChat(
               articleId: widget.article.id,
               lang: Localizations.localeOf(context).languageCode,
-              messages: [
+              messages: _recent([
                 for (final t in _turns)
                   if (t != answer && t.text.isNotEmpty) (t.reader, t.text),
-              ],
+              ]),
               transaction: transaction,
             );
       _left = reply.remaining;
@@ -227,6 +281,7 @@ class _ChatScreenState extends State<ChatScreen> {
         _fit();
       }
       answer.done = true;
+      unawaited(_save());
     } on ChatLimit catch (limit) {
       // Not asked: the question goes back into the field, for after a top-up.
       _turns
@@ -303,22 +358,33 @@ class _ChatScreenState extends State<ChatScreen> {
     if ((room - _room).abs() > 0.5) setState(() => _room = room);
   });
 
+  /// What the server takes with a question: the last [ChatHistory.maxMessages]
+  /// messages, from a question on.
+  static List<(bool, String)> _recent(List<(bool, String)> messages) {
+    var from = max(0, messages.length - ChatHistory.maxMessages);
+    while (from < messages.length - 1 && !messages[from].$1) {
+      from++;
+    }
+    return messages.sublist(from);
+  }
+
   /// Takes the last question to the top, once there is room for it there.
-  void _toQuestion() => WidgetsBinding.instance.addPostFrameCallback((_) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final top = _offsetOf(_lastAsked.key);
-      if (top == null || !mounted) return;
-      final to = clampDouble(top, 0, _scroll.position.maxScrollExtent);
-      if (Motion.reduced(context)) return _scroll.jumpTo(to);
-      unawaited(
-        _scroll.animateTo(
-          to,
-          duration: const Duration(milliseconds: 380),
-          curve: Curves.easeOutCubic,
-        ),
-      );
-    });
-  });
+  void _toQuestion({bool animate = true}) =>
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          final top = _offsetOf(_lastAsked.key);
+          if (top == null || !mounted) return;
+          final to = clampDouble(top, 0, _scroll.position.maxScrollExtent);
+          if (!animate || Motion.reduced(context)) return _scroll.jumpTo(to);
+          unawaited(
+            _scroll.animateTo(
+              to,
+              duration: const Duration(milliseconds: 380),
+              curve: Curves.easeOutCubic,
+            ),
+          );
+        });
+      });
 
   /// The question before an answer cut off or refused, asked again.
   void _again() {
@@ -535,6 +601,7 @@ class _ChatScreenState extends State<ChatScreen> {
                               text: turn.text,
                               style: news.body.copyWith(color: label),
                               onGrow: _fit,
+                              atOnce: turn.kept,
                             ),
                           if (turn.cutOff)
                             Text(
@@ -825,6 +892,7 @@ class _Answer extends StatefulWidget {
     required this.text,
     required this.style,
     this.onGrow,
+    this.atOnce = false,
   });
 
   final String text;
@@ -832,6 +900,9 @@ class _Answer extends StatefulWidget {
 
   /// More of it shows: the room under the conversation is measured again.
   final VoidCallback? onGrow;
+
+  /// All of it at once: an answer kept on the phone from before.
+  final bool atOnce;
 
   @override
   State<_Answer> createState() => _AnswerState();
@@ -854,7 +925,7 @@ class _AnswerState extends State<_Answer> with SingleTickerProviderStateMixin {
   }
 
   void _catchUp() {
-    if (Motion.reduced(context)) {
+    if (widget.atOnce || Motion.reduced(context)) {
       _ticker.stop();
       _shown = widget.text.length;
       widget.onGrow?.call();
