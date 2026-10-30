@@ -11,11 +11,25 @@ export { LANGUAGE_NAMES, SITE_LANGS, type SiteLang };
 export const isSiteLang = (value: string): value is SiteLang => (SITE_LANGS as readonly string[]).includes(value);
 
 interface SiteTexts {
+  /**
+   * The EU AI Act Art. 50(4) notice: AI text on public-interest matters, not
+   * reviewed by a person. It is also the change notice the licences ask for
+   * (CC BY: changes indicated; the Japanese PDL 1.0: that the text was edited
+   * and by whom, `{publisher}`), and says it is not the official text (no
+   * official status). Once on a page, above the credit (#88 review).
+   */
+  aiNotice: string;
+  creditSource: string;
+  published: string;
+  added: string;
+  originalTitle: string;
   latestLink: string;
   /** The "Get the app" block above the footer (Yurii, 28 Oct): placeholders until the app is in the stores. */
   getApp: string;
   getAppBody: string;
   comingSoon: string;
+  notInLang: string;
+  readIn: string;
   notFound: string;
   error: string;
   errorText: string;
@@ -35,10 +49,18 @@ interface SiteTexts {
 
 const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
   en: {
+    aiNotice:
+      "Headlines and summaries are written by AI for Outer News ({publisher}) from the official text and are not reviewed by a person. They are not the official text and can contain mistakes: before you rely on one, read the original.",
+    creditSource: "Source: {source}",
+    published: "Published {date}",
+    added: "In Outer News since {date}",
+    originalTitle: "Original title",
     latestLink: "Latest decisions",
     getApp: "Get the app",
     getAppBody: "Official decisions from around the world, in a few calm sentences, on your phone.",
     comingSoon: "Coming soon",
+    notInLang: "This decision is not available in this language yet.",
+    readIn: "Read it in:",
     notFound: "Page not found",
     error: "Something went wrong",
     errorText: "Please try again in a minute.",
@@ -53,10 +75,18 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     emailUs: "Write to us at {email}.",
   },
   uk: {
+    aiNotice:
+      "Заголовки й стислі виклади пише ШІ для Outer News ({publisher}) на основі офіційного тексту, і людина їх не перевіряє. Вони не є офіційним текстом і можуть містити помилки: перш ніж покладатися на них, прочитайте оригінал.",
+    creditSource: "Джерело: {source}",
+    published: "Опубліковано {date}",
+    added: "В Outer News з {date}",
+    originalTitle: "Оригінальна назва",
     latestLink: "Останні рішення",
     getApp: "Завантажте застосунок",
     getAppBody: "Офіційні рішення з усього світу кількома спокійними реченнями у вашому телефоні.",
     comingSoon: "Незабаром",
+    notInLang: "Цього рішення ще немає цією мовою.",
+    readIn: "Читати:",
     notFound: "Сторінку не знайдено",
     error: "Щось пішло не так",
     errorText: "Спробуйте ще раз за хвилину.",
@@ -71,10 +101,18 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     emailUs: "Пишіть нам на {email}.",
   },
   ru: {
+    aiNotice:
+      "Заголовки и краткие изложения пишет ИИ для Outer News ({publisher}) на основе официального текста, и человек их не проверяет. Они не являются официальным текстом и могут содержать ошибки: прежде чем полагаться на них, прочитайте оригинал.",
+    creditSource: "Источник: {source}",
+    published: "Опубликовано {date}",
+    added: "В Outer News с {date}",
+    originalTitle: "Оригинальное название",
     latestLink: "Последние решения",
     getApp: "Скачайте приложение",
     getAppBody: "Официальные решения со всего мира в нескольких спокойных предложениях в вашем телефоне.",
     comingSoon: "Скоро",
+    notInLang: "Этого решения пока нет на этом языке.",
+    readIn: "Читать:",
     notFound: "Страница не найдена",
     error: "Что-то пошло не так",
     errorText: "Попробуйте ещё раз через минуту.",
@@ -89,10 +127,18 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     emailUs: "Пишите нам на {email}.",
   },
   es: {
+    aiNotice:
+      "Los titulares y los resúmenes los escribe una IA para Outer News ({publisher}) a partir del texto oficial, y ninguna persona los revisa. No son el texto oficial y pueden contener errores: antes de fiarte de uno, lee el original.",
+    creditSource: "Fuente: {source}",
+    published: "Publicado el {date}",
+    added: "En Outer News desde el {date}",
+    originalTitle: "Título original",
     latestLink: "Últimas decisiones",
     getApp: "Descarga la app",
     getAppBody: "Decisiones oficiales de todo el mundo, en pocas frases serenas, en tu móvil.",
     comingSoon: "Próximamente",
+    notInLang: "Esta decisión aún no está disponible en este idioma.",
+    readIn: "Leer en:",
     notFound: "Página no encontrada",
     error: "Algo salió mal",
     errorText: "Vuelve a intentarlo en un minuto.",
@@ -107,10 +153,18 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     emailUs: "Escríbenos a {email}.",
   },
   de: {
+    aiNotice:
+      "Überschriften und Zusammenfassungen schreibt eine KI für Outer News ({publisher}) auf Grundlage des offiziellen Textes, und kein Mensch prüft sie. Sie sind nicht der offizielle Text und können Fehler enthalten: Lesen Sie das Original, bevor Sie sich darauf verlassen.",
+    creditSource: "Quelle: {source}",
+    published: "Veröffentlicht am {date}",
+    added: "Bei Outer News seit dem {date}",
+    originalTitle: "Originaltitel",
     latestLink: "Neueste Entscheidungen",
     getApp: "Laden Sie die App",
     getAppBody: "Offizielle Entscheidungen aus aller Welt, in wenigen ruhigen Sätzen, auf Ihrem Handy.",
     comingSoon: "Demnächst",
+    notInLang: "Diese Entscheidung gibt es in dieser Sprache noch nicht.",
+    readIn: "Lesen auf:",
     notFound: "Seite nicht gefunden",
     error: "Etwas ist schiefgelaufen",
     errorText: "Bitte versuchen Sie es in einer Minute erneut.",
@@ -160,6 +214,10 @@ export const publisher = (lang: SiteLang) => text(lang, "publisher", { name: PUB
 
 /** The publisher with its seat, company ID and register file, as the app's privacy policy and terms say it. */
 export const publisherDetails = (lang: SiteLang) => text(lang, "publisherDetails", { name: PUBLISHER_NAME, ...PUBLISHER_DETAILS });
+
+/** The AI notice, which names us as the text's editor (see SiteTexts.aiNotice). */
+export const aiNotice = (lang: SiteLang) => t(lang, "aiNotice", { publisher: PUBLISHER_NAME });
+export const aiNoticeText = (lang: SiteLang) => text(lang, "aiNotice", { publisher: PUBLISHER_NAME });
 
 const hasAppKey = (key: string): key is AppKey => key in APP_TEXTS.en;
 
