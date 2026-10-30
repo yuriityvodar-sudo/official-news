@@ -109,9 +109,7 @@ void main() {
       expect(glass(tester), 1);
     });
 
-    testWidgets('a popup over its screen leaves the glass too', (
-      tester,
-    ) async {
+    testWidgets('a popup over its screen leaves the glass too', (tester) async {
       fakeViews(tester);
       await tester.pumpWidget(capsule());
       final navigator = tester.state<NavigatorState>(find.byType(Navigator));
