@@ -9,6 +9,9 @@ export type NameLang = "en" | Lang;
 /** The source country of the EU's own institutions (the European Commission): not a country, but in groups. */
 export const EU = "EU";
 
+/** The source country of sources about the whole world, such as Wikipedia's current events (#230): not a country, and in no menu. */
+export const WORLD = "WW";
+
 /**
  * The groups of countries in the Where menu (Yurii, 16 Oct), in the menu's
  * order: official organizations, with their members among the countries we

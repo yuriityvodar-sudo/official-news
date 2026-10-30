@@ -2,7 +2,7 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import { FROM_TRANSLATED, PAGE_CONDITIONS, RECENT_TRANSLATION, TRANSLATED_CONDITIONS, feedFilters, feedTopics, topStories } from "../src/api";
-import { EU_MEMBERS, GROUPS, type GroupId, TOPIC_NAMES, type Where, countryName, groupCountries, hasCountryName } from "../src/api/filters";
+import { EU_MEMBERS, GROUPS, type GroupId, TOPIC_NAMES, WORLD, type Where, countryName, groupCountries, hasCountryName } from "../src/api/filters";
 import { TOPICS, type Topic } from "../src/summarizer/schema";
 import { LANGS, type Lang } from "../src/translator";
 import { type ArticlesPage, QWEN, get, hideSeed, hoursAgo, ids, minutesAgo, rowsRead } from "./helpers";
@@ -700,7 +700,15 @@ describe("GET /countries", () => {
 
   it("has a name in every language for every country of docs/sources.csv", () => {
     expect(env.TEST_SOURCE_COUNTRIES.length).toBeGreaterThan(5);
-    for (const code of env.TEST_SOURCE_COUNTRIES) expect(hasCountryName(code), code).toBe(true);
+    for (const code of env.TEST_SOURCE_COUNTRIES) if (code !== WORLD) expect(hasCountryName(code), code).toBe(true);
+  });
+
+  it("never lists the world's sources as a country (#230)", async () => {
+    await env.DB.prepare(
+      "INSERT INTO sources (id, country, name, kind, url, status) VALUES ('ww-events', 'WW', 'Wikipedia', 'api', 'https://en.wikipedia.org/wiki/Portal:Current_events', 'active')",
+    ).run();
+    const { countries } = (await get("/countries?lang=en")).body as { countries: { code: string }[] };
+    expect(countries.map((c) => c.code)).not.toContain(WORLD);
   });
 
   it("shows a code it has no name for as it is", async () => {

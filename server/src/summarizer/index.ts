@@ -1,7 +1,7 @@
 import type { Env } from "../env";
 import { toStoredTime } from "../fetcher/text";
 import { checkSummary } from "./checks";
-import { type ArticleInput, MAX_TEXT, headlineKind, publishedDate, systemPrompt, userMessage } from "./prompt";
+import { type ArticleInput, MAX_TEXT, eventPrompt, headlineKind, publishedDate, systemPrompt, userMessage } from "./prompt";
 import { SUMMARY_SCHEMA, type Summary, clipped, overLimits, parseJson, toSummary } from "./schema";
 
 /**
@@ -33,6 +33,10 @@ interface ArticleRow {
   published_at: string;
   fetched_at: string;
   summary_attempts: number;
+  /** The source reads Wikipedia's current events (#230). */
+  is_event: number;
+  /** The source is hidden (#230): its news is stored as not news. */
+  hidden: number;
 }
 
 /** What happened to one article in a run, for the log. */
@@ -45,6 +49,8 @@ export interface SummaryResult {
   warning?: string;
   /** Its last try was unusable too: it stays hidden (`gaveUpOnSummary` in /health). */
   gaveUp?: boolean;
+  /** From a hidden source (#230): stored as not news, whatever `isNews` says. */
+  hidden?: boolean;
 }
 
 /** The model answered, but not with something we can store. Counts as a failed attempt. */
@@ -57,7 +63,7 @@ function workersAi(env: Env): Summarize {
   return async (article) => {
     const output = await env.AI.run(MODEL, {
       messages: [
-        { role: "system", content: systemPrompt(article.headlineKind) },
+        { role: "system", content: article.event ? eventPrompt() : systemPrompt(article.headlineKind) },
         { role: "user", content: userMessage(article) },
       ],
       response_format: { type: "json_schema", json_schema: { name: "article_summary", schema: SUMMARY_SCHEMA, strict: true } },
@@ -148,7 +154,8 @@ export async function runSummarizer(
 
   const { results: rows } = await env.DB.prepare(
     `SELECT a.id, a.original_title, a.text, a.original_language, s.name AS source_name, s.country,
-            a.published_at, a.fetched_at, a.summary_attempts
+            a.published_at, a.fetched_at, a.summary_attempts,
+            json_extract(s.config, '$.currentEvents') IS NOT NULL AS is_event, json_extract(s.config, '$.hidden') IS 1 AS hidden
      FROM articles a JOIN sources s ON s.id = a.source_id
      WHERE a.id IN (SELECT value FROM json_each(?))
      ORDER BY a.fetched_at DESC, a.id DESC`,
@@ -166,6 +173,7 @@ export async function runSummarizer(
       text: row.text,
       published: publishedDate(row.published_at, row.country),
       headlineKind: headlineKind(row.id, row.text),
+      event: row.is_event === 1,
     };
     try {
       const answer = await summarize(article);
@@ -175,7 +183,7 @@ export async function runSummarizer(
       } catch {
         throw new UnusableAnswer("the answer is not valid JSON");
       }
-      const checked = toSummary(parsed, article.headlineKind);
+      const checked = toSummary(parsed, article.headlineKind, article.event);
       if ("problems" in checked) throw new UnusableAnswer(checked.problems.join("; "));
       // A number the article does not give, or a summary not in English, is never
       // stored (#63). A ruled-out word, text copied from the article or a field over
@@ -200,11 +208,13 @@ export async function runSummarizer(
         if (soft.length) warnings.push(`stored on its last try with: ${soft.join("; ")}`);
       }
       summary = clipped(summary);
-      await env.DB.batch(store(env, row.id, summary, toStoredTime(new Date()), row.country));
+      // A hidden source's news is checked like any other, then kept out of the feed (#230).
+      await env.DB.batch(store(env, row.id, row.hidden ? { ...summary, isNews: false } : summary, toStoredTime(new Date()), row.country));
       results.push({
         articleId: row.id,
         ok: true,
         isNews: summary.isNews,
+        ...(row.hidden ? { hidden: true } : {}),
         ...(warnings.length ? { warning: warnings.join("; ") } : {}),
       });
     } catch (error) {

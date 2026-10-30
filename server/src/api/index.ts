@@ -11,6 +11,7 @@ import {
   GROUPS,
   TOPIC_ERROR,
   TOPIC_NAMES,
+  WORLD,
   type Where,
   byName,
   countryName,
@@ -649,7 +650,8 @@ async function listTopics(url: URL, env: Env): Promise<Response> {
  * GROUPS, always, in its fixed order, named in `lang`, with the source
  * countries it shows (`EU` for the EU institutions). `countries`: the countries
  * of active sources (real ones, not the Kickoff seed), without the EU
- * institutions (in the European Union group instead), named in `lang` and
+ * institutions (in the European Union group instead) and the world's sources
+ * (#230), named in `lang` and
  * sorted by that name. The sources table holds a few dozen rows.
  */
 async function listCountries(url: URL, env: Env): Promise<Response> {
@@ -664,7 +666,7 @@ async function listCountries(url: URL, env: Env): Promise<Response> {
   const groups = GROUPS.map((group) => ({ id: group.id, name: groupName(group, nameLang), members: groupCountries(group) }));
   const countries = results
     .map((r) => r.country)
-    .filter((code) => /^[A-Z]{2}$/.test(code) && code !== EU)
+    .filter((code) => /^[A-Z]{2}$/.test(code) && code !== EU && code !== WORLD)
     .map((code) => ({ code, name: countryName(code, nameLang) }));
   return json({ groups, countries: byName(countries, nameLang) }, 200, LIST_CACHE);
 }

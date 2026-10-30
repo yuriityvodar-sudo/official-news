@@ -5,6 +5,7 @@ import { extractContent, findLink, parsePage } from "./page";
 import { type Robots, isAllowed, robotsFromResponse } from "./robots";
 import { decodeBody, getStrings, htmlToText, toStoredTime, ulid } from "./text";
 import { type FilterField, type FoundItem, type SourceConfig, type SourceRow, configRegex, readConfig } from "./types";
+import { type EventsLang, currentEventsPages, englishPageDay, parseCurrentEvents } from "./wikipedia";
 
 export const USER_AGENT = "OfficialNewsBot/0.1 (+https://github.com/yuriityvodar-sudo/official-news)";
 
@@ -196,7 +197,32 @@ function listUrl(url: string, now: Date): string {
   return url.replaceAll("{year}", String(now.getUTCFullYear()));
 }
 
+/**
+ * Wikipedia's current events (#230): the raw wikitext of the last days' pages.
+ * A day page not written yet (404 early in the UTC day) is skipped; the check
+ * fails only when no page could be read.
+ */
+async function readCurrentEvents(run: Run, lang: EventsLang, config: SourceConfig): Promise<ListResult> {
+  const items: FoundItem[] = [];
+  let read = false;
+  let failed: number | null = null;
+  for (const raw of currentEventsPages(lang, run.now)) {
+    if (await blockedBy(run, raw)) continue;
+    const res = await request(run, raw, "text/x-wiki, text/plain;q=0.9", config.crawlDelaySeconds);
+    if (!res.ok) {
+      failed ??= res.status;
+      continue;
+    }
+    read = true;
+    // The item links the page people read, not its wikitext.
+    const page = raw.replace(/\?action=raw$/, "");
+    items.push(...parseCurrentEvents(await res.text(), page, lang, run.now, englishPageDay(page)));
+  }
+  return { items, status: read ? 200 : (failed ?? 403), etag: null, lastModified: null };
+}
+
 async function readList(run: Run, source: SourceRow, config: SourceConfig, url: string): Promise<ListResult> {
+  if (config.currentEvents) return readCurrentEvents(run, config.currentEvents, config);
   // Servers often match these exactly, so we send back what they sent, never a time of our own.
   const conditional: Record<string, string> = {};
   if (config.conditionalGet && source.list_etag) conditional["if-none-match"] = source.list_etag;

@@ -92,5 +92,13 @@ export const CREDITS: Record<string, Credit> = {
     "wording": "Джерело: Урядовий кур’єр",
     "wordingLang": "uk"
   },
-  "ua-verkhovna-rada": {}
+  "ua-verkhovna-rada": {},
+  "ww-wikipedia-en": {
+    "licence": "CC BY-SA 4.0",
+    "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+  },
+  "ww-wikipedia-ru": {
+    "licence": "CC BY-SA 4.0",
+    "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
+  }
 };
