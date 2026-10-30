@@ -318,6 +318,29 @@ void main() {
       await tester.pumpAndSettle();
     }
 
+    testWidgets("iOS's glass on the close button is drawn after everything "
+        'else in the chat: drawn first, it left the chat under it empty '
+        '(TestFlight 55, Roman, 30 Oct)', (tester) async {
+      GlassCircle.debugNative = true;
+      addTearDown(() => GlassCircle.debugNative = null);
+      final messenger = tester.binding.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(
+        SystemChannels.platform_views,
+        (_) async => null,
+      );
+      addTearDown(
+        () => messenger.setMockMethodCallHandler(
+          SystemChannels.platform_views,
+          null,
+        ),
+      );
+      await openChat(tester, server(remaining: 2));
+      expect(
+        paintOrder(tester, find.byType(UiKitView)),
+        greaterThan(paintOrder(tester, find.text('Ask about this decision'))),
+      );
+    });
+
     testWidgets(
       'asks about this decision and shows the answer as it comes, with the official link',
       (tester) async {
