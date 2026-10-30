@@ -60,6 +60,23 @@ function fakeModel(...answers: (string | Error)[]) {
 }
 
 describe("runSummarizer", () => {
+  it("stores the countries a decision concerns and its reach, or its source's country when the model names none (#230)", async () => {
+    const earlier = `${new Date(Date.now() - 60_000).toISOString().slice(0, 19)}Z`;
+    await insertUnsummarized("named", now());
+    await insertUnsummarized("unnamed", earlier);
+    const { summarize } = fakeModel(answer({ countries: ["FR", "DE"], reach: "regional" }), answer({ countries: [] }));
+    await runSummarizer(env, { maxArticles: 2 }, summarize);
+    const countries = async (id: string) =>
+      (await env.DB.prepare("SELECT country FROM article_countries WHERE article_id = ? ORDER BY country").bind(id).all<{ country: string }>()).results.map(
+        (r) => r.country,
+      );
+    expect(await countries("named")).toEqual(["DE", "FR"]);
+    expect(await row("named")).toMatchObject({ reach: "regional" });
+    // The German federal government's source.
+    expect(await countries("unnamed")).toEqual(["DE"]);
+    expect(await row("unnamed")).toMatchObject({ reach: "national" });
+  });
+
   it("summarizes the newest unsummarized articles; news enters the feed when the translator releases it", async () => {
     await insertUnsummarized("old", "2026-10-14T08:00:00Z");
     await insertUnsummarized("new", now());
@@ -238,6 +255,13 @@ describe("runSummarizer", () => {
 
 describe("toSummary", () => {
   const base = JSON.parse(answer()) as Record<string, unknown>;
+
+  it("reads the countries a decision concerns as codes, at most 5, and its reach (#230)", () => {
+    const named = toSummary({ ...base, countries: ["us", "CA", "UK", "Canada", "US", 7, "DE", "FR", "IT", "PL"], reach: "regional" }, "question");
+    expect(named).toMatchObject({ summary: { countries: ["US", "CA", "GB", "DE", "FR"], reach: "regional" } });
+    // Missing or wrong: no countries (the source's is stored then) and national, never a retry.
+    expect(toSummary({ ...base, countries: "US", reach: "planet" }, "question")).toMatchObject({ summary: { countries: [], reach: "national" } });
+  });
 
   it("drops unknown topics and fills a missing decision type for news", () => {
     const result = toSummary({ ...base, decisionType: "press-release", topics: ["economy", "sports", "economy"] }, "question");
