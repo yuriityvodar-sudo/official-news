@@ -180,6 +180,10 @@
   "@decisionTypeMeetingOutcome": {
     "description": "Decision type: what an official meeting decided."
   },
+  "decisionTypeEvent": "Event",
+  "@decisionTypeEvent": {
+    "description": "Not a decision: an event in the world, from Wikipedia's current events (#230)."
+  },
 
   "topicForeignAffairs": "Foreign affairs",
   "@topicForeignAffairs": {

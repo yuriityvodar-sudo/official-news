@@ -427,6 +427,36 @@ describe("runFetcher", () => {
       ["https://legis.senado.test/norma/44184944", "2026-10-13T12:00:00Z"],
     ]);
   });
+
+  it("reads Wikipedia's current events as wikitext, skips a day page not written yet, and links the page people read (#230)", async () => {
+    await addSource("xx-events", "https://en.wikipedia.org/wiki/Portal:Current_events", "api", { currentEvents: "en", hidden: true, itemPages: false });
+    const day = (n: number) => `https://en.wikipedia.org/wiki/Portal:Current_events/2026_October_${n}`;
+    const { fetch, requests } = fakeFetch({
+      "https://en.wikipedia.org/robots.txt": { body: "User-agent: *\nDisallow: /w/\nDisallow: /api/", type: "text/plain" },
+      // Today's page (14 October) is not written yet: 404.
+      [`${day(13)}?action=raw`]: {
+        type: "text/x-wiki; charset=UTF-8",
+        body: "'''Disasters and accidents'''\n*An earthquake of magnitude 6.1 strikes [[Eastland]]. [https://news.test/q (Example Wire)]\n",
+      },
+    });
+
+    const [check] = await runFetcher(env, { fetch, now: NOW });
+    expect(check).toMatchObject({ sourceId: "xx-events", ok: true, httpStatus: 200, found: 1, saved: 1, error: null });
+    expect(requests.map((r) => r.url)).toEqual(["https://en.wikipedia.org/robots.txt", `${day(14)}?action=raw`, `${day(13)}?action=raw`]);
+    const [saved] = await articlesOf("xx-events");
+    expect(saved.url).toMatch(new RegExp(`^${day(13)}#event-[0-9a-z]+$`));
+    expect(saved).toMatchObject({
+      original_title: "An earthquake of magnitude 6.1 strikes Eastland.",
+      published_at: "2026-10-13T12:00:00Z",
+      date_only: 1,
+      text: "Disasters and accidents\nAn earthquake of magnitude 6.1 strikes Eastland.\nReported by: Example Wire",
+    });
+
+    // No page at all: the check fails with the pages' answer.
+    await env.DB.prepare("UPDATE sources SET last_checked_at = NULL WHERE id = 'xx-events'").run();
+    const { fetch: none } = fakeFetch({ "https://en.wikipedia.org/robots.txt": { body: "", type: "text/plain" } });
+    expect(await runFetcher(env, { fetch: none, now: NOW })).toMatchObject([{ ok: false, httpStatus: 404, error: "HTTP 404" }]);
+  });
 });
 
 // #71: sources whose list gives only a teaser. Fixtures are trimmed from the real pages and answers.

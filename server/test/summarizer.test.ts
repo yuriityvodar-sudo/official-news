@@ -4,6 +4,7 @@ import { CLAIM_MINUTES, MAX_ATTEMPTS, MODEL, runSummarizer, type Summarize } fro
 import { runTranslator } from "../src/translator";
 import {
   type ArticleInput,
+  eventPrompt,
   headlineKind,
   publishedDate,
   systemPrompt,
@@ -115,6 +116,45 @@ describe("runSummarizer", () => {
     expect(await row("statement")).toMatchObject({ is_news: 0, decision_type: null });
     const feed = (await (await exports.default.fetch("https://api.test/articles")).json()) as { items: { id: string }[] };
     expect(feed.items.map((a) => a.id)).not.toContain("statement");
+  });
+
+  it("summarizes an event with the event prompt as an event, and keeps a hidden source's out of the feed with its verdict (#230)", async () => {
+    for (const [id, hidden] of [
+      ["ww-events", false],
+      ["ww-events-hidden", true],
+    ] as const) {
+      await env.DB.prepare(
+        `INSERT INTO sources (id, country, name, kind, url, config, language, verified_by, verified_at, status)
+         VALUES (?, 'WW', 'Wikipedia: Current events', 'api', 'https://en.wikipedia.org/wiki/Portal:Current_events', ?, 'en', 'domain', '2026-10-30', 'active')`,
+      )
+        .bind(id, JSON.stringify({ currentEvents: "en", itemPages: false, ...(hidden ? { hidden } : {}) }))
+        .run();
+      await env.DB.prepare(
+        `INSERT INTO articles (id, source_id, url, original_title, published_at, fetched_at, text, original_language)
+         VALUES (?, ?, ?, 'An earthquake of magnitude 6.1 strikes Eastland.', ?, ?, ?, 'en')`,
+      )
+        .bind(id, id, `https://en.wikipedia.org/wiki/Portal:Current_events/2026_October_13#${id}`, now(), now(), "Disasters and accidents\nAn earthquake of magnitude 6.1 strikes Eastland.\nReported by: Example Wire")
+        .run();
+    }
+    const event = answer({
+      decisionType: "law",
+      topics: ["security-defence"],
+      summary: "A magnitude 6.1 earthquake hit Eastland.",
+      shortSummary: "Eastland was hit by a magnitude 6.1 earthquake.",
+      headline: "Magnitude 6.1 earthquake hits Eastland",
+      headlineType: "plain",
+    });
+    const { summarize, calls } = fakeModel(event, event);
+    const results = await runSummarizer(env, { maxArticles: 5 }, summarize);
+
+    expect(calls.map((c) => c.event)).toEqual([true, true]);
+    expect(results.find((r) => r.articleId === "ww-events-hidden")).toMatchObject({ ok: true, isNews: true, hidden: true });
+    expect(await row("ww-events")).toMatchObject({ is_news: 1, decision_type: "event", headline_type: "plain" });
+    // Checked and stored like any news, but not news: never translated or released. Its decision type keeps the model's verdict.
+    expect(await row("ww-events-hidden")).toMatchObject({ is_news: 0, decision_type: "event", headline: "Magnitude 6.1 earthquake hits Eastland" });
+    await release();
+    expect(await row("ww-events-hidden")).toMatchObject({ feed_seq: null });
+    expect((await row("ww-events"))?.feed_seq).not.toBeNull();
   });
 
   it("counts an unusable answer as an attempt and gives up after the last one", async () => {
@@ -272,6 +312,12 @@ describe("toSummary", () => {
     expect(toSummary({ ...base, isNews: false }, "question")).toMatchObject({ summary: { decisionType: null } });
   });
 
+  it("makes news from an event source an event, and never an official article (#230)", () => {
+    expect(toSummary({ ...base, decisionType: "law" }, "question", true)).toMatchObject({ summary: { decisionType: "event" } });
+    expect(toSummary({ ...base, isNews: false, decisionType: "event" }, "question", true)).toMatchObject({ summary: { decisionType: null } });
+    expect(toSummary({ ...base, decisionType: "event" }, "question")).toMatchObject({ summary: { decisionType: "decision" } });
+  });
+
   it("keeps the headline type the model names, or the kind asked for when it names none (#133)", () => {
     expect(toSummary({ ...base, headlineType: "plain" }, "question")).toMatchObject({ summary: { headlineType: "plain" } });
     expect(toSummary({ ...base, headlineType: "deadline" }, "question")).toMatchObject({ summary: { headlineType: "question" } });
@@ -317,6 +363,18 @@ describe("the headline kind (#133)", () => {
     expect(prompt).toContain("Write it as a contrast headline");
     expect(prompt).toContain("headlineType: what you wrote: contrast, or plain.");
     expect(systemPrompt("question")).not.toContain("contrast headline");
+  });
+
+  it("is plain for an event, whose prompt asks for a short summary from the given lines only, in English (#230)", () => {
+    const prompt = eventPrompt();
+    expect(prompt).toContain("Wikipedia's current events");
+    expect(prompt).toContain("you always write in English");
+    expect(prompt).toContain('decisionType: "event"');
+    expect(prompt).toContain("headlineType: plain.");
+    expect(prompt).toContain("Nothing from memory");
+    // An official decision is never offered the event type.
+    expect(systemPrompt("question")).not.toMatch(/meeting-outcome, event/);
+    expect(systemPrompt("question")).toContain("meeting-agenda, meeting-outcome;");
   });
 
   it("is sent with the article and stored with the summary, without impact or tags, and the API returns it", async () => {

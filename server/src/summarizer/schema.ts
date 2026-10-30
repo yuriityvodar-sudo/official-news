@@ -11,6 +11,8 @@ export const DECISION_TYPES = [
   "decision",
   "meeting-agenda",
   "meeting-outcome",
+  // Not a decision (#230): what happened in the world, from Wikipedia's current events.
+  "event",
 ] as const;
 
 export const TOPICS = [
@@ -126,9 +128,11 @@ export function parseJson(text: string): unknown {
  * Checks the model's answer and normalises it. Returns the problems instead of
  * a summary when something essential is missing or wrong. `kind` is the
  * headline kind that was asked for: an answer that names another kind keeps it.
- * Lengths are not clipped here: one over its limit costs a retry (`overLimits`).
+ * News from an `event` source (#230) is of the type event, and an official
+ * article never is. Lengths are not clipped here: one over its limit costs a
+ * retry (`overLimits`).
  */
-export function toSummary(value: unknown, kind: HeadlineKind): { summary: Summary } | { problems: string[] } {
+export function toSummary(value: unknown, kind: HeadlineKind, event = false): { summary: Summary } | { problems: string[] } {
   if (!value || typeof value !== "object" || Array.isArray(value)) return { problems: ["not a JSON object"] };
   const v = value as Record<string, unknown>;
   const problems: string[] = [];
@@ -146,8 +150,9 @@ export function toSummary(value: unknown, kind: HeadlineKind): { summary: Summar
 
   const isNews = v.isNews === true;
   let decisionType: DecisionType | null = null;
-  if (isNews) {
-    decisionType = DECISION_TYPES.includes(v.decisionType as DecisionType) ? (v.decisionType as DecisionType) : "decision";
+  if (isNews && event) decisionType = "event";
+  else if (isNews) {
+    decisionType = DECISION_TYPES.includes(v.decisionType as DecisionType) && v.decisionType !== "event" ? (v.decisionType as DecisionType) : "decision";
   }
   const topics = Array.isArray(v.topics)
     ? [...new Set(v.topics.filter((t): t is Topic => TOPICS.includes(t as Topic)))].slice(0, LIMITS.topics)

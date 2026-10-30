@@ -1,5 +1,6 @@
 import type { Lang } from "../translator/languages";
 import type { DateSpec } from "./dates";
+import type { EventsLang } from "./wikipedia";
 
 /** A source row from D1. */
 export interface SourceRow {
@@ -96,6 +97,19 @@ export interface SourceConfig {
   allowedHosts?: string[];
   /** Days to keep the extracted text (default 30). */
   textDays?: number;
+  /**
+   * Wikipedia's current events in this language (#230): the items are the
+   * events of its pages (wikipedia.ts), not the links of a list. The source's
+   * `url` is the portal's page, for robots.txt and the site's links.
+   */
+  currentEvents?: EventsLang;
+  /**
+   * Not in the feed yet (#230, until the app labels events): its articles are
+   * summarized, so the summaries can be checked, but stored as not news, so
+   * they are never translated or released. The model's verdict stays in
+   * `decision_type`, which is set only for news.
+   */
+  hidden?: boolean;
   /**
    * The source's name in the app's other languages (#76), from
    * docs/source-names.csv (never written in docs/sources.csv). Not read by the

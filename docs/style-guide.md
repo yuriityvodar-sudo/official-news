@@ -74,6 +74,15 @@ Official decisions only, as agreed in `docs/decisions.md`. `isNews` is `true` fo
 
 `isNews` is `false` for statements, condolences, congratulations, readouts of calls or visits that announce no decision, speeches, interviews, opinion pieces, event announcements, a parliamentary debate or hearing where nothing was adopted (even about a bill), a page explaining a law or programme adopted before its publication date, and regular notices: exchange rates, interest rate tables, price indices, tenders, court notices, company notices, appointments below the top level, technical standards.
 
+## Events (#230)
+
+An event from Wikipedia's current events is not an official text: one sentence, the topics above it and the outlets that reported it. It gets its own instructions (`eventPrompt` in `server/src/summarizer/prompt.ts`), and the same checks.
+
+- `isNews` is `true` when the event matters beyond the place it happened (politics, elections, conflicts, disasters, the economy, health, science, courts, major sports), `false` for a minor sports result, the death of someone little known or an anniversary. Its type is always `event`.
+- The summary is 1 to 3 short sentences, up to 400 characters: what happened, where, and whom it affects. No "What to do:" or "What we do not know:": the lines say too little for them.
+- The headline is plain and factual (`headlineType` `plain`): what happened and where.
+- Only what the lines say: nothing from memory, no background, in English whatever the page's language, and in the summarizer's own words, never the sentence copied.
+
 ## Importance
 
 | Score | Meaning | Example |

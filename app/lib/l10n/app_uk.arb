@@ -41,6 +41,7 @@
   "decisionTypeDecision": "Рішення",
   "decisionTypeMeetingAgenda": "Порядок денний",
   "decisionTypeMeetingOutcome": "Підсумки засідання",
+  "decisionTypeEvent": "Подія",
 
   "topicForeignAffairs": "Зовнішня політика",
   "topicEconomy": "Економіка",
