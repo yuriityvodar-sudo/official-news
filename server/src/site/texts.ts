@@ -2,7 +2,7 @@
 // app-texts.generated.ts, never copied; only what the app does not say is
 // written here, in all 5 languages (TypeScript requires each one). The uk and
 // ru texts need Yurii's review, es and de a native speaker's.
-import { countryName as apiCountryName } from "../api/filters";
+import { countryName as apiCountryName, hasCountryName } from "../api/filters";
 import { APP_TEXTS, type AppKey, LANGUAGE_NAMES, PUBLISHER_DETAILS, PUBLISHER_NAME, SITE_LANGS, type SiteLang } from "./app-texts.generated";
 import { Html, esc } from "./html";
 
@@ -19,6 +19,10 @@ interface SiteTexts {
    * official status). Once on a page, above the credit (#88 review).
    */
   aiNotice: string;
+  /** The AI notice on an event's page (#230): from Wikipedia's text, which is not an official one. */
+  aiNoticeEvent: string;
+  /** The AI notice on a list that has events among its decisions (#230). */
+  aiNoticeWithEvents: string;
   creditSource: string;
   published: string;
   added: string;
@@ -35,6 +39,8 @@ interface SiteTexts {
   getAppBody: string;
   comingSoon: string;
   notInLang: string;
+  /** The not-in-language page of an event (#230). */
+  notInLangEvent: string;
   readIn: string;
   notFound: string;
   error: string;
@@ -57,6 +63,10 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
   en: {
     aiNotice:
       "Headlines and summaries are written by AI for Outer News ({publisher}) from the official text and are not reviewed by a person. They are not the official text and can contain mistakes: before you rely on one, read the original.",
+    aiNoticeEvent:
+      "Headlines and summaries are written by AI for Outer News ({publisher}) from Wikipedia's text and are not reviewed by a person. They can contain mistakes: before you rely on one, read the original.",
+    aiNoticeWithEvents:
+      "Headlines and summaries are written by AI for Outer News ({publisher}) from the official text, or for events from Wikipedia's text, and are not reviewed by a person. They are not the official text and can contain mistakes: before you rely on one, read the original.",
     creditSource: "Source: {source}",
     published: "Published {date}",
     added: "In Outer News since {date}",
@@ -69,6 +79,7 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     getAppBody: "Official decisions from around the world, in a few calm sentences, on your phone.",
     comingSoon: "Coming soon",
     notInLang: "This decision is not available in this language yet.",
+    notInLangEvent: "This event is not available in this language yet.",
     readIn: "Read it in:",
     notFound: "Page not found",
     error: "Something went wrong",
@@ -86,6 +97,10 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
   uk: {
     aiNotice:
       "Заголовки й стислі виклади пише ШІ для Outer News ({publisher}) на основі офіційного тексту, і людина їх не перевіряє. Вони не є офіційним текстом і можуть містити помилки: перш ніж покладатися на них, прочитайте оригінал.",
+    aiNoticeEvent:
+      "Заголовки й стислі виклади пише ШІ для Outer News ({publisher}) на основі тексту Вікіпедії, і людина їх не перевіряє. Вони можуть містити помилки: перш ніж покладатися на них, прочитайте оригінал.",
+    aiNoticeWithEvents:
+      "Заголовки й стислі виклади пише ШІ для Outer News ({publisher}) на основі офіційного тексту, а для подій — тексту Вікіпедії, і людина їх не перевіряє. Вони не є офіційним текстом і можуть містити помилки: перш ніж покладатися на них, прочитайте оригінал.",
     creditSource: "Джерело: {source}",
     published: "Опубліковано {date}",
     added: "В Outer News з {date}",
@@ -98,6 +113,7 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     getAppBody: "Офіційні рішення з усього світу кількома спокійними реченнями у вашому телефоні.",
     comingSoon: "Незабаром",
     notInLang: "Цього рішення ще немає цією мовою.",
+    notInLangEvent: "Цієї події ще немає цією мовою.",
     readIn: "Читати:",
     notFound: "Сторінку не знайдено",
     error: "Щось пішло не так",
@@ -115,6 +131,10 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
   ru: {
     aiNotice:
       "Заголовки и краткие изложения пишет ИИ для Outer News ({publisher}) на основе официального текста, и человек их не проверяет. Они не являются официальным текстом и могут содержать ошибки: прежде чем полагаться на них, прочитайте оригинал.",
+    aiNoticeEvent:
+      "Заголовки и краткие изложения пишет ИИ для Outer News ({publisher}) на основе текста Википедии, и человек их не проверяет. Они могут содержать ошибки: прежде чем полагаться на них, прочитайте оригинал.",
+    aiNoticeWithEvents:
+      "Заголовки и краткие изложения пишет ИИ для Outer News ({publisher}) на основе официального текста, а для событий — текста Википедии, и человек их не проверяет. Они не являются официальным текстом и могут содержать ошибки: прежде чем полагаться на них, прочитайте оригинал.",
     creditSource: "Источник: {source}",
     published: "Опубликовано {date}",
     added: "В Outer News с {date}",
@@ -127,6 +147,7 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     getAppBody: "Официальные решения со всего мира в нескольких спокойных предложениях в вашем телефоне.",
     comingSoon: "Скоро",
     notInLang: "Этого решения пока нет на этом языке.",
+    notInLangEvent: "Этого события пока нет на этом языке.",
     readIn: "Читать:",
     notFound: "Страница не найдена",
     error: "Что-то пошло не так",
@@ -144,6 +165,10 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
   es: {
     aiNotice:
       "Los titulares y los resúmenes los escribe una IA para Outer News ({publisher}) a partir del texto oficial, y ninguna persona los revisa. No son el texto oficial y pueden contener errores: antes de fiarte de uno, lee el original.",
+    aiNoticeEvent:
+      "Los titulares y los resúmenes los escribe una IA para Outer News ({publisher}) a partir del texto de Wikipedia, y ninguna persona los revisa. Pueden contener errores: antes de fiarte de uno, lee el original.",
+    aiNoticeWithEvents:
+      "Los titulares y los resúmenes los escribe una IA para Outer News ({publisher}) a partir del texto oficial o, en los acontecimientos, del texto de Wikipedia, y ninguna persona los revisa. No son el texto oficial y pueden contener errores: antes de fiarte de uno, lee el original.",
     creditSource: "Fuente: {source}",
     published: "Publicado el {date}",
     added: "En Outer News desde el {date}",
@@ -156,6 +181,7 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     getAppBody: "Decisiones oficiales de todo el mundo, en pocas frases serenas, en tu móvil.",
     comingSoon: "Próximamente",
     notInLang: "Esta decisión aún no está disponible en este idioma.",
+    notInLangEvent: "Este acontecimiento aún no está disponible en este idioma.",
     readIn: "Leer en:",
     notFound: "Página no encontrada",
     error: "Algo salió mal",
@@ -173,6 +199,10 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
   de: {
     aiNotice:
       "Überschriften und Zusammenfassungen schreibt eine KI für Outer News ({publisher}) auf Grundlage des offiziellen Textes, und kein Mensch prüft sie. Sie sind nicht der offizielle Text und können Fehler enthalten: Lesen Sie das Original, bevor Sie sich darauf verlassen.",
+    aiNoticeEvent:
+      "Überschriften und Zusammenfassungen schreibt eine KI für Outer News ({publisher}) auf Grundlage des Wikipedia-Textes, und kein Mensch prüft sie. Sie können Fehler enthalten: Lesen Sie das Original, bevor Sie sich darauf verlassen.",
+    aiNoticeWithEvents:
+      "Überschriften und Zusammenfassungen schreibt eine KI für Outer News ({publisher}) auf Grundlage des offiziellen Textes, bei Ereignissen des Wikipedia-Textes, und kein Mensch prüft sie. Sie sind nicht der offizielle Text und können Fehler enthalten: Lesen Sie das Original, bevor Sie sich darauf verlassen.",
     creditSource: "Quelle: {source}",
     published: "Veröffentlicht am {date}",
     added: "Bei Outer News seit dem {date}",
@@ -185,6 +215,7 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     getAppBody: "Offizielle Entscheidungen aus aller Welt, in wenigen ruhigen Sätzen, auf Ihrem Handy.",
     comingSoon: "Demnächst",
     notInLang: "Diese Entscheidung gibt es in dieser Sprache noch nicht.",
+    notInLangEvent: "Dieses Ereignis gibt es in dieser Sprache noch nicht.",
     readIn: "Lesen auf:",
     notFound: "Seite nicht gefunden",
     error: "Etwas ist schiefgelaufen",
@@ -236,9 +267,13 @@ export const publisher = (lang: SiteLang) => text(lang, "publisher", { name: PUB
 /** The publisher with its seat, company ID and register file, as the app's privacy policy and terms say it. */
 export const publisherDetails = (lang: SiteLang) => text(lang, "publisherDetails", { name: PUBLISHER_NAME, ...PUBLISHER_DETAILS });
 
+/** Whose text the AI wrote from: official ones, Wikipedia's for an event (#230), or both on a list with events. */
+export type NoticeOf = "decisions" | "event" | "both";
+const NOTICE_KEYS = { decisions: "aiNotice", event: "aiNoticeEvent", both: "aiNoticeWithEvents" } as const;
+
 /** The AI notice, which names us as the text's editor (see SiteTexts.aiNotice). */
-export const aiNotice = (lang: SiteLang) => t(lang, "aiNotice", { publisher: PUBLISHER_NAME });
-export const aiNoticeText = (lang: SiteLang) => text(lang, "aiNotice", { publisher: PUBLISHER_NAME });
+export const aiNotice = (lang: SiteLang, of: NoticeOf = "decisions") => t(lang, NOTICE_KEYS[of], { publisher: PUBLISHER_NAME });
+export const aiNoticeText = (lang: SiteLang, of: NoticeOf = "decisions") => text(lang, NOTICE_KEYS[of], { publisher: PUBLISHER_NAME });
 
 const hasAppKey = (key: string): key is AppKey => key in APP_TEXTS.en;
 
@@ -251,6 +286,20 @@ const hasAppKey = (key: string): key is AppKey => key in APP_TEXTS.en;
 export function countryName(lang: SiteLang, code: string): string {
   const key = `country${code}`;
   return hasAppKey(key) ? APP_TEXTS[lang][key] : apiCountryName(code, lang);
+}
+
+/** An event from Wikipedia's current events, not an official decision (#230), as the app's `Article.isEvent`. */
+export const isEvent = (article: { decisionType: string | null }) => article.decisionType === "event";
+
+/**
+ * The country a card or an article names, as the app's `placeName`
+ * (countries.dart, #230): the source's; for an event, whose source is the
+ * whole world (WW), the country it concerns most, or the world when there is
+ * no name for it.
+ */
+export function placeCode(article: { country: string; countries: string[]; decisionType: string | null }): string {
+  const main = isEvent(article) ? article.countries[0] : undefined;
+  return main && (hasAppKey(`country${main}`) || hasCountryName(main)) ? main : article.country;
 }
 
 /** A source language's name as it fills "translated from {language}" (languages.dart): an unknown code in capitals. */
@@ -273,9 +322,10 @@ export function decisionLabel(lang: SiteLang, id: string | null): string | null 
  * The AI label, with the app's own rule (detail_screen.dart): "Summary by AI"
  * when the source is in the language the article is read in, otherwise
  * "Summary by AI · translated from German". The app reads a missing source
- * language as English.
+ * language as English. An event's says it is of Wikipedia's text (#230).
  */
-export function aiLabel(lang: SiteLang, originalLanguage: string | null): string {
+export function aiLabel(lang: SiteLang, originalLanguage: string | null, event = false): string {
   const source = originalLanguage ?? "en";
-  return source === lang ? text(lang, "summaryByAi") : text(lang, "summaryByAiTranslated", { language: languageName(lang, source) });
+  if (source === lang) return text(lang, event ? "summaryByAiOfWikipedia" : "summaryByAi");
+  return text(lang, event ? "summaryByAiOfWikipediaTranslated" : "summaryByAiTranslated", { language: languageName(lang, source) });
 }

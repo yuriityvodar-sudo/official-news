@@ -7,7 +7,7 @@ import type { ApiArticle, ApiList } from "../data";
 import { fullDate, parseTime, publishedDate } from "../dates";
 import { html } from "../html";
 import { type Page, SITE_NAME } from "../layout";
-import { SITE_LANGS, type SiteLang, aiNotice, countryName, decisionLabel, t, text } from "../texts";
+import { SITE_LANGS, type SiteLang, aiNotice, countryName, decisionLabel, isEvent, placeCode, t, text } from "../texts";
 import { articlePath, listPath } from "../urls";
 
 function item(lang: SiteLang, article: ApiArticle) {
@@ -16,7 +16,7 @@ function item(lang: SiteLang, article: ApiArticle) {
   const lead = article.shortSummary?.trim();
   return html`<li class="item">
 ${type ? html`<p class="kind">${type}</p>` : ""}<a class="title" href="${articlePath(lang, article)}">${article.headline ?? article.originalTitle}</a>
-${lead ? html`<p>${lead}</p>` : ""}<p class="meta">${article.source.name} · ${countryName(lang, article.country)}${
+${lead ? html`<p>${lead}</p>` : ""}<p class="meta">${article.source.name} · ${countryName(lang, placeCode(article))}${
     published ? html` · ${publishedDate(lang, published, article.dateOnly)}` : ""
   }</p>
 </li>`;
@@ -29,7 +29,7 @@ function leadStory(lang: SiteLang, article: ApiArticle) {
   const dek = article.shortSummary?.trim();
   return html`<article class="leadstory">
 ${type ? html`<p class="kind">${type}</p>` : ""}<a class="title" href="${articlePath(lang, article)}">${article.headline ?? article.originalTitle}</a>
-${dek ? html`<p class="dek">${dek}</p>` : ""}<p class="meta">${article.source.name} · ${countryName(lang, article.country)}${
+${dek ? html`<p class="dek">${dek}</p>` : ""}<p class="meta">${article.source.name} · ${countryName(lang, placeCode(article))}${
     published ? html` · ${publishedDate(lang, published, article.dateOnly)}` : ""
   }</p>
 </article>`;
@@ -49,7 +49,7 @@ function streamItem(lang: SiteLang, article: ApiArticle, today: string) {
   const type = decisionLabel(lang, article.decisionType);
   return html`<li class="item row"><span class="when">${when(article, today)}</span><div>
 ${type ? html`<p class="kind">${type}</p>` : ""}<a class="title" href="${articlePath(lang, article)}">${article.headline ?? article.originalTitle}</a>
-<p class="meta">${article.source.name} · ${countryName(lang, article.country)}</p>
+<p class="meta">${article.source.name} · ${countryName(lang, placeCode(article))}</p>
 </div></li>`;
 }
 
@@ -60,7 +60,7 @@ function card(lang: SiteLang, article: ApiArticle, today: string, wide: boolean)
   const at = when(article, today);
   return html`<li class="card${wide ? " wide" : ""}">
 ${type ? html`<p class="kind">${type}</p>` : ""}<a class="title" href="${articlePath(lang, article)}">${article.headline ?? article.originalTitle}</a>
-${dek ? html`<p class="dek">${dek}</p>` : ""}<p class="meta">${article.source.name} · ${countryName(lang, article.country)}${at ? ` · ${at}` : ""}</p>
+${dek ? html`<p class="dek">${dek}</p>` : ""}<p class="meta">${article.source.name} · ${countryName(lang, placeCode(article))}${at ? ` · ${at}` : ""}</p>
 </li>`;
 }
 
@@ -105,6 +105,8 @@ export function listPage(lang: SiteLang, origin: string, view: ListView, data: L
   const lead = first ? (list.top[0] ?? latest[0]) : undefined;
   const moreTop = first ? list.top.slice(1) : [];
   const stream = lead && !list.top.length ? latest.slice(1) : latest;
+  // The AI's text is of official pages, and of Wikipedia's for events (#230).
+  const notice = html`<p class="notice">${aiNotice(lang, [...list.top, ...list.items].some(isEvent) ? "both" : "decisions")}</p>`;
   const head = html`<div class="front-head"><h1 class="page-title">${t(lang, "listTitle")}</h1></div>`;
   const older = next ? html`<a class="more" href="${listPath(lang, next)}" rel="next">${t(lang, "older")} →</a><br>` : "";
   const body = lead
@@ -116,7 +118,7 @@ ${
     : html`<section class="lead-col" aria-labelledby="lead"><h2 class="vh" id="lead">${t(lang, "latest")}</h2>`
 }
 ${leadStory(lang, lead)}
-<p class="notice">${aiNotice(lang)}</p>
+${notice}
 ${moreTop.length ? html`<ol class="items">${moreTop.map((a) => item(lang, a))}</ol>` : ""}
 </section>
 ${stream.length ? html`<section class="latest-col" aria-labelledby="latest"><div class="latest-head"><h2 class="section" id="latest">${t(lang, "latest")}</h2><span class="meta">${fullDate(lang, new Date())}</span></div>
@@ -127,7 +129,7 @@ ${stream.length > COLUMN ? html`<ol class="cards" aria-label="${t(lang, "latest"
 ${stream.length > COLUMN + GRID ? html`<ol class="items more-rows" aria-label="${t(lang, "latest")}">${stream.slice(COLUMN + GRID).map((a) => streamItem(lang, a, today))}</ol>` : ""}
 ${older}`
     : html`<h1 class="page-title">${t(lang, "listTitle")}</h1>
-${list.items.length ? html`<p class="notice">${aiNotice(lang)}</p>` : ""}
+${list.items.length ? notice : ""}
 ${items}
 ${older}
 ${first ? "" : html`<a class="more" href="${listPath(lang)}">${t(lang, "latestLink")}</a>`}`;
