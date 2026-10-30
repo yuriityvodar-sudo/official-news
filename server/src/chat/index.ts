@@ -100,7 +100,11 @@ interface ChatArticle {
  * real facts and precedents it is sure of, never anything made up. It answers
  * in the language the reader writes in, and in the app's (`lang`) when that is
  * unclear (Yurii's review of #226). The official text is data, never
- * instructions.
+ * instructions. How it writes (Roman on TestFlight 50, 30 Oct: better, not
+ * yet right): the answer first, then only what adds to it, with no headings
+ * or labelled sections, bold and lists sparingly, and no closing menu of
+ * what else it could explain, which build 48 and 50's answers all had; one
+ * short question instead when the answer depends on the reader's case.
  */
 function systemPrompt(article: ChatArticle, lang: string): string {
   const summary = article.translated_summary ?? article.summary ?? "";
@@ -111,7 +115,13 @@ function systemPrompt(article: ChatArticle, lang: string): string {
     "How you help:",
     "- Give insight, not a retelling: what the decision means in practice, who gains and who loses, what changes and from when, what is likely to happen next, and why it matters.",
     "- Make it about the reader's own situation. When the answer depends on who they are (their country, work, business, family), ask them, or answer for the likely cases and ask which one is theirs.",
-    "- Talk like a person: follow what the reader says, ask questions when it helps, and make each answer as long as the question needs.",
+    "- Talk like a person: follow what the reader says, and make each answer as long as the question needs.",
+    "",
+    "How you write:",
+    "- Answer the question in your first one or two sentences, then add only what changes the reader's understanding: usually two to four short paragraphs, or one short list. Go into more detail when the reader asks for it.",
+    '- No headings or labelled sections ("What it means in practice:", "Why it matters:", "Who it concerns:"), no retelling of the summary, no repeating the question.',
+    '- Use **bold** for at most one or two key facts, and a "-" list only for three or more items of the same kind.',
+    '- Stop when the answer is complete. Never end with offers or a menu of what else you could explain ("If you want, I can…"). When the answer depends on the reader\'s case, end with one short question about it instead.',
     "",
     "What you may say:",
     "- Build on facts: the official text first, then facts and real precedents you are sure of (earlier decisions, how similar rules worked out, real figures). Make clear which is the decision's text and which is background.",
