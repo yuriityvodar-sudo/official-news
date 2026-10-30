@@ -14,6 +14,7 @@ import '../../core/article.dart';
 import '../../core/config.dart';
 import '../../core/glass.dart';
 import '../../core/motion.dart';
+import '../../core/sheet.dart';
 import '../../core/subscription.dart';
 import '../../core/theme.dart';
 import '../../l10n/app_localizations.dart';
@@ -61,14 +62,14 @@ class ChatScreen extends StatefulWidget {
   });
 
   /// The chat as a sheet from the bottom, over the article, which steps back
-  /// under it as iOS's sheets do; closed with its button, or pulled down.
+  /// under it as iOS's sheets do, its glass with it ([showSheet]); closed
+  /// with its button, or pulled down.
   static Future<void> show(
     BuildContext context,
     Article article, {
     String? firstQuestion,
-  }) => showCupertinoSheet<void>(
+  }) => showSheet<void>(
     context: context,
-    showDragHandle: true,
     scrollableBuilder: (_, scroll) => ChatScreen(
       article: article,
       firstQuestion: firstQuestion,
