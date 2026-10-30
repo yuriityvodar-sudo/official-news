@@ -213,7 +213,8 @@ describe("Local is gone", () => {
     for (const path of ["/en", "/en/de?topic=health", "/ru/g7", "/en/privacy", "/uk/privacy"]) {
       const { body } = await site(path);
       // The privacy policy's paragraph on what Local read (the country from the IP address) is gone too.
-      expect(body, path).not.toMatch(/\/local|menu=where|“Local”|«Моя країна»|Cloudflare reads from your IP|за вашою IP-адресою/);
+      // «Моя країна» stays: it is the app's Settings → My country, which For you's paragraph names (#170).
+      expect(body, path).not.toMatch(/\/local|menu=where|“Local”|Cloudflare reads from your IP|за вашою IP-адресою/);
     }
     for (const lang of SITE_LANGS) expect((await site(`/${lang}`)).body).not.toContain(`<p class="menu-note">`);
   });
