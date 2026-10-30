@@ -9,13 +9,13 @@
 //   /{lang}/{cc}/{id}-{slug}       an article (looked up by its id; another country or slug is a 301 to its own)
 //   /{lang}/about|privacy|terms|support
 //   /robots.txt                    Disallow: /*?, and where the sitemap is
-//   /sitemap.xml                   the lists and the 7 days' articles (seo.ts)
+//   /sitemap.xml                   an index: /sitemap-latest.xml (the lists, the 7 days) and /sitemap-YYYY-MM.xml (seo.ts)
 import type { Topic } from "../summarizer/schema";
-import { type ApiArticle, type ListView, allLatest, articleInLanguages, listData } from "./data";
+import { type ApiArticle, type ListView, allLatest, articleInLanguages, listData, monthSitemap } from "./data";
 import type { SiteEnv } from "./env";
 import { APPLE_TOUCH_ICON, OG_IMAGE } from "./icon";
 import { type Page, cssHash, layout } from "./layout";
-import { sitemapXml } from "./seo";
+import { monthSitemapXml, sitemapIndexXml, sitemapMonths, sitemapXml } from "./seo";
 import { consentHash } from "./consent";
 import { visitorLang } from "./lang";
 import { articlePage, notInLanguagePage } from "./pages/article";
@@ -143,11 +143,27 @@ async function route(request: Request, env: SiteEnv): Promise<Reply> {
   }
   // robots.txt names the sitemap, so a crawler finds it once indexing is allowed.
   if (path === "/robots.txt") return { kind: "fixed", status: 200, body: `${ROBOTS_TXT}\nSitemap: ${origin}/sitemap.xml\n` };
+  // The sitemap: an index (no D1 read), the latest file (the 7 days, from the
+  // snapshots), and one file per month of every released article, since
+  // article pages never expire (seo.ts, api/sitemap.ts).
+  const XML = "application/xml; charset=utf-8";
   if (path === "/sitemap.xml") {
     if (url.search) return { kind: "redirect", status: 301, body: null, location: `${origin}/sitemap.xml` };
+    return { kind: "sitemap", status: 200, body: sitemapIndexXml(origin, new Date()), contentType: XML };
+  }
+  if (path === "/sitemap-latest.xml") {
+    if (url.search) return { kind: "redirect", status: 301, body: null, location: `${origin}/sitemap-latest.xml` };
     const lists = await Promise.all(SITE_LANGS.map((lang) => allLatest(env, lang)));
     const shown = Object.fromEntries(SITE_LANGS.map((lang, i) => [lang, lists[i]]));
-    return { kind: "sitemap", status: 200, body: sitemapXml(origin, shown), contentType: "application/xml; charset=utf-8" };
+    return { kind: "sitemap", status: 200, body: sitemapXml(origin, shown), contentType: XML };
+  }
+  const month = /^\/sitemap-(\d{4}-\d{2})\.xml$/.exec(path)?.[1];
+  if (month) {
+    const months = sitemapMonths(new Date());
+    if (!months.includes(month)) return notFound("en");
+    if (url.search) return { kind: "redirect", status: 301, body: null, location: `${origin}/sitemap-${month}.xml` };
+    const current = month === months[months.length - 1];
+    return { kind: current ? "sitemapCurrentMonth" : "sitemapMonth", status: 200, body: monthSitemapXml(origin, await monthSitemap(env, month)), contentType: XML };
   }
   // The icon (icon.ts): Safari's home-screen icon under any of its names, and
   // the link preview's picture. The tab icon is inline, so /favicon.ico stays a 404.
