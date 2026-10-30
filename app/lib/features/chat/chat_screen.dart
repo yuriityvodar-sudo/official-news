@@ -301,13 +301,17 @@ class _ChatScreenState extends State<ChatScreen> {
   /// Sets [_room] once laid out: as much as the screen has left under the
   /// last question and what came after it, none once that fills the screen.
   /// The question then stays at the top while its answer grows into the room.
+  /// The keyboard's height counts as screen: a question sent with the return
+  /// key closes it, the screen grows, and with only the room it had left
+  /// the question slid down from the top (simulator, 30 Oct).
   void _fit() => WidgetsBinding.instance.addPostFrameCallback((_) {
     final top = _offsetOf(_lastAsked.key);
     final end = _offsetOf(_end);
     if (top == null || end == null || !mounted) return;
+    final keyboard = MediaQuery.viewInsetsOf(context).bottom;
     final room = max(
       0.0,
-      _scroll.position.viewportDimension - _above - (end - top),
+      _scroll.position.viewportDimension + keyboard - _above - (end - top),
     );
     if ((room - _room).abs() > 0.5) setState(() => _room = room);
   });

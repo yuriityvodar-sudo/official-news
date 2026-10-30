@@ -613,6 +613,37 @@ void main() {
       },
     );
 
+    testWidgets('a question sent as the keyboard closes still goes to the '
+        'top: the room under it counts the keyboard (the simulator, 30 Oct)', (
+      tester,
+    ) async {
+      await openChat(tester, server(pieces: ['Short answer.']));
+      await tester.tap(find.text('Does this concern me?'));
+      await tester.pumpAndSettle();
+      // The keyboard is up while the reader types, 300 points.
+      tester.view.viewInsets = FakeViewPadding(
+        bottom: 300 * tester.view.devicePixelRatio,
+      );
+      addTearDown(tester.view.resetViewInsets);
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(CupertinoTextField), 'And then?');
+      await tester.testTextInput.receiveAction(TextInputAction.send);
+      await tester.pump();
+      // The return key closes it.
+      tester.view.resetViewInsets();
+      await tester.pumpAndSettle();
+      final top = tester.getTopLeft(find.byType(SingleChildScrollView)).dy;
+      final bubble = tester.getRect(
+        find
+            .ancestor(
+              of: find.text('And then?'),
+              matching: find.byType(Container),
+            )
+            .first,
+      );
+      expect(bubble.top, moreOrLessEquals(top + 8));
+    });
+
     testWidgets('not paid any more: the paywall again', (tester) async {
       await openChat(tester, server(status: 402));
       await tester.tap(find.text('Does this concern me?'));
