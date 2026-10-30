@@ -427,7 +427,9 @@ class _ChatScreenState extends State<ChatScreen> {
                                 const SizedBox(width: 6),
                                 Flexible(
                                   child: Text(
-                                    l10n.readOfficialDecisionOn(site),
+                                    article.isEvent
+                                        ? '${l10n.readOnWikipedia}, $site'
+                                        : l10n.readOfficialDecisionOn(site),
                                     style: TextStyle(
                                       fontSize: 14,
                                       color: style.ink,

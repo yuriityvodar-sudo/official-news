@@ -262,6 +262,44 @@ void main() {
         });
       }
 
+      testWidgets('an event has no official seal and names the country it '
+          'concerns, not the whole world (#230)', (tester) async {
+        final event = {
+          ..._article('e1', feedSeq: 2, country: 'WW'),
+          'decisionType': 'event',
+          'countries': ['ES', 'PT'],
+          'source': {
+            'id': 'ww-wikipedia-en',
+            'name': 'Wikipedia: Current events',
+            'url': 'https://en.wikipedia.org/wiki/Portal:Current_events',
+          },
+        };
+        final seals = find.byWidgetPredicate(
+          (w) =>
+              w is Icon &&
+              (w.icon == CupertinoIcons.checkmark_seal ||
+                  w.icon == CupertinoIcons.checkmark_seal_fill),
+        );
+        await pumpFeed(tester, [_article('d1', feedSeq: 1)], []);
+        final official = seals.evaluate().length;
+        // A fresh screen: the same one would keep its first controller.
+        await tester.pumpWidget(const SizedBox());
+        await pumpFeed(tester, [event, _article('d1', feedSeq: 1)], []);
+        expect(find.text('Decision e1'), findsOneWidget);
+        expect(seals.evaluate().length, official);
+        final place = RegExp('spain', caseSensitive: false);
+        expect(find.textContaining(place, findRichText: true), findsWidgets);
+        expect(
+          find.textContaining(
+            // A card's place starts its line ("World · …"); the Where menu's
+            // "The whole world" does not.
+            RegExp(r'^world\b', caseSensitive: false),
+            findRichText: true,
+          ),
+          findsNothing,
+        );
+      });
+
       testWidgets('opens a top story with section "top" and its place in the '
           'block, the rest with "feed" and theirs in the list', (tester) async {
         await pumpFeed(tester, _items, _top);

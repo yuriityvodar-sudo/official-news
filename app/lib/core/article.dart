@@ -36,6 +36,7 @@ class Article {
     this.feedSeq,
     this.addedAt,
     this.lang,
+    this.countries = const [],
   });
 
   factory Article.fromJson(Map<String, dynamic> json) {
@@ -63,6 +64,7 @@ class Article {
           ? null
           : DateTime.parse(json['addedAt'] as String),
       lang: json['lang'] as String?,
+      countries: List<String>.from(json['countries'] as List? ?? const []),
     );
   }
 
@@ -95,6 +97,14 @@ class Article {
   /// none in the English feed.
   final String? lang;
 
+  /// The countries it concerns, the main one first (#230); empty before the
+  /// AI step and from a server before #239. [country] stays the source's.
+  final List<String> countries;
+
+  /// An event from Wikipedia's current events, not an official decision
+  /// (#230): no official-source seal, and its link opens Wikipedia.
+  bool get isEvent => decisionType == 'event';
+
   /// The contract format, so the last feed can be saved on the phone and read back.
   Map<String, dynamic> toJson() => {
     'id': id,
@@ -116,6 +126,7 @@ class Article {
     'feedSeq': feedSeq,
     'addedAt': addedAt?.toUtc().toIso8601String(),
     'lang': lang,
+    'countries': countries,
   };
 }
 

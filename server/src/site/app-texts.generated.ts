@@ -40,6 +40,7 @@ export type AppKey =
   | "countryUA"
   | "countryUS"
   | "countryZA"
+  | "countryWW"
   | "countryAT"
   | "countryBE"
   | "countryBG"
@@ -180,6 +181,7 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "countryUA": "Ukraine",
     "countryUS": "United States",
     "countryZA": "South Africa",
+    "countryWW": "World",
     "countryAT": "Austria",
     "countryBE": "Belgium",
     "countryBG": "Bulgaria",
@@ -314,6 +316,7 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "countryUA": "Україна",
     "countryUS": "США",
     "countryZA": "ПАР",
+    "countryWW": "Світ",
     "countryAT": "Австрія",
     "countryBE": "Бельгія",
     "countryBG": "Болгарія",
@@ -448,6 +451,7 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "countryUA": "Украина",
     "countryUS": "США",
     "countryZA": "ЮАР",
+    "countryWW": "Мир",
     "countryAT": "Австрия",
     "countryBE": "Бельгия",
     "countryBG": "Болгария",
@@ -582,6 +586,7 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "countryUA": "Ucrania",
     "countryUS": "Estados Unidos",
     "countryZA": "Sudáfrica",
+    "countryWW": "Mundo",
     "countryAT": "Austria",
     "countryBE": "Bélgica",
     "countryBG": "Bulgaria",
@@ -716,6 +721,7 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "countryUA": "Ukraine",
     "countryUS": "Vereinigte Staaten",
     "countryZA": "Südafrika",
+    "countryWW": "Welt",
     "countryAT": "Österreich",
     "countryBE": "Belgien",
     "countryBG": "Bulgarien",

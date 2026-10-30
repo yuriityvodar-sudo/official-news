@@ -243,6 +243,66 @@ void main() {
     );
   });
 
+  testWidgets('an event says what it is and where, opens Wikipedia, names its '
+      'licence and shares its source, never as official (#230)', (
+    tester,
+  ) async {
+    const page =
+        'https://ru.wikipedia.org/wiki/%D0%9F%D0%BE%D1%80%D1%82%D0%B0%D0%BB:'
+        '%D0%A2%D0%B5%D0%BA%D1%83%D1%89%D0%B8%D0%B5_%D1%81%D0%BE%D0%B1%D1%8B'
+        '%D1%82%D0%B8%D1%8F';
+    final event = Article.fromJson({
+      ..._article(language: 'ru', originalUrl: '$page#event-1c9wykw').toJson(),
+      'country': 'WW',
+      'countries': ['ES'],
+      'decisionType': 'event',
+      'source': {
+        'id': 'ww-wikipedia-ru',
+        'name': 'Russian Wikipedia: Current events',
+        'url': 'https://ru.wikipedia.org/wiki/Портал:Текущие_события',
+      },
+      'headline': 'Train crash near Toledo kills 69',
+      'shortSummary': 'Two trains collided in Toledo province, Spain.',
+    });
+    final opened = <Uri>[];
+    final shared = <String>[];
+    await _pump(
+      tester,
+      event,
+      openLink: (uri) async => opened.add(uri),
+      share: (_, text, _) async => shared.add(text),
+    );
+
+    expect(find.text('Spain · Event'), findsOneWidget);
+    expect(find.text('EVENT'), findsOneWidget);
+    expect(find.text('Official source'), findsNothing);
+    expect(find.byIcon(CupertinoIcons.checkmark_seal), findsNothing);
+    expect(
+      find.text("Summary by AI of Wikipedia's text · translated from Russian"),
+      findsOneWidget,
+    );
+    expect(find.text('Read the official decision'), findsNothing);
+    expect(find.text('ru.wikipedia.org'), findsOneWidget);
+
+    await tester.tap(find.text('Read on Wikipedia'));
+    final licence = find.text('Text from Wikipedia, CC BY-SA 4.0');
+    await tester.ensureVisible(licence);
+    await tester.pumpAndSettle();
+    await tester.tap(licence);
+    expect(opened, [
+      Uri.parse(page),
+      Uri.parse('https://creativecommons.org/licenses/by-sa/4.0/'),
+    ]);
+
+    await tester.tap(find.byIcon(CupertinoIcons.share));
+    expect(
+      shared.single,
+      'Train crash near Toledo kills 69\n\n'
+      'Two trains collided in Toledo province, Spain.\n\n'
+      'Source: $page',
+    );
+  });
+
   // #52: the article screen in the app's language; the article's own text is
   // as the feed has it (here English, as the test article is).
   testWidgets('shows its labels, dates and country in Ukrainian', (

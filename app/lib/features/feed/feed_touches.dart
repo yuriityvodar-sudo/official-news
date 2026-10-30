@@ -49,7 +49,11 @@ Future<void> showArticleActions(BuildContext context, Article article) {
                 unawaited(analytics.officialLinkOpened(article));
                 unawaited(openOfficialPage(page));
               }),
-              child: Text(l10n.readOfficialDecision),
+              child: Text(
+                article.isEvent
+                    ? l10n.readOnWikipedia
+                    : l10n.readOfficialDecision,
+              ),
             ),
             CupertinoActionSheetAction(
               onPressed: () => then(() {

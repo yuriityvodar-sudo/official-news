@@ -59,7 +59,7 @@ class PublisherLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final country = countryName(article.country, AppLocalizations.of(context));
+    final country = placeName(article, AppLocalizations.of(context));
     final style = dim(NewsText.from(context).publisher, dimmed);
     final dots = mark?.dots ?? false;
     return Row(
@@ -79,7 +79,8 @@ class PublisherLine extends StatelessWidget {
         ),
         if (dots)
           UnreadDot(mark!, fontSize: style.fontSize!)
-        else ...[
+        // An event (#230) is not official: no seal.
+        else if (!article.isEvent) ...[
           const SizedBox(width: 4),
           Icon(
             CupertinoIcons.checkmark_seal,

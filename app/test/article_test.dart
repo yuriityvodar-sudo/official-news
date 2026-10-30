@@ -1,5 +1,8 @@
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:official_news/core/article.dart';
+import 'package:official_news/core/countries.dart';
+import 'package:official_news/l10n/app_localizations.dart';
 
 void main() {
   final full = {
@@ -56,5 +59,38 @@ void main() {
     });
     expect(page.items, hasLength(1));
     expect(page.top, isEmpty);
+  });
+
+  test('reads the countries it concerns, the main one first, and keeps them '
+      'when saved (#230)', () {
+    final article = Article.fromJson({
+      ...full,
+      'countries': ['PL', 'SA'],
+    });
+    expect(article.countries, ['PL', 'SA']);
+    expect(Article.fromJson(article.toJson()).countries, ['PL', 'SA']);
+    // A server before #239 sends none.
+    expect(Article.fromJson(full).countries, isEmpty);
+  });
+
+  test('an event names the country it concerns most, or the world when the '
+      'app has no name for it; a decision its source\'s country (#230)', () {
+    final l10n = lookupAppLocalizations(const Locale('en'));
+    Article event(List<String> countries) => Article.fromJson({
+      ...full,
+      'country': 'WW',
+      'decisionType': 'event',
+      'countries': countries,
+    });
+    expect(event(['ES', 'PT']).isEvent, isTrue);
+    expect(placeName(event(['ES', 'PT']), l10n), 'Spain');
+    expect(placeName(event(['YE', 'SA']), l10n), 'World');
+    expect(placeName(event([]), l10n), 'World');
+    final decision = Article.fromJson({
+      ...full,
+      'countries': ['US'],
+    });
+    expect(decision.isEvent, isFalse);
+    expect(placeName(decision, l10n), 'Poland');
   });
 }

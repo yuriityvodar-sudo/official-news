@@ -722,8 +722,9 @@ class _Card extends StatelessWidget {
                         children: [
                           Row(
                             children: [
-                              // The dot takes the official seal's place.
-                              if (!mark.dots) ...[
+                              // The dot takes the official seal's place; an
+                              // event (#230) is not official, so it has none.
+                              if (!mark.dots && !article.isEvent) ...[
                                 Icon(
                                   CupertinoIcons.checkmark_seal_fill,
                                   size: 15,
@@ -736,10 +737,7 @@ class _Card extends StatelessWidget {
                                   TextSpan(
                                     children: [
                                       TextSpan(
-                                        text: countryName(
-                                          article.country,
-                                          l10n,
-                                        ),
+                                        text: placeName(article, l10n),
                                         style: source,
                                       ),
                                       // In the dot styles the unread dot stands
@@ -818,7 +816,7 @@ String _spoken(BuildContext context, Article a, List<String> topics) {
   String sentence(String s) => RegExp(r'[.!?…]$').hasMatch(s) ? s : '$s.';
   return [
     a.headline,
-    '${countryName(a.country, l10n)}, ${a.source.name}',
+    '${placeName(a, l10n)}, ${a.source.name}',
     ?spokenTopics(topics, l10n),
     feedTime(a, l10n),
   ].map(sentence).join(' ');

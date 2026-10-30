@@ -261,7 +261,7 @@ class _Kicker extends StatelessWidget {
         style: type.kicker,
         children: [
           TextSpan(
-            text: countryName(article.country, l10n).toUpperCase(),
+            text: placeName(article, l10n).toUpperCase(),
             style: type.country,
           ),
           if (mark.dots) ...[
@@ -309,7 +309,7 @@ String _spoken(BuildContext context, Article a, List<String> topics) {
   String sentence(String s) => RegExp(r'[.!?…]$').hasMatch(s) ? s : '$s.';
   return [
     a.headline,
-    '${countryName(a.country, l10n)}, ${a.source.name}',
+    '${placeName(a, l10n)}, ${a.source.name}',
     ?spokenTopics(topics, l10n),
     feedTime(a, l10n),
   ].map(sentence).join(' ');
