@@ -4,9 +4,9 @@ Two people build this app, Yurii and Roman, each with their own Claude Code. The
 
 ## Documentation is part of every change
 
-- `docs/plan.md` is the plan and `docs/decisions.md` is the decision log. They are the single source of truth.
-- A pull request that changes a decision (scope, the article format, the API, the database, an account, a tool) updates `docs/decisions.md`, and `docs/plan.md` where it is affected, in the same pull request.
-- Decisions made on a call go into `docs/decisions.md` the same day, through a pull request.
+- `docs/plan.md` is the plan and the decision log is `docs/decisions/` (one file per decision, from 30 Oct 2026) with the older ones in the table of `docs/decisions.md`. They are the single source of truth.
+- A pull request that changes a decision (scope, the article format, the API, the database, an account, a tool) adds its own file to `docs/decisions/` (`YYYY-MM-DD-short-name.md`: the decision, why, and its status), and updates `docs/plan.md` where it is affected, in the same pull request. One file each, so two open pull requests never conflict in the log.
+- Decisions made on a call go into `docs/decisions/` the same day, through a pull request.
 - The website (`server/src/site/`, #88) shows the app's texts (`app/lib/l10n/app_*.arb`, the publisher and dates in `info_pages.dart`, the languages in `feed_language.dart`) and `docs/source-credits.csv` through generated files: after changing a text the site shows, run `npm run site:texts` in `server/` and commit the result (`npm test` says when).
 - Anything created outside the code (an account, a Worker, a database, a key, an App Store entry) is recorded in `docs/setup.md` in the same change: what it is, who owns it, where it lives. Never the secret value itself.
 - The plan proposes approaches; it does not restrict how something is built. A better approach is welcome: propose it in the pull request or an issue, and record it once agreed.
