@@ -9,6 +9,7 @@ import 'package:flutter/rendering.dart';
 import '../../core/article.dart';
 import '../../core/card_zoom.dart';
 import '../../core/countries.dart';
+import '../../core/glass.dart' show glassShadowRoom;
 import '../../core/motion.dart';
 import '../../core/news_widgets.dart';
 import '../../core/read_mark.dart';
@@ -333,7 +334,11 @@ class _NewsHeader extends SliverPersistentHeaderDelegate {
           right: 0,
           top: -shrinkOffset,
           height: titleHeight,
+          // Clipped to its band, and the room under it where the buttons'
+          // glass casts its shadow: cut at the band's foot, the shadow
+          // showed as a band under them (Roman, 30 Oct).
           child: ClipRect(
+            clipper: const _TitleBand(),
             child: Opacity(opacity: 1 - gone, child: title),
           ),
         ),
@@ -354,6 +359,22 @@ class _NewsHeader extends SliverPersistentHeaderDelegate {
       old.pillsHeight != pillsHeight ||
       old.title != title ||
       old.pills != pills;
+}
+
+/// The masthead title's band, reaching [glassShadowRoom] further down for
+/// the shadow of its buttons' glass.
+class _TitleBand extends CustomClipper<Rect> {
+  const _TitleBand();
+
+  @override
+  Rect getClip(Size size) =>
+      Rect.fromLTRB(0, 0, size.width, size.height + glassShadowRoom);
+
+  @override
+  Rect getApproximateClipRect(Size size) => getClip(size);
+
+  @override
+  bool shouldReclip(_TitleBand oldClipper) => false;
 }
 
 /// What shows in the gap the pull opens above the masthead: plain grey
