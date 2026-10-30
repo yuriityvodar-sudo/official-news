@@ -13,6 +13,8 @@ const summary = (text: string, shortSummary = "Short."): Summary => ({
   importance: 3,
   countries: ["PL"],
   reach: "national",
+  wikipedia: [],
+  keywords: [],
 });
 
 describe("checkSummary", () => {

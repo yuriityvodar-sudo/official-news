@@ -14,6 +14,15 @@ const HEADLINE_TARGET = 80;
 /** Words that judge or guess instead of telling (checks.ts counts them as ruled out). */
 const NEVER_WRITE = `Never write "aims to", "seeks to", "is intended to", "is expected to", "could", "might", "significant", "routine", "first step", "landmark" or "historic"`;
 
+/**
+ * The two fields for its popularity (#230 step 4), the same in both prompts:
+ * the Wikipedia articles whose page views per language tell how much each
+ * country's readers look it up, and the words that find its news coverage.
+ */
+const popularityFields = (what: "decision" | "event") =>
+  `- wikipedia: up to ${LIMITS.wikipedia} titles of English Wikipedia articles about what the ${what} is about most, written exactly as the article's title: the person, organisation, law, programme or event at its centre (“Christine Lagarde”, “European Central Bank”). Only articles you are sure exist; never a country or a city alone. [] when there is none.
+- keywords: 2 to ${LIMITS.keywords} English words or short names that news reports about the ${what} would contain, the most specific first: names, acronyms and numbers rather than general words (“Lagarde”, “ECB”, “resignation”).`;
+
 /** The types an official decision can have: an event is only for events (#230). */
 const OFFICIAL_TYPES = DECISION_TYPES.filter((t) => t !== "event");
 
@@ -58,6 +67,7 @@ Return JSON with these fields:
 - shortSummary: one sentence, up to ${LIMITS.shortSummary} characters, for the feed card: the concrete change for the reader. Do not repeat the headline.
 - headline: up to ${HEADLINE_TARGET} characters, written after the summary from its most useful fact, for the people the decision affects most. Write it as ${KIND_DEFINITIONS[kind]} For war, disasters and deaths, and for decisions that change nothing practical for anyone, write a plain factual headline instead. No full stop.
 - headlineType: what you wrote: ${kind}, or plain.
+${popularityFields("decision")}
 
 Rules:
 1. Do not retell the article. Each sentence must give the reader something: whether it concerns them, what changes, what to do, a date, money, a risk, or what is still unknown. Leave out the name of the act, who submitted it, background and anything else that changes nothing for the reader. Never copy sentences from the article.
@@ -104,6 +114,7 @@ Return JSON with these fields:
 - shortSummary: one sentence, up to ${LIMITS.shortSummary} characters, for the feed card. Do not repeat the headline.
 - headline: up to ${HEADLINE_TARGET} characters, plain and factual: what happened and where. No full stop.
 - headlineType: plain.
+${popularityFields("event")}
 
 Rules:
 1. Only what the text says and what follows directly from it. Nothing from memory, no background, no predictions, no invented numbers, dates, names or reasons. ${NEVER_WRITE}.

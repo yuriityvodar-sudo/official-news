@@ -4,6 +4,7 @@ import type { Env } from "./env";
 import { runFetcher } from "./fetcher";
 import { runCleanup } from "./health/cleanup";
 import { recordChecks } from "./health/status";
+import { popularityStep } from "./popularity";
 import { runPush } from "./push";
 import { runSummarizer } from "./summarizer";
 import { sendReplyPushes } from "./support/cron";
@@ -21,6 +22,8 @@ import { TRANSLATIONS_PER_RUN, releaseReady, runTranslator, translatorRunning } 
  * translator is not running, the summarizer's run sends them instead. Both
  * runs end with the website's snapshot of one language (api/snapshot.ts), so
  * each language gets a run every 5 minutes and is rebuilt when its feed changed.
+ * Every 4th minute the summarizer's run also checks one item's popularity per
+ * country (popularity/index.ts, #230 step 4).
  */
 export const CRONS = {
   fetcher: "* * * * *",
@@ -74,6 +77,8 @@ export default {
         // keeps the two runs from both sending, also when they overlap.
         await pushStep(env, true);
         await snapshotStep(env, controller.scheduledTime);
+        // Every 4th minute, one item's popularity per country (#230 step 4).
+        await popularityStep(env, controller.scheduledTime);
       }
     } else if (step === "translator") {
       try {
