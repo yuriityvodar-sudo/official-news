@@ -708,7 +708,7 @@
   "@aboutSourcesHeading": {
     "description": "About page, heading."
   },
-  "aboutSources1": "Every decision comes from a verified official website: a government, a ministry, a parliament or an international body. We never use media, aggregators or trending lists.",
+  "aboutSources1": "Every decision comes from a verified official website: a government, a ministry, a parliament or an international body.",
   "@aboutSources1": {
     "description": "About page, under aboutSourcesHeading."
   },
@@ -787,7 +787,7 @@
   "@privacyAiHeading": {
     "description": "Privacy policy, heading."
   },
-  "privacyAi": "Summaries and translations are written by AI services (Cloudflare Workers AI and Groq) from the official texts only. No data about you is sent to them.",
+  "privacyAi": "Summaries and translations are written by AI services (Cloudflare Workers AI and Groq) from the texts of their sources. No data about you is sent to them.",
   "@privacyAi": {
     "description": "Privacy policy, under privacyAiHeading. Cloudflare Workers AI and Groq are product names: never translated."
   },
