@@ -2,6 +2,7 @@
 // articles with their own texts, translations in each queue state, and HTML readers.
 import { env } from "cloudflare:workers";
 import { vi } from "vitest";
+import { SNAPSHOT_LANGS, buildSnapshot, writeSnapshot } from "../src/api/snapshot";
 import { handleSite } from "../src/site/handler";
 import { CACHE } from "../src/site/respond";
 import type { SiteLang } from "../src/site/texts";
@@ -31,6 +32,15 @@ export async function reach(path: string, init: RequestInit = {}) {
   if (first.status !== 301 || first.headers.get("cloudflare-cdn-cache-control") !== CACHE.moved.edge) return first;
   if (!location?.startsWith(`${ORIGIN}/`)) throw new Error(`${path}: a 301 to ${location}`);
   return { ...(await site(location.slice(ORIGIN.length), init)), movedFrom: path };
+}
+
+/**
+ * The site's snapshots of the test database, every language, as the api
+ * Worker's cron leaves them after a round (api/snapshot.ts). A list page then
+ * reads one row; without them it reads the API's queries (the fallback).
+ */
+export async function refreshSite(now = new Date()) {
+  for (const lang of SNAPSHOT_LANGS) await writeSnapshot(env, lang, await buildSnapshot(env, lang, now));
 }
 
 export const stored = (date: Date) => `${date.toISOString().slice(0, 19)}Z`;

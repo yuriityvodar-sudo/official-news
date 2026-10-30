@@ -15,7 +15,7 @@
 // /topics lists for the place and the language, plus the current choice when
 // the list does not have it (as the app keeps it).
 import type { Topic } from "../../summarizer/schema";
-import type { ApiTopic, ApiWhere } from "../data";
+import type { ApiTopic, ApiWhere, Menus } from "../data";
 import { type Html, html, raw } from "../html";
 import { type SiteLang, countryName, groupName, groupShort, text, topicName } from "../texts";
 import { type ListFilter, type Place, isCountryPage, listPath } from "../urls";
@@ -60,12 +60,6 @@ export const TOPIC_ICONS: Record<Topic, string> = {
 };
 
 const topicIcon = (topic: Topic) => raw(`<svg class="glyph" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">${TOPIC_ICONS[topic]}</svg>`);
-
-/** What the menus offer, from the API: on the first page of a list only. */
-export interface Menus {
-  where: ApiWhere;
-  topics: ApiTopic[];
-}
 
 interface Item {
   label: string;
