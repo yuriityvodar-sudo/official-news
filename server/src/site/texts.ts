@@ -55,7 +55,11 @@ interface SiteTexts {
   independentNote: string;
   siteHeading: string;
   siteData: string;
+  /** Google Analytics on the website, after Accept (Roman's review of #240). */
+  siteAnalytics: string;
   siteBanner: string;
+  /** The footer's way to withdraw (consent.ts). */
+  cookieSettings: string;
   /** The ARB policy texts say "the app". */
   siteCovers: string;
   /** On translated policy pages; `{link}` is the English page. */
@@ -97,8 +101,10 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     independentNote: "Independent website, not affiliated with any government.",
     siteHeading: "On this website",
     siteData:
-      "This website sets no cookies and runs no scripts, and everything on its pages comes from this website. Cloudflare, which hosts it, receives your IP address and basic technical details (such as the page address, browser and time) to deliver the page; your browser may also send Cloudflare an error report if a page fails to load. We can see request logs for up to 7 days to keep the site working; we do not use them to identify you.",
+      "Cloudflare, which hosts this website, receives your IP address and basic technical details (such as the page address, browser and time) to deliver the page; your browser may also send Cloudflare an error report if a page fails to load. We can see request logs for up to 7 days to keep the site working; we do not use them to identify you.",
+    siteAnalytics: "With your yes in the cookie notice, this website uses Google Analytics, a service of Google, to count visits and see which pages are read, how far they are scrolled and which links lead out. It sets the cookies _ga and _ga_D0H8XW2SWJ, kept for up to 2 years, and the data goes to Google, which may process it outside the EU. Nothing from Google loads before you accept. To withdraw, tap Cookie settings at the bottom of any page: it deletes these cookies and asks again.",
     siteBanner: "On iPhone and iPad, Safari may show a banner for our app, using information it loads from Apple's App Store.",
+    cookieSettings: "Cookie settings",
     siteCovers: "The privacy policy and the terms of use cover both the Outer News app and this website.",
     prevails: "The English version prevails ({link}).",
     emailUs: "Write to us at {email}.",
@@ -135,8 +141,10 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     independentNote: "Незалежний сайт, не пов’язаний із жодним урядом.",
     siteHeading: "На цьому сайті",
     siteData:
-      "Цей сайт не встановлює файлів cookie і не запускає скриптів, а все на його сторінках завантажується з цього ж сайту. Cloudflare, де він розміщений, отримує вашу IP-адресу та базові технічні дані (як-от адресу сторінки, браузер і час), щоб показати сторінку; ваш браузер також може надіслати Cloudflare звіт про помилку, якщо сторінка не завантажилася. Ми бачимо журнали запитів до 7 днів, щоб сайт працював; ми не використовуємо їх, щоб вас ідентифікувати.",
+      "Cloudflare, де розміщено цей сайт, отримує вашу IP-адресу та базові технічні дані (як-от адресу сторінки, браузер і час), щоб показати сторінку; ваш браузер також може надіслати Cloudflare звіт про помилку, якщо сторінка не завантажилася. Ми бачимо журнали запитів до 7 днів, щоб сайт працював; ми не використовуємо їх, щоб вас ідентифікувати.",
+    siteAnalytics: "Якщо ви погодитеся в повідомленні про cookie, цей сайт використовує Google Analytics, сервіс Google, щоб рахувати відвідування й бачити, які сторінки читають, наскільки їх прокручують і за якими посиланнями переходять на інші сайти. Він встановлює файли cookie _ga і _ga_D0H8XW2SWJ, які зберігаються до 2 років, а дані надходять до Google, який може обробляти їх за межами ЄС. До вашої згоди нічого від Google не завантажується. Щоб відкликати згоду, натисніть «Налаштування cookie» внизу будь-якої сторінки: це видалить ці файли cookie і запитає знову.",
     siteBanner: "На iPhone та iPad Safari може показати банер нашого застосунку з даними, які він завантажує з App Store від Apple.",
+    cookieSettings: "Налаштування cookie",
     siteCovers: "Політика конфіденційності й умови використання стосуються і застосунку Outer News, і цього сайту.",
     prevails: "Це переклад; у разі розбіжностей переважну силу має англійська версія ({link}).",
     emailUs: "Пишіть нам на {email}.",
@@ -173,8 +181,10 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     independentNote: "Независимый сайт, не связанный ни с одним правительством.",
     siteHeading: "На этом сайте",
     siteData:
-      "Этот сайт не устанавливает файлы cookie и не запускает скрипты, а всё на его страницах загружается с этого же сайта. Cloudflare, где он размещён, получает ваш IP-адрес и базовые технические данные (например, адрес страницы, браузер и время), чтобы показать страницу; ваш браузер также может отправить Cloudflare отчёт об ошибке, если страница не загрузилась. Мы видим журналы запросов до 7 дней, чтобы сайт работал; мы не используем их, чтобы вас идентифицировать.",
+      "Cloudflare, где размещён этот сайт, получает ваш IP-адрес и базовые технические данные (например, адрес страницы, браузер и время), чтобы показать страницу; ваш браузер также может отправить Cloudflare отчёт об ошибке, если страница не загрузилась. Мы видим журналы запросов до 7 дней, чтобы сайт работал; мы не используем их, чтобы вас идентифицировать.",
+    siteAnalytics: "Если вы согласитесь в уведомлении о cookie, этот сайт использует Google Analytics, сервис Google, чтобы считать посещения и видеть, какие страницы читают, насколько их прокручивают и по каким ссылкам переходят на другие сайты. Он устанавливает файлы cookie _ga и _ga_D0H8XW2SWJ, которые хранятся до 2 лет, а данные поступают в Google, который может обрабатывать их за пределами ЕС. До вашего согласия ничего от Google не загружается. Чтобы отозвать согласие, нажмите «Настройки cookie» внизу любой страницы: это удалит эти файлы cookie и спросит снова.",
     siteBanner: "На iPhone и iPad Safari может показать баннер нашего приложения с данными, которые он загружает из App Store от Apple.",
+    cookieSettings: "Настройки cookie",
     siteCovers: "Политика конфиденциальности и условия использования относятся и к приложению Outer News, и к этому сайту.",
     prevails: "Это перевод; в случае расхождений преимущественную силу имеет английская версия ({link}).",
     emailUs: "Пишите нам на {email}.",
@@ -211,8 +221,10 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     independentNote: "Sitio web independiente, sin vínculo con ningún gobierno.",
     siteHeading: "En este sitio web",
     siteData:
-      "Este sitio no usa cookies ni ejecuta scripts, y todo lo que aparece en sus páginas viene de este mismo sitio. Cloudflare, que lo aloja, recibe tu dirección IP y datos técnicos básicos (como la dirección de la página, el navegador y la hora) para mostrar la página; tu navegador también puede enviar a Cloudflare un informe de error si una página no carga. Vemos los registros de solicitudes durante un máximo de 7 días para que el sitio funcione; no los usamos para identificarte.",
+      "Cloudflare, que aloja este sitio, recibe tu dirección IP y datos técnicos básicos (como la dirección de la página, el navegador y la hora) para mostrar la página; tu navegador también puede enviar a Cloudflare un informe de error si una página no carga. Vemos los registros de solicitudes durante un máximo de 7 días para que el sitio funcione; no los usamos para identificarte.",
+    siteAnalytics: "Si aceptas en el aviso de cookies, este sitio usa Google Analytics, un servicio de Google, para contar visitas y ver qué páginas se leen, hasta dónde se desplazan y qué enlaces llevan fuera. Usa las cookies _ga y _ga_D0H8XW2SWJ, que se guardan hasta 2 años, y los datos van a Google, que puede tratarlos fuera de la UE. Nada de Google se carga antes de que aceptes. Para retirar tu consentimiento, toca Configuración de cookies al pie de cualquier página: borra estas cookies y vuelve a preguntar.",
     siteBanner: "En iPhone y iPad, Safari puede mostrar un banner de nuestra app con información que obtiene del App Store de Apple.",
+    cookieSettings: "Configuración de cookies",
     siteCovers: "La política de privacidad y los términos de uso se aplican tanto a la app Outer News como a este sitio web.",
     prevails: "Esto es una traducción; en caso de discrepancia, prevalece la versión en inglés ({link}).",
     emailUs: "Escríbenos a {email}.",
@@ -249,8 +261,10 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     independentNote: "Unabhängige Website ohne Verbindung zu einer Regierung.",
     siteHeading: "Auf dieser Website",
     siteData:
-      "Diese Website setzt keine Cookies und führt keine Skripte aus; alles auf ihren Seiten kommt von dieser Website selbst. Cloudflare, wo sie gehostet wird, erhält Ihre IP-Adresse und grundlegende technische Angaben (etwa Seitenadresse, Browser und Uhrzeit), um die Seite auszuliefern; Ihr Browser kann Cloudflare außerdem einen Fehlerbericht senden, wenn eine Seite nicht lädt. Wir sehen die Anfrageprotokolle bis zu 7 Tage lang, damit die Website funktioniert; wir nutzen sie nicht, um Sie zu identifizieren.",
+      "Cloudflare, wo diese Website gehostet wird, erhält Ihre IP-Adresse und grundlegende technische Angaben (etwa Seitenadresse, Browser und Uhrzeit), um die Seite auszuliefern; Ihr Browser kann Cloudflare außerdem einen Fehlerbericht senden, wenn eine Seite nicht lädt. Wir sehen die Anfrageprotokolle bis zu 7 Tage lang, damit die Website funktioniert; wir nutzen sie nicht, um Sie zu identifizieren.",
+    siteAnalytics: "Wenn Sie im Cookie-Hinweis zustimmen, nutzt diese Website Google Analytics, einen Dienst von Google, um Besuche zu zählen und zu sehen, welche Seiten gelesen werden, wie weit sie gescrollt werden und welche Links nach außen führen. Sie setzt die Cookies _ga und _ga_D0H8XW2SWJ, die bis zu 2 Jahre gespeichert werden, und die Daten gehen an Google, das sie auch außerhalb der EU verarbeiten kann. Vor Ihrer Zustimmung lädt nichts von Google. Um die Einwilligung zu widerrufen, tippen Sie unten auf jeder Seite auf Cookie-Einstellungen: Das löscht diese Cookies und fragt erneut.",
     siteBanner: "Auf iPhone und iPad kann Safari ein Banner für unsere App zeigen, mit Angaben, die es aus Apples App Store lädt.",
+    cookieSettings: "Cookie-Einstellungen",
     siteCovers: "Die Datenschutzerklärung und die Nutzungsbedingungen gelten für die App Outer News und für diese Website.",
     prevails: "Dies ist eine Übersetzung; bei Abweichungen ist die englische Fassung maßgeblich ({link}).",
     emailUs: "Schreiben Sie uns an {email}.",

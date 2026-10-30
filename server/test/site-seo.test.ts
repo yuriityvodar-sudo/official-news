@@ -116,6 +116,21 @@ describe("Google Analytics, after the visitor accepts cookies", () => {
     // No way to say no: the only answer is Accept.
     expect(CONSENT_JS).not.toContain('"no"');
   });
+
+  // Roman's review of #240: the policy says what the site does, and withdrawing is as easy as accepting.
+  it("names Google Analytics and its cookies in the privacy policy, and every page has Cookie settings to withdraw", async () => {
+    const privacy = (await site("/en/privacy")).body;
+    expect(privacy).toContain("this website uses Google Analytics, a service of Google");
+    expect(privacy).toContain(`_ga_${GA_ID.slice(2)}`);
+    expect(privacy).not.toContain("sets no cookies");
+    for (const path of ["/en", EN, "/uk/terms"]) {
+      expect((await site(path)).body, path).toMatch(/<button type="button" class="link" data-consent-reset>[^<]+<\/button><\/nav>/);
+    }
+    // Withdrawing forgets the yes, deletes Google's cookies and asks again.
+    expect(CONSENT_JS).toContain("localStorage.removeItem(k)");
+    expect(CONSENT_JS).toContain('indexOf("_ga")');
+    expect(CONSENT_JS).toContain("location.reload()");
+  });
 });
 
 describe("the front page's title", () => {

@@ -19,8 +19,14 @@ export const GA_ID = "G-D0H8XW2SWJ";
 
 const KEY = "outer-news-analytics";
 
-/** Shows the notice until the visitor accepts (covering the page when it is a wall); loads Google's tag after the yes, now and on later visits. */
-export const CONSENT_JS = `(function(){var k=${JSON.stringify(KEY)},id=${JSON.stringify(GA_ID)};function load(){window.dataLayer=window.dataLayer||[];window.gtag=function(){window.dataLayer.push(arguments)};window.gtag("js",new Date());window.gtag("config",id);var s=document.createElement("script");s.async=true;s.src="https://www.googletagmanager.com/gtag/js?id="+id;document.head.appendChild(s)}var v=null;try{v=localStorage.getItem(k)}catch(e){}if(v==="yes"){load();return}var b=document.getElementById("consent");if(!b)return;var r=document.documentElement;b.hidden=false;if(b.hasAttribute("data-wall"))r.classList.add("walled");var y=b.querySelector("[data-consent]");if(!y)return;y.addEventListener("click",function(){try{localStorage.setItem(k,"yes")}catch(e){}b.hidden=true;r.classList.remove("walled");load()})})();`;
+/**
+ * Shows the notice until the visitor accepts (covering the page when it is a
+ * wall); loads Google's tag after the yes, now and on later visits. Cookie
+ * settings in the footer (`data-consent-reset`) withdraws: it forgets the yes,
+ * deletes Google's `_ga*` cookies and reloads, so the notice asks again
+ * (Roman's review of #240, GDPR Art. 7(3)).
+ */
+export const CONSENT_JS = `(function(){var k=${JSON.stringify(KEY)},id=${JSON.stringify(GA_ID)},r=document.documentElement;function load(){window.dataLayer=window.dataLayer||[];window.gtag=function(){window.dataLayer.push(arguments)};window.gtag("js",new Date());window.gtag("config",id);var s=document.createElement("script");s.async=true;s.src="https://www.googletagmanager.com/gtag/js?id="+id;document.head.appendChild(s)}document.addEventListener("click",function(e){if(!e.target.closest||!e.target.closest("[data-consent-reset]"))return;try{localStorage.removeItem(k)}catch(x){}var h=location.hostname,d=["",h,"."+h,"."+h.split(".").slice(-2).join(".")];document.cookie.split(";").forEach(function(c){var n=c.split("=")[0].trim();if(n.indexOf("_ga")!==0)return;d.forEach(function(m){document.cookie=n+"=; Max-Age=0; path=/"+(m?"; domain="+m:"")})});location.reload()});var v=null;try{v=localStorage.getItem(k)}catch(e){}if(v==="yes"){load();return}var b=document.getElementById("consent");if(!b)return;b.hidden=false;if(b.hasAttribute("data-wall"))r.classList.add("walled");var y=b.querySelector("[data-consent]");if(!y)return;y.addEventListener("click",function(){try{localStorage.setItem(k,"yes")}catch(e){}b.hidden=true;r.classList.remove("walled");load()})})();`;
 
 let scriptHash: Promise<string> | undefined;
 

@@ -95,7 +95,8 @@ html.walled{overflow:hidden}
 main{flex:1 0 auto}
 footer{border-top:.5px solid var(--separator);padding:8px 0 40px;font-size:13px;color:var(--secondary)}
 footer nav{display:flex;flex-wrap:wrap;column-gap:18px}
-footer nav a{display:inline-flex;align-items:center;min-height:44px;color:var(--text);text-decoration:none}
+footer nav a,footer nav .link{display:inline-flex;align-items:center;min-height:44px;color:var(--text);text-decoration:none}
+footer nav .link{padding:0;border:0;background:none;font:inherit;cursor:pointer}
 footer p{margin:8px 0 0}
 .leadstory .title{display:block;font:700 30px/1.15 Georgia,"Times New Roman",serif;color:var(--text);text-decoration:none}
 .leadstory .title:hover{text-decoration:underline}
@@ -193,7 +194,7 @@ const footer = (lang: SiteLang) => {
     support: text(lang, "contactSupport"),
   };
   return html`<footer><div class="wrap">
-<nav aria-label="${SITE_NAME}">${INFO_PAGES.map((page) => html`<a href="${infoPath(lang, page)}">${names[page]}</a>`)}</nav>
+<nav aria-label="${SITE_NAME}">${INFO_PAGES.map((page) => html`<a href="${infoPath(lang, page)}">${names[page]}</a>`)}<button type="button" class="link" data-consent-reset>${t(lang, "cookieSettings")}</button></nav>
 <p>${t(lang, "aboutPublishedBy", { publisher: publisher(lang) })}</p>
 </div></footer>`;
 };
