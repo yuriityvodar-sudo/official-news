@@ -50,6 +50,14 @@ export const CACHE = {
   moved: { browser: "public, max-age=300", edge: "max-age=600" },
   /** The sitemap (seo.ts): an hour, as new articles come all day; it reads up to 10 API pages per language. */
   sitemap: { browser: "public, max-age=3600", edge: "max-age=3600, stale-if-error=86400" },
+  /** A past month's sitemap: its articles are all released, so a day (a re-summarized headline's new address comes through the article's own redirect). */
+  sitemapMonth: { browser: "public, max-age=86400", edge: "max-age=86400, stale-if-error=604800" },
+  /**
+   * The current month's sitemap: 6 hours. It reads the month's articles and
+   * translations (about 10,000 D1 rows at 1,300 articles), and a new article
+   * reaches crawlers within the hour through /sitemap-latest.xml anyway.
+   */
+  sitemapCurrentMonth: { browser: "public, max-age=21600", edge: "max-age=21600, stale-if-error=604800" },
   /** `/`, sent to the visitor's own language: per visitor, so never stored anywhere. */
   chooser: { browser: "private, no-store", edge: "no-store" },
   /** 405 and 500: never stored, so an outage is never cached as a page. */

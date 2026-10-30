@@ -45,14 +45,14 @@ export function articleJsonLd(lang: SiteLang, origin: string, article: ApiArticl
 
 const xml = (value: string) => value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
-/**
- * The sitemap: each language's latest list while it has articles (an empty
- * one is noindex), and every article of the API's 7 days in each language it
- * is shown in, with its other languages as hreflang alternates, as the pages'
- * own <link rel="alternate">.
- */
-export function sitemapXml(origin: string, shown: Partial<Record<SiteLang, ListArticle[]>>): string {
-  const byId = new Map<string, Partial<Record<SiteLang, ListArticle>>>();
+/** What a sitemap entry needs of an article: its address (articlePath) and when it came. */
+type SitemapEntry = Pick<ListArticle, "id" | "country" | "headline" | "originalTitle" | "addedAt" | "publishedAt">;
+
+const URLSET = '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">';
+
+/** Each article in each language it is shown in, with its other languages as hreflang alternates, as the pages' own <link rel="alternate">. */
+function articleUrls(origin: string, shown: Partial<Record<SiteLang, SitemapEntry[]>>): string[] {
+  const byId = new Map<string, Partial<Record<SiteLang, SitemapEntry>>>();
   for (const lang of SITE_LANGS) {
     for (const article of shown[lang] ?? []) {
       const entry = byId.get(article.id) ?? {};
@@ -60,11 +60,7 @@ export function sitemapXml(origin: string, shown: Partial<Record<SiteLang, ListA
       byId.set(article.id, entry);
     }
   }
-  const withLists = SITE_LANGS.filter((lang) => (shown[lang] ?? []).length > 0);
-  const urls: string[] = withLists.map((lang) => {
-    const links = withLists.map((l) => `<xhtml:link rel="alternate" hreflang="${l}" href="${xml(origin + listPath(l))}"/>`).join("");
-    return `<url><loc>${xml(origin + listPath(lang))}</loc><changefreq>hourly</changefreq>${links}</url>`;
-  });
+  const urls: string[] = [];
   for (const entry of byId.values()) {
     const langs = SITE_LANGS.filter((l) => entry[l]);
     const links = langs.map((l) => `<xhtml:link rel="alternate" hreflang="${l}" href="${xml(origin + articlePath(l, entry[l]!))}"/>`).join("");
@@ -74,5 +70,50 @@ export function sitemapXml(origin: string, shown: Partial<Record<SiteLang, ListA
       urls.push(`<url><loc>${xml(origin + articlePath(lang, article))}</loc>${added ? `<lastmod>${isoTime(added)}</lastmod>` : ""}${links}</url>`);
     }
   }
-  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">\n${urls.join("\n")}\n</urlset>\n`;
+  return urls;
+}
+
+/**
+ * The latest sitemap (/sitemap-latest.xml): each language's latest list while
+ * it has articles (an empty one is noindex), and every article of the API's 7
+ * days in each language it is shown in.
+ */
+export function sitemapXml(origin: string, shown: Partial<Record<SiteLang, ListArticle[]>>): string {
+  const withLists = SITE_LANGS.filter((lang) => (shown[lang] ?? []).length > 0);
+  const urls: string[] = withLists.map((lang) => {
+    const links = withLists.map((l) => `<xhtml:link rel="alternate" hreflang="${l}" href="${xml(origin + listPath(l))}"/>`).join("");
+    return `<url><loc>${xml(origin + listPath(lang))}</loc><changefreq>hourly</changefreq>${links}</url>`;
+  });
+  urls.push(...articleUrls(origin, shown));
+  return `${URLSET}\n${urls.join("\n")}\n</urlset>\n`;
+}
+
+/** A month's sitemap (/sitemap-YYYY-MM.xml): every article released that month, in each language it is shown in. Article pages never expire. */
+export function monthSitemapXml(origin: string, shown: Partial<Record<SiteLang, SitemapEntry[]>>): string {
+  return `${URLSET}\n${articleUrls(origin, shown).join("\n")}\n</urlset>\n`;
+}
+
+/** The first month with articles (the feed's first release, 14 Oct 2026): the oldest month file. */
+export const FIRST_SITEMAP_MONTH = "2026-10";
+
+/** Every month from FIRST_SITEMAP_MONTH to `now`'s, as `YYYY-MM`. */
+export function sitemapMonths(now: Date): string[] {
+  const months: string[] = [];
+  let [y, m] = FIRST_SITEMAP_MONTH.split("-").map(Number);
+  const last = now.getUTCFullYear() * 12 + now.getUTCMonth();
+  while (y * 12 + (m - 1) <= last) {
+    months.push(`${y}-${String(m).padStart(2, "0")}`);
+    if (++m > 12) { m = 1; y++; }
+  }
+  return months;
+}
+
+/**
+ * /sitemap.xml, the index robots.txt names: the latest file, then one file per
+ * month. A file holds at most 50,000 addresses (sitemaps.org); a month is about
+ * 5,000 today (1,300 articles × the languages they are shown in).
+ */
+export function sitemapIndexXml(origin: string, now: Date): string {
+  const files = [`${origin}/sitemap-latest.xml`, ...sitemapMonths(now).map((m) => `${origin}/sitemap-${m}.xml`)];
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${files.map((f) => `<sitemap><loc>${xml(f)}</loc></sitemap>`).join("\n")}\n</sitemapindex>\n`;
 }
