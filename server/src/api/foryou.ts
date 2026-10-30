@@ -79,10 +79,21 @@ const concernsAny = (list: readonly string[]) =>
     : "0";
 
 /** How much the article concerns the reader's country: 2 its own, 1 its neighbours' or group's, else 0 (the rest of the world). */
-export const concernSql = (home: string) => `CASE WHEN ${concernsAny([checked(home)])} THEN 2 WHEN ${concernsAny(nearCountries(home))} THEN 1 ELSE 0 END`;
+const concernSql = (home: string) => `CASE WHEN ${concernsAny([checked(home)])} THEN 2 WHEN ${concernsAny(nearCountries(home))} THEN 1 ELSE 0 END`;
 
-/** Relevance: the concern, or 1 for a global item that concerns neither. */
+/** Relevance in SQL, for the top stories' score (topScore): the concern, or 1 for a global item that concerns neither. */
 export const relevanceSql = (home: string) => `MAX(${concernSql(home)}, CASE WHEN a.reach = 'global' THEN 1 ELSE 0 END)`;
+
+/**
+ * The same in the Worker, from what the row has read already (its source's
+ * country and its `countries`), so ranking For you's 7 days runs no lookup
+ * per article for it: the concern (2, 1 or 0) and the relevance.
+ */
+export function relevanceOf(home: string, sourceCountry: string, countries: string[], reach: string | null): { concern: number; relevance: number } {
+  const its = new Set([sourceCountry, ...countries]);
+  const concern = its.has(home) ? 2 : nearCountries(home).some((c) => its.has(c)) ? 1 : 0;
+  return { concern, relevance: Math.max(concern, reach === "global" ? 1 : 0) };
+}
 
 /** Popularity in the reader's country (#230 step 4): its language's Wikipedia views and its media, at most POPULARITY_MAX. */
 export function popularitySql(home: string): string {
@@ -107,6 +118,24 @@ export interface Ranked {
 
 /** Half a point a day since publication, as the top stories (TOP_SCORE). */
 export const score = (row: Ranked, now: number) => (row.importance ?? 0) + row.relevance + row.popularity - (0.5 * (now - Date.parse(row.published_at))) / 86_400_000;
+
+/** The top stories (#164): of the last 72 hours, with an importance, at most one a source country, TOP_SIZE in all. */
+export function topForYou<T extends Ranked & { country: string }>(rows: T[], now: number, size: number, hours: number): T[] {
+  const since = now - hours * 3_600_000;
+  const compare = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
+  const candidates = rows
+    .filter((r) => r.importance !== null && Date.parse(r.published_at) >= since)
+    .sort((a, b) => score(b, now) - score(a, now) || compare(b.published_at, a.published_at) || compare(b.id, a.id));
+  const countries = new Set<string>();
+  const top: T[] = [];
+  for (const row of candidates) {
+    if (countries.has(row.country)) continue;
+    countries.add(row.country);
+    top.push(row);
+    if (top.length === size) break;
+  }
+  return top;
+}
 
 /** At most this many items a page from the rest of the world (concern 0). */
 export const OTHERS_PER_PAGE = 2;
@@ -176,4 +205,71 @@ export function decodeForYouCursor(value: string): ForYouCursor | null {
     // Not ours.
   }
   return null;
+}
+
+/** For you's ranking is kept this long (Yurii's review of #260): a first page within it reads its articles by id. */
+export const RANKING_MINUTES = 5;
+/** Rankings older than this are deleted when a new one is written. */
+const RANKING_KEPT_MINUTES = 60;
+
+/** Which ranking: the reader's country, the feed's language, the topic ('' for all) and the page size. */
+export type RankingKey = readonly [home: string, lang: string, topic: string, size: number];
+
+/** A kept ranking: its moment and newest feed_seq (the cursor's), the articles' ids in order, and the top stories' ids. */
+export interface Ranking {
+  at: number;
+  seq: number;
+  ids: string[];
+  top: string[];
+}
+
+const idList = (value: string): string[] => {
+  try {
+    const parsed: unknown = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === "string") : [];
+  } catch {
+    return [];
+  }
+};
+
+/**
+ * The kept ranking for a page, or null to rank again: a first page takes the
+ * newest one of its key, if it is at most RANKING_MINUTES old and nothing has
+ * appeared in the feed since (its `seq` is still the feed's newest: a reader
+ * who pulls after "N new" sees them); a later page the one its cursor was
+ * made from (the same moment and feed), whatever its age, while it is kept.
+ * One row through the primary key, and for a first page the feed's newest
+ * number through articles_feed_seq.
+ */
+export async function keptRanking(db: D1Database, key: RankingKey, cursor: ForYouCursor | null, now: number): Promise<Ranking | null> {
+  type Row = { at: number; seq: number; ids: string; top: string; built_at: string; newest?: number | null };
+  const row = cursor
+    ? await db
+        .prepare("SELECT at, seq, ids, top, built_at FROM for_you_rankings WHERE home = ? AND lang = ? AND topic = ? AND size = ? AND at = ?")
+        .bind(...key, cursor.at)
+        .first<Row>()
+    : await db
+        .prepare(
+          `SELECT at, seq, ids, top, built_at, (SELECT MAX(feed_seq) FROM articles) AS newest
+           FROM for_you_rankings WHERE home = ? AND lang = ? AND topic = ? AND size = ? ORDER BY at DESC LIMIT 1`,
+        )
+        .bind(...key)
+        .first<Row>();
+  if (!row) return null;
+  if (cursor ? row.seq !== cursor.seq : !(now - Date.parse(row.built_at) <= RANKING_MINUTES * 60_000) || (row.newest ?? 0) > row.seq) return null;
+  return { at: row.at, seq: row.seq, ids: idList(row.ids), top: idList(row.top) };
+}
+
+/** Keeps a ranking, and deletes the ones older than RANKING_KEPT_MINUTES (a few dozen rows at most). */
+export async function keepRanking(db: D1Database, key: RankingKey, ranking: Ranking, now: number): Promise<void> {
+  const stored = (ms: number) => `${new Date(ms).toISOString().slice(0, 19)}Z`;
+  await db.batch([
+    db.prepare("DELETE FROM for_you_rankings WHERE built_at < ?").bind(stored(now - RANKING_KEPT_MINUTES * 60_000)),
+    db
+      .prepare(
+        `INSERT INTO for_you_rankings (home, lang, topic, size, at, seq, ids, top, built_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT (home, lang, topic, size, at) DO UPDATE SET seq = excluded.seq, ids = excluded.ids, top = excluded.top, built_at = excluded.built_at`,
+      )
+      .bind(...key, ranking.at, ranking.seq, JSON.stringify(ranking.ids), JSON.stringify(ranking.top), stored(now)),
+  ]);
 }

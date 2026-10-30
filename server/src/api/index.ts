@@ -25,13 +25,17 @@ import {
 import {
   type ForYouCursor,
   type Ranked,
-  concernSql,
+  type RankingKey,
   decodeForYouCursor,
   encodeForYouCursor,
+  keepRanking,
+  keptRanking,
   mediaLinksSql,
   popularitySql,
   rankForYou,
+  relevanceOf,
   relevanceSql,
+  topForYou,
 } from "./foryou";
 
 /** A row of `articles` joined with its source, as stored in D1. */
@@ -489,7 +493,7 @@ async function listArticles(url: URL, env: Env): Promise<Response> {
   if (filters.home !== null && params.get("after") === null && params.get("since") === null) {
     const raw = params.get("cursor");
     const cursor = raw === null ? null : decodeForYouCursor(raw);
-    if (raw === null || cursor) return forYouPage(env, filters, filters.home, lang, limit, cursor);
+    if (raw === null || cursor) return forYouPage(env, filters, filters.home, lang, topic, limit, cursor);
   }
 
   const where = [...PAGE_CONDITIONS, ...(lang ? [RECENT_TRANSLATION, ...TRANSLATED_CONDITIONS] : []), ...filters.where];
@@ -584,50 +588,97 @@ const FOR_YOU_MAX = 500;
 /**
  * A page of For you (#230 step 5): every article For you shows the reader's
  * country (forYouCondition, with `topic` and `lang` as the feed has them),
- * with what its score needs, ranked in the Worker at the cursor's moment (now
- * for a first page) over what the first page saw, and the page at the cursor's
- * place in that order, so the pages of one scroll agree. Its items carry `media`, the reader's country's
+ * ranked in the Worker at one moment (now for a first page) over what the
+ * first page saw, and the page at the cursor's place in that order, so the
+ * pages of one scroll agree. Its items carry `media`, the reader's country's
  * outlets about it. The top stories come on the first page, ranked by the same
- * score in SQL (topScore).
+ * score from the same rows (topForYou).
+ *
+ * Ranking reads For you's whole 7 days, so the ranking is kept 5 minutes
+ * (keptRanking, Yurii's review of #260): a first page within them, and every
+ * later page of a kept ranking, reads only its own articles and top stories by
+ * id.
  */
-async function forYouPage(env: Env, filters: Filters, home: string, lang: Lang | null, limit: number, cursor: ForYouCursor | null): Promise<Response> {
-  const at = cursor?.at ?? Date.now();
+async function forYouPage(
+  env: Env,
+  filters: Filters,
+  home: string,
+  lang: Lang | null,
+  topic: Topic | null,
+  limit: number,
+  cursor: ForYouCursor | null,
+): Promise<Response> {
+  const now = Date.now();
   const offset = cursor?.offset ?? 0;
-  const where = [...PAGE_CONDITIONS, ...(lang ? [RECENT_TRANSLATION, ...TRANSLATED_CONDITIONS] : []), ...filters.where];
-  // A later page ranks what the first one did: nothing that appeared since.
-  const binds: (string | number)[] = [...(lang ? [lang] : []), ...filters.binds];
-  if (cursor) {
-    where.push("a.feed_seq <= ?");
-    binds.push(cursor.seq);
-  }
-  const list = env.DB.prepare(
-    `SELECT ${lang ? translatedColumns(lang) : ARTICLE_COLUMNS},
-            ${concernSql(home)} AS concern, ${relevanceSql(home)} AS relevance, ${popularitySql(home)} AS popularity,
-            ${mediaLinksSql(home)} AS media_links
-     ${lang ? FROM_TRANSLATED : FROM_ARTICLES}
-     WHERE ${where.join(" AND ")}
-     ORDER BY a.feed_seq DESC
-     LIMIT ${FOR_YOU_MAX}`,
-  ).bind(...binds);
-  const topSql = topStories(filters, lang);
-  const topQuery = offset === 0 ? env.DB.prepare(topSql.sql).bind(...topSql.binds) : null;
+  const key: RankingKey = [home, lang ?? "en", topic ?? "", limit];
   const switchQuery = lang ? env.DB.prepare(LANG_SWITCH).bind(lang) : null;
-  const [all, ...more] = await env.DB.batch<TranslatedRow & Ranked & { delayed?: number }>(
-    [list, topQuery, switchQuery].filter((q): q is D1PreparedStatement => q !== null),
-  );
-  const top = topQuery ? more.shift() : undefined;
-  const delayed = switchQuery ? more.shift() : undefined;
+  const columns = `${lang ? translatedColumns(lang) : ARTICLE_COLUMNS}, ${mediaLinksSql(home)} AS media_links`;
+  const from = lang ? FROM_TRANSLATED : FROM_ARTICLES;
 
-  const ranked = rankForYou(all.results, limit, at);
-  const rows = ranked.slice(offset, offset + limit);
-  const seq = cursor?.seq ?? Math.max(0, ...all.results.map((r) => r.feed_seq ?? 0));
-  const nextCursor = offset + limit < ranked.length ? encodeForYouCursor({ at, seq, offset: offset + limit }) : null;
+  let ranking = await keptRanking(env.DB, key, cursor, now);
+  let found: Map<string, TranslatedRow>;
+  let delayed: D1Result<{ delayed?: number }> | undefined;
+  if (ranking) {
+    // The page's and the top stories' articles, by id: still released and, in a language, still shown.
+    // Each article is found by its id: the unary + keeps SQLite from walking the (is_news,
+    // published_at) index over every released article instead (324 rows against about 80 in
+    // filters.test.ts), and CROSS JOIN keeps the articles the outer loop.
+    const wanted = [...ranking.ids.slice(offset, offset + limit), ...(offset === 0 ? ranking.top : [])];
+    const byId = env.DB.prepare(
+      `SELECT ${columns}
+       ${lang ? "FROM translation_langs l CROSS JOIN articles a ON l.lang = ?" : "FROM articles a"}
+       CROSS JOIN sources s ON s.id = a.source_id
+       ${lang ? "CROSS JOIN article_translations t ON t.article_id = a.id AND t.lang = l.lang" : ""}
+       WHERE a.id IN (${wanted.map(() => "?").join(", ") || "NULL"}) AND +a.is_news = 1 AND +a.feed_seq IS NOT NULL
+         ${lang ? `AND ${TRANSLATED_CONDITIONS.join(" AND ")}` : ""}`,
+    ).bind(...(lang ? [lang] : []), ...wanted);
+    const [rows, ...more] = await env.DB.batch<TranslatedRow & { delayed?: number }>(
+      [byId, switchQuery].filter((q): q is D1PreparedStatement => q !== null),
+    );
+    found = new Map(rows.results.map((row) => [row.id, row]));
+    delayed = more.shift();
+  } else {
+    const at = cursor?.at ?? now;
+    const where = [...PAGE_CONDITIONS, ...(lang ? [RECENT_TRANSLATION, ...TRANSLATED_CONDITIONS] : []), ...filters.where];
+    // A later page ranks what the first one did: nothing that appeared since.
+    const binds: (string | number)[] = [...(lang ? [lang] : []), ...filters.binds];
+    if (cursor) {
+      where.push("a.feed_seq <= ?");
+      binds.push(cursor.seq);
+    }
+    // Relevance comes from what each row reads anyway (relevanceOf), and the top stories from the same
+    // rows (topForYou): one pass over the 7 days, no lookup per article but its popularity.
+    const list = env.DB.prepare(
+      `SELECT ${columns}, a.reach AS reach, ${popularitySql(home)} AS popularity
+       ${from}
+       WHERE ${where.join(" AND ")}
+       ORDER BY a.feed_seq DESC
+       LIMIT ${FOR_YOU_MAX}`,
+    ).bind(...binds);
+    const [all, ...more] = await env.DB.batch<TranslatedRow & { reach: string | null; popularity: number; delayed?: number }>(
+      [list, switchQuery].filter((q): q is D1PreparedStatement => q !== null),
+    );
+    delayed = more.shift();
+    const rows = all.results.map((row) => ({ ...row, ...relevanceOf(home, row.country, parseStringArray(row.countries), row.reach) }));
+    ranking = {
+      at,
+      seq: cursor?.seq ?? Math.max(0, ...rows.map((r) => r.feed_seq ?? 0)),
+      ids: rankForYou(rows, limit, at).map((r) => r.id),
+      top: topForYou(rows, at, TOP_SIZE, TOP_HOURS).map((r) => r.id),
+    };
+    await keepRanking(env.DB, key, ranking, now);
+    found = new Map(rows.map((row) => [row.id, row]));
+  }
+
   const shape = (row: TranslatedRow) => (lang ? toTranslatedArticle(row, lang) : toArticle(row));
+  const pick = (ids: string[]) => ids.map((id) => found.get(id)).filter((row): row is TranslatedRow => row !== undefined).map(shape);
+  const { at, seq, ids } = ranking;
+  const nextCursor = offset + limit < ids.length ? encodeForYouCursor({ at, seq, offset: offset + limit }) : null;
   return json(
     {
-      items: rows.map(shape),
+      items: pick(ids.slice(offset, offset + limit)),
       nextCursor,
-      top: top ? top.results.map(shape) : [],
+      top: offset === 0 ? pick(ranking.top) : [],
       ...(lang ? { translationsDelayed: delayed?.results[0]?.delayed !== 0 } : {}),
     },
     200,
