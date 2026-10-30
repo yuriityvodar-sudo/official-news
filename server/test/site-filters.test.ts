@@ -15,7 +15,7 @@ import { SITE_LANGS, type SiteLang, text } from "../src/site/texts";
 import { ALL, COUNTRY_PAGES, INFO_PAGES, isCountryPage } from "../src/site/urls";
 import { TOPICS } from "../src/summarizer/schema";
 import { get, hideSeed } from "./helpers";
-import { ORIGIN, hreflangs, insertArticle, insertTranslation, linkedIds, site, siteRowsRead as rowsRead, testId, withoutConsentScript } from "./site-helpers";
+import { ORIGIN, hreflangs, insertArticle, insertTranslation, linkedIds, refreshSite, site, siteRowsRead as rowsRead, testId, withoutConsentScript } from "./site-helpers";
 
 const SOURCE = {
   DE: "de-federal-government",
@@ -46,6 +46,7 @@ async function fixtures() {
   await insertArticle({ id: testId(60), sourceId: SOURCE.FR, topics: ["climate"] });
   await insertArticle({ id: testId(61), sourceId: SOURCE.GB, topics: ["security-defence"] });
   await insertArticle({ id: testId(62), sourceId: SOURCE.TR, topics: ["security-defence"] });
+  await refreshSite();
 }
 
 beforeEach(fixtures);
@@ -379,6 +380,7 @@ describe("the menus", () => {
     await env.DB.prepare(
       `INSERT INTO sources (id, country, name, kind, url, status) VALUES ('xx-evil', '"><b>', 'Evil', 'rss', 'https://evil.test', 'active'), ('qq-1', 'QQ', 'Q', 'rss', 'https://q.test', 'active')`,
     ).run();
+    await refreshSite();
     const { body } = await site("/en");
     expect(body).not.toMatch(/<b>|evil|\/en\/qq/i);
     // By name: France, Germany, Türkiye, United Kingdom, United States.
@@ -489,9 +491,9 @@ describe("paging and languages keep the filters", () => {
       expect(later.body).not.toContain("<details");
       expect(chipLinks(later.body), first).toEqual(expected);
       expect(later.body).toContain(`<nav class="filters" aria-label="${text("en", "filters")}"><a class="chip-link"`);
-      const withMenus = await rowsRead(() => site(first));
-      const without = await rowsRead(() => site(next!));
-      expect(without, first).toBeLessThan(withMenus);
+      // Both are the language's snapshot, one row (data.ts).
+      expect(await rowsRead(() => site(first)), first).toBe(1);
+      expect(await rowsRead(() => site(next!)), first).toBe(1);
     }
   });
 });
@@ -543,7 +545,8 @@ describe("every new page", () => {
     }
   });
 
-  it("asks GET /topics only when the page does not hold its whole list: a complete first page counts its own articles", async () => {
+  it("without a snapshot (the fallback), asks GET /topics only when the page does not hold its whole list: a complete first page counts its own articles", async () => {
+    await env.DB.prepare("DELETE FROM site_snapshots").run();
     const api = (path: string) => rowsRead(() => get(path));
     // The menus are kept 10 minutes in the data centre's cache (cachedApi): empty it, as a cold start.
     const cold = async (path: string) => {
@@ -563,18 +566,22 @@ describe("every new page", () => {
   });
 
   // 30 Oct: crawlers opened thousands of list pages the day the site went live, each counting its menus again.
-  it("keeps the menus' answers in the data centre's cache, so a page soon after reads only its list", async () => {
+  it("without a snapshot, keeps the menus' answers in the data centre's cache, so a page soon after reads only its list", async () => {
+    await env.DB.prepare("DELETE FROM site_snapshots").run();
     await site("/en/nato");
     expect(await rowsRead(() => site("/en/nato"))).toBe(await rowsRead(() => get("/articles?limit=20&group=nato")));
   });
 
-  it("reads a bounded number of D1 rows (numbers for docs/plan.md; a test database of 48 articles)", async () => {
+  it("reads one D1 row, the snapshot, whatever the filter; the API's queries without one (numbers for docs/plan.md; a test database of 48 articles)", async () => {
+    const paths = ["/en", "/en/de", "/en/us", "/en/ua", "/en/eu", "/en/g7", "/en/g20", "/en/nato", "/en?topic=economy", "/en/g7?topic=health", "/uk/g20", "/uk?topic=economy"];
+    for (const path of paths) expect(await rowsRead(() => site(path)), path).toBe(1);
+    await env.DB.prepare("DELETE FROM site_snapshots").run();
     const rows: Record<string, number> = {};
-    for (const path of ["/en", "/en/de", "/en/us", "/en/ua", "/en/eu", "/en/g7", "/en/g20", "/en/nato", "/en?topic=economy", "/en/g7?topic=health", "/uk/g20", "/uk?topic=economy"]) {
+    for (const path of paths) {
       rows[path] = await rowsRead(() => site(path));
       expect(rows[path], path).toBeLessThan(700);
     }
-    console.log(JSON.stringify({ rowsRead: rows }));
+    console.log(JSON.stringify({ rowsReadFromApi: rows }));
   });
 });
 

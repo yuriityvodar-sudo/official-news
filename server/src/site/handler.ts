@@ -2,7 +2,7 @@
 // rendered from what the app's API shows, one request per page view, nothing
 // indexed before the domain. URLs (docs/contract.md, "Website"):
 //   /                              302 to the visitor's language (lang.ts), 0 D1 rows, never cached
-//   /{lang}                        latest list (all countries); ?before=<feedSeq> for the next page
+//   /{lang}                        latest list (all countries) from the language's snapshot (1 D1 row); ?before=<feedSeq> for the next page
 //   /{lang}/{cc}                   one country's list (#67, #68: only that country's sources)
 //   /{lang}/{group}                a group of countries (eu, g7, g20, nato: its members' sources together)
 //   …?topic=<id>                   any list, one topic; then &before=, as the next page
@@ -10,9 +10,8 @@
 //   /{lang}/about|privacy|terms|support
 //   /robots.txt                    Disallow: /*?, and where the sitemap is
 //   /sitemap.xml                   the lists and the 7 days' articles (seo.ts)
-import { rankTopics } from "../api/filters";
 import type { Topic } from "../summarizer/schema";
-import { type ApiArticle, allLatest, articleInLanguages, latest, topicsMenu, whereMenu } from "./data";
+import { type ApiArticle, type ListView, allLatest, articleInLanguages, listData } from "./data";
 import type { SiteEnv } from "./env";
 import { APPLE_TOUCH_ICON, OG_IMAGE } from "./icon";
 import { type Page, cssHash, layout } from "./layout";
@@ -22,7 +21,7 @@ import { visitorLang } from "./lang";
 import { articlePage, notInLanguagePage } from "./pages/article";
 import { errorPage, notFoundPage } from "./pages/errors";
 import { infoPage } from "./pages/info";
-import { type ListView, listPage } from "./pages/list";
+import { listPage } from "./pages/list";
 import { type CacheKind, type Reply, respond, robotsFor } from "./respond";
 import { SITE_LANGS, type SiteLang, isSiteLang } from "./texts";
 import { ARTICLE_ID, INFO_PAGES, type InfoPage, type Place, articlePath, groupOf, isCountryPage, isTopic, listPath, originOf } from "./urls";
@@ -87,31 +86,13 @@ function readPlace(segment: string | undefined): Place | undefined {
 }
 
 /**
- * A list page: the API's page with its filters and, on a first page, what the
- * two menus offer (GET /countries; GET /topics for the place), all in this one
- * request. A later page shows its filters without menus, so paging reads no
- * more rows than before the filters.
- *
- * The Topics menu counts the place's (or the whole) feed without a topic. A
- * country's or a small group's first page without a topic often holds all of
- * it (live, 16 Oct: 15 of 17 countries had 20 decisions or fewer in 7 days);
- * then the menu is its articles' topics counted as GET /topics counts them
- * (rankTopics), which saves walking the feed a second time (about 230 rows).
- * Otherwise, and always for all countries, the menu is GET /topics, asked in
- * parallel when it is certainly needed.
+ * A list page: its page with the filters and, on a first page, what the two
+ * menus offer, from the language's snapshot (data.ts: one D1 row), or from the
+ * API's queries while there is no fresh snapshot. A later page shows its
+ * filters without menus.
  */
 async function listReply(env: SiteEnv, origin: string, lang: SiteLang, view: ListView): Promise<Reply> {
-  const { filter, before } = view;
-  if (before !== null) return page(listPage(lang, origin, view, { list: await latest(env, lang, filter, before), menus: null }), 200, "list");
-  const mayHoldAll = filter.place !== null && filter.topic === null;
-  const [list, where, asked] = await Promise.all([
-    latest(env, lang, filter, null),
-    whereMenu(env, lang),
-    mayHoldAll ? null : topicsMenu(env, lang, filter.place),
-  ]);
-  const topics =
-    asked ?? (list.nextCursor === null ? rankTopics(list.items.map((a) => a.topics), lang) : await topicsMenu(env, lang, filter.place));
-  return page(listPage(lang, origin, view, { list, menus: { where, topics } }), 200, "list");
+  return page(listPage(lang, origin, view, await listData(env, lang, view)), 200, "list");
 }
 
 /** The article id at the start of a path segment, followed by a hyphen or nothing; else null. */

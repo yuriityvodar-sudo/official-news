@@ -675,13 +675,13 @@ describe("push notifications", () => {
 describe("the scheduled runs", () => {
   const keyless = () => ({ ...testEnv(null, undefined, null) });
 
-  it("ends with the push step, after the release; without the secret it logs that it skipped", async () => {
+  it("has the push step after the release, then the site's snapshot; without the secret it logs that it skipped", async () => {
     await insertNews("a1", stored(new Date(Date.now() - 3_600_000)));
     const log = quiet();
     await worker.scheduled(createScheduledController({ cron: CRONS.translator }), { ...keyless(), FCM_SERVICE_ACCOUNT: undefined });
     expect(await env.DB.prepare("SELECT feed_seq FROM articles WHERE id = 'a1'").first("feed_seq")).toEqual(expect.any(Number));
     const messages = log.mock.calls.map((c) => JSON.parse(String(c[0])).message);
-    expect(messages.at(-1)).toBe("push skipped: FCM_SERVICE_ACCOUNT not set");
+    expect(messages.slice(-2)).toEqual(["push skipped: FCM_SERVICE_ACCOUNT not set", "site snapshot"]);
   });
 
   it("never lets a push error break the translator's run or its release", async () => {
