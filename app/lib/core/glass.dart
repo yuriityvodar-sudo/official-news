@@ -124,9 +124,13 @@ class _Glass extends StatelessWidget {
 /// frame: Flutter draws a page or a sheet over a native view only within
 /// its frame ([NativeOrPlain]). Liquid Glass's shadow is wide: with 10
 /// points it was cut off in a visible band along the pills (build 50,
-/// Roman, 30 Oct). The view takes no touches in the room: Flutter hit-tests
-/// a box only inside its own size, and the view reaches past it.
-const double glassShadowRoom = 30;
+/// Roman, 30 Oct), and with 30 in a fainter one 30 points under the
+/// Conversations and Settings buttons (the simulator, Roman, 30 Oct): the
+/// shadow there was still 3 of 255 darker than the page, halving about every
+/// 8 points, so by 56 it is gone. The view takes no touches in the room:
+/// Flutter hit-tests a box only inside its own size, and the view reaches
+/// past it.
+const double glassShadowRoom = 56;
 
 /// iOS's own [native] view (the glass, the topic pills), or Flutter's [plain]
 /// look in its place until iOS has made its view ([ready]). Under the splash
