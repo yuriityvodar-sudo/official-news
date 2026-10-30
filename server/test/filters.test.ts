@@ -761,6 +761,15 @@ describe("GET /articles?for= (For you, #170)", () => {
     expect(await ids(`/articles?for=CZ&after=${first.items[1].feedSeq}`)).toEqual(["eu-2"]);
   });
 
+  it("takes a decision published elsewhere when it concerns the reader's country (#230)", async () => {
+    // A US tariff on Canadian cars: the US published it, and it concerns Canada too.
+    await add({ id: "us-tariff-ca", country: "US", importance: 2, publishedAt: daysAgoAt(1, 9) });
+    await env.DB.prepare("INSERT INTO article_countries (article_id, country) VALUES ('us-tariff-ca', 'US'), ('us-tariff-ca', 'CA')").run();
+    expect(await ids("/articles?for=CA")).toContain("us-tariff-ca");
+    // Elsewhere it is one of the world's, and importance 2 is not enough there.
+    expect(await ids("/articles?for=MX")).not.toContain("us-tariff-ca");
+  });
+
   it("gives the reader's own country a point more in the top stories, and the EU institutions half a point for an EU member", async () => {
     await hideSeed();
     await env.DB.prepare("UPDATE articles SET is_news = 0").run();
