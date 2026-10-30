@@ -8,6 +8,7 @@ import '../../core/analytics.dart';
 import '../../core/article.dart';
 import '../../core/glass.dart';
 import '../../core/motion.dart';
+import '../../core/sheet.dart';
 import '../../core/subscription.dart';
 import '../../core/theme.dart';
 import '../../l10n/app_localizations.dart';
@@ -37,9 +38,8 @@ class PaywallSheet extends StatefulWidget {
   final ScrollController? scroll;
 
   static Future<bool> show(BuildContext context, Article article) async =>
-      await showCupertinoSheet<bool>(
+      await showSheet<bool>(
         context: context,
-        showDragHandle: true,
         scrollableBuilder: (_, scroll) =>
             PaywallSheet(article: article, scroll: scroll),
       ) ??
@@ -163,25 +163,32 @@ class _PaywallSheetState extends State<PaywallSheet> {
             ),
           ),
         ),
-        Semantics(
-          button: true,
-          label: l10n.paywallClose,
-          child: CupertinoButton(
-            padding: EdgeInsets.zero,
-            minimumSize: const Size(44, 44),
-            onPressed: () => Navigator.of(context).pop(false),
-            child: GlassCircle(
-              size: 34,
-              child: Icon(
-                CupertinoIcons.xmark,
-                size: 16,
-                color: label,
-                semanticLabel: l10n.paywallClose,
-              ),
-            ),
+        // The close button's room: the button itself is drawn over the
+        // paywall, last ([close]).
+        const SizedBox(width: 44, height: 44),
+      ],
+    );
+    // iOS's glass inside a sheet is drawn after everything else in it, at
+    // the end of the header: whatever Flutter drew after it showed only
+    // over iOS's other views (the AI chat, TestFlight 55, Roman, 30 Oct;
+    // `GlassCircle`).
+    final close = Semantics(
+      button: true,
+      label: l10n.paywallClose,
+      child: CupertinoButton(
+        padding: EdgeInsets.zero,
+        minimumSize: const Size(44, 44),
+        onPressed: () => Navigator.of(context).pop(false),
+        child: GlassCircle(
+          size: 34,
+          child: Icon(
+            CupertinoIcons.xmark,
+            size: 16,
+            color: label,
+            semanticLabel: l10n.paywallClose,
           ),
         ),
-      ],
+      ),
     );
     // The decision the sample is about, as a pill with the official seal.
     final about = Align(
@@ -411,38 +418,43 @@ class _PaywallSheetState extends State<PaywallSheet> {
         type: MaterialType.transparency,
         child: SafeArea(
           // The sample sits at the bottom, over the offer, as the end of a chat
-          // does; on a short screen it all scrolls.
-          child: LayoutBuilder(
-            builder: (context, box) => SingleChildScrollView(
-              controller: widget.scroll,
-              padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  minHeight: math.max(box.maxHeight - 20, 0),
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    header,
-                    Column(
+          // does; on a short screen it all scrolls, under the close button.
+          child: Stack(
+            children: [
+              LayoutBuilder(
+                builder: (context, box) => SingleChildScrollView(
+                  controller: widget.scroll,
+                  padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minHeight: math.max(box.maxHeight - 20, 0),
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        const SizedBox(height: 12),
-                        about,
-                        const SizedBox(height: 14),
-                        question,
-                        const SizedBox(height: 14),
-                        agent,
-                        const SizedBox(height: 6),
-                        answer,
-                        offer,
+                        header,
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            const SizedBox(height: 12),
+                            about,
+                            const SizedBox(height: 14),
+                            question,
+                            const SizedBox(height: 14),
+                            agent,
+                            const SizedBox(height: 6),
+                            answer,
+                            offer,
+                          ],
+                        ),
                       ],
                     ),
-                  ],
+                  ),
                 ),
               ),
-            ),
+              Positioned(top: 4, right: 20, child: close),
+            ],
           ),
         ),
       ),
