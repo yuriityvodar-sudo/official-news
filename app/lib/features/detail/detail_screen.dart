@@ -373,11 +373,7 @@ class _DiscussWithAi extends StatelessWidget {
     }
     if (!context.mounted || !await ChatConsent.ask(context)) return;
     if (!context.mounted) return;
-    await Navigator.of(context).push(
-      CupertinoPageRoute<void>(
-        builder: (_) => ChatScreen(article: article, firstQuestion: first),
-      ),
-    );
+    await ChatScreen.show(context, article, firstQuestion: first);
   }
 
   @override

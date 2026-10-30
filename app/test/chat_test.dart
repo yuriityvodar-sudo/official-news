@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 
@@ -215,6 +216,8 @@ void main() {
       String body = '{}',
       List<int> left = const [20],
       int units = 1,
+      List<String> pieces = const ['Yes,', ' from November', ' 2027.'],
+      Future<void>? hold,
     }) {
       var statuses = 0;
       return ApiClient(
@@ -238,6 +241,7 @@ void main() {
             );
           }
           asked.add(jsonDecode(sent) as Map<String, dynamic>);
+          if (hold != null) await hold;
           if (status != 200) {
             return http.StreamedResponse(
               Stream.value(utf8.encode(body)),
@@ -245,9 +249,7 @@ void main() {
             );
           }
           return http.StreamedResponse(
-            Stream.fromIterable(
-              ['Yes,', ' from November', ' 2027.'].map(utf8.encode),
-            ),
+            Stream.fromIterable(pieces.map(utf8.encode)),
             200,
             headers: {
               'x-chat-remaining': '$remaining',
@@ -412,6 +414,138 @@ void main() {
           findsOneWidget,
         );
         expect(find.text('3 questions left today'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'opens as a sheet from the bottom over the article, and its button closes it',
+      (tester) async {
+        await tester.runAsync(() async {
+          store.report(
+            PurchaseStatus.purchased,
+            jws: _jws(_now.add(const Duration(days: 30))),
+          );
+          await Future<void>.delayed(const Duration(milliseconds: 20));
+        });
+        await tester.pumpWidget(
+          testApp(
+            home: Builder(
+              builder: (context) => CupertinoButton(
+                onPressed: () => ChatScreen.show(context, _article),
+                child: const Text('Discuss'),
+              ),
+            ),
+          ),
+        );
+        await tester.tap(find.text('Discuss'));
+        await tester.pumpAndSettle();
+        final chat = find.byType(ChatScreen);
+        expect(chat, findsOneWidget);
+        expect(
+          ModalRoute.of(tester.element(chat)),
+          isA<CupertinoSheetRoute<void>>(),
+        );
+        await tester.tap(find.byIcon(CupertinoIcons.xmark));
+        await tester.pumpAndSettle();
+        expect(chat, findsNothing);
+      },
+    );
+
+    testWidgets(
+      "shows the answer's bold and lists as such, never their marks (Roman, 30 Oct)",
+      (tester) async {
+        await openChat(
+          tester,
+          server(
+            pieces: [
+              '**Yes.** It ',
+              'starts in 2027.\n\nWhat changes:\n- new **cars**',
+              '\n- old ones\n1. first\n### Unknown',
+            ],
+          ),
+        );
+        await tester.tap(find.text('What changes and when?'));
+        await tester.pumpAndSettle();
+        expect(find.textContaining('**'), findsNothing);
+        expect(find.textContaining('###'), findsNothing);
+        final yes = tester.widget<Text>(find.text('Yes. It starts in 2027.'));
+        final spans = (yes.textSpan! as TextSpan).children!.cast<TextSpan>();
+        expect(spans.first.text, 'Yes.');
+        expect(spans.first.style?.fontWeight, FontWeight.w700);
+        expect(find.text('What changes:'), findsOneWidget);
+        expect(find.text('•'), findsNWidgets(2));
+        expect(find.text('new cars'), findsOneWidget);
+        expect(find.text('old ones'), findsOneWidget);
+        expect(find.text('1.'), findsOneWidget);
+        expect(find.text('first'), findsOneWidget);
+        expect(find.text('Unknown'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'folds the header into the title once asked, and a dot, not a spinner, '
+      'while the agent thinks',
+      (tester) async {
+        final hold = Completer<void>();
+        await openChat(tester, server(hold: hold.future));
+        expect(
+          find.text('New cars must meet Euro 7 from 2027'),
+          findsOneWidget,
+        );
+        expect(find.text('GOV.UK'), findsOneWidget);
+
+        await tester.tap(find.text('Does this concern me?'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 400));
+        expect(find.byType(CupertinoActivityIndicator), findsNothing);
+        // The decision's headline is the title's second line; the rest is gone.
+        expect(
+          find.text('New cars must meet Euro 7 from 2027'),
+          findsOneWidget,
+        );
+        expect(find.text('GOV.UK'), findsNothing);
+        expect(find.text('What should I do?'), findsNothing);
+
+        hold.complete();
+        await tester.pumpAndSettle();
+        expect(find.text('Yes, from November 2027.'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'takes the question asked to the top of the screen and keeps it there '
+      "as a long answer comes, never jumping to the answer's end",
+      (tester) async {
+        await openChat(
+          tester,
+          server(
+            pieces: [
+              for (var i = 1; i <= 40; i++) 'Line $i of the answer.\n\n',
+            ],
+          ),
+        );
+        final list = find.byType(SingleChildScrollView);
+        await tester.tap(find.text('Does this concern me?'));
+        await tester.pumpAndSettle();
+        // The first question stands at the top as the header folds.
+        expect(
+          tester.getTopLeft(find.text('Does this concern me?')).dy,
+          lessThan(tester.getTopLeft(list).dy + 40),
+        );
+        expect(find.text('Line 1 of the answer.'), findsOneWidget);
+
+        await tester.enterText(find.byType(CupertinoTextField), 'And then?');
+        await tester.testTextInput.receiveAction(TextInputAction.send);
+        await tester.pumpAndSettle();
+        final top = tester.getTopLeft(list).dy;
+        final question = tester.getTopLeft(find.text('And then?')).dy;
+        expect(question, greaterThanOrEqualTo(top));
+        expect(question, lessThan(top + 40));
+        // The start of the answer shows under it; its end is further down.
+        expect(
+          tester.getTopLeft(find.text('Line 1 of the answer.').last).dy,
+          lessThan(tester.getBottomLeft(list).dy),
+        );
       },
     );
 
