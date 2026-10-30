@@ -327,7 +327,7 @@ class _BCardState extends State<BCard> {
     final read = mark.dimmed;
     final large = bLargeText(context);
     final padding = large ? 16.0 : _Size.padding;
-    final country = countryName(a.country, l10n);
+    final country = placeName(a, l10n);
     final topics = widget.topics;
     final time = feedTime(a, l10n);
     final summary = a.shortSummary?.trim();
@@ -364,18 +364,20 @@ class _BCardState extends State<BCard> {
                   red: s.accentText,
                 )
               else ...[
-                // The official-source seal, outlined and grey as a quiet mark.
-                WidgetSpan(
-                  alignment: PlaceholderAlignment.middle,
-                  child: Padding(
-                    padding: const EdgeInsets.only(left: 4),
-                    child: Icon(
-                      CupertinoIcons.checkmark_seal,
-                      size: 14 * math.min(grow, 1.4) / grow,
-                      color: _fadeGrey(s.source, read).color,
+                // The official-source seal, outlined and grey as a quiet mark;
+                // an event (#230) is not official, so it has none.
+                if (!a.isEvent)
+                  WidgetSpan(
+                    alignment: PlaceholderAlignment.middle,
+                    child: Padding(
+                      padding: const EdgeInsets.only(left: 4),
+                      child: Icon(
+                        CupertinoIcons.checkmark_seal,
+                        size: 14 * math.min(grow, 1.4) / grow,
+                        color: _fadeGrey(s.source, read).color,
+                      ),
                     ),
                   ),
-                ),
                 TextSpan(text: ' · ', style: _fadeGrey(s.source, read)),
               ],
               TextSpan(text: a.source.name, style: _fadeGrey(s.source, read)),

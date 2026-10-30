@@ -490,7 +490,7 @@ class _Item extends StatelessWidget {
     final t = _Styles.of(context);
     final read = mark.dimmed;
     final l10n = AppLocalizations.of(context);
-    final country = countryName(article.country, l10n);
+    final country = placeName(article, l10n);
     final summary = article.shortSummary?.trim() ?? '';
     final stamp = _stamp(article, l10n);
     final important = (article.importance ?? 0) >= 4;

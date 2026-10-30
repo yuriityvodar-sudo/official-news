@@ -1,4 +1,5 @@
 import '../l10n/app_localizations.dart';
+import 'article.dart';
 
 /// The name of a country code in the source list (docs/sources.csv), or of
 /// another EU member, in the app's language (#52): "Germany", "Німеччина" for "DE". An unknown code is
@@ -28,6 +29,8 @@ String countryName(String code, AppLocalizations l10n) => switch (code) {
   'UA' => l10n.countryUA,
   'US' => l10n.countryUS,
   'ZA' => l10n.countryZA,
+  // Sources about the whole world, such as Wikipedia's current events (#230).
+  'WW' => l10n.countryWW,
   // The other EU members, for Settings → My country (#170).
   'AT' => l10n.countryAT,
   'BE' => l10n.countryBE,
@@ -98,3 +101,15 @@ const _withoutMark = {
   'è': 'e', 'ê': 'e', 'ë': 'e', 'í': 'i', 'î': 'i', 'ï': 'i', 'ñ': 'n', //
   'ó': 'o', 'ô': 'o', 'ö': 'o', 'ú': 'u', 'û': 'u', 'ü': 'u', 'ß': 'ss', //
 };
+
+/// The country a card or an article names (#230): the source's; for an
+/// event, whose source is the whole world, the country it concerns most, or
+/// "World" when the app has no name for it (an event in Yemen).
+String placeName(Article article, AppLocalizations l10n) {
+  if (article.isEvent && article.countries.isNotEmpty) {
+    final code = article.countries.first;
+    final name = countryName(code, l10n);
+    if (name != code) return name;
+  }
+  return countryName(article.country, l10n);
+}

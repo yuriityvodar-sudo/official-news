@@ -59,7 +59,10 @@ String shareText(Article article, AppLocalizations l10n) {
   return [
     article.headline,
     if (summary != null && summary.isNotEmpty) summary,
-    if (page != null) l10n.shareOfficialSource(page.toString()),
+    if (page != null)
+      article.isEvent
+          ? l10n.shareSource(page.toString())
+          : l10n.shareOfficialSource(page.toString()),
   ].join('\n\n');
 }
 
@@ -235,6 +238,13 @@ class _DetailScreenState extends State<DetailScreen> {
                       widget.openLink(page);
                     },
                   ),
+                  // Wikipedia's text is CC BY-SA 4.0: its name, the page and the licence (#230).
+                  if (article.isEvent) ...[
+                    const SizedBox(height: 10),
+                    _WikipediaLicence(
+                      onTap: () => widget.openLink(wikipediaLicence),
+                    ),
+                  ],
                 ].map(rest),
               ],
             ),
@@ -513,7 +523,7 @@ class _Publisher extends StatelessWidget {
 /// "Germany · ✓ Official source", under the publisher, or under the card an
 /// article opened out of (#141). Wraps instead of overflowing: "Official
 /// source" is longer in some languages ("Официальный источник"), and at
-/// large text sizes.
+/// large text sizes. An event (#230) is not official: "Spain · Event".
 class _Official extends StatelessWidget {
   const _Official(this.article);
 
@@ -523,10 +533,14 @@ class _Official extends StatelessWidget {
   Widget build(BuildContext context) {
     final text = NewsText.from(context);
     final l10n = AppLocalizations.of(context);
+    final place = placeName(article, l10n);
+    if (article.isEvent) {
+      return Text('$place · ${l10n.decisionTypeEvent}', style: text.meta);
+    }
     return Wrap(
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        Text('${countryName(article.country, l10n)} · ', style: text.meta),
+        Text('$place · ', style: text.meta),
         Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -618,9 +632,15 @@ class _AiLabel extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final source = article.originalLanguage;
     final reading = article.lang ?? 'en';
-    final label = source == reading
+    final language = languageName(source, l10n);
+    // An event's summary is of Wikipedia's text (#230), and says so.
+    final label = article.isEvent
+        ? (source == reading
+              ? l10n.summaryByAiOfWikipedia
+              : l10n.summaryByAiOfWikipediaTranslated(language))
+        : source == reading
         ? l10n.summaryByAi
-        : l10n.summaryByAiTranslated(languageName(source, l10n));
+        : l10n.summaryByAiTranslated(language);
     return Row(
       children: [
         Icon(Icons.auto_awesome_outlined, size: 15, color: text.meta.color),
@@ -662,7 +682,36 @@ class _SummaryComing extends StatelessWidget {
   }
 }
 
-/// "Read the official decision": the site and the original title, opening the page.
+/// The licence of Wikipedia's text (#230), which its reuse must name and link.
+final wikipediaLicence = Uri.parse(
+  'https://creativecommons.org/licenses/by-sa/4.0/',
+);
+
+/// "Text from Wikipedia, CC BY-SA 4.0", under an event's link: a tap opens the licence.
+class _WikipediaLicence extends StatelessWidget {
+  const _WikipediaLicence({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = NewsText.from(context);
+    return Semantics(
+      link: true,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Text(
+          AppLocalizations.of(context).wikipediaLicence,
+          style: text.meta.copyWith(decoration: TextDecoration.underline),
+        ),
+      ),
+    );
+  }
+}
+
+/// "Read the official decision": the site and the original title, opening
+/// the page. For an event (#230), "Read on Wikipedia" and the site.
 class _OfficialLink extends StatelessWidget {
   const _OfficialLink({required this.article, required this.onTap});
 
@@ -676,7 +725,9 @@ class _OfficialLink extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     return Semantics(
       button: true,
-      label: l10n.readOfficialDecisionOn(_site(article.originalUrl)),
+      label: article.isEvent
+          ? '${l10n.readOnWikipedia}, ${_site(article.originalUrl)}'
+          : l10n.readOfficialDecisionOn(_site(article.originalUrl)),
       excludeSemantics: true,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
@@ -693,10 +744,18 @@ class _OfficialLink extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(l10n.readOfficialDecision, style: text.publisher),
+                    Text(
+                      article.isEvent
+                          ? l10n.readOnWikipedia
+                          : l10n.readOfficialDecision,
+                      style: text.publisher,
+                    ),
                     const SizedBox(height: 3),
                     Text(
-                      '${_site(article.originalUrl)} · ${article.originalTitle}',
+                      // An event's original title is its sentence, already summarized above.
+                      article.isEvent
+                          ? _site(article.originalUrl)
+                          : '${_site(article.originalUrl)} · ${article.originalTitle}',
                       style: text.meta,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,

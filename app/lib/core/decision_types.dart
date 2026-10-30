@@ -13,6 +13,8 @@ const decisionTypes = [
   'decision',
   'meeting-agenda',
   'meeting-outcome',
+  // Not a decision (#230): an event from Wikipedia's current events.
+  'event',
 ];
 
 /// The label for [id], or null for an unknown or missing type (shown without a label).
@@ -25,5 +27,6 @@ String? decisionTypeLabel(String? id, AppLocalizations l10n) => switch (id) {
   'decision' => l10n.decisionTypeDecision,
   'meeting-agenda' => l10n.decisionTypeMeetingAgenda,
   'meeting-outcome' => l10n.decisionTypeMeetingOutcome,
+  'event' => l10n.decisionTypeEvent,
   _ => null,
 };

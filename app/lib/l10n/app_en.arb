@@ -338,6 +338,10 @@
   "@countryZA": {
     "description": "Country name."
   },
+  "countryWW": "World",
+  "@countryWW": {
+    "description": "Not a country: the source country of sources about the whole world, such as Wikipedia's current events (#230), and an event's place when the app has no name for its country."
+  },
   "countryAT": "Austria",
   "@countryAT": {
     "description": "An EU member's name, for Settings → My country (#170)."
@@ -502,6 +506,20 @@
       }
     }
   },
+  "summaryByAiOfWikipedia": "Summary by AI of Wikipedia's text",
+  "@summaryByAiOfWikipedia": {
+    "description": "Above an event's summary (#230): written by AI from Wikipedia's current events."
+  },
+  "summaryByAiOfWikipediaTranslated": "Summary by AI of Wikipedia's text · translated from {language}",
+  "@summaryByAiOfWikipediaTranslated": {
+    "description": "Above an event's summary (#230), for a Wikipedia page in another language than the one the article is read in.",
+    "placeholders": {
+      "language": {
+        "type": "String",
+        "example": "Russian"
+      }
+    }
+  },
   "summaryComing": "The AI summary is on its way. Until then, the headline is the original title, and the official page has the full text.",
   "@summaryComing": {
     "description": "On an article the AI has not summarized yet."
@@ -513,6 +531,14 @@
   "readOfficialDecision": "Read the official decision",
   "@readOfficialDecision": {
     "description": "The card at the end of an article that opens the official page."
+  },
+  "readOnWikipedia": "Read on Wikipedia",
+  "@readOnWikipedia": {
+    "description": "The link of an event (#230) to its Wikipedia page, in place of Read the official decision."
+  },
+  "wikipediaLicence": "Text from Wikipedia, CC BY-SA 4.0",
+  "@wikipediaLicence": {
+    "description": "Under an event's link (#230): Wikipedia's licence, which its reuse must name; a tap opens it."
   },
   "readOfficialDecisionOn": "Read the official decision on {site}",
   "@readOfficialDecisionOn": {
@@ -545,6 +571,16 @@
       "url": {
         "type": "String",
         "example": "https://www.bundesregierung.de/…"
+      }
+    }
+  },
+  "shareSource": "Source: {url}",
+  "@shareSource": {
+    "description": "The last line of a shared event (#230), which is not an official source.",
+    "placeholders": {
+      "url": {
+        "type": "String",
+        "example": "https://en.wikipedia.org/wiki/Portal:Current_events/2026_October_29"
       }
     }
   },
