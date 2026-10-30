@@ -101,13 +101,34 @@ export interface ApiWhere {
   countries: ApiCountry[];
 }
 
+/**
+ * How long the menus' answers are kept in this data centre's cache (30 Oct:
+ * the day the site went live, crawlers opened about 4,800 list pages in two
+ * hours, each counting its menus again, and D1 read 2.1 million rows of its
+ * 5 million a day). A menu changes only as articles come, so 10 minutes.
+ */
+const MENU_SECONDS = 600;
+
+/** `api()`, answered from the Cache API when this data centre has asked the same in the last MENU_SECONDS. */
+async function cachedApi<T>(env: SiteEnv, path: string): Promise<T | null> {
+  const key = new Request(`https://site-cache.internal${path}`);
+  const cache = typeof caches === "undefined" ? null : caches.default;
+  const hit = await cache?.match(key);
+  if (hit) return (await hit.json()) as T;
+  const answer = await api<T>(env, path);
+  if (answer !== null && cache) {
+    await cache.put(key, new Response(JSON.stringify(answer), { headers: { "content-type": "application/json", "cache-control": `max-age=${MENU_SECONDS}` } }));
+  }
+  return answer;
+}
+
 /** The Topics menu: `GET /topics`, the topics with articles in that place's (or the whole) feed in `lang`, busiest first. */
 export async function topicsMenu(env: SiteEnv, lang: SiteLang, place: Place): Promise<ApiTopic[]> {
   const params = new URLSearchParams();
   if (lang !== "en") params.set("lang", lang);
   setPlace(params, place);
   const query = params.toString();
-  const answer = await api<{ topics: ApiTopic[] }>(env, query ? `/topics?${query}` : "/topics");
+  const answer = await cachedApi<{ topics: ApiTopic[] }>(env, query ? `/topics?${query}` : "/topics");
   if (!answer) throw new ApiError("API 404 for /topics");
   return answer.topics;
 }
@@ -118,7 +139,7 @@ export async function topicsMenu(env: SiteEnv, lang: SiteLang, place: Place): Pr
  * sorted by that name.
  */
 export async function whereMenu(env: SiteEnv, lang: SiteLang): Promise<ApiWhere> {
-  const answer = await api<ApiWhere>(env, lang === "en" ? "/countries" : `/countries?lang=${lang}`);
+  const answer = await cachedApi<ApiWhere>(env, lang === "en" ? "/countries" : `/countries?lang=${lang}`);
   if (!answer) throw new ApiError("API 404 for /countries");
   return { groups: answer.groups, countries: answer.countries };
 }
