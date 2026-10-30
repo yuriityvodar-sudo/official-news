@@ -53,7 +53,7 @@ beforeEach(fixtures);
 type Link = readonly [href: string, label: string, current: boolean];
 
 /** A menu item's link, its icon or empty icon slot (the Topics menu), and its name. */
-const MENU_ITEM = /<li><a href="([^"]+)"( aria-current="page")?>(<svg class="glyph"[\s\S]*?<\/svg>|<span class="glyph" aria-hidden="true"><\/span>)?<span>([^<]+)<\/span>/g;
+const MENU_ITEM = /<li><a href="([^"]+)" rel="nofollow"( aria-current="page")?>(<svg class="glyph"[\s\S]*?<\/svg>|<span class="glyph" aria-hidden="true"><\/span>)?<span>([^<]+)<\/span>/g;
 
 /** A menu's lists (its sections: All, groups, countries), each as links [href, label, current]. */
 function sections(body: string, which: 0 | 1): Link[][] {
@@ -82,7 +82,7 @@ const chips = (body: string) =>
     !!m[1],
   ]);
 
-const nextLink = (body: string) => /<a class="more" href="([^"]+)" rel="next">/.exec(body)?.[1].replaceAll("&amp;", "&") ?? null;
+const nextLink = (body: string) => /<a class="more" href="([^"]+)" rel="next nofollow">/.exec(body)?.[1].replaceAll("&amp;", "&") ?? null;
 
 /** The API's query for a site list path: `/en/g7?topic=economy` → `&group=g7&topic=economy`. */
 function apiQuery(path: string): string {
@@ -545,15 +545,27 @@ describe("every new page", () => {
 
   it("asks GET /topics only when the page does not hold its whole list: a complete first page counts its own articles", async () => {
     const api = (path: string) => rowsRead(() => get(path));
+    // The menus are kept 10 minutes in the data centre's cache (cachedApi): empty it, as a cold start.
+    const cold = async (path: string) => {
+      await caches.default.delete(new Request("https://site-cache.internal/countries"));
+      for (const q of ["/topics?group=nato", "/topics?country=US"]) await caches.default.delete(new Request(`https://site-cache.internal${q}`));
+      return rowsRead(() => site(path));
+    };
     // The US: 15 articles, one page; NATO: 33, two pages.
-    expect(await rowsRead(() => site("/en/us"))).toBe((await api("/articles?limit=20&country=US")) + (await api("/countries")));
-    expect(await rowsRead(() => site("/en/nato"))).toBe(
+    expect(await cold("/en/us")).toBe((await api("/articles?limit=20&country=US")) + (await api("/countries")));
+    expect(await cold("/en/nato")).toBe(
       (await api("/articles?limit=20&group=nato")) + (await api("/countries")) + (await api("/topics?group=nato")),
     );
     // With a topic, the menu needs the place's whole feed: GET /topics.
-    expect(await rowsRead(() => site("/en/us?topic=health"))).toBe(
+    expect(await cold("/en/us?topic=health")).toBe(
       (await api("/articles?limit=20&country=US&topic=health")) + (await api("/countries")) + (await api("/topics?country=US")),
     );
+  });
+
+  // 30 Oct: crawlers opened thousands of list pages the day the site went live, each counting its menus again.
+  it("keeps the menus' answers in the data centre's cache, so a page soon after reads only its list", async () => {
+    await site("/en/nato");
+    expect(await rowsRead(() => site("/en/nato"))).toBe(await rowsRead(() => get("/articles?limit=20&group=nato")));
   });
 
   it("reads a bounded number of D1 rows (numbers for docs/plan.md; a test database of 48 articles)", async () => {
