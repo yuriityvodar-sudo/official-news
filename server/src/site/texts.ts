@@ -2,7 +2,8 @@
 // app-texts.generated.ts, never copied; only what the app does not say is
 // written here, in all 5 languages (TypeScript requires each one). The uk and
 // ru texts need Yurii's review, es and de a native speaker's.
-import { countryName as apiCountryName, hasCountryName } from "../api/filters";
+import { GROUPS, type GroupId, TOPIC_NAMES, countryName as apiCountryName, groupName as apiGroupName, hasCountryName } from "../api/filters";
+import type { Topic } from "../summarizer/schema";
 import { APP_TEXTS, type AppKey, LANGUAGE_NAMES, PUBLISHER_DETAILS, PUBLISHER_NAME, SITE_LANGS, type SiteLang } from "./app-texts.generated";
 import { Html, esc } from "./html";
 
@@ -38,6 +39,11 @@ interface SiteTexts {
   getApp: string;
   getAppBody: string;
   comingSoon: string;
+  /** The cookie notice (consent.ts; Yurii, 30 Oct: a general message, Details is the privacy policy): nothing from Google loads before Accept. */
+  consentTitle: string;
+  consentText: string;
+  consentYes: string;
+  consentDetails: string;
   notInLang: string;
   /** The not-in-language page of an event (#230). */
   notInLangEvent: string;
@@ -50,13 +56,42 @@ interface SiteTexts {
   independentNote: string;
   siteHeading: string;
   siteData: string;
+  /** Google Analytics on the website, after Accept (Roman's review of #240). */
+  siteAnalytics: string;
   siteBanner: string;
+  /** The footer's way to withdraw (consent.ts). */
+  cookieSettings: string;
   /** The ARB policy texts say "the app". */
   siteCovers: string;
   /** On translated policy pages; `{link}` is the English page. */
   prevails: string;
   /** The Support page; `{email}` is the support address (the app writes from its own screen). */
   emailUs: string;
+  /**
+   * The filters' words (#67, #68), word for word from the app's ARB keys of
+   * the same names (#87, feature/67-filters-app, after the chips prototype's
+   * review, prototype/chips 3d88cf3, 16 Oct), which main does not have yet;
+   * scripts/site-texts.check.mjs fails when a copy differs from an ARB file
+   * that has the key. Whichever of #87 and #89 merges second moves them to
+   * KEYS in scripts/site-texts.mjs, out of this file, and runs `npm run
+   * site:texts` in server/. `filterAllCountries` is "All countries", the
+   * Where chip and its menu's first item.
+   */
+  filterAllCountries: string;
+  filterAllTopics: string;
+  /** What a screen reader says for the Where chip, which shows only the country's code (GB). */
+  filterCountryChip: string;
+  /** The same for a group, whose chip shows its short name (ЄС, G7, G20, НАТО). */
+  filterGroupChip: string;
+  /** The European Union's chip: the EU's abbreviation in the language. NATO's chip is its name (GROUPS' names, the app's groupNato); G7 and G20 are written so in every language. */
+  filterGroupEUShort: string;
+  /** The same for the Topics chip, which shows only the topic's icon. */
+  filterTopicChip: string;
+  filterEmpty: string;
+  filterShowAllCountries: string;
+  filterShowAllTopics: string;
+  /** The filter bar's name for screen readers (the site's own). */
+  filters: string;
 }
 
 const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
@@ -78,6 +113,10 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     getApp: "Get the app",
     getAppBody: "Official decisions from around the world, in a few calm sentences, on your phone.",
     comingSoon: "Coming soon",
+    consentTitle: "Cookies",
+    consentText: "We use cookies to give you a better experience on Outer News.",
+    consentYes: "OK",
+    consentDetails: "Details",
     notInLang: "This decision is not available in this language yet.",
     notInLangEvent: "This event is not available in this language yet.",
     readIn: "Read it in:",
@@ -88,11 +127,23 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     independentNote: "Independent website, not affiliated with any government.",
     siteHeading: "On this website",
     siteData:
-      "This website sets no cookies and runs no scripts, and everything on its pages comes from this website. Cloudflare, which hosts it, receives your IP address and basic technical details (such as the page address, browser and time) to deliver the page; your browser may also send Cloudflare an error report if a page fails to load. We can see request logs for up to 7 days to keep the site working; we do not use them to identify you.",
+      "Cloudflare, which hosts this website, receives your IP address and basic technical details (such as the page address, browser and time) to deliver the page; your browser may also send Cloudflare an error report if a page fails to load. We can see request logs for up to 7 days to keep the site working; we do not use them to identify you.",
+    siteAnalytics: "With your yes in the cookie notice, this website uses Google Analytics, a service of Google, to count visits and see which pages are read, how far they are scrolled and which links lead out. It sets the cookies _ga and _ga_D0H8XW2SWJ, kept for up to 2 years, and the data goes to Google, which may process it outside the EU. Nothing from Google loads before you accept. To withdraw, tap Cookie settings at the bottom of any page: it deletes these cookies and asks again.",
     siteBanner: "On iPhone and iPad, Safari may show a banner for our app, using information it loads from Apple's App Store.",
+    cookieSettings: "Cookie settings",
     siteCovers: "The privacy policy and the terms of use cover both the Outer News app and this website.",
     prevails: "The English version prevails ({link}).",
     emailUs: "Write to us at {email}.",
+    filterAllCountries: "All countries",
+    filterAllTopics: "All topics",
+    filterCountryChip: "Country: {name}",
+    filterGroupChip: "Countries: {name}",
+    filterGroupEUShort: "EU",
+    filterTopicChip: "Topic: {name}",
+    filterEmpty: "No decisions here in the last 7 days.",
+    filterShowAllCountries: "Show all countries",
+    filterShowAllTopics: "Show all topics",
+    filters: "Filters",
   },
   uk: {
     aiNotice:
@@ -112,6 +163,10 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     getApp: "Завантажте застосунок",
     getAppBody: "Офіційні рішення з усього світу кількома спокійними реченнями у вашому телефоні.",
     comingSoon: "Незабаром",
+    consentTitle: "Файли cookie",
+    consentText: "Ми використовуємо файли cookie, щоб зробити Outer News зручнішим для вас.",
+    consentYes: "OK",
+    consentDetails: "Докладніше",
     notInLang: "Цього рішення ще немає цією мовою.",
     notInLangEvent: "Цієї події ще немає цією мовою.",
     readIn: "Читати:",
@@ -122,11 +177,23 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     independentNote: "Незалежний сайт, не пов’язаний із жодним урядом.",
     siteHeading: "На цьому сайті",
     siteData:
-      "Цей сайт не встановлює файлів cookie і не запускає скриптів, а все на його сторінках завантажується з цього ж сайту. Cloudflare, де він розміщений, отримує вашу IP-адресу та базові технічні дані (як-от адресу сторінки, браузер і час), щоб показати сторінку; ваш браузер також може надіслати Cloudflare звіт про помилку, якщо сторінка не завантажилася. Ми бачимо журнали запитів до 7 днів, щоб сайт працював; ми не використовуємо їх, щоб вас ідентифікувати.",
+      "Cloudflare, де розміщено цей сайт, отримує вашу IP-адресу та базові технічні дані (як-от адресу сторінки, браузер і час), щоб показати сторінку; ваш браузер також може надіслати Cloudflare звіт про помилку, якщо сторінка не завантажилася. Ми бачимо журнали запитів до 7 днів, щоб сайт працював; ми не використовуємо їх, щоб вас ідентифікувати.",
+    siteAnalytics: "Якщо ви погодитеся в повідомленні про cookie, цей сайт використовує Google Analytics, сервіс Google, щоб рахувати відвідування й бачити, які сторінки читають, наскільки їх прокручують і за якими посиланнями переходять на інші сайти. Він встановлює файли cookie _ga і _ga_D0H8XW2SWJ, які зберігаються до 2 років, а дані надходять до Google, який може обробляти їх за межами ЄС. До вашої згоди нічого від Google не завантажується. Щоб відкликати згоду, натисніть «Налаштування cookie» внизу будь-якої сторінки: це видалить ці файли cookie і запитає знову.",
     siteBanner: "На iPhone та iPad Safari може показати банер нашого застосунку з даними, які він завантажує з App Store від Apple.",
+    cookieSettings: "Налаштування cookie",
     siteCovers: "Політика конфіденційності й умови використання стосуються і застосунку Outer News, і цього сайту.",
     prevails: "Це переклад; у разі розбіжностей переважну силу має англійська версія ({link}).",
     emailUs: "Пишіть нам на {email}.",
+    filterAllCountries: "Усі країни",
+    filterAllTopics: "Усі теми",
+    filterCountryChip: "Країна: {name}",
+    filterGroupChip: "Країни: {name}",
+    filterGroupEUShort: "ЄС",
+    filterTopicChip: "Тема: {name}",
+    filterEmpty: "За останні 7 днів тут немає рішень.",
+    filterShowAllCountries: "Показати всі країни",
+    filterShowAllTopics: "Показати всі теми",
+    filters: "Фільтри",
   },
   ru: {
     aiNotice:
@@ -146,6 +213,10 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     getApp: "Скачайте приложение",
     getAppBody: "Официальные решения со всего мира в нескольких спокойных предложениях в вашем телефоне.",
     comingSoon: "Скоро",
+    consentTitle: "Файлы cookie",
+    consentText: "Мы используем файлы cookie, чтобы сделать Outer News удобнее для вас.",
+    consentYes: "OK",
+    consentDetails: "Подробнее",
     notInLang: "Этого решения пока нет на этом языке.",
     notInLangEvent: "Этого события пока нет на этом языке.",
     readIn: "Читать:",
@@ -156,11 +227,23 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     independentNote: "Независимый сайт, не связанный ни с одним правительством.",
     siteHeading: "На этом сайте",
     siteData:
-      "Этот сайт не устанавливает файлы cookie и не запускает скрипты, а всё на его страницах загружается с этого же сайта. Cloudflare, где он размещён, получает ваш IP-адрес и базовые технические данные (например, адрес страницы, браузер и время), чтобы показать страницу; ваш браузер также может отправить Cloudflare отчёт об ошибке, если страница не загрузилась. Мы видим журналы запросов до 7 дней, чтобы сайт работал; мы не используем их, чтобы вас идентифицировать.",
+      "Cloudflare, где размещён этот сайт, получает ваш IP-адрес и базовые технические данные (например, адрес страницы, браузер и время), чтобы показать страницу; ваш браузер также может отправить Cloudflare отчёт об ошибке, если страница не загрузилась. Мы видим журналы запросов до 7 дней, чтобы сайт работал; мы не используем их, чтобы вас идентифицировать.",
+    siteAnalytics: "Если вы согласитесь в уведомлении о cookie, этот сайт использует Google Analytics, сервис Google, чтобы считать посещения и видеть, какие страницы читают, насколько их прокручивают и по каким ссылкам переходят на другие сайты. Он устанавливает файлы cookie _ga и _ga_D0H8XW2SWJ, которые хранятся до 2 лет, а данные поступают в Google, который может обрабатывать их за пределами ЕС. До вашего согласия ничего от Google не загружается. Чтобы отозвать согласие, нажмите «Настройки cookie» внизу любой страницы: это удалит эти файлы cookie и спросит снова.",
     siteBanner: "На iPhone и iPad Safari может показать баннер нашего приложения с данными, которые он загружает из App Store от Apple.",
+    cookieSettings: "Настройки cookie",
     siteCovers: "Политика конфиденциальности и условия использования относятся и к приложению Outer News, и к этому сайту.",
     prevails: "Это перевод; в случае расхождений преимущественную силу имеет английская версия ({link}).",
     emailUs: "Пишите нам на {email}.",
+    filterAllCountries: "Все страны",
+    filterAllTopics: "Все темы",
+    filterCountryChip: "Страна: {name}",
+    filterGroupChip: "Страны: {name}",
+    filterGroupEUShort: "ЕС",
+    filterTopicChip: "Тема: {name}",
+    filterEmpty: "За последние 7 дней здесь нет решений.",
+    filterShowAllCountries: "Показать все страны",
+    filterShowAllTopics: "Показать все темы",
+    filters: "Фильтры",
   },
   es: {
     aiNotice:
@@ -180,6 +263,10 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     getApp: "Descarga la app",
     getAppBody: "Decisiones oficiales de todo el mundo, en pocas frases serenas, en tu móvil.",
     comingSoon: "Próximamente",
+    consentTitle: "Cookies",
+    consentText: "Usamos cookies para ofrecerte una mejor experiencia en Outer News.",
+    consentYes: "OK",
+    consentDetails: "Detalles",
     notInLang: "Esta decisión aún no está disponible en este idioma.",
     notInLangEvent: "Este acontecimiento aún no está disponible en este idioma.",
     readIn: "Leer en:",
@@ -190,11 +277,23 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     independentNote: "Sitio web independiente, sin vínculo con ningún gobierno.",
     siteHeading: "En este sitio web",
     siteData:
-      "Este sitio no usa cookies ni ejecuta scripts, y todo lo que aparece en sus páginas viene de este mismo sitio. Cloudflare, que lo aloja, recibe tu dirección IP y datos técnicos básicos (como la dirección de la página, el navegador y la hora) para mostrar la página; tu navegador también puede enviar a Cloudflare un informe de error si una página no carga. Vemos los registros de solicitudes durante un máximo de 7 días para que el sitio funcione; no los usamos para identificarte.",
+      "Cloudflare, que aloja este sitio, recibe tu dirección IP y datos técnicos básicos (como la dirección de la página, el navegador y la hora) para mostrar la página; tu navegador también puede enviar a Cloudflare un informe de error si una página no carga. Vemos los registros de solicitudes durante un máximo de 7 días para que el sitio funcione; no los usamos para identificarte.",
+    siteAnalytics: "Si aceptas en el aviso de cookies, este sitio usa Google Analytics, un servicio de Google, para contar visitas y ver qué páginas se leen, hasta dónde se desplazan y qué enlaces llevan fuera. Usa las cookies _ga y _ga_D0H8XW2SWJ, que se guardan hasta 2 años, y los datos van a Google, que puede tratarlos fuera de la UE. Nada de Google se carga antes de que aceptes. Para retirar tu consentimiento, toca Configuración de cookies al pie de cualquier página: borra estas cookies y vuelve a preguntar.",
     siteBanner: "En iPhone y iPad, Safari puede mostrar un banner de nuestra app con información que obtiene del App Store de Apple.",
+    cookieSettings: "Configuración de cookies",
     siteCovers: "La política de privacidad y los términos de uso se aplican tanto a la app Outer News como a este sitio web.",
     prevails: "Esto es una traducción; en caso de discrepancia, prevalece la versión en inglés ({link}).",
     emailUs: "Escríbenos a {email}.",
+    filterAllCountries: "Todos los países",
+    filterAllTopics: "Todos los temas",
+    filterCountryChip: "País: {name}",
+    filterGroupChip: "Países: {name}",
+    filterGroupEUShort: "UE",
+    filterTopicChip: "Tema: {name}",
+    filterEmpty: "No hay decisiones aquí en los últimos 7 días.",
+    filterShowAllCountries: "Mostrar todos los países",
+    filterShowAllTopics: "Mostrar todos los temas",
+    filters: "Filtros",
   },
   de: {
     aiNotice:
@@ -214,6 +313,10 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     getApp: "Laden Sie die App",
     getAppBody: "Offizielle Entscheidungen aus aller Welt, in wenigen ruhigen Sätzen, auf Ihrem Handy.",
     comingSoon: "Demnächst",
+    consentTitle: "Cookies",
+    consentText: "Wir verwenden Cookies, um Ihnen ein besseres Erlebnis auf Outer News zu bieten.",
+    consentYes: "OK",
+    consentDetails: "Details",
     notInLang: "Diese Entscheidung gibt es in dieser Sprache noch nicht.",
     notInLangEvent: "Dieses Ereignis gibt es in dieser Sprache noch nicht.",
     readIn: "Lesen auf:",
@@ -224,11 +327,23 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     independentNote: "Unabhängige Website ohne Verbindung zu einer Regierung.",
     siteHeading: "Auf dieser Website",
     siteData:
-      "Diese Website setzt keine Cookies und führt keine Skripte aus; alles auf ihren Seiten kommt von dieser Website selbst. Cloudflare, wo sie gehostet wird, erhält Ihre IP-Adresse und grundlegende technische Angaben (etwa Seitenadresse, Browser und Uhrzeit), um die Seite auszuliefern; Ihr Browser kann Cloudflare außerdem einen Fehlerbericht senden, wenn eine Seite nicht lädt. Wir sehen die Anfrageprotokolle bis zu 7 Tage lang, damit die Website funktioniert; wir nutzen sie nicht, um Sie zu identifizieren.",
+      "Cloudflare, wo diese Website gehostet wird, erhält Ihre IP-Adresse und grundlegende technische Angaben (etwa Seitenadresse, Browser und Uhrzeit), um die Seite auszuliefern; Ihr Browser kann Cloudflare außerdem einen Fehlerbericht senden, wenn eine Seite nicht lädt. Wir sehen die Anfrageprotokolle bis zu 7 Tage lang, damit die Website funktioniert; wir nutzen sie nicht, um Sie zu identifizieren.",
+    siteAnalytics: "Wenn Sie im Cookie-Hinweis zustimmen, nutzt diese Website Google Analytics, einen Dienst von Google, um Besuche zu zählen und zu sehen, welche Seiten gelesen werden, wie weit sie gescrollt werden und welche Links nach außen führen. Sie setzt die Cookies _ga und _ga_D0H8XW2SWJ, die bis zu 2 Jahre gespeichert werden, und die Daten gehen an Google, das sie auch außerhalb der EU verarbeiten kann. Vor Ihrer Zustimmung lädt nichts von Google. Um die Einwilligung zu widerrufen, tippen Sie unten auf jeder Seite auf Cookie-Einstellungen: Das löscht diese Cookies und fragt erneut.",
     siteBanner: "Auf iPhone und iPad kann Safari ein Banner für unsere App zeigen, mit Angaben, die es aus Apples App Store lädt.",
+    cookieSettings: "Cookie-Einstellungen",
     siteCovers: "Die Datenschutzerklärung und die Nutzungsbedingungen gelten für die App Outer News und für diese Website.",
     prevails: "Dies ist eine Übersetzung; bei Abweichungen ist die englische Fassung maßgeblich ({link}).",
     emailUs: "Schreiben Sie uns an {email}.",
+    filterAllCountries: "Alle Länder",
+    filterAllTopics: "Alle Themen",
+    filterCountryChip: "Land: {name}",
+    filterGroupChip: "Länder: {name}",
+    filterGroupEUShort: "EU",
+    filterTopicChip: "Thema: {name}",
+    filterEmpty: "In den letzten 7 Tagen gab es hier keine Entscheidungen.",
+    filterShowAllCountries: "Alle Länder anzeigen",
+    filterShowAllTopics: "Alle Themen anzeigen",
+    filters: "Filter",
   },
 };
 
@@ -301,6 +416,19 @@ export function placeCode(article: { country: string; countries: string[]; decis
   const main = isEvent(article) ? article.countries[0] : undefined;
   return main && (hasAppKey(`country${main}`) || hasCountryName(main)) ? main : article.country;
 }
+
+/** A group's name, as GET /countries names it (GROUPS in api/filters.ts): "European Union", "G7", "НАТО". */
+export const groupName = (lang: SiteLang, id: GroupId) => apiGroupName(GROUPS.find((g) => g.id === id)!, lang);
+
+/**
+ * A group's chip, short in the language, as the app's groupShortName: the
+ * EU's abbreviation (EU, ЄС, ЕС, UE), the others their name, already short
+ * (G7, G20; NATO, НАТО, OTAN), so the chip and its checked menu item agree.
+ */
+export const groupShort = (lang: SiteLang, id: GroupId) => (id === "eu" ? text(lang, "filterGroupEUShort") : groupName(lang, id));
+
+/** A topic's name, as GET /topics names it (TOPIC_NAMES in api/filters.ts). */
+export const topicName = (lang: SiteLang, topic: Topic) => TOPIC_NAMES[lang][topic];
 
 /** A source language's name as it fills "translated from {language}" (languages.dart): an unknown code in capitals. */
 export function languageName(lang: SiteLang, code: string): string {
