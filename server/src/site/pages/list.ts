@@ -122,7 +122,7 @@ ${filter.place ? html`<a class="more" href="${listPath(lang, { place: null, topi
   const notice = html`<p class="notice">${aiNotice(lang, [...list.top, ...list.items].some(isEvent) ? "both" : "decisions")}</p>`;
   const head = html`<div class="front-head"><h1 class="page-title">${t(lang, "listTitle")}</h1>
 ${filterBar(lang, filter, data.menus)}</div>`;
-  const older = next ? html`<a class="more" href="${listPath(lang, filter, next)}" rel="next">${t(lang, "older")} →</a><br>` : "";
+  const older = next ? html`<a class="more" href="${listPath(lang, filter, next)}" rel="next nofollow">${t(lang, "older")} →</a><br>` : "";
   const body = lead
     ? html`${head}
 <div class="front">
