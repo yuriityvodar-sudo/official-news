@@ -78,8 +78,10 @@ Official decisions only, as agreed in `docs/decisions.md`. `isNews` is `true` fo
 
 An event from Wikipedia's current events is not an official text: one sentence, the topics above it and the outlets that reported it. It gets its own instructions (`eventPrompt` in `server/src/summarizer/prompt.ts`), and the same checks.
 
-- `isNews` is `true` when the event matters beyond the place it happened (politics, elections, conflicts, disasters, the economy, health, science, courts, major sports), `false` for a minor sports result, the death of someone little known or an anniversary. Its type is always `event`.
-- The summary is 1 to 3 short sentences, up to 400 characters: what happened, where, and whom it affects. No "What to do:" or "What we do not know:": the lines say too little for them.
+- `isNews` is `true` when the event matters beyond the place it happened (politics, elections, conflicts, disasters, the economy, health, science, courts). Sport and prizes are news only when they name a winner: a world, continental or Olympic champion in any sport, a world record, or the winner of a major prize such as a Nobel Prize or the Ballon d'Or; never the start of a tournament or a minor result. `false` for a local fire or accident in which no one was hurt, the death of someone little known or an anniversary. Its type is always `event`.
+- The summary is 1 to 3 short sentences, up to 400 characters: what happened, where, when and to whom, as far as the lines say; one sentence when they give one fact. No "What to do:" or "What we do not know:": the lines say too little for them.
+- Every sentence gives a fact. No filler that says in general words what the event means or whom it affects ("The event affects the political leadership of the country").
+- Never the outlets that reported it, nor that it was reported: the app shows where an event comes from. A summary that names an outlet from the lines, or says "reported by", is asked again, and stored on its last try with a warning, like a ruled-out word.
 - The headline is plain and factual (`headlineType` `plain`): what happened and where.
 - Only what the lines say: nothing from memory, no background, in English whatever the page's language, and in the summarizer's own words, never the sentence copied.
 

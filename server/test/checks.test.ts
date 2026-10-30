@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { COPIED_WORDS, checkSummary } from "../src/summarizer/checks";
+import { COPIED_WORDS, checkSummary, namedOutlets } from "../src/summarizer/checks";
 import type { Summary } from "../src/summarizer/schema";
 
 const summary = (text: string, shortSummary = "Short."): Summary => ({
@@ -209,5 +209,26 @@ describe("copied text (#133)", () => {
     expect(checkSummary(own, source, 2026).copied).toEqual([]);
     const german = "Die Kommission hat ein förmliches Verfahren eingeleitet, um zu prüfen, ob Booking.com gegen das Gesetz verstoßen hat.";
     expect(checkSummary(summary("The Commission has opened formal proceedings to check Booking.com."), german, 2026).copied).toEqual([]);
+  });
+});
+
+describe("outlets an event names (#230)", () => {
+  const event = (headline: string, text: string): Summary => ({ ...summary(text), decisionType: "event", headline });
+
+  it("finds an outlet from the source line, as it is written there, and \"reported by\"", () => {
+    const text = "Disasters and accidents\nA train collision in Toledo kills 69 people.\nReported by: AP, Reuters, AFP via RFI";
+    expect(namedOutlets(event("Train collision in Toledo kills 69", "69 people died. The incident was reported by Reuters."), text)).toEqual([
+      "Reuters",
+      "reported by",
+    ]);
+    expect(namedOutlets(event("Train collision in Toledo kills 69", "AFP says 69 people died."), text)).toEqual(["AFP"]);
+    // "ap" inside a word is not the outlet AP.
+    expect(namedOutlets(event("Train collision in Toledo kills 69", "69 people died when two trains collided near the capital."), text)).toEqual([]);
+  });
+
+  it("catches an outlet in another script only through \"reported by\"", () => {
+    const text = "Происшествия и катастрофы\nПожар в московской усадьбе «Узкое».\nИсточники: РБК";
+    expect(namedOutlets(event("Fire at the Uzkoe estate in Moscow", "A fire broke out. The event was reported by RBC."), text)).toEqual(["reported by"]);
+    expect(namedOutlets(event("Fire at the Uzkoe estate in Moscow", "A fire broke out at the Uzkoe estate in Moscow."), text)).toEqual([]);
   });
 });

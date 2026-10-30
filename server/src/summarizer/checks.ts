@@ -247,6 +247,25 @@ function copiedRuns(s: Summary, source: string): string[] {
   return runs;
 }
 
+/** The line an event from Wikipedia's current events ends with (fetcher/wikipedia.ts). */
+const OUTLETS_LINE = /^(?:Reported by|Источники): (.+)$/m;
+
+/**
+ * The outlets an event's summary names, and "reported by" (#230): the app
+ * shows where an event comes from, so "The incident was reported by Reuters"
+ * gives the reader nothing (event prompt, rule 3). An outlet is found as the
+ * source line writes it; one in another script ("РБК") only through "reported by".
+ */
+export function namedOutlets(s: Summary, text: string): string[] {
+  const written = shown(s);
+  const outlets = (text.match(OUTLETS_LINE)?.[1] ?? "").split(/, | via /).filter(Boolean);
+  const found = outlets.filter((outlet) =>
+    new RegExp(`(?<![\\p{L}\\p{N}])${outlet.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\p{L}\\p{N}])`, "iu").test(written),
+  );
+  if (/\breported by\b/i.test(written)) found.push("reported by");
+  return found;
+}
+
 export interface CheckResult {
   /** Numbers of two digits or more that are not in the article (its title and text). */
   invented: string[];
