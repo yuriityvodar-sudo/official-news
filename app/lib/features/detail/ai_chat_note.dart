@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/analytics.dart';
 import '../../core/motion.dart';
+import '../../core/sheet.dart';
 import '../../core/theme.dart';
 import '../../l10n/app_localizations.dart';
 
@@ -25,9 +26,8 @@ class AiChatNote extends StatefulWidget {
   static const interestedKey = 'aiChat.interested';
 
   /// Shows the note as an iOS sheet over the article.
-  static Future<void> show(BuildContext context) => showCupertinoSheet<void>(
+  static Future<void> show(BuildContext context) => showSheet<void>(
     context: context,
-    showDragHandle: true,
     scrollableBuilder: (_, scroll) => AiChatNote(scroll: scroll),
   );
 
