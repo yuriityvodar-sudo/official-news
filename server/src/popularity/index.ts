@@ -6,6 +6,8 @@
 // A check sends at most 2 + WIKI_LANGS.length requests outside, within the
 // free plan's 50 a run.
 import type { Env } from "../env";
+import { USER_AGENT } from "../fetcher";
+import { isAllowed, robotsFromResponse } from "../fetcher/robots";
 import { type MediaLink, GDELT_TIMEOUT_MS, gdeltUrl, mediaFrom } from "./gdelt";
 import { WIKI_LANGS } from "./places";
 import { mediaScore, viewsScore } from "./score";
@@ -19,9 +21,6 @@ export const POPULARITY_HOURS = 72;
 export const RECHECK_HOURS = 12;
 /** Only items of this importance or more: a minor one is never in For you from abroad. */
 export const POPULARITY_MIN_IMPORTANCE = 2;
-
-/** The same identification as the fetcher's (fetcher/index.ts): Wikimedia asks every client for one. */
-const USER_AGENT = "OfficialNewsBot/0.1 (+https://github.com/yuriityvodar-sudo/official-news)";
 
 type Get = (url: string, init?: RequestInit) => Promise<Response>;
 
@@ -86,7 +85,13 @@ async function claim(env: Env, now: Date): Promise<Due | null> {
  * article or no day since the item has ended yet.
  */
 export async function pageViews(title: string, published: string, now: Date, get: Get): Promise<Views[] | null> {
-  const response = await get(articlePage(title), { headers: { "user-agent": USER_AGENT }, redirect: "follow" });
+  // The page is read as the fetcher reads a source's: only where robots.txt allows (CLAUDE.md). The two
+  // APIs, Wikimedia's pageviews and GDELT's search, are made for programs.
+  const page = new URL(articlePage(title));
+  const rules = await get(`${page.origin}/robots.txt`, { headers: { "user-agent": USER_AGENT } });
+  const robots = robotsFromResponse(rules.status, rules.ok ? await rules.text() : "");
+  if (!isAllowed(robots, page.pathname + page.search)) return null;
+  const response = await get(page.href, { headers: { "user-agent": USER_AGENT }, redirect: "follow" });
   if (response.status === 404) return [];
   if (!response.ok) return null;
   const { title: english, links } = languageLinks(await readStart(response));
@@ -164,6 +169,7 @@ async function save(env: Env, id: string, views: Views[] | null, media: Map<stri
  */
 export async function popularityStep(env: Env, scheduledTime: number, now = new Date(), get: Get = fetch): Promise<void> {
   if (new Date(scheduledTime).getUTCMinutes() % POPULARITY_EVERY_MINUTES !== 1) return;
+  const started = Date.now();
   try {
     const due = await claim(env, now);
     if (!due) return;
@@ -179,6 +185,8 @@ export async function popularityStep(env: Env, scheduledTime: number, now = new 
         id: due.id,
         views: views === null ? "unknown" : views.map((v) => `${v.lang} ${v.views}/${v.usual}`).join(", "),
         media: media === null ? "unknown" : [...media].map(([c, m]) => `${c} ${m.count}`).join(", "),
+        // As the fetcher logs its runs: a check that creeps up shows here (the page read is up to 200 KB).
+        ms: Date.now() - started,
       }),
     );
   } catch (error) {

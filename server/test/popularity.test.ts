@@ -168,6 +168,20 @@ describe("popularityStep", () => {
     expect(await env.DB.prepare("SELECT popularity_at FROM articles WHERE id = 'decree'").first("popularity_at")).toBe("2026-10-30T17:21:00Z");
   });
 
+  it("reads Wikipedia's page only where its robots.txt allows, as the fetcher reads a source", async () => {
+    await released("lagarde", ["Christine Lagarde"], ["Lagarde", "ECB"]);
+    const asked: string[] = [];
+    const closed = async (url: string) => {
+      asked.push(url);
+      if (url === "https://en.wikipedia.org/robots.txt") return new Response("User-agent: *\nDisallow: /wiki/\n");
+      if (url.startsWith("https://api.gdeltproject.org/")) return Response.json({});
+      return new Response("not found", { status: 404 });
+    };
+    await popularityStep(env, at(21), NOW, closed);
+    expect(asked.map((u) => new URL(u).origin + new URL(u).pathname)).toEqual(["https://en.wikipedia.org/robots.txt", "https://api.gdeltproject.org/api/v2/doc/doc"]);
+    expect(await rows("article_views")).toEqual([]);
+  });
+
   it("checks only released news of the last 72 hours with something to look for, never checked first", async () => {
     await released("old", ["Christine Lagarde"], ["Lagarde"], "2026-10-27T11:00:00Z");
     await released("bare", [], []);
