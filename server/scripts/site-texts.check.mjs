@@ -58,7 +58,9 @@ describe("the app's texts", () => {
 
   test("every country in docs/sources.csv has a name (country<CC>)", () => {
     const en = english();
-    const missing = [...new Set(sources().map((s) => s.country))].filter((cc) => !(`country${cc}` in en));
+    // A hidden source's articles never reach the site (#230): its country gets a name when it is shown.
+    const shown = sources().filter((s) => !(s.config && JSON.parse(s.config).hidden));
+    const missing = [...new Set(shown.map((s) => s.country))].filter((cc) => !(`country${cc}` in en));
     assert.deepEqual(missing, [], `add country names to app/lib/l10n/app_*.arb: ${missing.join(", ")}`);
   });
 

@@ -54,7 +54,7 @@ A fixed list. The AI gives each news article one of them; the app shows its labe
 
 `law` (Law), `bill` (Bill), `amendment` (Amendment), `proposal` (Proposal), `cabinet-decision` (Cabinet decision), `decision` (Decision), `meeting-agenda` (Meeting agenda), `meeting-outcome` (Meeting outcome), `event` (Event)
 
-`event` (#230, additive) is not a decision: an event from Wikipedia's current events, given only to articles of an event source, and never to an official one. Until the app labels events (#230 step 3b) those sources are hidden, so no article in the API has it; an app that does not know it shows no label.
+`event` (#230, additive) is not a decision: an event from Wikipedia's current events, given only to articles of an event source, and never to an official one. Until the app labels events (#230 step 3b) those sources are hidden, so no article in the API has it; its label is `decisionTypeEvent` in the app's texts, and an app that does not know it shows no label.
 
 ## Topics
 

@@ -15,6 +15,7 @@ export type AppKey =
   | "decisionTypeDecision"
   | "decisionTypeMeetingAgenda"
   | "decisionTypeMeetingOutcome"
+  | "decisionTypeEvent"
   | "countryAR"
   | "countryAU"
   | "countryBR"
@@ -154,6 +155,7 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "decisionTypeDecision": "Decision",
     "decisionTypeMeetingAgenda": "Meeting agenda",
     "decisionTypeMeetingOutcome": "Meeting outcome",
+    "decisionTypeEvent": "Event",
     "countryAR": "Argentina",
     "countryAU": "Australia",
     "countryBR": "Brazil",
@@ -287,6 +289,7 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "decisionTypeDecision": "Рішення",
     "decisionTypeMeetingAgenda": "Порядок денний",
     "decisionTypeMeetingOutcome": "Підсумки засідання",
+    "decisionTypeEvent": "Подія",
     "countryAR": "Аргентина",
     "countryAU": "Австралія",
     "countryBR": "Бразилія",
@@ -420,6 +423,7 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "decisionTypeDecision": "Решение",
     "decisionTypeMeetingAgenda": "Повестка дня",
     "decisionTypeMeetingOutcome": "Итоги заседания",
+    "decisionTypeEvent": "Событие",
     "countryAR": "Аргентина",
     "countryAU": "Австралия",
     "countryBR": "Бразилия",
@@ -553,6 +557,7 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "decisionTypeDecision": "Decisión",
     "decisionTypeMeetingAgenda": "Orden del día",
     "decisionTypeMeetingOutcome": "Resultados de la reunión",
+    "decisionTypeEvent": "Acontecimiento",
     "countryAR": "Argentina",
     "countryAU": "Australia",
     "countryBR": "Brasil",
@@ -686,6 +691,7 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "decisionTypeDecision": "Beschluss",
     "decisionTypeMeetingAgenda": "Tagesordnung",
     "decisionTypeMeetingOutcome": "Sitzungsergebnis",
+    "decisionTypeEvent": "Ereignis",
     "countryAR": "Argentinien",
     "countryAU": "Australien",
     "countryBR": "Brasilien",

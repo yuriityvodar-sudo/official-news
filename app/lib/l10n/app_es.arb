@@ -41,6 +41,7 @@
   "decisionTypeDecision": "Decisión",
   "decisionTypeMeetingAgenda": "Orden del día",
   "decisionTypeMeetingOutcome": "Resultados de la reunión",
+  "decisionTypeEvent": "Acontecimiento",
 
   "topicForeignAffairs": "Asuntos exteriores",
   "topicEconomy": "Economía",
