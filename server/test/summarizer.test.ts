@@ -78,6 +78,14 @@ describe("runSummarizer", () => {
     expect(await row("unnamed")).toMatchObject({ reach: "national" });
   });
 
+  it("stores its Wikipedia articles and keywords for its popularity, and a new summary is checked again (#230 step 4)", async () => {
+    await insertUnsummarized("popular", now());
+    await env.DB.prepare("UPDATE articles SET popularity_at = '2026-10-29T10:00:00Z' WHERE id = 'popular'").run();
+    const { summarize } = fakeModel(answer({ wikipedia: ["Christine Lagarde"], keywords: ["Lagarde", "ECB"] }));
+    await runSummarizer(env, { maxArticles: 1 }, summarize);
+    expect(await row("popular")).toMatchObject({ wikipedia: '["Christine Lagarde"]', keywords: '["Lagarde","ECB"]', popularity_at: null });
+  });
+
   it("summarizes the newest unsummarized articles; news enters the feed when the translator releases it", async () => {
     await insertUnsummarized("old", "2026-10-14T08:00:00Z");
     await insertUnsummarized("new", now());
@@ -377,6 +385,22 @@ describe("toSummary", () => {
     expect(named).toMatchObject({ summary: { countries: ["US", "CA", "GB", "DE", "FR"], reach: "regional" } });
     // Missing or wrong: no countries (the source's is stored then) and national, never a retry.
     expect(toSummary({ ...base, countries: "US", reach: "planet" }, "question")).toMatchObject({ summary: { countries: [], reach: "national" } });
+  });
+
+  it("reads its Wikipedia titles and keywords: at most 2 and 4, trimmed, once each, none too long (#230 step 4)", () => {
+    const named = toSummary(
+      {
+        ...base,
+        wikipedia: [" Christine_Lagarde ", "European Central Bank", "Christine Lagarde", "ECB"],
+        keywords: ["Lagarde", " ECB ", "", "resignation", 7, "x".repeat(101), "Frankfurt", "euro"],
+      },
+      "question",
+    );
+    expect(named).toMatchObject({
+      summary: { wikipedia: ["Christine Lagarde", "European Central Bank"], keywords: ["Lagarde", "ECB", "resignation", "Frankfurt"] },
+    });
+    // Missing or not a list: none, never a retry.
+    expect(toSummary({ ...base, wikipedia: "Christine Lagarde" }, "question")).toMatchObject({ summary: { wikipedia: [], keywords: [] } });
   });
 
   it("drops unknown topics and fills a missing decision type for news", () => {

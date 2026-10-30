@@ -69,6 +69,14 @@ export interface Summary {
    */
   countries: string[];
   reach: Reach;
+  /**
+   * For its popularity (#230 step 4): the titles of up to 2 English Wikipedia
+   * articles about what it is about most, whose page views per language tell
+   * how much each country's readers look it up; and up to 4 English words its
+   * news coverage would contain, to count that coverage. Empty when none.
+   */
+  wikipedia: string[];
+  keywords: string[];
 }
 
 /**
@@ -82,7 +90,12 @@ export const LIMITS = {
   summary: 1000,
   topics: 3,
   countries: 5,
+  wikipedia: 2,
+  keywords: 4,
 };
+
+/** A Wikipedia title or a keyword longer than this is not one: left out. */
+const MAX_NAME = 100;
 
 /**
  * JSON schema sent with the request, so the model answers in this shape. The
@@ -93,7 +106,20 @@ export const LIMITS = {
 export const SUMMARY_SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["isNews", "decisionType", "topics", "importance", "countries", "reach", "summary", "shortSummary", "headline", "headlineType"],
+  required: [
+    "isNews",
+    "decisionType",
+    "topics",
+    "importance",
+    "countries",
+    "reach",
+    "summary",
+    "shortSummary",
+    "headline",
+    "headlineType",
+    "wikipedia",
+    "keywords",
+  ],
   properties: {
     isNews: { type: "boolean" },
     decisionType: { type: ["string", "null"], enum: [...DECISION_TYPES, null] },
@@ -105,8 +131,20 @@ export const SUMMARY_SCHEMA = {
     shortSummary: { type: "string" },
     headline: { type: "string" },
     headlineType: { type: "string", enum: [...HEADLINE_TYPES] },
+    wikipedia: { type: "array", items: { type: "string" }, maxItems: LIMITS.wikipedia },
+    keywords: { type: "array", items: { type: "string" }, maxItems: LIMITS.keywords },
   },
 } as const;
+
+/** Up to `max` distinct names from the model's list: trimmed, none empty or too long; anything else reads as none. */
+function names(value: unknown, max: number, spaces: RegExp = /\s+/g): string[] {
+  if (!Array.isArray(value)) return [];
+  const out = value
+    .filter((v): v is string => typeof v === "string")
+    .map((v) => v.replace(spaces, " ").trim())
+    .filter((v) => v.length > 0 && v.length <= MAX_NAME);
+  return [...new Set(out)].slice(0, max);
+}
 
 /** Trims to `max` characters at a word boundary when one is close. */
 function clip(text: string, max: number): string {
@@ -182,6 +220,9 @@ export function toSummary(value: unknown, kind: HeadlineKind, event = false): { 
       importance,
       countries,
       reach,
+      // Wikipedia's links write a title's spaces as underscores: the title has spaces.
+      wikipedia: names(v.wikipedia, LIMITS.wikipedia, /[\s_]+/g),
+      keywords: names(v.keywords, LIMITS.keywords),
     },
   };
 }

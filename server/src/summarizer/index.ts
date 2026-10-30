@@ -86,11 +86,13 @@ function workersAi(env: Env): Summarize {
 function store(env: Env, id: string, s: Summary, now: string, sourceCountry: string): D1PreparedStatement[] {
   // No feed_seq here: an article enters the feed when it is released, in English
   // and every language at once (release together, #46: translator/release.ts).
-  // Since #133 no impact and no tags: what it means is in the summary.
+  // Since #133 no impact and no tags: what it means is in the summary. A new
+  // summary is looked at again for its popularity (#230 step 4: popularity_at).
   return [
     env.DB.prepare(
       `UPDATE articles SET headline = ?, headline_type = ?, short_summary = ?, summary = ?, decision_type = ?, topics = ?,
-              tags = '[]', importance = ?, reach = ?, is_news = ?, summarized_at = ?, model = ?, impact = NULL
+              tags = '[]', importance = ?, reach = ?, is_news = ?, summarized_at = ?, model = ?, impact = NULL,
+              wikipedia = ?, keywords = ?, popularity_at = NULL
        WHERE id = ?`,
     ).bind(
       s.headline,
@@ -104,6 +106,8 @@ function store(env: Env, id: string, s: Summary, now: string, sourceCountry: str
       s.isNews ? 1 : 0,
       now,
       MODEL,
+      JSON.stringify(s.wikipedia),
+      JSON.stringify(s.keywords),
       id,
     ),
     // The countries it concerns (#230): For you asks by them. The source's when the model gave none.
