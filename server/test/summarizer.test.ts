@@ -186,6 +186,53 @@ describe("runSummarizer", () => {
     expect(last).toMatchObject({ ok: true, warning: "stored on its last try with: names who reported it: Reuters, reported by" });
   });
 
+  it("shows an event both Wikipedias report once: the one summarized first (#230)", async () => {
+    for (const [id, lang] of [
+      ["ww-twin-en", "en"],
+      ["ww-twin-ru", "ru"],
+    ] as const) {
+      await env.DB.prepare(
+        `INSERT INTO sources (id, country, name, kind, url, config, language, verified_by, verified_at, status)
+         VALUES (?, 'WW', 'Wikipedia: Current events', 'api', 'https://wikipedia.org', ?, ?, 'domain', '2026-10-30', 'active')`,
+      )
+        .bind(id, JSON.stringify({ currentEvents: lang, itemPages: false }), lang)
+        .run();
+    }
+    const text = "Business and economy\nChristine Lagarde resigns as president of the European Central Bank. She leaves in February 2027.\nReported by: Reuters";
+    for (const [id, source, minutes] of [
+      ["lagarde-en", "ww-twin-en", 2],
+      ["lagarde-ru", "ww-twin-ru", 1],
+      ["toledo", "ww-twin-ru", 0],
+    ] as const) {
+      const at = `${new Date(Date.now() - minutes * 60_000).toISOString().slice(0, 19)}Z`;
+      await env.DB.prepare(
+        `INSERT INTO articles (id, source_id, url, original_title, published_at, fetched_at, text, original_language)
+         VALUES (?1, ?2, 'https://wikipedia.org/#' || ?1, 'T', ?3, ?3, ?4, 'en')`,
+      )
+        .bind(id, source, at, id === "toledo" ? "Disasters\nA train collision in Toledo kills 69 people.\nReported by: Reuters" : text)
+        .run();
+    }
+    const event = (headline: string, shortSummary: string, countries: string[]) =>
+      answer({ topics: ["economy"], countries, reach: "regional", headline, shortSummary, summary: shortSummary, headlineType: "plain" });
+    // Newest fetched first: Toledo, then the Russian Lagarde, then the English one.
+    const { summarize } = fakeModel(
+      event("Train collision in Toledo kills 69 people", "69 people died when two trains collided in Toledo.", ["ES"]),
+      event("Christine Lagarde resigns as European Central Bank President", "Christine Lagarde will step down as President of the European Central Bank in February 2027.", ["EU"]),
+      event("Christine Lagarde resigns as European Central Bank president", "European Central Bank President Christine Lagarde will resign in February 2027.", ["EU"]),
+    );
+
+    const results = await runSummarizer(env, { maxArticles: 5 }, summarize);
+
+    expect(results.map((r) => [r.articleId, r.ok, r.twinOf ?? null])).toEqual([
+      ["toledo", true, null],
+      ["lagarde-ru", true, null],
+      ["lagarde-en", true, "lagarde-ru"],
+    ]);
+    expect(await row("lagarde-ru")).toMatchObject({ is_news: 1, decision_type: "event" });
+    expect(await row("lagarde-en")).toMatchObject({ is_news: 0, decision_type: "event" });
+    expect(await row("toledo")).toMatchObject({ is_news: 1 });
+  });
+
   it("counts an unusable answer as an attempt and gives up after the last one", async () => {
     await insertUnsummarized("bad", now());
     for (let i = 0; i < MAX_ATTEMPTS; i++) {

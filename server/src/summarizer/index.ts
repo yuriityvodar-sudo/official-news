@@ -3,6 +3,7 @@ import { toStoredTime } from "../fetcher/text";
 import { checkSummary, namedOutlets } from "./checks";
 import { type ArticleInput, MAX_TEXT, eventPrompt, headlineKind, publishedDate, systemPrompt, userMessage } from "./prompt";
 import { SUMMARY_SCHEMA, type Summary, clipped, overLimits, parseJson, toSummary } from "./schema";
+import { twinOf } from "./twins";
 
 /**
  * The Workers AI model that writes the summaries (docs/decisions.md). Gemma 4
@@ -51,6 +52,8 @@ export interface SummaryResult {
   gaveUp?: boolean;
   /** From a hidden source (#230): stored as not news, whatever `isNews` says. */
   hidden?: boolean;
+  /** An event already in the news from the other Wikipedia (#230, twins.ts): stored as not news. */
+  twinOf?: string;
 }
 
 /** The model answered, but not with something we can store. Counts as a failed attempt. */
@@ -211,13 +214,17 @@ export async function runSummarizer(
         if (soft.length) warnings.push(`stored on its last try with: ${soft.join("; ")}`);
       }
       summary = clipped(summary);
+      // An event both Wikipedias report is shown once, the one summarized first (#230).
+      const twin = article.event && summary.isNews && !row.hidden ? await twinOf(env, row.id, summary, row.published_at, row.country) : null;
       // A hidden source's news is checked like any other, then kept out of the feed (#230).
-      await env.DB.batch(store(env, row.id, row.hidden ? { ...summary, isNews: false } : summary, toStoredTime(new Date()), row.country));
+      const shown = row.hidden || twin ? { ...summary, isNews: false } : summary;
+      await env.DB.batch(store(env, row.id, shown, toStoredTime(new Date()), row.country));
       results.push({
         articleId: row.id,
         ok: true,
         isNews: summary.isNews,
         ...(row.hidden ? { hidden: true } : {}),
+        ...(twin ? { twinOf: twin } : {}),
         ...(warnings.length ? { warning: warnings.join("; ") } : {}),
       });
     } catch (error) {

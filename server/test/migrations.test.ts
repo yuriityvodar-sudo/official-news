@@ -60,32 +60,47 @@ describe("migration 0010 (release together)", () => {
 });
 
 describe("migration 0022 (show events, #230)", () => {
-  it("makes the hidden events of the last 2 days news, and leaves older ones, those not news and decisions alone", async () => {
-    const show = env.TEST_MIGRATIONS.find((m) => m.name.startsWith("0022"))?.queries.find((q) => q.includes("SET is_news = 1"));
+  it("has the events of the last 2 days summarized again after the deploy, and leaves older ones, released ones and decisions alone", async () => {
+    const show = env.TEST_MIGRATIONS.find((m) => m.name.startsWith("0022"))?.queries.find((q) => q.includes("summarized_at = NULL"));
     expect(show).toBeDefined();
+    for (const id of ["ww-wikipedia-en", "ww-wikipedia-ru"]) {
+      await env.DB.prepare(
+        `INSERT OR IGNORE INTO sources (id, country, name, kind, url, config, language)
+         VALUES (?, 'WW', 'Wikipedia: Current events', 'api', 'https://wikipedia.org', '{"currentEvents":"en","hidden":true}', 'en')`,
+      )
+        .bind(id)
+        .run();
+    }
     const day = (n: number) => `${new Date(Date.now() - n * 86_400_000).toISOString().slice(0, 19)}Z`;
-    for (const [id, type, publishedAt] of [
-      ["event-new", "event", day(1)],
-      ["event-old", "event", day(3)],
-      ["not-news", null, day(1)],
-      ["decision", "law", day(1)],
+    for (const [id, source, publishedAt, feedSeq] of [
+      ["event-new", "ww-wikipedia-en", day(1), null],
+      ["event-ru", "ww-wikipedia-ru", day(0.5), null],
+      ["event-old", "ww-wikipedia-en", day(3), null],
+      ["event-shown", "ww-wikipedia-en", day(1), 990001],
+      ["decision", "de-federal-government", day(1), null],
     ] as const) {
       await env.DB.prepare(
-        `INSERT INTO articles (id, source_id, url, original_title, published_at, fetched_at, is_news, decision_type)
-         VALUES (?1, 'de-federal-government', 'https://example.gov/' || ?1, 'T', ?2, ?2, 0, ?3)`,
+        `INSERT INTO articles (id, source_id, url, original_title, published_at, fetched_at, is_news, decision_type, summarized_at, summary_attempts, feed_seq)
+         VALUES (?1, ?2, 'https://example.org/' || ?1, 'T', ?3, ?3, 0, 'event', ?3, 1, ?4)`,
       )
-        .bind(id, publishedAt, type)
+        .bind(id, source, publishedAt, feedSeq)
         .run();
     }
 
     await env.DB.prepare(show!).run();
 
-    const { results } = await env.DB.prepare("SELECT id, is_news FROM articles WHERE id IN ('event-new', 'event-old', 'not-news', 'decision') ORDER BY id").all();
+    const { results } = await env.DB.prepare(
+      `SELECT id, summarized_at IS NULL AS again, summary_attempts, summary_claimed_at >= ? AS claimed FROM articles
+       WHERE id IN ('event-new', 'event-ru', 'event-old', 'event-shown', 'decision') ORDER BY id`,
+    )
+      .bind(day(0.01))
+      .all();
     expect(results).toEqual([
-      { id: "decision", is_news: 0 },
-      { id: "event-new", is_news: 1 },
-      { id: "event-old", is_news: 0 },
-      { id: "not-news", is_news: 0 },
+      { id: "decision", again: 0, summary_attempts: 1, claimed: null },
+      { id: "event-new", again: 1, summary_attempts: 0, claimed: 1 },
+      { id: "event-old", again: 0, summary_attempts: 1, claimed: null },
+      { id: "event-ru", again: 1, summary_attempts: 0, claimed: 1 },
+      { id: "event-shown", again: 0, summary_attempts: 1, claimed: null },
     ]);
   });
 });
