@@ -1,4 +1,5 @@
 import { handleApi } from "./api";
+import { snapshotStep } from "./api/snapshot";
 import type { Env } from "./env";
 import { runFetcher } from "./fetcher";
 import { runCleanup } from "./health/cleanup";
@@ -17,7 +18,9 @@ import { TRANSLATIONS_PER_RUN, releaseReady, runTranslator, translatorRunning } 
  * release (translator/release.ts), so a decision reaches the feed also while
  * the translator's trigger is not firing. The translator's run then sends the
  * push notifications (push/index.ts, #62): at most one per language; while the
- * translator is not running, the summarizer's run sends them instead.
+ * translator is not running, the summarizer's run sends them instead. Both
+ * runs end with the website's snapshot of one language (api/snapshot.ts), so
+ * each language gets a run every 5 minutes and is rebuilt when its feed changed.
  */
 export const CRONS = {
   fetcher: "* * * * *",
@@ -70,6 +73,7 @@ export default {
         // While the translator is not running, its pushes too (#62). A claim in push_log
         // keeps the two runs from both sending, also when they overlap.
         await pushStep(env, true);
+        await snapshotStep(env, controller.scheduledTime);
       }
     } else if (step === "translator") {
       try {
@@ -77,6 +81,7 @@ export default {
       } finally {
         // After the release, so a decision released in this run can go out at once.
         await pushStep(env);
+        await snapshotStep(env, controller.scheduledTime);
       }
     } else if (step === "cleanup") {
       await runCleanup(env);

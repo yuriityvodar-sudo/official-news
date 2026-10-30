@@ -11,6 +11,7 @@ import {
   GROUPS,
   TOPIC_ERROR,
   WORLD,
+  type NameLang,
   type Where,
   byName,
   countryName,
@@ -60,16 +61,63 @@ interface ArticleRow {
 const sourceName = (lang: Lang | null) =>
   lang ? `COALESCE(CASE WHEN json_valid(s.config) THEN json_extract(s.config, '$.names.${lang}') END, s.name)` : "s.name";
 
+/** The countries the article concerns (#230), in the summarizer's order, as a JSON array. */
+const COUNTRIES_COLUMN =
+  "(SELECT json_group_array(country) FROM (SELECT c.country FROM article_countries c WHERE c.article_id = a.id ORDER BY c.rowid)) AS countries";
+
 const articleColumns = (lang: Lang | null) => `
   a.id, s.country, a.source_id, ${sourceName(lang)} AS source_name, s.url AS source_url,
   a.url, a.original_title, a.published_at, a.date_only, a.headline, a.headline_type, a.short_summary,
   a.summary, a.decision_type, a.image_url, a.original_language, a.topics, a.tags, a.importance,
-  a.feed_seq, a.added_at, a.impact,
-  (SELECT json_group_array(country) FROM (SELECT c.country FROM article_countries c WHERE c.article_id = a.id ORDER BY c.rowid)) AS countries`;
+  a.feed_seq, a.added_at, a.impact, ${COUNTRIES_COLUMN}`;
 
 const ARTICLE_COLUMNS = articleColumns(null);
 
 const FROM_ARTICLES = "FROM articles a JOIN sources s ON s.id = a.source_id";
+
+/** A row of the website's snapshot (snapshot.ts): what a list page shows of an article. */
+export interface ListRow {
+  id: string;
+  country: string;
+  source_name: string;
+  original_title: string;
+  published_at: string;
+  date_only: number;
+  headline: string | null;
+  short_summary: string | null;
+  decision_type: string | null;
+  topics: string | null;
+  importance: number | null;
+  feed_seq: number;
+  added_at: string | null;
+  countries: string | null;
+}
+
+/**
+ * The columns the website's lists show (snapshot.ts), in English or in `lang`
+ * (the translation `t`), without the texts only an article page needs
+ * (summary, impact, the original URL): a language's snapshot is the whole 7-day
+ * feed, about 300 articles, and their summaries would be most of what a cron
+ * run reads for nothing.
+ */
+const listColumns = (lang: Lang | null) => `
+  a.id, s.country, ${sourceName(lang)} AS source_name, a.original_title, a.published_at, a.date_only,
+  ${lang ? "t.headline, t.short_summary" : "a.headline, a.short_summary"}, a.decision_type, a.topics, a.importance,
+  a.feed_seq, a.added_at, ${COUNTRIES_COLUMN}`;
+
+/**
+ * The whole feed in `lang` (`null` for English), newest first, as one
+ * statement: every article a list page could show, with the same conditions as
+ * listArticles (the 7 days; in a language, the articles with a shown
+ * translation), so the website's snapshot (snapshot.ts) holds exactly what a
+ * page would have read.
+ */
+export function wholeFeed(env: Env, lang: Lang | null): D1PreparedStatement {
+  const where = [...PAGE_CONDITIONS, ...(lang ? [RECENT_TRANSLATION, ...TRANSLATED_CONDITIONS] : [])];
+  return env.DB.prepare(`SELECT ${listColumns(lang)} ${lang ? FROM_TRANSLATED : FROM_ARTICLES} WHERE ${where.join(" AND ")} ORDER BY a.feed_seq DESC`).bind(
+    ...(lang ? [lang] : []),
+  );
+}
 
 /**
  * A feed page: official decisions from the last 7 days (docs/contract.md), in feed order.
@@ -92,11 +140,15 @@ const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 50;
 
 /** How many top stories the first page sends (#164). */
-const TOP_SIZE = 3;
+export const TOP_SIZE = 3;
+
+/** A top story is from the last 72 hours. */
+export const TOP_HOURS = 72;
 
 /**
  * A top story's score (#164): the AI's importance (1 to 5) less half a point
  * for each day since it was published, so a 4 from yesterday beats a fresh 3.
+ * The website's snapshot scores the same way in the Worker (site/snapshot.ts).
  */
 const TOP_SCORE = "a.importance - 0.5 * (julianday('now') - julianday(a.published_at))";
 
@@ -131,8 +183,7 @@ const topQuery = (columns: string, from: string, where: string, filters: Filters
              PARTITION BY s.country ORDER BY ${topScore(filters)} DESC, a.published_at DESC, a.id DESC
            ) AS country_rank
     ${from}
-    WHERE ${where} AND a.importance IS NOT NULL
-      AND a.published_at >= strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-72 hours')
+    WHERE ${where} AND ${TOP_CANDIDATE}
   )
   WHERE country_rank <= ${filters.oneCountry ? TOP_SIZE : 1}
   ORDER BY score DESC, published_at DESC, id DESC
@@ -145,8 +196,20 @@ const topQuery = (columns: string, from: string, where: string, filters: Filters
  * (ANALYZE; test/filters.test.ts checks both).
  */
 const TOP_WHERE = "a.is_news = 1 AND +a.feed_seq IS NOT NULL";
+/** What a top story is picked from, after TOP_WHERE and the filters: an article with an importance, of the last TOP_HOURS. */
+const TOP_CANDIDATE = `a.importance IS NOT NULL AND a.published_at >= strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-${TOP_HOURS} hours')`;
 /** The top-story conditions plus `filters` (their values are bound first). */
 const topWhere = (filters: Filters) => [TOP_WHERE, ...filters.where].join(" AND ");
+
+/**
+ * Every article the English top stories can be picked from, with what the
+ * picking reads (snapshot.ts scores and ranks them in the Worker, per filter):
+ * topQuery's rows before any filter, through the (is_news, published_at)
+ * index. A language's top stories are the English ones that have a shown
+ * translation (translatedTop), so one list serves every language.
+ */
+export const topCandidates = (env: Env) =>
+  env.DB.prepare(`SELECT a.id, s.country, a.importance, a.published_at, a.topics ${FROM_ARTICLES} WHERE ${TOP_WHERE} AND ${TOP_CANDIDATE}`);
 /** The top stories among the feed's articles that pass `filters`. */
 const englishTop = (filters: Filters) => topQuery(ARTICLE_COLUMNS, FROM_ARTICLES, topWhere(filters), filters);
 
@@ -246,7 +309,7 @@ export function feedFilters(where: Where, topic: Topic | null): Filters {
 }
 
 /** A JSON array of strings stored in D1; anything else reads as empty. */
-function parseStringArray(value: string | null): string[] {
+export function parseStringArray(value: string | null): string[] {
   if (!value) return [];
   try {
     const parsed: unknown = JSON.parse(value);
@@ -652,19 +715,24 @@ async function listTopics(url: URL, env: Env): Promise<Response> {
 async function listCountries(url: URL, env: Env): Promise<Response> {
   const lang = readLang(url.searchParams);
   if (lang === undefined) return badRequest(LANG_ERROR);
-  const nameLang = lang ?? "en";
+  const { results } = await activeCountries(env).all<{ country: string }>();
+  return json(whereMenu(results, lang ?? "en"), 200, LIST_CACHE);
+}
 
-  const { results } = await env.DB.prepare(
-    `SELECT DISTINCT country FROM sources WHERE status = 'active' AND ${REAL_SOURCE}`,
-  ).all<{ country: string }>();
+/** The countries of active sources, once each: what GET /countries lists, before its names. */
+export const activeCountries = (env: Env) => env.DB.prepare(`SELECT DISTINCT country FROM sources WHERE status = 'active' AND ${REAL_SOURCE}`);
 
-  const groups = GROUPS.map((group) => ({ id: group.id, name: groupName(group, nameLang), members: groupCountries(group) }));
-  const countries = results
+/** GET /countries's answer for these active source countries, named in `lang` (the website's snapshot builds it per language too). */
+export function whereMenu(rows: { country: string }[], lang: NameLang) {
+  const groups = GROUPS.map((group) => ({ id: group.id, name: groupName(group, lang), members: groupCountries(group) }));
+  const countries = rows
     .map((r) => r.country)
     .filter((code) => /^[A-Z]{2}$/.test(code) && code !== EU && code !== WORLD)
-    .map((code) => ({ code, name: countryName(code, nameLang) }));
-  return json({ groups, countries: byName(countries, nameLang) }, 200, LIST_CACHE);
+    .map((code) => ({ code, name: countryName(code, lang) }));
+  return { groups, countries: byName(countries, lang) };
 }
+
+export type WhereMenu = ReturnType<typeof whereMenu>;
 
 /** The country Cloudflare sees the request from, or null: unknown (XX), Tor (T1), or none (a local run). */
 function requestCountry(request: Request): string | null {
