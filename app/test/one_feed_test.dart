@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:official_news/core/api_client.dart';
 import 'package:official_news/core/article.dart';
+import 'package:official_news/core/home_country.dart';
 import 'package:official_news/features/feed/feed_controller.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'test_app.dart';
@@ -146,6 +147,43 @@ void main() {
       expect(_ids(topStoriesBlock(top.take(2).toList())), ['t1', 't2']);
       expect(topStoriesBlock(top.take(1).toList()), isEmpty);
       expect(topStoriesBlock(const []), isEmpty);
+    });
+  });
+
+  group("For you's order (#230 step 5)", () {
+    setUp(() => SharedPreferences.setMockInitialValues({}));
+
+    test('inServerOrder keeps the server\'s order, each article once', () {
+      final items = [_a('b', feedSeq: 2), _a('c', feedSeq: 9), _a('a', feedSeq: 5), _a('c', feedSeq: 9)];
+      expect(_ids(inServerOrder(items)), ['b', 'c', 'a']);
+    });
+
+    test("For you shows the server's ranking; the whole world, the feed's order", () async {
+      final before = readPhoneRegion;
+      addTearDown(() => readPhoneRegion = before);
+      readPhoneRegion = () async => 'CZ';
+      final feed = FeedController(
+        api: ApiClient(
+          baseUrl: 'https://api.test',
+          client: MockClient((request) async {
+            final menu = fakeMenus(request);
+            if (menu != null) return menu;
+            final ranked = request.url.queryParameters.containsKey('for');
+            final ids = ranked ? [3, 9, 1, 7] : [9, 7, 3, 1];
+            return http.Response(
+              jsonEncode({
+                'items': [for (final i in ids) _json('a$i', feedSeq: i)],
+                'nextCursor': null,
+                'top': const [],
+              }),
+              200,
+            );
+          }),
+        ),
+      );
+      await feed.start();
+      expect(feed.homeCountry, 'CZ');
+      expect(_ids(feed.feed), ['a3', 'a9', 'a1', 'a7']);
     });
   });
 

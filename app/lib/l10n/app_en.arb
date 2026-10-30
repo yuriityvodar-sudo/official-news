@@ -532,6 +532,10 @@
   "@readOfficialDecision": {
     "description": "The card at the end of an article that opens the official page."
   },
+  "inTheMedia": "In the media",
+  "@inTheMedia": {
+    "description": "Above the links to the reader's country's media about a decision (#230 step 5): headline and outlet only."
+  },
   "readOnWikipedia": "Read on Wikipedia",
   "@readOnWikipedia": {
     "description": "The link of an event (#230) to its Wikipedia page, in place of Read the official decision."

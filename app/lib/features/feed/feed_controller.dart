@@ -122,12 +122,18 @@ class FeedController extends ChangeNotifier {
   void _merge() {
     _topStories = topStoriesBlock(top);
     final inBlock = {for (final a in _topStories) a.id};
+    // For you (#230 step 5): the server ranks it by score for the reader's
+    // country, so it stays in the server's order; its top stories are among
+    // its items. The whole world's feed is in the order it arrived.
+    final ordered = _forCountry != null
+        ? inServerOrder(_items)
+        : oneFeed(
+            top: _topStories.isEmpty ? top : const [],
+            items: _items,
+            complete: _cursor == null,
+          );
     _feed = [
-      for (final a in oneFeed(
-        top: _topStories.isEmpty ? top : const [],
-        items: _items,
-        complete: _cursor == null,
-      ))
+      for (final a in ordered)
         if (!inBlock.contains(a.id)) a,
     ];
   }
@@ -542,6 +548,16 @@ List<Article> oneFeed({
   return [
     for (final a in all)
       if (loaded.contains(a.id) || order(a, last) < 0) a,
+  ];
+}
+
+/// For you's list (#230 step 5) as the server ranked it, page after page,
+/// each article once.
+List<Article> inServerOrder(List<Article> items) {
+  final seen = <String>{};
+  return [
+    for (final a in items)
+      if (seen.add(a.id)) a,
   ];
 }
 

@@ -751,22 +751,24 @@ describe("GET /articles?for= (For you, #170)", () => {
   it("keeps the reader's own country, the EU institutions for an EU member, and the world's that matter", async () => {
     // Czechia: all its own, whatever the importance, and the EU's. The world: importance 3 or more, at most 2 a
     // country a day, the most important first (de-3 is Germany's third of that day; de-3-earlier is another day).
-    expect(await ids("/articles?for=CZ")).toEqual(["eu-2", "cz-plain", "cz-1", "us-3", "de-4", "de-5", "de-3-earlier"]);
+    // Ranked by score since #230 step 5 (more in foryou.test.ts): Germany is Czechia's neighbour, a point more.
+    expect(await ids("/articles?for=CZ")).toEqual(["de-5", "de-4", "de-3-earlier", "us-3", "eu-2", "cz-1", "cz-plain"]);
     // Ukraine is not in the EU: the EU institutions' decision of importance 2 stays out, as Czechia's do.
-    expect(await ids("/articles?for=UA")).toEqual(["ua-2", "us-3", "de-4", "de-5", "de-3-earlier"]);
+    expect(await ids("/articles?for=UA")).toEqual(["de-5", "ua-2", "de-4", "us-3", "de-3-earlier"]);
     // An EU member without sources of its own still gets the EU's.
-    expect(await ids("/articles?for=AT")).toEqual(["eu-2", "us-3", "de-4", "de-5", "de-3-earlier"]);
-    expect(await ids("/articles?for=DE")).toEqual(["eu-2", "us-3", "de-2", "de-3", "de-4", "de-5", "de-3-earlier"]);
+    expect(await ids("/articles?for=AT")).toEqual(["de-5", "de-4", "de-3-earlier", "us-3", "eu-2"]);
+    expect(await ids("/articles?for=DE")).toEqual(["de-5", "de-4", "de-3", "de-3-earlier", "de-2", "us-3", "eu-2"]);
   });
 
   it("works with topic, lang and paging, as the other filters do", async () => {
-    expect(await ids("/articles?for=CZ&topic=health")).toEqual(["cz-1", "us-3"]);
+    expect(await ids("/articles?for=CZ&topic=health")).toEqual(["us-3", "cz-1"]);
     await translated("cz-1", "de-5", "ua-2");
-    expect(await ids("/articles?for=CZ&lang=uk")).toEqual(["cz-1", "de-5"]);
+    expect(await ids("/articles?for=CZ&lang=uk")).toEqual(["de-5", "cz-1"]);
     const first = await page("/articles?for=CZ&limit=3");
-    expect(first.items.map((a) => a.id)).toEqual(["eu-2", "cz-plain", "cz-1"]);
-    expect(await ids(`/articles?for=CZ&limit=3&cursor=${first.nextCursor}`)).toEqual(["us-3", "de-4", "de-5"]);
-    expect(await ids(`/articles?for=CZ&after=${first.items[1].feedSeq}`)).toEqual(["eu-2"]);
+    expect(first.items.map((a) => a.id)).toEqual(["de-5", "de-4", "de-3-earlier"]);
+    expect(await ids(`/articles?for=CZ&limit=3&cursor=${first.nextCursor}`)).toEqual(["us-3", "eu-2", "cz-1"]);
+    // What appeared after an article is counted in the feed's order, as before.
+    expect(await ids(`/articles?for=CZ&after=${first.items[1].feedSeq}`)).toEqual(["eu-2", "cz-plain", "cz-1", "us-3"]);
   });
 
   it("takes a decision published elsewhere when it concerns the reader's country (#230)", async () => {
@@ -778,7 +780,7 @@ describe("GET /articles?for= (For you, #170)", () => {
     expect(await ids("/articles?for=MX")).not.toContain("us-tariff-ca");
   });
 
-  it("gives the reader's own country a point more in the top stories, and the EU institutions half a point for an EU member", async () => {
+  it("scores the top stories as the list: 2 for the reader's own country, 1 for its neighbours and the EU's for a member and for Ukraine", async () => {
     await hideSeed();
     await env.DB.prepare("UPDATE articles SET is_news = 0").run();
     await add(
@@ -790,10 +792,10 @@ describe("GET /articles?for= (For you, #170)", () => {
     );
     // Importance less half a point a day: fr-5 3.54, us-4 3.46, eu-3 2.98, cz-3 2.96, de-4 2.85.
     expect(await topIds("/articles")).toEqual(["fr-5-3-days", "us-4-yesterday", "eu-3"]);
-    // For Czechia: cz-3 3.96 and eu-3 3.48 (us-4 3.46 drops out).
-    expect(await topIds("/articles?for=CZ")).toEqual(["cz-3", "fr-5-3-days", "eu-3"]);
-    // For Ukraine, outside the EU: no bonus for the EU's, and none of its own.
-    expect(await topIds("/articles?for=UA")).toEqual(["fr-5-3-days", "us-4-yesterday", "eu-3"]);
+    // For Czechia: cz-3 4.96, eu-3 3.98 and Germany's de-4 3.85 (fr-5 3.54 drops out).
+    expect(await topIds("/articles?for=CZ")).toEqual(["cz-3", "eu-3", "de-4-2-days"]);
+    // For Ukraine, outside the EU but close to it: the EU's a point more (eu-3 3.98), none of its own.
+    expect(await topIds("/articles?for=UA")).toEqual(["eu-3", "fr-5-3-days", "us-4-yesterday"]);
   });
 
   it("reads the feed's 7 days once, not older articles", async () => {

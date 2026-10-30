@@ -186,6 +186,29 @@ void main() {
     ]);
   });
 
+  testWidgets("shows the reader's country's media about it, headline and "
+      'outlet, each opening its page (#230 step 5)', (tester) async {
+    final opened = <Uri>[];
+    final article = Article.fromJson({
+      ..._article().toJson(),
+      'media': [
+        {'title': 'Vláda schválila rozpočet', 'outlet': 'novinky.cz', 'url': 'https://www.novinky.cz/clanek/1'},
+        {'title': 'Not a page', 'outlet': 'x.test', 'url': 'javascript:alert(1)'},
+      ],
+    });
+    expect(article.media.map((m) => m.outlet), ['novinky.cz']);
+    await _pump(tester, article, openLink: (uri) async => opened.add(uri));
+    await tester.scrollUntilVisible(find.text('Vláda schválila rozpočet'), 200);
+    expect(find.text('In the media'), findsOneWidget);
+    await tester.tap(find.text('Vláda schválila rozpočet'));
+    expect(opened, [Uri.parse('https://www.novinky.cz/clanek/1')]);
+  });
+
+  testWidgets('without media there is no "In the media"', (tester) async {
+    await _pump(tester, _article());
+    expect(find.text('In the media'), findsNothing);
+  });
+
   testWidgets('opens the page without the bill-stage fragment', (tester) async {
     final opened = <Uri>[];
     await _pump(
