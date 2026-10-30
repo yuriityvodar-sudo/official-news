@@ -10,6 +10,7 @@ import 'package:flutter/scheduler.dart' show Ticker;
 
 import '../../core/analytics.dart';
 import '../../core/api_client.dart';
+import '../../core/chat_history.dart';
 import '../../core/article.dart';
 import '../../core/config.dart';
 import '../../core/glass.dart';
@@ -32,6 +33,9 @@ class _Turn {
   bool done = false;
   bool cutOff = false;
 
+  /// Kept on the phone from before: shown at once, not written again.
+  bool kept = false;
+
   /// Its own, so a turn keeps its place and state as others come.
   final key = GlobalKey();
 }
@@ -43,13 +47,18 @@ class _Turn {
 /// title once the conversation starts; the question asked goes to the top
 /// of the screen and its answer is written under it, the screen keeping
 /// still, never jumping to the answer's end; a pulsing dot while the agent
-/// thinks; the answer's bold and lists shown as such ([_Formatted]). The limit as Claude shows it (variant A of Roman's mockup,
-/// 27 Oct): nothing until it is near, then "3 questions left today" over the
-/// field; once none are left, a card in the field's place, with when new ones
-/// come and "Buy more questions" ([TopUpSheet]). A long document's question
-/// takes more of the limit, and the chat says so. Not paid any more (the
-/// server's 402): the paywall shows again. Nothing of the conversation is
-/// kept: it is gone with the screen.
+/// thinks; the answer's bold and lists shown as such ([_Formatted]).
+///
+/// The limit as Claude shows it (variant A of Roman's mockup, 27 Oct):
+/// nothing until it is near, then "3 questions left today" over the field;
+/// once none are left, a card in the field's place, with when new ones come
+/// and "Buy more questions" ([TopUpSheet]). A long document's question takes
+/// more of the limit, and the chat says so. Not paid any more (the server's
+/// 402): the paywall shows again.
+///
+/// The conversation is kept on the phone only ([ChatHistory], Roman's pick
+/// B, 30 Oct): opened again about the same decision, it goes on where it was
+/// left, and the Conversations screen lists them all.
 class ChatScreen extends StatefulWidget {
   const ChatScreen({
     super.key,
@@ -58,6 +67,7 @@ class ChatScreen extends StatefulWidget {
     this.api,
     this.scroll,
     this.subscription,
+    this.history,
     this.openLink = openOfficialPage,
   });
 
@@ -68,12 +78,14 @@ class ChatScreen extends StatefulWidget {
     BuildContext context,
     Article article, {
     String? firstQuestion,
+    ChatHistory? history,
   }) => showSheet<void>(
     context: context,
     scrollableBuilder: (_, scroll) => ChatScreen(
       article: article,
       firstQuestion: firstQuestion,
       scroll: scroll,
+      history: history,
     ),
   );
 
@@ -89,6 +101,9 @@ class ChatScreen extends StatefulWidget {
 
   /// [chatSubscription] unless a test brings its own.
   final ChatSubscription? subscription;
+
+  /// [chatHistory] unless a test brings its own.
+  final ChatHistory? history;
   final Future<void> Function(Uri) openLink;
 
   /// Where the chat is: the iOS app (StoreKit), not Android or tests, unless a
@@ -128,6 +143,16 @@ class _ChatScreenState extends State<ChatScreen> {
   /// line does: flush with it, the question slipped under the title on the
   /// phone (Roman, 30 Oct).
   static const _above = 8.0;
+
+  /// Whether the conversation stands where it should. A kept one is hidden
+  /// until its last question is at the top, a frame or two, and its header
+  /// is gone at once rather than folding: it opened showing the header,
+  /// folded it and jumped to the question (Roman, 30 Oct).
+  late bool _placed = _history.loaded;
+
+  /// Bumped as a kept conversation comes in: the header and the title then
+  /// change at once (their AnimatedSize starts anew) instead of folding.
+  int _kept = 0;
   String? _problem;
   bool _sending = false;
 
@@ -142,12 +167,65 @@ class _ChatScreenState extends State<ChatScreen> {
 
   ChatSubscription get _subscription => widget.subscription ?? chatSubscription;
 
+  ChatHistory get _history => widget.history ?? chatHistory;
+
   @override
   void initState() {
     super.initState();
     unawaited(_loadStatus());
+    // Read already (the feed reads it for its Conversations button): the
+    // kept conversation is there from the first frame, with no header.
+    if (_history.loaded) _keep();
+    unawaited(_start());
+  }
+
+  /// The conversation the phone keeps about this decision, if any, shown at
+  /// once at its last question; then the paywall's question, if one came.
+  Future<void> _start() async {
+    await _history.load();
+    if (!mounted) return;
+    if (_turns.isEmpty && _history.of(widget.article.id) != null) {
+      setState(() {
+        _kept++;
+        _keep();
+      });
+    } else if (!_placed) {
+      setState(() => _placed = true);
+    }
     final first = widget.firstQuestion;
-    if (first != null) unawaited(Future.microtask(() => _ask(first)));
+    if (first != null) await _ask(first);
+  }
+
+  /// The kept conversation's turns, its last question then taken to the
+  /// top unseen ([_placed]).
+  void _keep() {
+    final saved = _history.of(widget.article.id);
+    if (saved == null) return;
+    for (final (reader, text) in saved.messages) {
+      _turns.add(
+        _Turn(reader, text)
+          ..done = !reader
+          ..kept = true,
+      );
+    }
+    _placed = false;
+    _toQuestion(animate: false);
+    _fit();
+  }
+
+  /// Keeps the conversation on the phone: each question with its answer,
+  /// once the answer has come in full.
+  Future<void> _save() {
+    final kept = <(bool, String)>[];
+    for (var i = 0; i + 1 < _turns.length; i++) {
+      final (question, answer) = (_turns[i], _turns[i + 1]);
+      if (question.reader && !answer.reader && answer.done) {
+        kept
+          ..add((true, question.text))
+          ..add((false, answer.text));
+      }
+    }
+    return _history.save(widget.article, kept);
   }
 
   /// What is left, from the server: the card shows at once when nothing is.
@@ -219,10 +297,10 @@ class _ChatScreenState extends State<ChatScreen> {
           : await _api.askChat(
               articleId: widget.article.id,
               lang: Localizations.localeOf(context).languageCode,
-              messages: [
+              messages: _recent([
                 for (final t in _turns)
                   if (t != answer && t.text.isNotEmpty) (t.reader, t.text),
-              ],
+              ]),
               transaction: transaction,
             );
       _left = reply.remaining;
@@ -233,6 +311,7 @@ class _ChatScreenState extends State<ChatScreen> {
         _fit();
       }
       answer.done = true;
+      unawaited(_save());
     } on ChatLimit catch (limit) {
       // Not asked: the question goes back into the field, for after a top-up.
       _turns
@@ -316,22 +395,44 @@ class _ChatScreenState extends State<ChatScreen> {
     if ((room - _room).abs() > 0.5) setState(() => _room = room);
   });
 
-  /// Takes the last question to the top, once there is room for it there.
-  void _toQuestion() => WidgetsBinding.instance.addPostFrameCallback((_) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final top = _offsetOf(_lastAsked.key);
-      if (top == null || !mounted) return;
-      final to = clampDouble(top - _above, 0, _scroll.position.maxScrollExtent);
-      if (Motion.reduced(context)) return _scroll.jumpTo(to);
-      unawaited(
-        _scroll.animateTo(
-          to,
-          duration: const Duration(milliseconds: 380),
-          curve: Curves.easeOutCubic,
-        ),
-      );
-    });
-  });
+  /// What the server takes with a question: the last [ChatHistory.maxMessages]
+  /// messages, from a question on.
+  static List<(bool, String)> _recent(List<(bool, String)> messages) {
+    var from = max(0, messages.length - ChatHistory.maxMessages);
+    while (from < messages.length - 1 && !messages[from].$1) {
+      from++;
+    }
+    return messages.sublist(from);
+  }
+
+  /// Takes the last question to the top, once there is room for it there,
+  /// and shows a kept conversation once it stands there ([_placed]).
+  void _toQuestion({bool animate = true}) =>
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          final top = _offsetOf(_lastAsked.key);
+          if (top != null) {
+            final to = clampDouble(
+              top - _above,
+              0,
+              _scroll.position.maxScrollExtent,
+            );
+            if (!animate || Motion.reduced(context)) {
+              _scroll.jumpTo(to);
+            } else {
+              unawaited(
+                _scroll.animateTo(
+                  to,
+                  duration: const Duration(milliseconds: 380),
+                  curve: Curves.easeOutCubic,
+                ),
+              );
+            }
+          }
+          if (!_placed) setState(() => _placed = true);
+        });
+      });
 
   /// The question before an answer cut off or refused, asked again.
   void _again() {
@@ -394,6 +495,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   ),
                 ),
                 AnimatedSize(
+                  key: ValueKey(_kept),
                   duration: fold,
                   curve: Curves.easeOutCubic,
                   alignment: Alignment.topLeft,
@@ -510,121 +612,129 @@ class _ChatScreenState extends State<ChatScreen> {
                   Expanded(
                     // All of it laid out, not a lazy list: the last question must
                     // be there to be taken to the top, however far down it is.
-                    child: SingleChildScrollView(
-                      controller: _scroll,
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          AnimatedSize(
-                            duration: fold,
-                            curve: Curves.easeOutCubic,
-                            alignment: Alignment.topCenter,
-                            onEnd: _fit,
-                            child: talking
-                                ? const SizedBox(width: double.infinity)
-                                : header,
-                          ),
-                          for (final turn in _turns) ...[
-                            SizedBox(height: turn.reader ? 6 : 14),
-                            if (turn.reader)
-                              Align(
-                                key: turn.key,
-                                alignment: Alignment.centerRight,
-                                child: Container(
-                                  constraints: const BoxConstraints(
-                                    maxWidth: 300,
-                                  ),
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 14,
-                                    vertical: 10,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: style.fill,
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                  child: Text(
-                                    turn.text,
-                                    style: const TextStyle(
-                                      fontSize: 15,
-                                      color: Color(0xFFFFFFFF),
+                    child: Opacity(
+                      opacity: _placed ? 1 : 0,
+                      child: SingleChildScrollView(
+                        controller: _scroll,
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            AnimatedSize(
+                              key: ValueKey(_kept),
+                              duration: fold,
+                              curve: Curves.easeOutCubic,
+                              alignment: Alignment.topCenter,
+                              onEnd: _fit,
+                              child: talking
+                                  ? const SizedBox(width: double.infinity)
+                                  : header,
+                            ),
+                            for (final turn in _turns) ...[
+                              SizedBox(height: turn.reader ? 6 : 14),
+                              if (turn.reader)
+                                Align(
+                                  key: turn.key,
+                                  alignment: Alignment.centerRight,
+                                  child: Container(
+                                    constraints: const BoxConstraints(
+                                      maxWidth: 300,
+                                    ),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 14,
+                                      vertical: 10,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: style.fill,
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    child: Text(
+                                      turn.text,
+                                      style: const TextStyle(
+                                        fontSize: 15,
+                                        color: Color(0xFFFFFFFF),
+                                      ),
                                     ),
                                   ),
-                                ),
-                              )
-                            else ...[
-                              if (turn.text.isEmpty)
-                                _ThinkingDot(color: label)
-                              else
-                                _Answer(
-                                  key: turn.key,
-                                  text: turn.text,
-                                  style: news.body.copyWith(color: label),
-                                  onGrow: _fit,
-                                ),
-                              if (turn.cutOff)
-                                Text(
-                                  l10n.chatCutOff,
-                                  style: TextStyle(fontSize: 13, color: muted),
-                                ),
-                              if (turn.done)
-                                CupertinoButton(
-                                  padding: EdgeInsets.zero,
-                                  minimumSize: const Size(44, 44),
-                                  onPressed: () => widget.openLink(
-                                    Uri.parse(article.originalUrl),
+                                )
+                              else ...[
+                                if (turn.text.isEmpty)
+                                  _ThinkingDot(color: label)
+                                else
+                                  _Answer(
+                                    key: turn.key,
+                                    text: turn.text,
+                                    style: news.body.copyWith(color: label),
+                                    onGrow: _fit,
+                                    atOnce: turn.kept,
                                   ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(
-                                        CupertinoIcons.arrow_up_right_square,
-                                        size: 16,
-                                        color: style.ink,
-                                      ),
-                                      const SizedBox(width: 6),
-                                      Flexible(
-                                        child: Text(
-                                          article.isEvent
-                                              ? '${l10n.readOnWikipedia}, $site'
-                                              : l10n.readOfficialDecisionOn(
-                                                  site,
-                                                ),
-                                          style: TextStyle(
-                                            fontSize: 14,
-                                            color: style.ink,
+                                if (turn.cutOff)
+                                  Text(
+                                    l10n.chatCutOff,
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: muted,
+                                    ),
+                                  ),
+                                if (turn.done)
+                                  CupertinoButton(
+                                    padding: EdgeInsets.zero,
+                                    minimumSize: const Size(44, 44),
+                                    onPressed: () => widget.openLink(
+                                      Uri.parse(article.originalUrl),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          CupertinoIcons.arrow_up_right_square,
+                                          size: 16,
+                                          color: style.ink,
+                                        ),
+                                        const SizedBox(width: 6),
+                                        Flexible(
+                                          child: Text(
+                                            article.isEvent
+                                                ? '${l10n.readOnWikipedia}, $site'
+                                                : l10n.readOfficialDecisionOn(
+                                                    site,
+                                                  ),
+                                            style: TextStyle(
+                                              fontSize: 14,
+                                              color: style.ink,
+                                            ),
                                           ),
                                         ),
-                                      ),
-                                    ],
+                                      ],
+                                    ),
+                                  ),
+                              ],
+                            ],
+                            if (_problem != null ||
+                                (_turns.isNotEmpty && _turns.last.cutOff)) ...[
+                              const SizedBox(height: 12),
+                              if (_problem != null)
+                                Text(
+                                  _problem!,
+                                  style: TextStyle(fontSize: 14, color: muted),
+                                ),
+                              CupertinoButton(
+                                padding: EdgeInsets.zero,
+                                minimumSize: const Size(44, 44),
+                                onPressed: _sending ? null : _again,
+                                child: Text(
+                                  l10n.tryAgain,
+                                  style: TextStyle(
+                                    fontSize: 15,
+                                    color: style.ink,
                                   ),
                                 ),
+                              ),
                             ],
+                            SizedBox(key: _end),
+                            SizedBox(height: _room),
                           ],
-                          if (_problem != null ||
-                              (_turns.isNotEmpty && _turns.last.cutOff)) ...[
-                            const SizedBox(height: 12),
-                            if (_problem != null)
-                              Text(
-                                _problem!,
-                                style: TextStyle(fontSize: 14, color: muted),
-                              ),
-                            CupertinoButton(
-                              padding: EdgeInsets.zero,
-                              minimumSize: const Size(44, 44),
-                              onPressed: _sending ? null : _again,
-                              child: Text(
-                                l10n.tryAgain,
-                                style: TextStyle(
-                                  fontSize: 15,
-                                  color: style.ink,
-                                ),
-                              ),
-                            ),
-                          ],
-                          SizedBox(key: _end),
-                          SizedBox(height: _room),
-                        ],
+                        ),
                       ),
                     ),
                   ),
@@ -863,6 +973,7 @@ class _Answer extends StatefulWidget {
     required this.text,
     required this.style,
     this.onGrow,
+    this.atOnce = false,
   });
 
   final String text;
@@ -870,6 +981,9 @@ class _Answer extends StatefulWidget {
 
   /// More of it shows: the room under the conversation is measured again.
   final VoidCallback? onGrow;
+
+  /// All of it at once: an answer kept on the phone from before.
+  final bool atOnce;
 
   @override
   State<_Answer> createState() => _AnswerState();
@@ -892,7 +1006,7 @@ class _AnswerState extends State<_Answer> with SingleTickerProviderStateMixin {
   }
 
   void _catchUp() {
-    if (Motion.reduced(context)) {
+    if (widget.atOnce || Motion.reduced(context)) {
       _ticker.stop();
       _shown = widget.text.length;
       widget.onGrow?.call();

@@ -313,7 +313,7 @@ class _Bar extends StatelessWidget {
                 const SizedBox(width: 6),
                 Padding(
                   padding: EdgeInsets.only(top: gearTop),
-                  child: masthead.settingsButton,
+                  child: masthead.buttons,
                 ),
               ],
             ),

@@ -236,7 +236,7 @@ class _Toolbar extends StatelessWidget {
           const SizedBox(width: 8),
           Padding(
             padding: EdgeInsets.only(top: gearTop),
-            child: masthead.settingsButton,
+            child: masthead.buttons,
           ),
         ],
       ),
