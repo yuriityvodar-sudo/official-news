@@ -41,16 +41,42 @@ h1,h2,.item .title{-webkit-hyphens:auto;hyphens:auto;hyphenate-limit-chars:12 5 
 .note{margin:0;font-size:13px;color:var(--secondary)}
 main{padding:20px 0 28px}
 .meta{font-size:14px;color:var(--secondary)}
+.publisher{display:flex;align-items:center;gap:12px;margin:0 0 18px}
+.cc{flex:none;display:grid;place-items:center;width:40px;height:40px;border-radius:10px;background:var(--chip);color:var(--text);font-size:14px;font-weight:700;letter-spacing:.5px}
+.publisher b{display:block;font-size:14px;font-weight:600}
+.seal{width:15px;height:15px;vertical-align:-3px;color:var(--verified)}
+.kind{margin:0 0 4px;font-size:13px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--accent)}
+h1{margin:0 0 10px;font-size:31px;line-height:1.15;font-weight:700}
+.ai{display:flex;align-items:center;gap:6px;margin:0 0 4px}
+.ai svg{width:15px;height:15px;flex:none}
+.lead{margin:20px 0 14px;font-size:20px;line-height:1.45;color:var(--secondary)}
+.body p{margin:0 0 14px;font-size:19px;line-height:1.5}
+.notice{margin:18px 0;padding:14px 16px;border-radius:12px;background:var(--card);font-size:14px;color:var(--secondary)}
+.official{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:44px;margin:18px 0;padding:14px 14px 14px 16px;border:1px solid var(--separator);border-radius:14px;color:var(--text);text-decoration:none}
+.official b{display:block;font-size:14px;font-weight:600}
+.official svg{width:24px;height:24px;flex:none;color:var(--accent)}
+.small{margin:0 0 6px;font-size:13px;color:var(--secondary)}
+.small a{color:inherit}
 .page-title{margin:0 0 4px;font-size:34px;font-weight:800;line-height:1.1}
+.get-app{border-top:.5px solid var(--separator);padding:22px 0 18px}
+.get-app h2{margin:0 0 4px;font:700 22px/1.2 Georgia,"Times New Roman",serif}
+.get-app p{margin:0 0 14px;color:var(--secondary)}
+.stores{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:10px}
+.store{display:inline-flex;flex-direction:column;justify-content:center;min-width:150px;min-height:52px;padding:6px 16px;border-radius:12px;background:var(--fill);color:var(--secondary)}
+.store span{font-size:12px}
+.store .name{color:var(--text);font-size:16px;font-weight:700}
 .info h2{margin:24px 0 6px;font-size:17px;font-weight:600}
 .info p,.info li{font-size:16px;line-height:1.5}
 .info p{margin:0 0 12px}
+.choose{list-style:none;margin:16px 0;padding:0}
+.choose li{border-bottom:.5px solid var(--separator)}
+.choose a{display:flex;justify-content:space-between;gap:12px;min-height:48px;align-items:center;color:var(--text);text-decoration:none;font-weight:600}
 main{flex:1 0 auto}
 footer{border-top:.5px solid var(--separator);padding:8px 0 40px;font-size:13px;color:var(--secondary)}
 footer nav{display:flex;flex-wrap:wrap;column-gap:18px}
 footer nav a{display:inline-flex;align-items:center;min-height:44px;color:var(--text);text-decoration:none}
 footer p{margin:8px 0 0}
-@media (min-width:720px){.page-title{font-size:40px}}
+@media (min-width:720px){h1{font-size:36px}.page-title{font-size:40px}}
 @media (min-width:960px){.top .wrap{display:flex;flex-wrap:wrap;align-items:center;column-gap:16px}.top .bar{display:contents}.top .brand{order:1}.top .note{order:2}.top .langs{order:3;margin-left:auto}.page-title{font-size:56px}}`;
 
 let styleHash: Promise<string> | undefined;
@@ -64,6 +90,17 @@ export function cssHash(): Promise<string> {
   });
   return styleHash;
 }
+
+/** Our own mark: a building with columns, in the app's red. Never a source's picture. */
+export const SEAL = raw(
+  `<svg class="seal" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="currentColor"/><path d="M4.8 8.2 7 10.4l4.2-4.6" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+);
+export const SPARKLE = raw(
+  `<svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M7 1.5 8.3 5.2 12 6.5 8.3 7.8 7 11.5 5.7 7.8 2 6.5l3.7-1.3z"/><path d="M12.5 10l.6 1.4 1.4.6-1.4.6-.6 1.4-.6-1.4-1.4-.6 1.4-.6z"/></svg>`,
+);
+export const ARROW = raw(
+  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6"/><path d="M20 4 11 13"/><path d="M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/></svg>`,
+);
 
 export interface Alternate {
   /** A language code, or `x-default`. */
@@ -87,6 +124,18 @@ export interface Page {
   ogType?: "article" | "website";
   body: Html;
 }
+
+/**
+ * "Get the app" above the footer: the App Store and Google Play, marked
+ * "Coming soon" and not links until the app is in the stores (placeholders,
+ * Yurii 28 Oct). Plain words, not the stores' badges, whose rules need the
+ * real store links.
+ */
+const getApp = (lang: SiteLang) => html`<section class="get-app" aria-labelledby="get-app"><div class="wrap">
+<h2 id="get-app">${t(lang, "getApp")}</h2>
+<p>${t(lang, "getAppBody")}</p>
+<ul class="stores"><li><span class="store" aria-disabled="true"><span class="name">App Store</span><span>${t(lang, "comingSoon")}</span></span></li><li><span class="store" aria-disabled="true"><span class="name">Google Play</span><span>${t(lang, "comingSoon")}</span></span></li></ul>
+</div></section>`;
 
 const footer = (lang: SiteLang) => {
   const names: Record<InfoPage, string> = {
@@ -147,6 +196,7 @@ ${page.canonical ? html`<meta property="og:url" content="${page.canonical}">\n` 
 <main id="main"><div class="wrap">
 ${page.body}
 </div></main>
+${getApp(lang)}
 ${footer(lang)}
 </body>
 </html>
