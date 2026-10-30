@@ -5,6 +5,7 @@
 // app's theme (app/lib/core/theme.dart: Georgia, not the system's New York),
 // light and dark; if #66 changes the app's font, change it here too.
 import { type Html, html, raw } from "./html";
+import { consent } from "./consent";
 import { TAB_ICON } from "./icon";
 import { LANGUAGE_NAMES, type SiteLang, publisher, t, text } from "./texts";
 import { INFO_PAGES, type InfoPage, infoPath, listPath } from "./urls";
@@ -73,6 +74,17 @@ h1{margin:0 0 10px;font-size:31px;line-height:1.15;font-weight:700}
 .store{display:inline-flex;flex-direction:column;justify-content:center;min-width:150px;min-height:52px;padding:6px 16px;border-radius:12px;background:var(--fill);color:var(--secondary)}
 .store span{font-size:12px}
 .store .name{color:var(--text);font-size:16px;font-weight:700}
+.consent{position:fixed;left:0;right:0;bottom:0;z-index:3;padding:14px 16px calc(14px + env(safe-area-inset-bottom));background:var(--menu);border-top:.5px solid var(--separator);box-shadow:0 -8px 24px var(--shadow)}
+.consent-card{max-width:648px;margin:0 auto}
+.consent[data-wall]{top:0;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(0,0,0,.45);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);border:0;box-shadow:none}
+.consent[data-wall] .consent-card{max-width:420px;padding:24px;border-radius:20px;background:var(--menu);box-shadow:0 12px 40px var(--shadow)}
+.consent[hidden]{display:none}
+html.walled{overflow:hidden}
+.consent p{margin:0 0 14px;font-size:15px;color:var(--text)}
+.consent-buttons{display:flex;gap:18px;align-items:center;flex-wrap:wrap}
+.consent-buttons a{color:var(--accent);font-size:15px}
+.consent button{min-height:44px;padding:0 22px;border:0;border-radius:22px;background:var(--accent);color:#fff;font:600 15px/1 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;cursor:pointer}
+.consent button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .more{display:inline-flex;align-items:center;min-height:44px;margin-top:8px;font-weight:600}
 .info h2{margin:24px 0 6px;font-size:17px;font-weight:600}
 .info p,.info li{font-size:16px;line-height:1.5}
@@ -83,7 +95,8 @@ h1{margin:0 0 10px;font-size:31px;line-height:1.15;font-weight:700}
 main{flex:1 0 auto}
 footer{border-top:.5px solid var(--separator);padding:8px 0 40px;font-size:13px;color:var(--secondary)}
 footer nav{display:flex;flex-wrap:wrap;column-gap:18px}
-footer nav a{display:inline-flex;align-items:center;min-height:44px;color:var(--text);text-decoration:none}
+footer nav a,footer nav .link{display:inline-flex;align-items:center;min-height:44px;color:var(--text);text-decoration:none}
+footer nav .link{padding:0;border:0;background:none;font:inherit;cursor:pointer}
 footer p{margin:8px 0 0}
 .leadstory .title{display:block;font:700 30px/1.15 Georgia,"Times New Roman",serif;color:var(--text);text-decoration:none}
 .leadstory .title:hover{text-decoration:underline}
@@ -142,6 +155,12 @@ export interface Page {
   lang: SiteLang;
   /** Which page. */
   kind: string;
+  /**
+   * Whether Google may index it (robotsFor()): an article, an information
+   * page, and a list's first page with no topic and something on it. Every
+   * other page (a later page, a topic, an empty list, a 404) stays out.
+   */
+  index?: boolean;
   title: string;
   /** For link previews when it differs from the title: an article's headline with the AI label. */
   ogTitle?: string;
@@ -175,7 +194,7 @@ const footer = (lang: SiteLang) => {
     support: text(lang, "contactSupport"),
   };
   return html`<footer><div class="wrap">
-<nav aria-label="${SITE_NAME}">${INFO_PAGES.map((page) => html`<a href="${infoPath(lang, page)}">${names[page]}</a>`)}</nav>
+<nav aria-label="${SITE_NAME}">${INFO_PAGES.map((page) => html`<a href="${infoPath(lang, page)}">${names[page]}</a>`)}<button type="button" class="link" data-consent-reset>${t(lang, "cookieSettings")}</button></nav>
 <p>${t(lang, "aboutPublishedBy", { publisher: publisher(lang) })}</p>
 </div></footer>`;
 };
@@ -228,6 +247,7 @@ ${page.body}
 </div></main>
 ${getApp(lang)}
 ${footer(lang)}
+${consent(lang, !(INFO_PAGES as readonly string[]).includes(page.kind))}
 </body>
 </html>
 `;
