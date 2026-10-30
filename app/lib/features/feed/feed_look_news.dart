@@ -333,6 +333,8 @@ class _NewsHeader extends SliverPersistentHeaderDelegate {
           right: 0,
           top: -shrinkOffset,
           height: titleHeight,
+          // The buttons' glass casts no shadow (GlassCircle.shadow): cut at
+          // the band's foot, it showed as a band under them (Roman, 30 Oct).
           child: ClipRect(
             child: Opacity(opacity: 1 - gone, child: title),
           ),
