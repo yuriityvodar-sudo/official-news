@@ -756,8 +756,11 @@ class _MastheadDelegate extends SliverPersistentHeaderDelegate {
                         if (nameAlpha > 0)
                           ExcludeSemantics(
                             child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 64,
+                              // Clear of the buttons at the end, one or two.
+                              padding: EdgeInsets.symmetric(
+                                horizontal: masthead.openConversations == null
+                                    ? 64
+                                    : 108,
                               ),
                               child: Text(
                                 masthead.title,
@@ -771,8 +774,23 @@ class _MastheadDelegate extends SliverPersistentHeaderDelegate {
                           ),
                         Positioned(
                           right: _margin - 4,
-                          child: _SettingsButton(
-                            onPressed: masthead.openSettings,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (masthead.openConversations case final open?)
+                                _RoundButton(
+                                  icon: CupertinoIcons.chat_bubble_2,
+                                  label: AppLocalizations.of(
+                                    context,
+                                  ).chatHistoryTitle,
+                                  onPressed: open,
+                                ),
+                              _RoundButton(
+                                icon: CupertinoIcons.gear_alt,
+                                label: AppLocalizations.of(context).settings,
+                                onPressed: masthead.openSettings,
+                              ),
+                            ],
                           ),
                         ),
                       ],
@@ -881,9 +899,17 @@ class _SnapState extends State<_Snap> {
 
 /// The settings gear in the same grey as the filter pull-downs beside it,
 /// with a 44-pt target and its VoiceOver label.
-class _SettingsButton extends StatelessWidget {
-  const _SettingsButton({required this.onPressed});
+/// The masthead's round buttons, Settings and Conversations: the icon on
+/// the plain circle, with a 44-pt target and its VoiceOver label.
+class _RoundButton extends StatelessWidget {
+  const _RoundButton({
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+  });
 
+  final IconData icon;
+  final String label;
   final VoidCallback onPressed;
 
   @override
@@ -899,10 +925,10 @@ class _SettingsButton extends StatelessWidget {
         shape: BoxShape.circle,
       ),
       child: Icon(
-        CupertinoIcons.gear_alt,
+        icon,
         size: 21,
         color: CupertinoColors.label.resolveFrom(context),
-        semanticLabel: AppLocalizations.of(context).settings,
+        semanticLabel: label,
       ),
     ),
   );

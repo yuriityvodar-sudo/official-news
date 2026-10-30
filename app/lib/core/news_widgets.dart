@@ -123,6 +123,15 @@ String fullDate(DateTime date, AppLocalizations l10n) =>
 String clockTime(DateTime date, AppLocalizations l10n) =>
     DateFormat.Hm(_dates(l10n)).format(date.toLocal());
 
+/// When, at the end of a list's row, as Messages says it: the time today,
+/// "Yesterday", else the day and month ("12 Oct", "12 окт.").
+String shortWhen(DateTime date, AppLocalizations l10n, {DateTime? now}) {
+  final label = dayLabel(date, l10n, now: now);
+  if (label == l10n.today) return clockTime(date, l10n);
+  if (label == l10n.yesterday) return label;
+  return DateFormat.MMMd(_dates(l10n)).format(date.toLocal());
+}
+
 /// "5m ago", "2h ago", "3d ago"; "5 хв тому", "3 дні тому".
 String timeAgo(DateTime date, AppLocalizations l10n, {DateTime? now}) {
   final diff = (now ?? DateTime.now()).difference(date);

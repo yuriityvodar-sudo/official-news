@@ -8,6 +8,7 @@ import 'package:flutter/rendering.dart';
 
 import '../../core/analytics.dart';
 import '../../core/card_zoom.dart';
+import '../../core/chat_history.dart';
 import '../../core/countries.dart';
 import '../../core/glass.dart';
 import '../../core/article.dart';
@@ -17,8 +18,11 @@ import '../../core/motion.dart';
 import '../../core/news_widgets.dart';
 import '../../core/pictures.dart';
 import '../../core/router.dart';
+import '../../core/subscription.dart';
 import '../../core/theme.dart';
 import '../../l10n/app_localizations.dart';
+import '../chat/chat_history_screen.dart';
+import '../chat/chat_screen.dart';
 import '../detail/detail_screen.dart';
 import '../settings/settings_screen.dart';
 import 'feed_controller.dart';
@@ -89,6 +93,9 @@ class _FeedScreenState extends State<FeedScreen> {
     readStyle.addListener(_designChanged);
     topicTagCount.addListener(_designChanged);
     _scroll.addListener(_nearEnd);
+    chatHistory.addListener(_chatChanged);
+    chatSubscription.addListener(_chatChanged);
+    unawaited(chatHistory.load());
     unawaited(_feed.start());
     _newCheck = Timer.periodic(widget.newCheckEvery, (_) {
       if (WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) {
@@ -106,6 +113,8 @@ class _FeedScreenState extends State<FeedScreen> {
     feedDesign.removeListener(_designChanged);
     readStyle.removeListener(_designChanged);
     topicTagCount.removeListener(_designChanged);
+    chatHistory.removeListener(_chatChanged);
+    chatSubscription.removeListener(_chatChanged);
     if (widget.controller == null) _feed.dispose();
     _scroll.dispose();
     _masthead.dispose();
@@ -313,6 +322,24 @@ class _FeedScreenState extends State<FeedScreen> {
     );
   }
 
+  void _chatChanged() {
+    if (mounted) setState(() {});
+  }
+
+  /// The Conversations button shows for a subscriber with conversations
+  /// kept on the phone (#146, Roman's pick B, 30 Oct).
+  bool get _conversations =>
+      ChatScreen.available && chatSubscription.active && !chatHistory.isEmpty;
+
+  void _openConversations() {
+    Navigator.of(context).push(
+      CupertinoPageRoute<void>(
+        settings: const RouteSettings(name: '/conversations'),
+        builder: (_) => const ChatHistoryScreen(),
+      ),
+    );
+  }
+
   void _openSettings() {
     Navigator.of(context).push(
       CupertinoPageRoute(
@@ -426,6 +453,9 @@ class _FeedScreenState extends State<FeedScreen> {
                       title: 'Outer News',
                       date: longDay(DateTime.now(), l10n),
                       openSettings: _openSettings,
+                      openConversations: _conversations
+                          ? _openConversations
+                          : null,
                       where: _feed.where,
                       topic: _feed.topic,
                       topics: _feed.topics,

@@ -1105,7 +1105,7 @@
   "@paywallTitle": {
     "description": "The paywall's title, under the sample answer that fades out."
   },
-  "paywallPoints": "Built on the official text · the source link · conversations not kept",
+  "paywallPoints": "Built on the official text · the source link · conversations only on your phone",
   "@paywallPoints": {
     "description": "What the AI agent does, on the paywall."
   },
@@ -1154,7 +1154,7 @@
   "@chatConsentTitle": {
     "description": "The AI chat's consent sheet, shown once (App Store guideline 5.1.2)."
   },
-  "chatConsentBody": "Your question and this article's text are sent to OpenAI for the answer. We don't keep your conversations. If you ask Apple for a refund, we may tell Apple how much you used the chat.",
+  "chatConsentBody": "Your question and this article's text are sent to OpenAI for the answer. Your conversations are kept only on your phone. If you ask Apple for a refund, we may tell Apple how much you used the chat.",
   "@chatConsentBody": {
     "description": "What the consent sheet says is sent, to whom, and what may be told to Apple on a refund."
   },
@@ -1165,6 +1165,30 @@
   "chatAsk": "Ask about this decision",
   "@chatAsk": {
     "description": "The AI chat's field, before anything is typed."
+  },
+  "chatHistoryTitle": "Conversations",
+  "@chatHistoryTitle": {
+    "description": "The screen of the reader's conversations with the AI agent, and its button beside Settings in the feed (#146, Roman's pick B, 30 Oct)."
+  },
+  "chatHistoryNote": "Conversations are kept only on this phone.",
+  "@chatHistoryNote": {
+    "description": "Under the list of conversations: they are kept on the phone only, never on the server."
+  },
+  "chatHistoryDelete": "Delete",
+  "@chatHistoryDelete": {
+    "description": "What a swipe to the left on a conversation does, for VoiceOver."
+  },
+  "chatHistoryDeleteAll": "Delete all",
+  "@chatHistoryDeleteAll": {
+    "description": "The button under the list of conversations, and the action that confirms it."
+  },
+  "chatHistoryDeleteAllConfirm": "Delete all conversations?",
+  "@chatHistoryDeleteAllConfirm": {
+    "description": "The question before all conversations are deleted."
+  },
+  "chatHistoryEmpty": "No conversations yet",
+  "@chatHistoryEmpty": {
+    "description": "The Conversations screen once every conversation is deleted."
   },
   "chatSend": "Send",
   "@chatSend": {
@@ -1186,7 +1210,7 @@
   "@privacyChatHeading": {
     "description": "A heading of the privacy policy."
   },
-  "privacyChat": "If you subscribe to the AI agent, your question and the article's text are sent to OpenAI to write the answer. We don't keep your conversations or send them to analytics. Apple handles the subscription: we receive a signed record of it from Apple, with an anonymous ID the app creates, never your name or payment details. We count each subscription's questions per day, for the daily limit.",
+  "privacyChat": "If you subscribe to the AI agent, your question and the article's text are sent to OpenAI to write the answer. Your conversations are kept only on your phone, in Conversations, where you can delete them; we don't keep them on our server or send them to analytics. Apple handles the subscription: we receive a signed record of it from Apple, with an anonymous ID the app creates, never your name or payment details. We count each subscription's questions per day, for the daily limit.",
   "@privacyChat": {
     "description": "The privacy policy's section on the AI chat by subscription (#146)."
   },
