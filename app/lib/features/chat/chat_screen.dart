@@ -463,25 +463,32 @@ class _ChatScreenState extends State<ChatScreen> {
               ],
             ),
           ),
-          Semantics(
-            button: true,
-            label: l10n.paywallClose,
-            child: CupertinoButton(
-              padding: EdgeInsets.zero,
-              minimumSize: const Size(44, 44),
-              onPressed: () => Navigator.of(context).maybePop(),
-              child: GlassCircle(
-                size: 34,
-                child: Icon(
-                  CupertinoIcons.xmark,
-                  size: 16,
-                  color: label,
-                  semanticLabel: l10n.paywallClose,
-                ),
-              ),
-            ),
-          ),
+          // The close button's room: the button itself is drawn over the
+          // chat, last ([close]).
+          const SizedBox(width: 44, height: 44),
         ],
+      ),
+    );
+    // iOS's glass inside a sheet is drawn after everything else in it, at
+    // the end of the title row: whatever Flutter drew after it showed only
+    // over iOS's other views, and the chat stayed empty (TestFlight 55,
+    // Roman, 30 Oct; `GlassCircle`).
+    final close = Semantics(
+      button: true,
+      label: l10n.paywallClose,
+      child: CupertinoButton(
+        padding: EdgeInsets.zero,
+        minimumSize: const Size(44, 44),
+        onPressed: () => Navigator.of(context).maybePop(),
+        child: GlassCircle(
+          size: 34,
+          child: Icon(
+            CupertinoIcons.xmark,
+            size: 16,
+            color: label,
+            semanticLabel: l10n.paywallClose,
+          ),
+        ),
       ),
     );
 
@@ -547,191 +554,207 @@ class _ChatScreenState extends State<ChatScreen> {
       child: Material(
         type: MaterialType.transparency,
         child: SafeArea(
-          child: Column(
+          child: Stack(
             children: [
-              title,
-              Expanded(
-                // All of it laid out, not a lazy list: the last question must
-                // be there to be taken to the top, however far down it is.
-                child: SingleChildScrollView(
-                  controller: _scroll,
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      AnimatedSize(
-                        duration: fold,
-                        curve: Curves.easeOutCubic,
-                        alignment: Alignment.topCenter,
-                        onEnd: _fit,
-                        child: talking
-                            ? const SizedBox(width: double.infinity)
-                            : header,
-                      ),
-                      for (final turn in _turns) ...[
-                        SizedBox(height: turn.reader ? 6 : 14),
-                        if (turn.reader)
-                          Align(
-                            key: turn.key,
-                            alignment: Alignment.centerRight,
-                            child: Container(
-                              constraints: const BoxConstraints(maxWidth: 300),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 14,
-                                vertical: 10,
-                              ),
-                              decoration: BoxDecoration(
-                                color: style.fill,
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              child: Text(
-                                turn.text,
-                                style: const TextStyle(
-                                  fontSize: 15,
-                                  color: Color(0xFFFFFFFF),
+              Column(
+                children: [
+                  title,
+                  Expanded(
+                    // All of it laid out, not a lazy list: the last question must
+                    // be there to be taken to the top, however far down it is.
+                    child: SingleChildScrollView(
+                      controller: _scroll,
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          AnimatedSize(
+                            duration: fold,
+                            curve: Curves.easeOutCubic,
+                            alignment: Alignment.topCenter,
+                            onEnd: _fit,
+                            child: talking
+                                ? const SizedBox(width: double.infinity)
+                                : header,
+                          ),
+                          for (final turn in _turns) ...[
+                            SizedBox(height: turn.reader ? 6 : 14),
+                            if (turn.reader)
+                              Align(
+                                key: turn.key,
+                                alignment: Alignment.centerRight,
+                                child: Container(
+                                  constraints: const BoxConstraints(
+                                    maxWidth: 300,
+                                  ),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 14,
+                                    vertical: 10,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: style.fill,
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: Text(
+                                    turn.text,
+                                    style: const TextStyle(
+                                      fontSize: 15,
+                                      color: Color(0xFFFFFFFF),
+                                    ),
+                                  ),
                                 ),
+                              )
+                            else ...[
+                              if (turn.text.isEmpty)
+                                _ThinkingDot(color: label)
+                              else
+                                _Answer(
+                                  key: turn.key,
+                                  text: turn.text,
+                                  style: news.body.copyWith(color: label),
+                                  onGrow: _fit,
+                                  atOnce: turn.kept,
+                                ),
+                              if (turn.cutOff)
+                                Text(
+                                  l10n.chatCutOff,
+                                  style: TextStyle(fontSize: 13, color: muted),
+                                ),
+                              if (turn.done)
+                                CupertinoButton(
+                                  padding: EdgeInsets.zero,
+                                  minimumSize: const Size(44, 44),
+                                  onPressed: () => widget.openLink(
+                                    Uri.parse(article.originalUrl),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        CupertinoIcons.arrow_up_right_square,
+                                        size: 16,
+                                        color: style.ink,
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Flexible(
+                                        child: Text(
+                                          article.isEvent
+                                              ? '${l10n.readOnWikipedia}, $site'
+                                              : l10n.readOfficialDecisionOn(
+                                                  site,
+                                                ),
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            color: style.ink,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                            ],
+                          ],
+                          if (_problem != null ||
+                              (_turns.isNotEmpty && _turns.last.cutOff)) ...[
+                            const SizedBox(height: 12),
+                            if (_problem != null)
+                              Text(
+                                _problem!,
+                                style: TextStyle(fontSize: 14, color: muted),
                               ),
-                            ),
-                          )
-                        else ...[
-                          if (turn.text.isEmpty)
-                            _ThinkingDot(color: label)
-                          else
-                            _Answer(
-                              key: turn.key,
-                              text: turn.text,
-                              style: news.body.copyWith(color: label),
-                              onGrow: _fit,
-                              atOnce: turn.kept,
-                            ),
-                          if (turn.cutOff)
-                            Text(
-                              l10n.chatCutOff,
-                              style: TextStyle(fontSize: 13, color: muted),
-                            ),
-                          if (turn.done)
                             CupertinoButton(
                               padding: EdgeInsets.zero,
                               minimumSize: const Size(44, 44),
-                              onPressed: () => widget.openLink(
-                                Uri.parse(article.originalUrl),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    CupertinoIcons.arrow_up_right_square,
-                                    size: 16,
-                                    color: style.ink,
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Flexible(
-                                    child: Text(
-                                      article.isEvent
-                                          ? '${l10n.readOnWikipedia}, $site'
-                                          : l10n.readOfficialDecisionOn(site),
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        color: style.ink,
-                                      ),
-                                    ),
-                                  ),
-                                ],
+                              onPressed: _sending ? null : _again,
+                              child: Text(
+                                l10n.tryAgain,
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  color: style.ink,
+                                ),
                               ),
                             ),
+                          ],
+                          SizedBox(key: _end),
+                          SizedBox(height: _room),
                         ],
-                      ],
-                      if (_problem != null ||
-                          (_turns.isNotEmpty && _turns.last.cutOff)) ...[
-                        const SizedBox(height: 12),
-                        if (_problem != null)
-                          Text(
-                            _problem!,
-                            style: TextStyle(fontSize: 14, color: muted),
+                      ),
+                    ),
+                  ),
+                  if (left == 0)
+                    // Nothing left: the card takes the field's place.
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 6, 12, 10),
+                      child: _OutCard(
+                        style: style,
+                        resets: resets,
+                        onTopUp: _topUp,
+                      ),
+                    )
+                  else ...[
+                    if (left != null && left <= 3)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 6),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              CupertinoIcons.clock,
+                              size: 15,
+                              color: style.ink,
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              l10n.chatRemaining(left),
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                                color: style.ink,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    // One row at the bottom: the field with its send button.
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 6, 12, 10),
+                      child: CupertinoTextField(
+                        controller: _field,
+                        placeholder: l10n.chatAsk,
+                        maxLength: 500,
+                        minLines: 1,
+                        maxLines: 4,
+                        textInputAction: TextInputAction.send,
+                        onSubmitted: _sending ? null : _ask,
+                        padding: const EdgeInsets.fromLTRB(14, 10, 6, 10),
+                        decoration: BoxDecoration(
+                          color: CupertinoColors.tertiarySystemFill.resolveFrom(
+                            context,
                           ),
-                        CupertinoButton(
-                          padding: EdgeInsets.zero,
+                          borderRadius: BorderRadius.circular(22),
+                        ),
+                        suffix: CupertinoButton(
+                          padding: const EdgeInsets.only(right: 6),
                           minimumSize: const Size(44, 44),
-                          onPressed: _sending ? null : _again,
-                          child: Text(
-                            l10n.tryAgain,
-                            style: TextStyle(fontSize: 15, color: style.ink),
+                          onPressed: _sending
+                              ? null
+                              : () {
+                                  Haptics.light();
+                                  unawaited(_ask(_field.text));
+                                },
+                          child: Icon(
+                            CupertinoIcons.arrow_up_circle_fill,
+                            size: 32,
+                            color: style.fill,
+                            semanticLabel: l10n.chatSend,
                           ),
                         ),
-                      ],
-                      SizedBox(key: _end),
-                      SizedBox(height: _room),
-                    ],
-                  ),
-                ),
+                      ),
+                    ),
+                  ],
+                ],
               ),
-              if (left == 0)
-                // Nothing left: the card takes the field's place.
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 6, 12, 10),
-                  child: _OutCard(
-                    style: style,
-                    resets: resets,
-                    onTopUp: _topUp,
-                  ),
-                )
-              else ...[
-                if (left != null && left <= 3)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 6),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(CupertinoIcons.clock, size: 15, color: style.ink),
-                        const SizedBox(width: 6),
-                        Text(
-                          l10n.chatRemaining(left),
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
-                            color: style.ink,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                // One row at the bottom: the field with its send button.
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 6, 12, 10),
-                  child: CupertinoTextField(
-                    controller: _field,
-                    placeholder: l10n.chatAsk,
-                    maxLength: 500,
-                    minLines: 1,
-                    maxLines: 4,
-                    textInputAction: TextInputAction.send,
-                    onSubmitted: _sending ? null : _ask,
-                    padding: const EdgeInsets.fromLTRB(14, 10, 6, 10),
-                    decoration: BoxDecoration(
-                      color: CupertinoColors.tertiarySystemFill.resolveFrom(
-                        context,
-                      ),
-                      borderRadius: BorderRadius.circular(22),
-                    ),
-                    suffix: CupertinoButton(
-                      padding: const EdgeInsets.only(right: 6),
-                      minimumSize: const Size(44, 44),
-                      onPressed: _sending
-                          ? null
-                          : () {
-                              Haptics.light();
-                              unawaited(_ask(_field.text));
-                            },
-                      child: Icon(
-                        CupertinoIcons.arrow_up_circle_fill,
-                        size: 32,
-                        color: style.fill,
-                        semanticLabel: l10n.chatSend,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
+              Positioned(top: 2, right: 8, child: close),
             ],
           ),
         ),

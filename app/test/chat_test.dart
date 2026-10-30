@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -11,6 +12,7 @@ import 'package:official_news/core/analytics.dart';
 import 'package:official_news/core/api_client.dart';
 import 'package:official_news/core/article.dart';
 import 'package:official_news/core/chat_history.dart';
+import 'package:official_news/core/glass.dart';
 import 'package:official_news/core/subscription.dart';
 import 'package:official_news/features/chat/chat_consent.dart';
 import 'package:official_news/features/chat/chat_screen.dart';
@@ -153,6 +155,34 @@ void main() {
       },
     );
 
+    testWidgets("iOS's glass on its close button is drawn after everything "
+        'else in it: whatever Flutter drew after a native view inside a sheet '
+        "showed only over iOS's other views (the AI chat, TestFlight 55, "
+        'Roman, 30 Oct)', (tester) async {
+      GlassCircle.debugNative = true;
+      addTearDown(() => GlassCircle.debugNative = null);
+      final messenger = tester.binding.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(
+        SystemChannels.platform_views,
+        (_) async => null,
+      );
+      addTearDown(
+        () => messenger.setMockMethodCallHandler(
+          SystemChannels.platform_views,
+          null,
+        ),
+      );
+      final closed = await showPaywall(tester);
+      expect(
+        paintOrder(tester, find.byType(UiKitView)),
+        greaterThan(paintOrder(tester, find.text('Privacy Policy'))),
+      );
+
+      await tester.tap(find.bySemanticsLabel('Close').first);
+      await tester.pumpAndSettle();
+      expect(await closed, isFalse);
+    });
+
     testWidgets('says when the App Store is not there, and opens the terms', (
       tester,
     ) async {
@@ -291,6 +321,29 @@ void main() {
       );
       await tester.pumpAndSettle();
     }
+
+    testWidgets("iOS's glass on the close button is drawn after everything "
+        'else in the chat: drawn first, it left the chat under it empty '
+        '(TestFlight 55, Roman, 30 Oct)', (tester) async {
+      GlassCircle.debugNative = true;
+      addTearDown(() => GlassCircle.debugNative = null);
+      final messenger = tester.binding.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(
+        SystemChannels.platform_views,
+        (_) async => null,
+      );
+      addTearDown(
+        () => messenger.setMockMethodCallHandler(
+          SystemChannels.platform_views,
+          null,
+        ),
+      );
+      await openChat(tester, server(remaining: 2));
+      expect(
+        paintOrder(tester, find.byType(UiKitView)),
+        greaterThan(paintOrder(tester, find.text('Ask about this decision'))),
+      );
+    });
 
     testWidgets(
       'asks about this decision and shows the answer as it comes, with the official link',
@@ -626,4 +679,21 @@ void main() {
       );
     });
   });
+}
+
+/// Where [finder]'s render object comes as the screen is painted: a parent
+/// before its children, children in their order (true of the stacks,
+/// columns and scroll views here).
+int paintOrder(WidgetTester tester, Finder finder) {
+  final target = tester.renderObject(finder);
+  var index = 0;
+  var found = -1;
+  void visit(RenderObject object) {
+    if (identical(object, target)) found = index;
+    index++;
+    object.visitChildren(visit);
+  }
+
+  visit(tester.renderObject(find.byType(CupertinoPageScaffold).first));
+  return found;
 }
