@@ -25,7 +25,10 @@ beforeEach(async () => {
 
 /** [path, status, cache kind, content-language] for every kind of response. */
 const ROUTES: [string, number, keyof typeof CACHE, string | null][] = [
+  ["/", 302, "chooser", null],
   ["/robots.txt", 200, "fixed", null],
+  ["/en", 200, "list", "en"],
+  ["/uk?before=5", 200, "list", "uk"],
   [EN, 200, "article", "en"],
   [UK, 200, "article", "uk"],
   [`/en/de/${ID}`, 301, "moved", null],
@@ -40,11 +43,15 @@ const ROUTES: [string, number, keyof typeof CACHE, string | null][] = [
   ["/en/support", 200, "fixed", "en"],
   ["/nowhere", 404, "missing", "en"],
   ["/uk/nowhere", 404, "missing", "uk"],
+  ["/en?menu=where", 301, "redirect", null],
   ["/.well-known/apple-app-site-association", 404, "missing", "en"],
   ["/favicon.ico", 404, "icon", null],
   ["/apple-touch-icon.png", 200, "icon", null],
   ["/apple-touch-icon-precomposed.png", 200, "icon", null],
   ["/icon-512.png", 200, "icon", null],
+  ["/en/", 301, "redirect", null],
+  ["/en?utm_source=x", 301, "redirect", null],
+  ["/?fbclid=1", 301, "redirect", null],
 ];
 
 describe("every route", () => {
@@ -67,6 +74,23 @@ describe("every route", () => {
     });
   }
 
+  it("sends a query a list or the landing page does not use to the clean URL, with no D1 read", async () => {
+    for (const [path, location] of [
+      ["/en?x=1", "/en"],
+      ["/en?before=12&utm=1", "/en?before=12"],
+      ["/en?before=0", "/en"],
+      ["/en?before=1&before=2", "/en"],
+      ["/en?before=abc", "/en"],
+      ["/uk/?before=7", "/uk?before=7"],
+      ["/?lang=uk", "/"],
+    ]) {
+      let response: Awaited<ReturnType<typeof site>> | undefined;
+      expect(await rowsRead(async () => (response = await site(path)))).toBe(0);
+      expect(response!.status).toBe(301);
+      expect(response!.headers.get("location")).toBe(ORIGIN + location);
+    }
+  });
+
   it("answers 405 to other methods, never stored", async () => {
     for (const method of ["POST", "PUT", "DELETE"]) {
       const { status, headers } = await site("/en", { method });
@@ -78,7 +102,7 @@ describe("every route", () => {
 
   it("answers 500, never stored, when D1 fails: never a cached 404", async () => {
     const broken = { ...siteEnv(), DB: { prepare: () => { throw new Error("D1 is down"); } } as unknown as D1Database };
-    for (const path of [`/uk/de/${ID}`]) {
+    for (const path of ["/en", `/uk/de/${ID}`]) {
       const { status, headers, body } = await site(path, {}, "site.test", broken);
       expect(status).toBe(500);
       expect(headers.get("cache-control")).toBe("no-store");
@@ -156,7 +180,7 @@ describe("one URL per article (#89 review)", () => {
 describe("one request per page view", () => {
   it("no page refers to anything it would have to load: no script, image, stylesheet, font or frame", async () => {
     await env.DB.prepare("UPDATE articles SET image_url = 'https://www.bundesregierung.de/picture.jpg' WHERE id = ?").bind(ID).run();
-    const paths = [EN, UK, ...SITE_LANGS.flatMap((l) => INFO_PAGES.map((p) => `/${l}/${p}`))];
+    const paths = ["/en", "/uk", EN, UK, ...SITE_LANGS.flatMap((l) => INFO_PAGES.map((p) => `/${l}/${p}`))];
     for (const path of paths) {
       const { body } = await site(path);
       expect(body, path).not.toMatch(/<script|<iframe|<object|<embed|<video|<audio|<source|rel="stylesheet"|rel="preload"|rel="prefetch"|rel="preconnect"|rel="dns-prefetch"|@import|@font-face/i);
@@ -180,7 +204,7 @@ describe("one request per page view", () => {
 
 describe("the request's host", () => {
   it("never appears in a page: every absolute URL is SITE_ORIGIN's (the cache key has no host)", async () => {
-    for (const path of ["/", UK, `/uk/de/${ID}`, `${UK}?utm_source=x`, "/es/about", `/uk/de/${NOT_IN_UK}`]) {
+    for (const path of ["/", "/en", UK, `/uk/de/${ID}`, `${UK}?utm_source=x`, "/es/about", "/en/", `/uk/de/${NOT_IN_UK}`]) {
       const { body, headers } = await site(path, {}, "evil.test");
       expect(body).not.toContain("evil.test");
       expect(headers.get("location") ?? "").not.toContain("evil.test");
@@ -206,7 +230,7 @@ describe("text from the data and the address", () => {
   });
 
   it("is always escaped: no tag, no attribute, no javascript: link", async () => {
-    for (const path of [`/en/de/${XSS}`]) {
+    for (const path of [`/en/de/${XSS}`, "/en"]) {
       const { status, body } = await reach(path);
       expect(status).toBe(200);
       expect(body).not.toMatch(/<script|<img|<svg onload|<b>bold/i);

@@ -1,14 +1,15 @@
 // The website shows exactly what the app's API shows (#88): for every article
 // and language, the page is there exactly when GET /articles/:id?lang= is, with
-// the API's texts. Written
+// the API's texts; the lists are the API's pages, in the same order (page 1's
+// Latest without its Top stories, as the app). Written
 // as loops over the API, so a change to its rules (#84 source names, #86
 // filters) is covered without touching these tests.
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
-import type { ApiArticle } from "../src/site/data";
+import type { ApiArticle, ApiList } from "../src/site/data";
 import { SITE_LANGS, type SiteLang, decisionLabel } from "../src/site/texts";
 import { get, hideSeed } from "./helpers";
-import { ORIGIN, escaped, hoursAgo, hreflangs, insertArticle, insertTranslation, reach, site, siteRowsRead as rowsRead, testId } from "./site-helpers";
+import { ORIGIN, escaped, hoursAgo, hreflangs, insertArticle, insertTranslation, linkedIds, reach, site, siteRowsRead as rowsRead, testId } from "./site-helpers";
 
 const A = {
   englishOnly: testId(1),
@@ -133,5 +134,78 @@ describe("article pages", () => {
     expect(rows).toBeLessThanOrEqual(20);
     expect(await rowsRead(() => site("/uk/de/01JTEST-not-an-id"))).toBe(0);
     expect(await rowsRead(() => site(`/uk/de/${A.ukrainian.toLowerCase()}`))).toBe(0);
+  });
+});
+
+describe("latest lists", () => {
+  beforeEach(async () => {
+    // Enough for three pages of 20, Ukrainian on every third.
+    for (let n = 10; n < 55; n++) {
+      await insertArticle({ id: testId(n), importance: n % 5 });
+      if (n % 3 === 0) await insertTranslation(testId(n), "uk");
+    }
+  });
+
+  /** Every page of the API's list in `lang`, through nextCursor. */
+  async function apiPages(lang: SiteLang) {
+    const pages: ApiList[] = [];
+    let cursor: string | null = null;
+    do {
+      const query: string = `limit=20${lang === "en" ? "" : `&lang=${lang}`}${cursor ? `&cursor=${cursor}` : ""}`;
+      const page = (await get(`/articles?${query}`)).body as ApiList;
+      pages.push(page);
+      cursor = page.nextCursor;
+    } while (cursor);
+    return pages;
+  }
+
+  /** Every page of the site's list in `lang`, through its "Older decisions" links. */
+  async function sitePages(lang: SiteLang) {
+    const pages: { top: string[]; items: string[] }[] = [];
+    let path: string | null = `/${lang}`;
+    while (path) {
+      const page = await site(path);
+      expect(page.status).toBe(200);
+      // Top stories are their own section (page 1 only); every other article link is the list's.
+      const main = page.body.split("<footer")[0];
+      const top = /<section[^>]*aria-labelledby="top">[\s\S]*?<\/section>/.exec(main)?.[0] ?? "";
+      pages.push({ top: linkedIds(top), items: linkedIds(main.replace(top, "")) });
+      path = /<a class="more" href="([^"]+)" rel="next">/.exec(page.body)?.[1].replaceAll("&amp;", "&") ?? null;
+    }
+    return pages;
+  }
+
+  it("are the API's pages, in the same order, with the same top stories (not repeated under Latest), in every language", async () => {
+    for (const lang of SITE_LANGS) {
+      const api = await apiPages(lang);
+      const ours = await sitePages(lang);
+      // Page 1's Latest leaves out its Top stories, as the app's feed does (#89 review); the API gives top on page 1 only.
+      expect(ours.map((p) => p.items), lang).toEqual(api.map((p) => p.items.filter((a) => !p.top.some((t) => t.id === a.id)).map((a) => a.id)));
+      expect(ours.map((p) => p.top), lang).toEqual(api.map((p) => p.top.map((a) => a.id)));
+      // The next page starts after the API's whole first page, Top stories included.
+      if (api.length > 1) expect(ours[1].items[0], lang).toBe(api[1].items[0].id);
+    }
+    expect((await apiPages("en")).length).toBe(3);
+    // The fixtures have Top stories that are also among the first page's latest 20, so the rule is exercised.
+    const first = (await apiPages("en"))[0];
+    expect(first.top.filter((t) => first.items.some((a) => a.id === t.id)).length).toBeGreaterThan(0);
+  });
+
+  it("say so when a language has nothing yet (German is off)", async () => {
+    const page = await site("/de");
+    expect(page.status).toBe(200);
+    expect(page.body).toContain("Noch keine übersetzten Entscheidungen.");
+    expect(linkedIds(page.body)).toEqual([]);
+  });
+
+  it("read a bounded number of D1 rows per page", async () => {
+    const first = await rowsRead(() => site("/en"));
+    const next = /<a class="more" href="([^"]+)" rel="next">/.exec((await site("/en")).body)![1];
+    const later = await rowsRead(() => site(next));
+    expect(first).toBeLessThan(400);
+    expect(later).toBeLessThan(200);
+    expect(await rowsRead(() => site("/uk?before=0"))).toBe(0);
+    // The numbers, for docs/decisions.md (a test database: a few dozen articles).
+    console.log(JSON.stringify({ rowsRead: { listFirstPage: first, listLaterPage: later } }));
   });
 });

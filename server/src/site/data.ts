@@ -5,13 +5,20 @@
 // source's name in the language) live in one place for the app and the site.
 // The rules are bundled into this Worker: they change on the site when
 // `deploy:site` runs, right after the api deploy (.github/workflows/deploy.yml).
-import { type toArticle, handleApi } from "../api";
+import { type toArticle, encodeCursor, handleApi } from "../api";
 import type { Env } from "../env";
 import type { SiteEnv } from "./env";
 import { SITE_LANGS, type SiteLang } from "./texts";
 
 /** An article as the API returns it (docs/contract.md); `lang` in a language other than English. */
 export type ApiArticle = ReturnType<typeof toArticle> & { lang?: string };
+
+export interface ApiList {
+  items: ApiArticle[];
+  nextCursor: string | null;
+  top: ApiArticle[];
+  translationsDelayed?: boolean;
+}
 
 /** The API failed (its own 500): the site answers 500 too, never a cached 404. */
 export class ApiError extends Error {}
@@ -41,4 +48,18 @@ export async function articleInLanguages(env: SiteEnv, id: string): Promise<Part
     if (article) shown[lang] = article;
   });
   return shown;
+}
+
+/**
+ * A page of the latest list in `lang`, as the app gets it: 20 articles, and top
+ * stories on the first. `before` is the site's paging parameter, the feedSeq
+ * after which the page continues, turned into the API's own cursor.
+ */
+export async function latest(env: SiteEnv, lang: SiteLang, before: number | null): Promise<ApiList> {
+  const params = new URLSearchParams({ limit: "20" });
+  if (lang !== "en") params.set("lang", lang);
+  if (before !== null) params.set("cursor", encodeCursor(before));
+  const list = await api<ApiList>(env, `/articles?${params}`);
+  if (!list) throw new ApiError("API 404 for /articles");
+  return list;
 }

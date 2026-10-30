@@ -1,19 +1,23 @@
 // The website (#88), the Worker `site` (wrangler.site.jsonc; index.ts). Plain HTML
 // rendered from what the app's API shows, one request per page view, nothing
 // indexed before the domain. URLs (docs/contract.md, "Website"):
+//   /                              302 to the visitor's language (lang.ts), 0 D1 rows, never cached
+//   /{lang}                        latest list; ?before=<feedSeq> for the next page
 //   /{lang}/{cc}/{id}-{slug}       an article (looked up by its id; another country or slug is a 301 to its own)
 //   /{lang}/about|privacy|terms|support
 //   /robots.txt                    Disallow: /
-import { type ApiArticle, articleInLanguages } from "./data";
+import { type ApiArticle, articleInLanguages, latest } from "./data";
 import type { SiteEnv } from "./env";
 import { APPLE_TOUCH_ICON, OG_IMAGE } from "./icon";
 import { type Page, cssHash, layout } from "./layout";
+import { visitorLang } from "./lang";
 import { articlePage, notInLanguagePage } from "./pages/article";
 import { errorPage, notFoundPage } from "./pages/errors";
 import { infoPage } from "./pages/info";
+import { type ListView, listPage } from "./pages/list";
 import { type CacheKind, type Reply, respond, robotsFor } from "./respond";
 import { SITE_LANGS, type SiteLang, isSiteLang } from "./texts";
-import { ARTICLE_ID, INFO_PAGES, type InfoPage, articlePath, originOf } from "./urls";
+import { ARTICLE_ID, INFO_PAGES, type InfoPage, articlePath, listPath, originOf } from "./urls";
 
 /** Nothing is indexed yet: crawlers stay out of every page. */
 export const ROBOTS_TXT = "User-agent: *\nDisallow: /\n";
@@ -22,6 +26,8 @@ const LANG_PATH = new RegExp(`^/(${SITE_LANGS.join("|")})(/.*)?$`);
 const INFO_PATH = new RegExp(`^/(${INFO_PAGES.join("|")})$`);
 /** `/de/01JB…`, `/de/01JB…-slug`: a country, the 26-character id, then a hyphen or the end (any other country or slug is a 301). */
 const ARTICLE_PATH = /^\/([A-Za-z]{2})\/([^/]+)$/;
+/** After the language, the list: nothing, with or without a trailing slash. */
+const LIST_PATH = /^(\/?)$/;
 
 /** A page's reply: its robots value is worked out once, for its header and its meta tag alike. */
 function page(p: Page, status: number, kind: CacheKind): Reply {
@@ -29,6 +35,19 @@ function page(p: Page, status: number, kind: CacheKind): Reply {
   return { kind, status, body: layout(p, robots), lang: p.lang, robots };
 }
 const notFound = (lang: SiteLang): Reply => page(notFoundPage(lang), 404, "missing");
+
+/** The site's paging parameter: a feedSeq, a whole number from 1. Anything else is not a page. */
+function readBefore(params: URLSearchParams): number | null {
+  const values = params.getAll("before");
+  if (values.length !== 1 || !/^[1-9]\d{0,15}$/.test(values[0])) return null;
+  const n = Number(values[0]);
+  return Number.isSafeInteger(n) ? n : null;
+}
+
+/** A list page: the API's page, in this one request. */
+async function listReply(env: SiteEnv, origin: string, lang: SiteLang, view: ListView): Promise<Reply> {
+  return page(listPage(lang, origin, view, { list: await latest(env, lang, view.before) }), 200, "list");
+}
 
 /** The article id at the start of a path segment, followed by a hyphen or nothing; else null. */
 function articleId(segment: string): string | null {
@@ -65,6 +84,17 @@ async function route(request: Request, env: SiteEnv): Promise<Reply> {
   const origin = originOf(env.SITE_ORIGIN);
   const path = url.pathname;
 
+  // A query a page does not use would be a new cache entry and a new render each time
+  // (the cache key is path and query): lists, the landing page and article pages send
+  // it to their clean URL, with no D1 read (#88 and #89 reviews).
+  // `/` opens the visitor's own language (Yurii, 28 Oct: no page to choose one),
+  // from the browser's languages, else the country Cloudflare sees; never cached.
+  if (path === "/") {
+    if (url.search) return { kind: "redirect", status: 301, body: null, location: `${origin}/` };
+    const country = (request.cf as { country?: unknown } | undefined)?.country;
+    const lang = visitorLang(request.headers.get("accept-language"), typeof country === "string" ? country : null);
+    return { kind: "chooser", status: 302, body: null, location: `${origin}${listPath(lang)}` };
+  }
   if (path === "/robots.txt") return { kind: "fixed", status: 200, body: ROBOTS_TXT };
   // The icon (icon.ts): Safari's home-screen icon under any of its names, and
   // the link preview's picture. The tab icon is inline, so /favicon.ico stays a 404.
@@ -79,6 +109,15 @@ async function route(request: Request, env: SiteEnv): Promise<Reply> {
 
   const info = INFO_PATH.exec(rest);
   if (info) return page(infoPage(lang, origin, info[1] as InfoPage), 200, "fixed");
+
+  const list = LIST_PATH.exec(rest);
+  if (list) {
+    const before = readBefore(url.searchParams);
+    // One URL per view: a trailing slash, a repeated or unused parameter go to it.
+    const clean = listPath(lang, before);
+    if (path + url.search !== clean) return { kind: "redirect", status: 301, body: null, location: origin + clean };
+    return listReply(env, origin, lang, { before });
+  }
 
   const article = ARTICLE_PATH.exec(rest);
   const id = article ? articleId(article[2]) : null;

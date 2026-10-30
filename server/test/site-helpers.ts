@@ -120,6 +120,9 @@ export async function insertTranslation(id: string, lang: Exclude<SiteLang, "en"
     .run();
 }
 
+/** Article ids linked from a part of a page, in order: `/{lang}/{cc}/{id}…`. */
+export const linkedIds = (html: string) => [...html.matchAll(/href="\/[a-z]{2}\/[a-z]{2}\/([0-9A-Z]{26})[^"]*"/g)].map((m) => m[1]);
+
 /** The page's hreflang alternates, without x-default. */
 export const hreflangs = (html: string) =>
   [...html.matchAll(/<link rel="alternate" hreflang="([^"]+)" href="([^"]+)">/g)].map((m) => m[1]).filter((l) => l !== "x-default");
