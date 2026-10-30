@@ -1,6 +1,6 @@
 import type { Env } from "../env";
 import { toStoredTime } from "../fetcher/text";
-import { checkSummary } from "./checks";
+import { checkSummary, namedOutlets } from "./checks";
 import { type ArticleInput, MAX_TEXT, eventPrompt, headlineKind, publishedDate, systemPrompt, userMessage } from "./prompt";
 import { SUMMARY_SCHEMA, type Summary, clipped, overLimits, parseJson, toSummary } from "./schema";
 
@@ -186,11 +186,12 @@ export async function runSummarizer(
       const checked = toSummary(parsed, article.headlineKind, article.event);
       if ("problems" in checked) throw new UnusableAnswer(checked.problems.join("; "));
       // A number the article does not give, or a summary not in English, is never
-      // stored (#63). A ruled-out word, text copied from the article or a field over
-      // its limit (#133) gets another try, and on the last one the summary is stored
-      // anyway (clipped to the limits), so a decision is not hidden for a word. Readers
-      // never see an article that is not news, so its answer is not checked: a retry
-      // would only cost Neurons.
+      // stored (#63). A ruled-out word, text copied from the article, a field over
+      // its limit (#133) or an event that names who reported it (#230) gets another
+      // try, and on the last one the summary is stored anyway (clipped to the
+      // limits), so a decision is not hidden for a word. Readers never see an
+      // article that is not news, so its answer is not checked: a retry would only
+      // cost Neurons.
       let summary = checked.summary;
       const warnings: string[] = [];
       if (summary.isNews) {
@@ -199,9 +200,11 @@ export async function runSummarizer(
         const found = checkSummary(summary, source, Number(row.fetched_at.slice(0, 4)));
         if (found.invented.length) throw new UnusableAnswer(`numbers not in the article: ${found.invented.join(", ")}`);
         if (found.notEnglish) throw new UnusableAnswer("the summary is not in English");
+        const outlets = article.event ? namedOutlets(summary, row.text ?? "") : [];
         const soft = [
           ...(found.banned.length ? [`ruled-out words: ${found.banned.join(", ")}`] : []),
           ...(found.copied.length ? [`copied from the article: ${found.copied.map((r) => `"${r}"`).join(", ")}`] : []),
+          ...(outlets.length ? [`names who reported it: ${outlets.join(", ")}`] : []),
           ...overLimits(summary),
         ];
         if (soft.length && row.summary_attempts < MAX_ATTEMPTS - 1) throw new UnusableAnswer(soft.join("; "));
