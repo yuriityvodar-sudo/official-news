@@ -8,7 +8,10 @@
 import { type toArticle, encodeCursor, handleApi } from "../api";
 import type { Env } from "../env";
 import type { SiteEnv } from "./env";
+import type { Topic } from "../summarizer/schema";
 import { SITE_LANGS, type SiteLang } from "./texts";
+import type { GroupId } from "../api/filters";
+import type { ListFilter, Place } from "./urls";
 
 /** An article as the API returns it (docs/contract.md); `lang` in a language other than English. */
 export type ApiArticle = ReturnType<typeof toArticle> & { lang?: string };
@@ -50,16 +53,92 @@ export async function articleInLanguages(env: SiteEnv, id: string): Promise<Part
   return shown;
 }
 
+/** The API's Where parameter for a place: `country=DE`, `group=g7`, or nothing for all countries. */
+function setPlace(params: URLSearchParams, place: Place) {
+  if (place === null) return;
+  if ("country" in place) params.set("country", place.country);
+  else params.set("group", place.group);
+}
+
 /**
  * A page of the latest list in `lang`, as the app gets it: 20 articles, and top
- * stories on the first. `before` is the site's paging parameter, the feedSeq
- * after which the page continues, turned into the API's own cursor.
+ * stories on the first, with the app's filters (#67, #68: `country` or
+ * `group`, and `topic`). `before` is the site's paging parameter, the feedSeq
+ * after which the page continues, turned into the API's own cursor (a place
+ * in the feed, so the next page continues within the filter).
  */
-export async function latest(env: SiteEnv, lang: SiteLang, before: number | null): Promise<ApiList> {
+export async function latest(env: SiteEnv, lang: SiteLang, filter: ListFilter, before: number | null): Promise<ApiList> {
   const params = new URLSearchParams({ limit: "20" });
   if (lang !== "en") params.set("lang", lang);
+  setPlace(params, filter.place);
+  if (filter.topic) params.set("topic", filter.topic);
   if (before !== null) params.set("cursor", encodeCursor(before));
   const list = await api<ApiList>(env, `/articles?${params}`);
   if (!list) throw new ApiError("API 404 for /articles");
   return list;
+}
+
+export interface ApiTopic {
+  id: Topic;
+  name: string;
+}
+
+export interface ApiCountry {
+  code: string;
+  name: string;
+}
+
+export interface ApiGroup {
+  id: GroupId;
+  name: string;
+  /** The `country` values of the articles the group shows (`EU` for the EU institutions). */
+  members: string[];
+}
+
+/** The Where menu as GET /countries answers it: every group, then the countries with active sources. */
+export interface ApiWhere {
+  groups: ApiGroup[];
+  countries: ApiCountry[];
+}
+
+/** The Topics menu: `GET /topics`, the topics with articles in that place's (or the whole) feed in `lang`, busiest first. */
+export async function topicsMenu(env: SiteEnv, lang: SiteLang, place: Place): Promise<ApiTopic[]> {
+  const params = new URLSearchParams();
+  if (lang !== "en") params.set("lang", lang);
+  setPlace(params, place);
+  const query = params.toString();
+  const answer = await api<{ topics: ApiTopic[] }>(env, query ? `/topics?${query}` : "/topics");
+  if (!answer) throw new ApiError("API 404 for /topics");
+  return answer.topics;
+}
+
+/**
+ * The Where menu: `GET /countries`, its groups (always all of them, in their
+ * fixed order) and the countries with active sources, named in `lang` and
+ * sorted by that name.
+ */
+export async function whereMenu(env: SiteEnv, lang: SiteLang): Promise<ApiWhere> {
+  const answer = await api<ApiWhere>(env, lang === "en" ? "/countries" : `/countries?lang=${lang}`);
+  if (!answer) throw new ApiError("API 404 for /countries");
+  return { groups: answer.groups, countries: answer.countries };
+}
+
+/** Pages of 50 the sitemap reads at most per language (the API's 7 days are about 200 articles today). */
+const SITEMAP_PAGES = 10;
+
+/** Every article of the API's 7 days in `lang`, for the sitemap: its pages of 50, newest first. */
+export async function allLatest(env: SiteEnv, lang: SiteLang): Promise<ApiArticle[]> {
+  const out: ApiArticle[] = [];
+  let cursor: string | null = null;
+  for (let page = 0; page < SITEMAP_PAGES; page++) {
+    const params = new URLSearchParams({ limit: "50" });
+    if (lang !== "en") params.set("lang", lang);
+    if (cursor) params.set("cursor", cursor);
+    const list: ApiList | null = await api<ApiList>(env, `/articles?${params}`);
+    if (!list) throw new ApiError("API 404 for /articles");
+    out.push(...list.items);
+    cursor = list.nextCursor;
+    if (!cursor) break;
+  }
+  return out;
 }

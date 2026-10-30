@@ -8,6 +8,8 @@
 //     that language. A non-English push needs that language's translation
 //     published for the article, and uses its headline and short summary.
 //   - Every breaking decision is pushed; a day with none has no push.
+//   - Never an event from Wikipedia's current events (#230): readers turned on
+//     the most important official decisions (pushOfferBody).
 //   - Quiet hours: none from 21:00 to 08:00 in the language's main time zone
 //     (TIME_ZONES); a decision released at night goes out in the morning, while
 //     it is less than 24 hours old.
@@ -98,9 +100,9 @@ export const LANGS_ON = `SELECT value AS lang FROM json_each(?1)
   WHERE value = 'en' OR EXISTS (SELECT 1 FROM translation_langs t WHERE t.lang = value AND t.enabled = 1)`;
 
 /**
- * A language's best breaking decision (importance 4+): released since ?2
- * (RECENT_HOURS ago) and published in the feed's 7 days (?3), never pushed in
- * that language (?1), and for a language other than English with its
+ * A language's best breaking decision (importance 4+, not an event): released
+ * since ?2 (RECENT_HOURS ago) and published in the feed's 7 days (?3), never
+ * pushed in that language (?1), and for a language other than English with its
  * translation published (state `published`, the translation of the current
  * English). Highest importance first, then the newest feed_seq. Its headline
  * and short summary in the language, and its source's country for the line
@@ -118,6 +120,7 @@ export const BREAKING_CANDIDATE = `SELECT a.id, a.importance, s.country,
   LEFT JOIN sources s ON s.id = a.source_id
   LEFT JOIN article_translations t ON t.article_id = a.id AND t.lang = ?1 AND t.state = 'published'
   WHERE a.feed_seq IS NOT NULL AND a.importance >= ${BREAKING_IMPORTANCE} AND a.added_at >= ?2 AND a.is_news = 1 AND a.published_at >= ?3
+    AND a.decision_type IS NOT 'event'
     AND (CASE WHEN ?1 = 'en' THEN a.headline <> '' AND a.short_summary <> '' ELSE t.article_id IS NOT NULL END)
     AND NOT EXISTS (SELECT 1 FROM push_log p WHERE p.article_id = a.id AND p.lang = ?1)
   ORDER BY a.importance DESC, a.feed_seq DESC

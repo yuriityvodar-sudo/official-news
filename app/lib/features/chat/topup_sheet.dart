@@ -6,6 +6,7 @@ import 'package:in_app_purchase/in_app_purchase.dart' show ProductDetails;
 
 import '../../core/analytics.dart';
 import '../../core/motion.dart';
+import '../../core/sheet.dart';
 import '../../core/subscription.dart';
 import '../../core/theme.dart';
 import '../../l10n/app_localizations.dart';
@@ -27,9 +28,8 @@ class TopUpSheet extends StatefulWidget {
     BuildContext context, {
     ChatSubscription? subscription,
   }) async =>
-      await showCupertinoSheet<bool>(
+      await showSheet<bool>(
         context: context,
-        showDragHandle: true,
         scrollableBuilder: (_, scroll) =>
             TopUpSheet(subscription: subscription, scroll: scroll),
       ) ??

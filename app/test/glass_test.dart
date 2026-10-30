@@ -4,6 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:official_news/core/glass.dart';
+import 'package:official_news/core/sheet.dart';
 import 'package:official_news/features/splash/splash.dart';
 
 import 'test_app.dart';
@@ -90,9 +91,7 @@ void main() {
       final navigator = tester.state<NavigatorState>(find.byType(Navigator));
       unawaited(
         navigator.push(
-          CupertinoSheetRoute<void>(
-            scrollableBuilder: (_, _) => const Text('Paywall'),
-          ),
+          SheetRoute<void>(scrollableBuilder: (_, _) => const Text('Paywall')),
         ),
       );
       await tester.pump();

@@ -58,3 +58,49 @@ describe("migration 0010 (release together)", () => {
     expect(names.filter((n) => n.startsWith("0007") && n !== "0007_source_health.sql")).toEqual([]);
   });
 });
+
+describe("migration 0022 (show events, #230)", () => {
+  it("has the events of the last 2 days summarized again after the deploy, and leaves older ones, released ones and decisions alone", async () => {
+    const show = env.TEST_MIGRATIONS.find((m) => m.name.startsWith("0022"))?.queries.find((q) => q.includes("summarized_at = NULL"));
+    expect(show).toBeDefined();
+    for (const id of ["ww-wikipedia-en", "ww-wikipedia-ru"]) {
+      await env.DB.prepare(
+        `INSERT OR IGNORE INTO sources (id, country, name, kind, url, config, language)
+         VALUES (?, 'WW', 'Wikipedia: Current events', 'api', 'https://wikipedia.org', '{"currentEvents":"en","hidden":true}', 'en')`,
+      )
+        .bind(id)
+        .run();
+    }
+    const day = (n: number) => `${new Date(Date.now() - n * 86_400_000).toISOString().slice(0, 19)}Z`;
+    for (const [id, source, publishedAt, feedSeq] of [
+      ["event-new", "ww-wikipedia-en", day(1), null],
+      ["event-ru", "ww-wikipedia-ru", day(0.5), null],
+      ["event-old", "ww-wikipedia-en", day(3), null],
+      ["event-shown", "ww-wikipedia-en", day(1), 990001],
+      ["decision", "de-federal-government", day(1), null],
+    ] as const) {
+      await env.DB.prepare(
+        `INSERT INTO articles (id, source_id, url, original_title, published_at, fetched_at, is_news, decision_type, summarized_at, summary_attempts, feed_seq)
+         VALUES (?1, ?2, 'https://example.org/' || ?1, 'T', ?3, ?3, 0, 'event', ?3, 1, ?4)`,
+      )
+        .bind(id, source, publishedAt, feedSeq)
+        .run();
+    }
+
+    await env.DB.prepare(show!).run();
+
+    const { results } = await env.DB.prepare(
+      `SELECT id, summarized_at IS NULL AS again, summary_attempts, summary_claimed_at >= ? AS claimed FROM articles
+       WHERE id IN ('event-new', 'event-ru', 'event-old', 'event-shown', 'decision') ORDER BY id`,
+    )
+      .bind(day(0.01))
+      .all();
+    expect(results).toEqual([
+      { id: "decision", again: 0, summary_attempts: 1, claimed: null },
+      { id: "event-new", again: 1, summary_attempts: 0, claimed: 1 },
+      { id: "event-old", again: 0, summary_attempts: 1, claimed: null },
+      { id: "event-ru", again: 1, summary_attempts: 0, claimed: 1 },
+      { id: "event-shown", again: 0, summary_attempts: 1, claimed: null },
+    ]);
+  });
+});

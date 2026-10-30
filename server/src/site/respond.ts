@@ -36,7 +36,7 @@ export const CACHE = {
   icon: { browser: "public, max-age=86400", edge: "max-age=86400" },
   /**
    * Another spelling of a list or of `/` (a query it does not use,
-   * a trailing slash), or an article URL with a query
+   * a trailing slash, a place in capitals), or an article URL with a query
    * (`fbclid`, `utm_*`), sent to its clean URL with no D1 read. The mapping
    * never changes, so it is kept a day.
    */
@@ -48,6 +48,8 @@ export const CACHE = {
    * as long as an article page: a later change never meets a stale redirect.
    */
   moved: { browser: "public, max-age=300", edge: "max-age=600" },
+  /** The sitemap (seo.ts): an hour, as new articles come all day; it reads up to 10 API pages per language. */
+  sitemap: { browser: "public, max-age=3600", edge: "max-age=3600, stale-if-error=86400" },
   /** `/`, sent to the visitor's own language: per visitor, so never stored anywhere. */
   chooser: { browser: "private, no-store", edge: "no-store" },
   /** 405 and 500: never stored, so an outage is never cached as a page. */
@@ -59,17 +61,25 @@ export type CacheKind = keyof typeof CACHE;
 /**
  * Whether search engines may index a page: the one switch, computed once per
  * page (handler.ts) and used for both the X-Robots-Tag header and the robots
- * meta tag, so they never disagree (the stricter one would win). Nothing is
- * indexed yet, and robots.txt keeps crawlers from every page.
+ * meta tag, so they never disagree (the stricter one would win). The page
+ * says whether it may be (Page.index): the articles, the information pages
+ * and the lists' first pages, since the domain (Yurii, 29 Oct). A page
+ * robots.txt keeps crawlers from never has its value read, so an indexed page
+ * is never one of those (site-routes.test.ts).
  */
-export const robotsFor = (_page: Page): string => "noindex";
+export const robotsFor = (page: Page): string => (page.index ? "index, follow" : "noindex");
 
 /** What a response that is not a page (robots.txt, a redirect, an icon, a 405) says. */
 export const ROBOTS_DEFAULT = "noindex";
 
-/** The site's Content-Security-Policy: our one inline stylesheet by its hash, data: icons, no scripts, no frames, nothing from elsewhere. */
-export const csp = (styleHash: string) =>
-  `default-src 'none'; style-src '${styleHash}'; img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`;
+/**
+ * The site's Content-Security-Policy: our one inline stylesheet and our one
+ * inline script (consent.ts), each by its hash, data: icons, and Google
+ * Analytics' own hosts, which the script loads only after a visitor's yes. No
+ * frames, nothing else from elsewhere.
+ */
+export const csp = (styleHash: string, scriptHash: string) =>
+  `default-src 'none'; style-src '${styleHash}'; script-src '${scriptHash}' https://*.googletagmanager.com; img-src 'self' data: https://*.google-analytics.com https://*.googletagmanager.com; connect-src https://*.google-analytics.com https://*.analytics.google.com https://*.googletagmanager.com; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`;
 
 export interface Reply {
   kind: CacheKind;
@@ -83,10 +93,12 @@ export interface Reply {
   /** For a redirect: an absolute URL made from SITE_ORIGIN. */
   location?: string;
   allow?: string;
+  /** For a text body that is not plain text: the sitemap's XML. */
+  contentType?: string;
 }
 
 /** The one place that sets the site's headers. A HEAD request gets the same headers and no body. */
-export function respond(reply: Reply, method: string, styleHash: string): Response {
+export function respond(reply: Reply, method: string, styleHash: string, scriptHash: string): Response {
   const cache = CACHE[reply.kind];
   const isText = typeof reply.body === "string";
   const isPng = reply.body instanceof Uint8Array;
@@ -97,8 +109,8 @@ export function respond(reply: Reply, method: string, styleHash: string): Respon
     "x-content-type-options": "nosniff",
     // https only, for a year: the site is served on its own domain (Roman's review of #233).
     "strict-transport-security": "max-age=31536000",
-    "content-security-policy": csp(styleHash),
-    "content-type": isPng ? "image/png" : isText ? "text/plain; charset=utf-8" : "text/html; charset=utf-8",
+    "content-security-policy": csp(styleHash, scriptHash),
+    "content-type": reply.contentType ?? (isPng ? "image/png" : isText ? "text/plain; charset=utf-8" : "text/html; charset=utf-8"),
   });
   if (reply.lang) headers.set("content-language", reply.lang);
   if (reply.location) headers.set("location", reply.location);

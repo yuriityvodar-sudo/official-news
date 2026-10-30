@@ -8,6 +8,7 @@ import '../../core/analytics.dart';
 import '../../core/article.dart';
 import '../../core/glass.dart';
 import '../../core/motion.dart';
+import '../../core/sheet.dart';
 import '../../core/subscription.dart';
 import '../../core/theme.dart';
 import '../../l10n/app_localizations.dart';
@@ -37,9 +38,8 @@ class PaywallSheet extends StatefulWidget {
   final ScrollController? scroll;
 
   static Future<bool> show(BuildContext context, Article article) async =>
-      await showCupertinoSheet<bool>(
+      await showSheet<bool>(
         context: context,
-        showDragHandle: true,
         scrollableBuilder: (_, scroll) =>
             PaywallSheet(article: article, scroll: scroll),
       ) ??
