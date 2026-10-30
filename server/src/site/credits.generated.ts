@@ -100,5 +100,7 @@ export const CREDITS: Record<string, Credit> = {
   "ww-wikipedia-ru": {
     "licence": "CC BY-SA 4.0",
     "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
-  }
+  },
+  "cz-finance-ministry": {},
+  "cz-national-bank": {}
 };

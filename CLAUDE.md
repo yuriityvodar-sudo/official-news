@@ -4,9 +4,9 @@ Two people build this app, Yurii and Roman, each with their own Claude Code. The
 
 ## Documentation is part of every change
 
-- `docs/plan.md` is the plan and `docs/decisions.md` is the decision log. They are the single source of truth.
-- A pull request that changes a decision (scope, the article format, the API, the database, an account, a tool) updates `docs/decisions.md`, and `docs/plan.md` where it is affected, in the same pull request.
-- Decisions made on a call go into `docs/decisions.md` the same day, through a pull request.
+- `docs/plan.md` is the plan and the decision log is `docs/decisions/` (one file per decision, from 30 Oct 2026) with the older ones in the table of `docs/decisions.md`. They are the single source of truth.
+- A pull request that changes a decision (scope, the article format, the API, the database, an account, a tool) adds its own file to `docs/decisions/` (`YYYY-MM-DD-short-name.md`: the decision, why, and its status), and updates `docs/plan.md` where it is affected, in the same pull request. One file each, so two open pull requests never conflict in the log.
+- Decisions made on a call go into `docs/decisions/` the same day, through a pull request.
 - The website (`server/src/site/`, #88) shows the app's texts (`app/lib/l10n/app_*.arb`, the publisher and dates in `info_pages.dart`, the languages in `feed_language.dart`) and `docs/source-credits.csv` through generated files: after changing a text the site shows, run `npm run site:texts` in `server/` and commit the result (`npm test` says when).
 - Anything created outside the code (an account, a Worker, a database, a key, an App Store entry) is recorded in `docs/setup.md` in the same change: what it is, who owns it, where it lives. Never the secret value itself.
 - The plan proposes approaches; it does not restrict how something is built. A better approach is welcome: propose it in the pull request or an issue, and record it once agreed.
@@ -17,7 +17,7 @@ Two people build this app, Yurii and Roman, each with their own Claude Code. The
 - One branch per issue: `feature/<issue#>-short-name` or `fix/<issue#>-short-name`.
 - Small pull requests, each ending with a visible result: under about 500 changed lines of code (tests and docs aside); bigger work is split by screen or by step. Reviewed within a day; reviewing is planned work, not an interruption.
 - At most three open pull requests per person. Past that, the next piece waits (research, docs, a prototype) until one merges.
-- Merges happen in batches when both are online: agree the order, merge one, update the next, re-approve, merge. Re-approvals after a plain merge of `main` are quick when they happen together, and nobody re-reviews the same change three times.
+- Merging (changed 30 Oct 2026; before: branches had to be up to date with `main`, so every merge cleared the next approval, and 14 merges on 30 Oct took over 20 re-approvals): a branch does not have to be up to date with `main` to merge. An approved, green, conflict-free pull request merges as it is. In return: merge one at a time, and the next merge waits until CI on `main` is green after the last one (a running CI counts as not green, so two merges never start together); whoever merged watches it, and fixes `main` first, within the hour, if it fails. The deploy keeps its own gate (it re-tests `main` before anything ships), and the app's builds come only from `main`. A new commit on a pull request still clears its approval.
 - The reviewer's Claude Code leaves review comments on GitHub; the author's Claude Code works through them and flags anything that needs a human decision; the reviewer approves.
 - CI checks run on every pull request. TestFlight builds are on demand only (manual GitHub Actions run).
 - One person per issue at a time: assign yourself before starting. Never push to someone else's branch; comment on their pull request instead.
