@@ -238,6 +238,17 @@ class _DetailScreenState extends State<DetailScreen> {
                       widget.openLink(page);
                     },
                   ),
+                  // "In the media" (#230 step 5): the reader's country's outlets, in For you.
+                  if (article.media.isNotEmpty) ...[
+                    const SizedBox(height: 18),
+                    _MediaLinks(
+                      links: article.media,
+                      onTap: (url) {
+                        final page = officialPage(url);
+                        if (page != null) widget.openLink(page);
+                      },
+                    ),
+                  ],
                   // Wikipedia's text is CC BY-SA 4.0: its name, the page and the licence (#230).
                   if (article.isEvent) ...[
                     const SizedBox(height: 10),
@@ -702,6 +713,54 @@ class _WikipediaLicence extends StatelessWidget {
           style: text.meta.copyWith(decoration: TextDecoration.underline),
         ),
       ),
+    );
+  }
+}
+
+/// "In the media" (#230 step 5): up to 3 of the reader's country's outlets
+/// about the decision, the outlet above its headline, each opening its page.
+/// Only the headline, the outlet and the link: never their text (EU
+/// Directive 2019/790, art. 15).
+class _MediaLinks extends StatelessWidget {
+  const _MediaLinks({required this.links, required this.onTap});
+
+  final List<MediaLink> links;
+  final void Function(String url) onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = NewsText.from(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(AppLocalizations.of(context).inTheMedia, style: text.publisher),
+        for (final link in links)
+          Semantics(
+            button: true,
+            label: '${link.outlet}, ${link.title}',
+            excludeSemantics: true,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => onTap(link.url),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(link.outlet, style: text.meta),
+                    const SizedBox(height: 2),
+                    Text(
+                      link.title,
+                      style: text.meta.copyWith(color: Theme.of(context).colorScheme.onSurface),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }

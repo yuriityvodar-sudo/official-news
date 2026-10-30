@@ -22,6 +22,17 @@ import {
   readWhere,
   whereCountries,
 } from "./filters";
+import {
+  type ForYouCursor,
+  type Ranked,
+  concernSql,
+  decodeForYouCursor,
+  encodeForYouCursor,
+  mediaLinksSql,
+  popularitySql,
+  rankForYou,
+  relevanceSql,
+} from "./foryou";
 
 /** A row of `articles` joined with its source, as stored in D1. */
 interface ArticleRow {
@@ -49,6 +60,8 @@ interface ArticleRow {
   impact: string | null;
   /** The countries it concerns (#230), as a JSON array in the summarizer's order. */
   countries: string | null;
+  /** For you only (#230 step 5): the reader's country's media about it, as stored in article_media. */
+  media_links?: string | null;
 }
 
 /**
@@ -152,20 +165,16 @@ export const TOP_HOURS = 72;
  */
 const TOP_SCORE = "a.importance - 0.5 * (julianday('now') - julianday(a.published_at))";
 
-/** Whether article `a` (from source `s`) concerns `country`: its source's, or one the summarizer named (#230). */
-const concerns = (country: string) =>
-  `(s.country = '${country}' OR EXISTS (SELECT 1 FROM article_countries c WHERE c.article_id = a.id AND c.country = '${country}'))`;
-
 /**
- * The score in For you (#170): a decision that concerns the reader's own
- * country gets a point more, one that concerns the EU half a point for a
- * reader in an EU member, so the block becomes "Top stories for you". Since
- * #230 by the countries the decision concerns, not its source's.
+ * The score in For you (#170; since #230 step 5 the list's score, foryou.ts):
+ * relevance to the reader's country (2 its own, 1 its neighbours' or the EU's
+ * for a member and for Ukraine, 1 a global item) and popularity there (0 to 2),
+ * so the block becomes "Top stories for you". By the countries the decision
+ * concerns, not its source's (#230).
  */
 function topScore(filters: Filters): string {
   if (filters.home === null) return TOP_SCORE;
-  const [home, union] = homeCountries(filters.home);
-  return `${TOP_SCORE} + CASE WHEN ${concerns(home)} THEN 1${union ? ` WHEN ${concerns(union)} THEN 0.5` : ""} ELSE 0 END`;
+  return `${TOP_SCORE} + ${relevanceSql(filters.home)} + ${popularitySql(filters.home)}`;
 }
 
 /**
@@ -354,7 +363,26 @@ export function toArticle(row: ArticleRow) {
     addedAt: row.added_at,
     impact: parseImpact(row.impact),
     countries: parseStringArray(row.countries),
+    // For you only (#230 step 5): "In the media", up to 3 of the reader's country's outlets about it.
+    ...(row.media_links !== undefined ? { media: parseMedia(row.media_links) } : {}),
   };
+}
+
+/** Links to the media stored for an article (popularity/gdelt.ts): headline, outlet and an http(s) link each; anything else reads as none. */
+function parseMedia(value: string | null): { title: string; outlet: string; url: string }[] {
+  if (!value) return [];
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter(
+        (m): m is { title: string; outlet: string; url: string } =>
+          typeof m?.title === "string" && typeof m?.outlet === "string" && typeof m?.url === "string" && /^https?:\/\//.test(m.url),
+      )
+      .map(({ title, outlet, url }) => ({ title, outlet, url }));
+  } catch {
+    return [];
+  }
 }
 
 /**
@@ -456,6 +484,14 @@ async function listArticles(url: URL, env: Env): Promise<Response> {
   if (topic === undefined) return badRequest(TOPIC_ERROR);
   const filters = feedFilters(place.where, topic);
 
+  // For you's order (#230 step 5): its pages are ranked by score (foryou.ts). `after` and
+  // `since` count what appeared since, as before; a feed cursor from before pages the old way.
+  if (filters.home !== null && params.get("after") === null && params.get("since") === null) {
+    const raw = params.get("cursor");
+    const cursor = raw === null ? null : decodeForYouCursor(raw);
+    if (raw === null || cursor) return forYouPage(env, filters, filters.home, lang, limit, cursor);
+  }
+
   const where = [...PAGE_CONDITIONS, ...(lang ? [RECENT_TRANSLATION, ...TRANSLATED_CONDITIONS] : []), ...filters.where];
   // The language is bound in the join (FROM_TRANSLATED), before the conditions.
   const binds: (string | number)[] = [...(lang ? [lang] : []), ...filters.binds];
@@ -530,6 +566,63 @@ async function listArticles(url: URL, env: Env): Promise<Response> {
   const nextCursor = page.results.length > limit && last?.feed_seq != null ? encodeCursor(last.feed_seq) : null;
   const shape = (row: TranslatedRow) => (lang ? toTranslatedArticle(row, lang) : toArticle(row));
 
+  return json(
+    {
+      items: rows.map(shape),
+      nextCursor,
+      top: top ? top.results.map(shape) : [],
+      ...(lang ? { translationsDelayed: delayed?.results[0]?.delayed !== 0 } : {}),
+    },
+    200,
+    LIST_CACHE,
+  );
+}
+
+/** For you ranks at most this many articles: more than For you's 7 days hold for one country (about 130 for Czechia, 30 Oct). */
+const FOR_YOU_MAX = 500;
+
+/**
+ * A page of For you (#230 step 5): every article For you shows the reader's
+ * country (forYouCondition, with `topic` and `lang` as the feed has them),
+ * with what its score needs, ranked in the Worker at the cursor's moment (now
+ * for a first page) over what the first page saw, and the page at the cursor's
+ * place in that order, so the pages of one scroll agree. Its items carry `media`, the reader's country's
+ * outlets about it. The top stories come on the first page, ranked by the same
+ * score in SQL (topScore).
+ */
+async function forYouPage(env: Env, filters: Filters, home: string, lang: Lang | null, limit: number, cursor: ForYouCursor | null): Promise<Response> {
+  const at = cursor?.at ?? Date.now();
+  const offset = cursor?.offset ?? 0;
+  const where = [...PAGE_CONDITIONS, ...(lang ? [RECENT_TRANSLATION, ...TRANSLATED_CONDITIONS] : []), ...filters.where];
+  // A later page ranks what the first one did: nothing that appeared since.
+  const binds: (string | number)[] = [...(lang ? [lang] : []), ...filters.binds];
+  if (cursor) {
+    where.push("a.feed_seq <= ?");
+    binds.push(cursor.seq);
+  }
+  const list = env.DB.prepare(
+    `SELECT ${lang ? translatedColumns(lang) : ARTICLE_COLUMNS},
+            ${concernSql(home)} AS concern, ${relevanceSql(home)} AS relevance, ${popularitySql(home)} AS popularity,
+            ${mediaLinksSql(home)} AS media_links
+     ${lang ? FROM_TRANSLATED : FROM_ARTICLES}
+     WHERE ${where.join(" AND ")}
+     ORDER BY a.feed_seq DESC
+     LIMIT ${FOR_YOU_MAX}`,
+  ).bind(...binds);
+  const topSql = topStories(filters, lang);
+  const topQuery = offset === 0 ? env.DB.prepare(topSql.sql).bind(...topSql.binds) : null;
+  const switchQuery = lang ? env.DB.prepare(LANG_SWITCH).bind(lang) : null;
+  const [all, ...more] = await env.DB.batch<TranslatedRow & Ranked & { delayed?: number }>(
+    [list, topQuery, switchQuery].filter((q): q is D1PreparedStatement => q !== null),
+  );
+  const top = topQuery ? more.shift() : undefined;
+  const delayed = switchQuery ? more.shift() : undefined;
+
+  const ranked = rankForYou(all.results, limit, at);
+  const rows = ranked.slice(offset, offset + limit);
+  const seq = cursor?.seq ?? Math.max(0, ...all.results.map((r) => r.feed_seq ?? 0));
+  const nextCursor = offset + limit < ranked.length ? encodeForYouCursor({ at, seq, offset: offset + limit }) : null;
+  const shape = (row: TranslatedRow) => (lang ? toTranslatedArticle(row, lang) : toArticle(row));
   return json(
     {
       items: rows.map(shape),
