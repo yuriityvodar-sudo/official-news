@@ -6,9 +6,12 @@ import { handleSite } from "../src/site/handler";
 import { CACHE } from "../src/site/respond";
 import type { SiteLang } from "../src/site/texts";
 import { rowsRead } from "./helpers";
+import { CONSENT_JS } from "../src/site/consent";
 
 export const ORIGIN = "https://site.test";
 
+/** A page without our one inline script, the analytics banner's (consent.ts), which every page carries; what is left must have no script at all. */
+export const withoutConsentScript = (body: string) => body.replace(`<script>${CONSENT_JS}</script>`, "");
 export const siteEnv = () => ({ DB: env.DB, SITE_ORIGIN: ORIGIN });
 
 export async function site(path: string, init: RequestInit = {}, host = "site.test", e = siteEnv()) {
