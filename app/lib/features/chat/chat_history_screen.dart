@@ -249,6 +249,8 @@ class ConversationsButton extends StatelessWidget {
     onPressed: onPressed,
     child: GlassCircle(
       size: 40,
+      // No shadow, as the Settings button beside it (Roman, 30 Oct).
+      shadow: false,
       child: Icon(
         CupertinoIcons.chat_bubble_2,
         size: 21,
