@@ -44,6 +44,13 @@ export type HeadlineKind = (typeof HEADLINE_KINDS)[number];
 export const HEADLINE_TYPES = [...HEADLINE_KINDS, "plain"] as const;
 export type HeadlineType = (typeof HEADLINE_TYPES)[number];
 
+/** How far a decision reaches (#230): one country, a group of countries or a region, or the whole world. */
+export const REACHES = ["national", "regional", "global"] as const;
+export type Reach = (typeof REACHES)[number];
+
+/** Codes the model writes for a country that has another ISO code. */
+const COUNTRY_ALIASES: Record<string, string> = { UK: "GB", EL: "GR" };
+
 export interface Summary {
   isNews: boolean;
   decisionType: DecisionType | null;
@@ -53,6 +60,13 @@ export interface Summary {
   summary: string;
   topics: Topic[];
   importance: number;
+  /**
+   * The countries whose people it concerns most (#230): ISO 3166-1 alpha-2
+   * codes, and EU for the Union as a whole. Empty when the model gave none:
+   * then the source's country is stored.
+   */
+  countries: string[];
+  reach: Reach;
 }
 
 /**
@@ -65,6 +79,7 @@ export const LIMITS = {
   shortSummary: 200,
   summary: 1000,
   topics: 3,
+  countries: 5,
 };
 
 /**
@@ -76,12 +91,14 @@ export const LIMITS = {
 export const SUMMARY_SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["isNews", "decisionType", "topics", "importance", "summary", "shortSummary", "headline", "headlineType"],
+  required: ["isNews", "decisionType", "topics", "importance", "countries", "reach", "summary", "shortSummary", "headline", "headlineType"],
   properties: {
     isNews: { type: "boolean" },
     decisionType: { type: ["string", "null"], enum: [...DECISION_TYPES, null] },
     topics: { type: "array", items: { type: "string", enum: [...TOPICS] }, maxItems: LIMITS.topics },
     importance: { type: "integer", minimum: 1, maximum: 5 },
+    countries: { type: "array", items: { type: "string", pattern: "^[A-Z]{2}$" }, maxItems: LIMITS.countries },
+    reach: { type: "string", enum: [...REACHES] },
     summary: { type: "string" },
     shortSummary: { type: "string" },
     headline: { type: "string" },
@@ -136,9 +153,31 @@ export function toSummary(value: unknown, kind: HeadlineKind): { summary: Summar
     ? [...new Set(v.topics.filter((t): t is Topic => TOPICS.includes(t as Topic)))].slice(0, LIMITS.topics)
     : [];
   const headlineType = HEADLINE_TYPES.includes(v.headlineType as HeadlineType) ? (v.headlineType as HeadlineType) : kind;
+  // Codes only; none is not a problem: the source's country is stored then (#230).
+  const codes = Array.isArray(v.countries) ? v.countries.filter((c): c is string => typeof c === "string") : [];
+  const countries = [
+    ...new Set(
+      codes
+        .map((c) => c.trim().toUpperCase())
+        .map((c) => COUNTRY_ALIASES[c] ?? c)
+        .filter((c) => /^[A-Z]{2}$/.test(c)),
+    ),
+  ].slice(0, LIMITS.countries);
+  const reach = REACHES.includes(v.reach as Reach) ? (v.reach as Reach) : "national";
 
   return {
-    summary: { isNews, decisionType, headline, headlineType, shortSummary: clip(shortSummary, LIMITS.shortSummary), summary, topics, importance },
+    summary: {
+      isNews,
+      decisionType,
+      headline,
+      headlineType,
+      shortSummary: clip(shortSummary, LIMITS.shortSummary),
+      summary,
+      topics,
+      importance,
+      countries,
+      reach,
+    },
   };
 }
 
