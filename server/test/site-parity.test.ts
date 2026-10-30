@@ -170,7 +170,7 @@ describe("latest lists", () => {
       const main = page.body.split("<footer")[0];
       const top = /<section[^>]*aria-labelledby="top">[\s\S]*?<\/section>/.exec(main)?.[0] ?? "";
       pages.push({ top: linkedIds(top), items: linkedIds(main.replace(top, "")) });
-      path = /<a class="more" href="([^"]+)" rel="next">/.exec(page.body)?.[1].replaceAll("&amp;", "&") ?? null;
+      path = /<a class="more" href="([^"]+)" rel="next nofollow">/.exec(page.body)?.[1].replaceAll("&amp;", "&") ?? null;
     }
     return pages;
   }
@@ -200,7 +200,7 @@ describe("latest lists", () => {
 
   it("read a bounded number of D1 rows per page", async () => {
     const first = await rowsRead(() => site("/en"));
-    const next = /<a class="more" href="([^"]+)" rel="next">/.exec((await site("/en")).body)![1];
+    const next = /<a class="more" href="([^"]+)" rel="next nofollow">/.exec((await site("/en")).body)![1];
     const later = await rowsRead(() => site(next));
     // 500 since #239: each article's countries (#230) are a few more rows, found by key.
     expect(first).toBeLessThan(500);
