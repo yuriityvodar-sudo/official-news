@@ -36,7 +36,7 @@ export const CACHE = {
   icon: { browser: "public, max-age=86400", edge: "max-age=86400" },
   /**
    * Another spelling of a list or of `/` (a query it does not use,
-   * a trailing slash), or an article URL with a query
+   * a trailing slash, a place in capitals), or an article URL with a query
    * (`fbclid`, `utm_*`), sent to its clean URL with no D1 read. The mapping
    * never changes, so it is kept a day.
    */
