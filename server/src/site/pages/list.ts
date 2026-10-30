@@ -2,13 +2,18 @@
 // same API call: Top stories on the first page, then the latest 20 without
 // the Top stories above them (as the app's feed_screen.dart; #89 review), and
 // "Older decisions" for the next page. Lists cover the API's 7 days; article
-// pages stay (GET /articles/:id has no date limit).
+// pages stay (GET /articles/:id has no date limit). With the app's filters
+// (#67, #68): a place, one country (`/{lang}/{cc}`) or a group of countries
+// (`/{lang}/{group}`), and one topic (`?topic=`), chosen in the two menus
+// under the title (filters.ts); paging, the language links and the alternates
+// keep them.
 import type { ApiArticle, ApiList } from "../data";
 import { fullDate, parseTime, publishedDate } from "../dates";
 import { html } from "../html";
 import { type Page, SITE_NAME } from "../layout";
 import { SITE_LANGS, type SiteLang, aiNotice, countryName, decisionLabel, isEvent, placeCode, t, text } from "../texts";
-import { articlePath, listPath } from "../urls";
+import { type ListFilter, articlePath, listPath } from "../urls";
+import { type Menus, filterBar, placeName, topicLabel } from "./filters";
 
 function item(lang: SiteLang, article: ApiArticle) {
   const type = decisionLabel(lang, article.decisionType);
@@ -71,27 +76,35 @@ const GRID = 5;
 /** The `before` of the next page: the last article's feedSeq, when the API says there is one. */
 export const nextBefore = (list: ApiList) => (list.nextCursor ? (list.items.at(-1)?.feedSeq ?? null) : null);
 
-/** Which list: its page (`before`, null for the first). */
+/** Which list: its filters and its page (`before`, null for the first). */
 export interface ListView {
+  filter: ListFilter;
   before: number | null;
 }
 
-/** What the API answered for it: the page. */
+/** What the API answered for it: the page, and on a first page what the menus offer. */
 export interface ListData {
   list: ApiList;
+  menus: Menus | null;
 }
 
 export function listPage(lang: SiteLang, origin: string, view: ListView, data: ListData): Page {
-  const { before } = view;
+  const { filter, before } = view;
   const { list } = data;
   const next = nextBefore(list);
   const first = before === null;
-  const empty =
-    lang === "en"
+  const filtered = filter.place !== null || filter.topic !== null;
+  // A filtered list with nothing in it says so, with a way back to all countries and all topics (the app's _FilteredEmpty).
+  const empty = filtered
+    ? html`<p class="meta">${t(lang, "filterEmpty")}</p>
+${filter.place ? html`<a class="more" href="${listPath(lang, { place: null, topic: filter.topic })}">${t(lang, "filterShowAllCountries")}</a><br>` : ""}${
+        filter.topic ? html`<a class="more" href="${listPath(lang, { place: filter.place, topic: null })}">${t(lang, "filterShowAllTopics")}</a>` : ""
+      }`
+    : lang === "en"
       ? html`<p class="meta">${t(lang, "feedEmpty")}</p>`
       : html`<p class="meta"><b>${t(lang, "feedNoTranslations")}</b><br>${t(lang, "feedTranslationsComing")}</p>`;
-  // Page 1's Latest leaves out the Top stories above it, so a short list does
-  // not show each decision twice; the next page still starts after
+  // Page 1's Latest leaves out the Top stories above it, so a short filtered
+  // list does not show each decision twice; the next page still starts after
   // the API's whole page (nextBefore). Nothing left: no Latest at all, as the app.
   const topIds = new Set(first ? list.top.map((a) => a.id) : []);
   const latest = list.items.filter((a) => !topIds.has(a.id));
@@ -107,8 +120,9 @@ export function listPage(lang: SiteLang, origin: string, view: ListView, data: L
   const stream = lead && !list.top.length ? latest.slice(1) : latest;
   // The AI's text is of official pages, and of Wikipedia's for events (#230).
   const notice = html`<p class="notice">${aiNotice(lang, [...list.top, ...list.items].some(isEvent) ? "both" : "decisions")}</p>`;
-  const head = html`<div class="front-head"><h1 class="page-title">${t(lang, "listTitle")}</h1></div>`;
-  const older = next ? html`<a class="more" href="${listPath(lang, next)}" rel="next">${t(lang, "older")} →</a><br>` : "";
+  const head = html`<div class="front-head"><h1 class="page-title">${t(lang, "listTitle")}</h1>
+${filterBar(lang, filter, data.menus)}</div>`;
+  const older = next ? html`<a class="more" href="${listPath(lang, filter, next)}" rel="next nofollow">${t(lang, "older")} →</a><br>` : "";
   const body = lead
     ? html`${head}
 <div class="front">
@@ -129,29 +143,33 @@ ${stream.length > COLUMN ? html`<ol class="cards" aria-label="${t(lang, "latest"
 ${stream.length > COLUMN + GRID ? html`<ol class="items more-rows" aria-label="${t(lang, "latest")}">${stream.slice(COLUMN + GRID).map((a) => streamItem(lang, a, today))}</ol>` : ""}
 ${older}`
     : html`<h1 class="page-title">${t(lang, "listTitle")}</h1>
+${filterBar(lang, filter, data.menus)}
 ${list.items.length ? notice : ""}
 ${items}
 ${older}
-${first ? "" : html`<a class="more" href="${listPath(lang)}">${t(lang, "latestLink")}</a>`}`;
+${first ? "" : html`<a class="more" href="${listPath(lang, filter)}">${t(lang, "latestLink")}</a>`}`;
 
+  // "Germany · Economy · Latest decisions · Outer News", "G7 · …": the filters' full names first, for tabs and history.
+  const names = [filter.place ? placeName(lang, filter.place) : null, filter.topic ? topicLabel(lang, filter.topic) : null].filter((n) => n !== null);
   // Every list exists in every language, as the app's language menu offers all
   // five (feed_language.dart); German is empty while it is off on the server.
   return {
     lang,
     kind: "list",
-    // A later page repeats what the first page links; an empty list (German
-    // while it is off) has nothing to find.
-    index: first && list.items.length > 0,
-    // The front page leads with the name, "Outer News · Official decisions" (Yurii, 29 Oct).
-    title: first ? `${SITE_NAME} · ${text(lang, "listTitle")}` : [text(lang, "latestLink"), SITE_NAME].join(" · "),
+    // A later page or a topic repeats what the lists already link; an empty
+    // list (German while it is off) has nothing to find.
+    index: first && filter.topic === null && list.items.length > 0,
+    // The front page leads with the name, "Outer News · Official decisions" (Yurii, 29 Oct);
+    // a filtered or later page names its filters first, for tabs and history.
+    title: first && !filtered ? `${SITE_NAME} · ${text(lang, "listTitle")}` : [...names, text(lang, "latestLink"), SITE_NAME].join(" · "),
     description: text(lang, "aboutIntro"),
-    canonical: origin + listPath(lang, before),
+    canonical: origin + listPath(lang, filter, before),
     alternates: [
-      ...SITE_LANGS.map((l) => ({ hreflang: l, href: origin + listPath(l, before) })),
-      // `/` picks the visitor's language (lang.ts); a later page has no such address of its own.
-      { hreflang: "x-default", href: origin + (first ? "/" : listPath("en", before)) },
+      ...SITE_LANGS.map((l) => ({ hreflang: l, href: origin + listPath(l, filter, before) })),
+      // `/` picks the visitor's language (lang.ts); a filtered or later page has no such address of its own.
+      { hreflang: "x-default", href: origin + (first && !filtered ? "/" : listPath("en", filter, before)) },
     ],
-    switcher: SITE_LANGS.map((l) => ({ lang: l, path: listPath(l, before) })),
+    switcher: SITE_LANGS.map((l) => ({ lang: l, path: listPath(l, filter, before) })),
     body,
   };
 }

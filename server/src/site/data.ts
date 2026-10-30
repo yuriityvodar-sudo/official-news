@@ -8,7 +8,10 @@
 import { type toArticle, encodeCursor, handleApi } from "../api";
 import type { Env } from "../env";
 import type { SiteEnv } from "./env";
+import type { Topic } from "../summarizer/schema";
 import { SITE_LANGS, type SiteLang } from "./texts";
+import type { GroupId } from "../api/filters";
+import type { ListFilter, Place } from "./urls";
 
 /** An article as the API returns it (docs/contract.md); `lang` in a language other than English. */
 export type ApiArticle = ReturnType<typeof toArticle> & { lang?: string };
@@ -50,18 +53,95 @@ export async function articleInLanguages(env: SiteEnv, id: string): Promise<Part
   return shown;
 }
 
+/** The API's Where parameter for a place: `country=DE`, `group=g7`, or nothing for all countries. */
+function setPlace(params: URLSearchParams, place: Place) {
+  if (place === null) return;
+  if ("country" in place) params.set("country", place.country);
+  else params.set("group", place.group);
+}
+
 /**
  * A page of the latest list in `lang`, as the app gets it: 20 articles, and top
- * stories on the first. `before` is the site's paging parameter, the feedSeq
- * after which the page continues, turned into the API's own cursor.
+ * stories on the first, with the app's filters (#67, #68: `country` or
+ * `group`, and `topic`). `before` is the site's paging parameter, the feedSeq
+ * after which the page continues, turned into the API's own cursor (a place
+ * in the feed, so the next page continues within the filter).
  */
-export async function latest(env: SiteEnv, lang: SiteLang, before: number | null): Promise<ApiList> {
+export async function latest(env: SiteEnv, lang: SiteLang, filter: ListFilter, before: number | null): Promise<ApiList> {
   const params = new URLSearchParams({ limit: "20" });
   if (lang !== "en") params.set("lang", lang);
+  setPlace(params, filter.place);
+  if (filter.topic) params.set("topic", filter.topic);
   if (before !== null) params.set("cursor", encodeCursor(before));
   const list = await api<ApiList>(env, `/articles?${params}`);
   if (!list) throw new ApiError("API 404 for /articles");
   return list;
+}
+
+export interface ApiTopic {
+  id: Topic;
+  name: string;
+}
+
+export interface ApiCountry {
+  code: string;
+  name: string;
+}
+
+export interface ApiGroup {
+  id: GroupId;
+  name: string;
+  /** The `country` values of the articles the group shows (`EU` for the EU institutions). */
+  members: string[];
+}
+
+/** The Where menu as GET /countries answers it: every group, then the countries with active sources. */
+export interface ApiWhere {
+  groups: ApiGroup[];
+  countries: ApiCountry[];
+}
+
+/**
+ * How long the menus' answers are kept in this data centre's cache (30 Oct:
+ * the day the site went live, crawlers opened about 4,800 list pages in two
+ * hours, each counting its menus again, and D1 read 2.1 million rows of its
+ * 5 million a day). A menu changes only as articles come, so 10 minutes.
+ */
+const MENU_SECONDS = 600;
+
+/** `api()`, answered from the Cache API when this data centre has asked the same in the last MENU_SECONDS. */
+async function cachedApi<T>(env: SiteEnv, path: string): Promise<T | null> {
+  const key = new Request(`https://site-cache.internal${path}`);
+  const cache = typeof caches === "undefined" ? null : caches.default;
+  const hit = await cache?.match(key);
+  if (hit) return (await hit.json()) as T;
+  const answer = await api<T>(env, path);
+  if (answer !== null && cache) {
+    await cache.put(key, new Response(JSON.stringify(answer), { headers: { "content-type": "application/json", "cache-control": `max-age=${MENU_SECONDS}` } }));
+  }
+  return answer;
+}
+
+/** The Topics menu: `GET /topics`, the topics with articles in that place's (or the whole) feed in `lang`, busiest first. */
+export async function topicsMenu(env: SiteEnv, lang: SiteLang, place: Place): Promise<ApiTopic[]> {
+  const params = new URLSearchParams();
+  if (lang !== "en") params.set("lang", lang);
+  setPlace(params, place);
+  const query = params.toString();
+  const answer = await cachedApi<{ topics: ApiTopic[] }>(env, query ? `/topics?${query}` : "/topics");
+  if (!answer) throw new ApiError("API 404 for /topics");
+  return answer.topics;
+}
+
+/**
+ * The Where menu: `GET /countries`, its groups (always all of them, in their
+ * fixed order) and the countries with active sources, named in `lang` and
+ * sorted by that name.
+ */
+export async function whereMenu(env: SiteEnv, lang: SiteLang): Promise<ApiWhere> {
+  const answer = await cachedApi<ApiWhere>(env, lang === "en" ? "/countries" : `/countries?lang=${lang}`);
+  if (!answer) throw new ApiError("API 404 for /countries");
+  return { groups: answer.groups, countries: answer.countries };
 }
 
 /** Pages of 50 the sitemap reads at most per language (the API's 7 days are about 200 articles today). */

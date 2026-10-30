@@ -57,40 +57,78 @@ import firebase_messaging
 /// draws the glass, over whatever Flutter has under it. On iOS before 26 it
 /// draws the plain grey circle the button had (the app runs from iOS 15).
 class GlassViewFactory: NSObject, FlutterPlatformViewFactory {
+  func createArgsCodec() -> FlutterMessageCodec & NSObjectProtocol {
+    FlutterStandardMessageCodec.sharedInstance()
+  }
+
   func create(
     withFrame frame: CGRect,
     viewIdentifier viewId: Int64,
     arguments args: Any?
   ) -> FlutterPlatformView {
-    return GlassView(frame: frame)
+    let params = args as? [String: Any]
+    let room = params?["room"] as? Double ?? 0
+    let shadow = params?["shadow"] as? Bool ?? true
+    return GlassView(frame: frame, room: CGFloat(room), shadow: shadow)
   }
 }
 
 class GlassView: NSObject, FlutterPlatformView {
   private let container: UIView
 
-  init(frame: CGRect) {
-    container = UIView(frame: frame)
+  /// The glass, [room] inside the view on every side (`glassShadowRoom` in
+  /// glass.dart): the view clips at its frame, the only part Flutter draws a
+  /// page or a sheet over, so the glass's shadow never shows through one
+  /// (Roman, 30 Oct). Without [shadow] (the feed's round buttons, Roman,
+  /// 30 Oct) the view is the glass itself, clipped round, so nothing of the
+  /// glass's shadow shows past its edge.
+  init(frame: CGRect, room: CGFloat, shadow: Bool) {
+    let glass: UIView
+    if #available(iOS 26.0, *) {
+      let effect = UIGlassEffect()
+      effect.isInteractive = false
+      let view = UIVisualEffectView(effect: effect)
+      view.cornerConfiguration = .capsule()
+      glass = view
+    } else {
+      glass = CircleView(frame: .zero)
+    }
+    container = RoomView(frame: frame, room: room, content: glass, round: !shadow)
     container.backgroundColor = .clear
+    container.clipsToBounds = true
     // Taps fall through to Flutter's button (PlatformViewHitTestBehavior.transparent).
     container.isUserInteractionEnabled = false
-    if #available(iOS 26.0, *) {
-      let glass = UIGlassEffect()
-      glass.isInteractive = false
-      let effect = UIVisualEffectView(effect: glass)
-      effect.frame = container.bounds
-      effect.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-      effect.cornerConfiguration = .capsule()
-      container.addSubview(effect)
-    } else {
-      let circle = CircleView(frame: container.bounds)
-      circle.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-      container.addSubview(circle)
-    }
     super.init()
   }
 
   func view() -> UIView { container }
+}
+
+/// A view whose [content] stands [room] inside it on every side, laid out
+/// again whenever Flutter sizes the view: Flutter makes it before it knows
+/// its size, so a frame set once stayed empty and the glass never showed
+/// (build 50, Roman, 30 Oct).
+final class RoomView: UIView {
+  private let room: CGFloat
+  private let content: UIView
+  /// Clipped to a capsule as wide or tall as it is, as the glass is.
+  private let round: Bool
+
+  init(frame: CGRect, room: CGFloat, content: UIView, round: Bool = false) {
+    self.room = room
+    self.content = content
+    self.round = round
+    super.init(frame: frame)
+    addSubview(content)
+  }
+
+  required init?(coder: NSCoder) { fatalError("not used") }
+
+  override func layoutSubviews() {
+    super.layoutSubviews()
+    content.frame = bounds.insetBy(dx: room, dy: room)
+    if round { layer.cornerRadius = min(bounds.width, bounds.height) / 2 }
+  }
 }
 
 /// The plain circle, iOS 15 to 18: the system's secondary fill, as the
@@ -212,6 +250,7 @@ class PillsView: NSObject, FlutterPlatformView {
 
   init(frame: CGRect, channel: FlutterMethodChannel, arguments: [String: Any]) {
     let model = PillsModel()
+    model.room = CGFloat(arguments["room"] as? Double ?? 0)
     model.update(arguments, animated: false)
     self.model = model
     self.channel = channel
@@ -225,6 +264,9 @@ class PillsView: NSObject, FlutterPlatformView {
     }
     host.view.frame = frame
     host.view.backgroundColor = .clear
+    // Nothing past the frame, where Flutter cannot draw a page or a sheet
+    // over it: the glass's shadow has its room inside (PillsRow.insets).
+    host.view.clipsToBounds = true
     host.overrideUserInterfaceStyle = model.dark ? .dark : .light
     // The same row takes every change, so the drop flows instead of a new row appearing.
     channel.setMethodCallHandler { [weak self] call, result in
@@ -257,6 +299,10 @@ final class PillsModel: ObservableObject {
   @Published var chosen = ""
   @Published var tint = Color.accentColor
   @Published var dark = false
+
+  /// How far the view reaches above and below the row, for the glass's
+  /// shadow (`glassShadowRoom` in glass.dart); set once, when it is made.
+  var room: CGFloat = 0
   var onSelect: (String) -> Void = { _ in }
   var onScroll: (CGFloat) -> Void = { _ in }
 
@@ -302,10 +348,12 @@ struct PillsRow: View {
 
   /// The pills in Flutter's row (58 points at the usual text size, taller as
   /// the text grows), each in a place at least 44 high ([place]), exactly
-  /// where Flutter's own pills are, with room under them for the glass's
-  /// shadow: nothing moves when one row stands in for the other (Roman,
-  /// 29 Oct).
-  static let insets = EdgeInsets(top: 4, leading: 16, bottom: 10, trailing: 16)
+  /// where Flutter's own pills are: nothing moves when Flutter's row gives
+  /// way to this one (Roman, 29 Oct). The view reaches [room] above and
+  /// below the row, for the glass's shadow, and clips at its frame.
+  static func insets(room: CGFloat) -> EdgeInsets {
+    EdgeInsets(top: 4 + room, leading: 16, bottom: 10 + room, trailing: 16)
+  }
 
   /// A pill's place, as tall as Flutter's: the pill centred in it.
   static let place: CGFloat = 44
@@ -380,7 +428,7 @@ struct GlassPills: View {
               .id(pill.id)
             }
           }
-          .padding(PillsRow.insets)
+          .padding(PillsRow.insets(room: model.room))
         }
       }
       .scrollClipDisabled()
@@ -430,7 +478,7 @@ struct MaterialPills: View {
             .id(pill.id)
           }
         }
-        .padding(PillsRow.insets)
+        .padding(PillsRow.insets(room: model.room))
       }
       // Once, as GlassPills.
       .onAppear {

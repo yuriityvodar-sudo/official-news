@@ -265,10 +265,9 @@ class _FeedPillsState extends State<FeedPills> {
 /// tapped. A swipe sideways and a tap go to iOS; a swipe up or down stays
 /// with the feed, as anywhere on it.
 ///
-/// [fallback], Flutter's own row, shows until iOS has made its row, and
-/// while anything is over the feed (a sheet, an article growing out of its
-/// card: [NativeOrPlain]), since the glass's shadow would show through it,
-/// as with the gear's glass (`GlassCircle`). It is swiped as far as iOS's
+/// [fallback], Flutter's own row, shows until iOS has made its row
+/// ([NativeOrPlain]); a page or a sheet then covers iOS's row itself, as
+/// it does the gear's glass (`GlassCircle`). It is swiped as far as iOS's
 /// row ([scroll]).
 class _NativePills extends StatefulWidget {
   const _NativePills({
@@ -305,6 +304,7 @@ class _NativePillsState extends State<_NativePills> {
     'chosen': widget.chosen,
     'tint': widget.tint.toARGB32(),
     'dark': Theme.of(context).brightness == Brightness.dark,
+    'room': glassShadowRoom,
   };
 
   @override
@@ -374,7 +374,24 @@ class _NativePillsState extends State<_NativePills> {
         Factory<TapGestureRecognizer>(TapGestureRecognizer.new),
       },
     );
-    return NativeOrPlain(ready: _ready, native: native, plain: widget.fallback);
+    return NativeOrPlain(
+      ready: _ready,
+      // iOS's row reaches [glassShadowRoom] above and below the row, for the
+      // glass's shadow; touches there go to the feed.
+      native: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned(
+            left: 0,
+            right: 0,
+            top: -glassShadowRoom,
+            bottom: -glassShadowRoom,
+            child: native,
+          ),
+        ],
+      ),
+      plain: widget.fallback,
+    );
   }
 }
 

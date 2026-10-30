@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -9,6 +11,7 @@ import 'package:in_app_purchase/in_app_purchase.dart';
 import 'package:official_news/core/analytics.dart';
 import 'package:official_news/core/api_client.dart';
 import 'package:official_news/core/article.dart';
+import 'package:official_news/core/glass.dart';
 import 'package:official_news/core/subscription.dart';
 import 'package:official_news/features/chat/chat_consent.dart';
 import 'package:official_news/features/chat/chat_screen.dart';
@@ -151,6 +154,34 @@ void main() {
       },
     );
 
+    testWidgets("iOS's glass on its close button is drawn after everything "
+        'else in it: whatever Flutter drew after a native view inside a sheet '
+        "showed only over iOS's other views (the AI chat, TestFlight 55, "
+        'Roman, 30 Oct)', (tester) async {
+      GlassCircle.debugNative = true;
+      addTearDown(() => GlassCircle.debugNative = null);
+      final messenger = tester.binding.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(
+        SystemChannels.platform_views,
+        (_) async => null,
+      );
+      addTearDown(
+        () => messenger.setMockMethodCallHandler(
+          SystemChannels.platform_views,
+          null,
+        ),
+      );
+      final closed = await showPaywall(tester);
+      expect(
+        paintOrder(tester, find.byType(UiKitView)),
+        greaterThan(paintOrder(tester, find.text('Privacy Policy'))),
+      );
+
+      await tester.tap(find.bySemanticsLabel('Close').first);
+      await tester.pumpAndSettle();
+      expect(await closed, isFalse);
+    });
+
     testWidgets('says when the App Store is not there, and opens the terms', (
       tester,
     ) async {
@@ -215,6 +246,8 @@ void main() {
       String body = '{}',
       List<int> left = const [20],
       int units = 1,
+      List<String> pieces = const ['Yes,', ' from November', ' 2027.'],
+      Future<void>? hold,
     }) {
       var statuses = 0;
       return ApiClient(
@@ -238,6 +271,7 @@ void main() {
             );
           }
           asked.add(jsonDecode(sent) as Map<String, dynamic>);
+          if (hold != null) await hold;
           if (status != 200) {
             return http.StreamedResponse(
               Stream.value(utf8.encode(body)),
@@ -245,9 +279,7 @@ void main() {
             );
           }
           return http.StreamedResponse(
-            Stream.fromIterable(
-              ['Yes,', ' from November', ' 2027.'].map(utf8.encode),
-            ),
+            Stream.fromIterable(pieces.map(utf8.encode)),
             200,
             headers: {
               'x-chat-remaining': '$remaining',
@@ -285,6 +317,29 @@ void main() {
       );
       await tester.pumpAndSettle();
     }
+
+    testWidgets("iOS's glass on the close button is drawn after everything "
+        'else in the chat: drawn first, it left the chat under it empty '
+        '(TestFlight 55, Roman, 30 Oct)', (tester) async {
+      GlassCircle.debugNative = true;
+      addTearDown(() => GlassCircle.debugNative = null);
+      final messenger = tester.binding.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(
+        SystemChannels.platform_views,
+        (_) async => null,
+      );
+      addTearDown(
+        () => messenger.setMockMethodCallHandler(
+          SystemChannels.platform_views,
+          null,
+        ),
+      );
+      await openChat(tester, server(remaining: 2));
+      expect(
+        paintOrder(tester, find.byType(UiKitView)),
+        greaterThan(paintOrder(tester, find.text('Ask about this decision'))),
+      );
+    });
 
     testWidgets(
       'asks about this decision and shows the answer as it comes, with the official link',
@@ -415,6 +470,180 @@ void main() {
       },
     );
 
+    testWidgets(
+      'opens as a sheet from the bottom over the article, and its button closes it',
+      (tester) async {
+        await tester.runAsync(() async {
+          store.report(
+            PurchaseStatus.purchased,
+            jws: _jws(_now.add(const Duration(days: 30))),
+          );
+          await Future<void>.delayed(const Duration(milliseconds: 20));
+        });
+        await tester.pumpWidget(
+          testApp(
+            home: Builder(
+              builder: (context) => CupertinoButton(
+                onPressed: () => ChatScreen.show(context, _article),
+                child: const Text('Discuss'),
+              ),
+            ),
+          ),
+        );
+        await tester.tap(find.text('Discuss'));
+        await tester.pumpAndSettle();
+        final chat = find.byType(ChatScreen);
+        expect(chat, findsOneWidget);
+        expect(
+          ModalRoute.of(tester.element(chat)),
+          isA<CupertinoSheetRoute<void>>(),
+        );
+        await tester.tap(find.byIcon(CupertinoIcons.xmark));
+        await tester.pumpAndSettle();
+        expect(chat, findsNothing);
+      },
+    );
+
+    testWidgets(
+      "shows the answer's bold and lists as such, never their marks (Roman, 30 Oct)",
+      (tester) async {
+        await openChat(
+          tester,
+          server(
+            pieces: [
+              '**Yes.** It ',
+              'starts in 2027.\n\nWhat changes:\n- new **cars**',
+              '\n- old ones\n1. first\n### Unknown',
+            ],
+          ),
+        );
+        await tester.tap(find.text('What changes and when?'));
+        await tester.pumpAndSettle();
+        expect(find.textContaining('**'), findsNothing);
+        expect(find.textContaining('###'), findsNothing);
+        final yes = tester.widget<Text>(find.text('Yes. It starts in 2027.'));
+        final spans = (yes.textSpan! as TextSpan).children!.cast<TextSpan>();
+        expect(spans.first.text, 'Yes.');
+        expect(spans.first.style?.fontWeight, FontWeight.w700);
+        expect(find.text('What changes:'), findsOneWidget);
+        expect(find.text('•'), findsNWidgets(2));
+        expect(find.text('new cars'), findsOneWidget);
+        expect(find.text('old ones'), findsOneWidget);
+        expect(find.text('1.'), findsOneWidget);
+        expect(find.text('first'), findsOneWidget);
+        expect(find.text('Unknown'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'folds the header into the title once asked, and a dot, not a spinner, '
+      'while the agent thinks',
+      (tester) async {
+        final hold = Completer<void>();
+        await openChat(tester, server(hold: hold.future));
+        expect(
+          find.text('New cars must meet Euro 7 from 2027'),
+          findsOneWidget,
+        );
+        expect(find.text('GOV.UK'), findsOneWidget);
+
+        await tester.tap(find.text('Does this concern me?'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 400));
+        expect(find.byType(CupertinoActivityIndicator), findsNothing);
+        // The decision's headline is the title's second line; the rest is gone.
+        expect(
+          find.text('New cars must meet Euro 7 from 2027'),
+          findsOneWidget,
+        );
+        expect(find.text('GOV.UK'), findsNothing);
+        expect(find.text('What should I do?'), findsNothing);
+
+        hold.complete();
+        await tester.pumpAndSettle();
+        expect(find.text('Yes, from November 2027.'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'takes the question asked to the top of the screen and keeps it there '
+      "as a long answer comes, never jumping to the answer's end",
+      (tester) async {
+        await openChat(
+          tester,
+          server(
+            pieces: [
+              for (var i = 1; i <= 40; i++) 'Line $i of the answer.\n\n',
+            ],
+          ),
+        );
+        final list = find.byType(SingleChildScrollView);
+        await tester.tap(find.text('Does this concern me?'));
+        await tester.pumpAndSettle();
+        // The first question stands at the top as the header folds.
+        expect(
+          tester.getTopLeft(find.text('Does this concern me?')).dy,
+          lessThan(tester.getTopLeft(list).dy + 40),
+        );
+        expect(find.text('Line 1 of the answer.'), findsOneWidget);
+
+        await tester.enterText(find.byType(CupertinoTextField), 'And then?');
+        await tester.testTextInput.receiveAction(TextInputAction.send);
+        await tester.pumpAndSettle();
+        final top = tester.getTopLeft(list).dy;
+        final question = tester.getTopLeft(find.text('And then?')).dy;
+        expect(question, greaterThanOrEqualTo(top));
+        expect(question, lessThan(top + 40));
+        // Its bubble stands 8 points under the title, not flush with it, where
+        // it slipped under the title on the phone (Roman, 30 Oct).
+        final bubble = tester.getRect(
+          find
+              .ancestor(
+                of: find.text('And then?'),
+                matching: find.byType(Container),
+              )
+              .first,
+        );
+        expect(bubble.top, moreOrLessEquals(top + 8));
+        // The start of the answer shows under it; its end is further down.
+        expect(
+          tester.getTopLeft(find.text('Line 1 of the answer.').last).dy,
+          lessThan(tester.getBottomLeft(list).dy),
+        );
+      },
+    );
+
+    testWidgets('a question sent as the keyboard closes still goes to the '
+        'top: the room under it counts the keyboard (the simulator, 30 Oct)', (
+      tester,
+    ) async {
+      await openChat(tester, server(pieces: ['Short answer.']));
+      await tester.tap(find.text('Does this concern me?'));
+      await tester.pumpAndSettle();
+      // The keyboard is up while the reader types, 300 points.
+      tester.view.viewInsets = FakeViewPadding(
+        bottom: 300 * tester.view.devicePixelRatio,
+      );
+      addTearDown(tester.view.resetViewInsets);
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(CupertinoTextField), 'And then?');
+      await tester.testTextInput.receiveAction(TextInputAction.send);
+      await tester.pump();
+      // The return key closes it.
+      tester.view.resetViewInsets();
+      await tester.pumpAndSettle();
+      final top = tester.getTopLeft(find.byType(SingleChildScrollView)).dy;
+      final bubble = tester.getRect(
+        find
+            .ancestor(
+              of: find.text('And then?'),
+              matching: find.byType(Container),
+            )
+            .first,
+      );
+      expect(bubble.top, moreOrLessEquals(top + 8));
+    });
+
     testWidgets('not paid any more: the paywall again', (tester) async {
       await openChat(tester, server(status: 402));
       await tester.tap(find.text('Does this concern me?'));
@@ -426,4 +655,21 @@ void main() {
       );
     });
   });
+}
+
+/// Where [finder]'s render object comes as the screen is painted: a parent
+/// before its children, children in their order (true of the stacks,
+/// columns and scroll views here).
+int paintOrder(WidgetTester tester, Finder finder) {
+  final target = tester.renderObject(finder);
+  var index = 0;
+  var found = -1;
+  void visit(RenderObject object) {
+    if (identical(object, target)) found = index;
+    index++;
+    object.visitChildren(visit);
+  }
+
+  visit(tester.renderObject(find.byType(CupertinoPageScaffold).first));
+  return found;
 }
