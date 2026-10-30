@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/rendering.dart' show ImageFilterLayer;
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -8,6 +9,7 @@ import 'package:http/testing.dart';
 import 'package:official_news/core/api_client.dart';
 import 'package:official_news/core/card_zoom.dart';
 import 'package:official_news/core/glass.dart';
+import 'package:official_news/core/sheet.dart';
 import 'package:official_news/core/router.dart';
 import 'package:official_news/features/detail/detail_screen.dart';
 import 'package:official_news/features/feed/feed_controller.dart';
@@ -372,12 +374,12 @@ void main() {
     final top = tester.getRect(find.text('Card'));
 
     navigator.push(
-      CupertinoSheetRoute<void>(
-        scrollableBuilder: (_, _) => const Text('Paywall'),
-      ),
+      SheetRoute<void>(scrollableBuilder: (_, _) => const Text('Paywall')),
     );
     await tester.pumpAndSettle();
     expect(find.text('Paywall'), findsOneWidget);
+    // The article shrinks through a transform its glass follows (#166).
+    expect(tester.layers.whereType<ImageFilterLayer>(), isEmpty);
     navigator.pop();
     await tester.pumpAndSettle();
 
@@ -386,8 +388,10 @@ void main() {
     expect(tester.getRect(find.text('Card')), top);
   });
 
-  testWidgets('the native glass under the moving article is drawn plainly '
-      'meanwhile; the article keeps its own', (tester) async {
+  testWidgets("the feed's native glass stays as the article grows over it, "
+      'stays open and goes back; the article has its own (Roman, 30 Oct)', (
+    tester,
+  ) async {
     GlassCircle.debugNative = true;
     addTearDown(() => GlassCircle.debugNative = null);
     final messenger = tester.binding.defaultBinaryMessenger;
@@ -431,23 +435,20 @@ void main() {
     await tester.tap(find.text('Card'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
-    expect(CardZoomRoute.moving.value, isTrue);
-    expect(native('Gear'), 0);
+    expect(native('Gear'), 1);
     expect(native('Back'), 1);
 
+    // The article covers the feed's glass, which needs no stand-in (#160).
     await tester.pumpAndSettle();
-    expect(CardZoomRoute.moving.value, isFalse);
-    // Covered by the article, the feed's glass stays plain (#160).
-    expect(native('Gear'), 0);
+    expect(native('Gear'), 1);
     expect(native('Back'), 1);
 
     tester.state<NavigatorState>(find.byType(Navigator)).pop();
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
-    expect(native('Gear'), 0);
+    expect(native('Gear'), 1);
     await tester.pumpAndSettle();
     expect(native('Gear'), 1);
-    expect(CardZoomRoute.moving.value, isFalse);
   });
 
   group('the feed', () {
