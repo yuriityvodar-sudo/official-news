@@ -6,6 +6,7 @@ import { parseFeed } from "../src/fetcher/feed";
 import { extractContent, findLink, parsePage } from "../src/fetcher/page";
 import { isAllowed, parseRobots, robotsFromResponse } from "../src/fetcher/robots";
 import { decodeBody, decodeEntities, fillTemplate, getPath, getStrings, htmlToText } from "../src/fetcher/text";
+import { currentEventsPages, englishPageDay, parseCurrentEvents, plainText } from "../src/fetcher/wikipedia";
 
 const NOW = new Date("2026-10-14T15:00:00Z");
 
@@ -471,5 +472,84 @@ describe("parseApi", () => {
       date: { field: ["billAssentedDate", "billPassedInRSDate"], dateOnly: true },
     }, NOW);
     expect(item).toMatchObject({ url: "https://sansad.in/a%20b.pdf", publishedAt: "2026-08-11T12:00:00Z" });
+  });
+});
+
+// #230: Wikipedia's current events. The fixtures copy the pages' markup, with made-up events.
+describe("Wikipedia's current events", () => {
+  const EN_PAGE = "https://en.wikipedia.org/wiki/Portal:Current_events/2026_October_13";
+  const EN = `{{Current events|year=2026|month=10|day=13|top=yes}}
+<!-- All news items below this line -->
+'''Armed conflicts and attacks'''
+*[[Northland conflict]]
+**[[Siege of Port Alba|Port Alba siege]]
+***Northland forces shell [[Port Alba]], killing 12 civilians. [https://news.test/a1 (Example Wire)] [https://paper.test/b2 (''The Daily Test'')]
+*An earthquake of magnitude 6.1 strikes [[Eastland]].<ref>ignored</ref> [https://news.test/q (Example Wire)]
+
+'''Business and economy'''
+*[[Eastland]]'s [[Central Bank of Eastland|central bank]] raises its key rate to 4.5%. [https://bank.test/rate (Reuters)]
+*A topic line with no source
+`;
+
+  it("takes each event with its category, the topics above it and the outlets that reported it", () => {
+    const items = parseCurrentEvents(EN, EN_PAGE, "en", NOW, englishPageDay(EN_PAGE));
+    expect(items.map((i) => i.title)).toEqual([
+      "Northland forces shell Port Alba, killing 12 civilians.",
+      "An earthquake of magnitude 6.1 strikes Eastland.",
+      "Eastland's central bank raises its key rate to 4.5%.",
+    ]);
+    expect(items[0]).toMatchObject({
+      publishedAt: "2026-10-13T12:00:00Z",
+      dateOnly: true,
+      imageUrl: null,
+      category: "Armed conflicts and attacks",
+      text: "Armed conflicts and attacks\nNorthland conflict › Port Alba siege\nNorthland forces shell Port Alba, killing 12 civilians.\nReported by: Example Wire, The Daily Test",
+    });
+    expect(items[1].text).toBe("Armed conflicts and attacks\nAn earthquake of magnitude 6.1 strikes Eastland.\nReported by: Example Wire");
+    expect(items[2].category).toBe("Business and economy");
+    // Each links the page people read, told apart by its first source's link, the same on every read.
+    expect(items[0].url).toMatch(/^https:\/\/en\.wikipedia\.org\/wiki\/Portal:Current_events\/2026_October_13#event-[0-9a-z]+$/);
+    expect(new Set(items.map((i) => i.url)).size).toBe(3);
+    expect(parseCurrentEvents(EN, EN_PAGE, "en", NOW, "2026-10-13").map((i) => i.url)).toEqual(items.map((i) => i.url));
+  });
+
+  it("dates Russian events by the day headings, a December one in January as last year's", () => {
+    const page = encodeURI("https://ru.wikipedia.org/wiki/Портал:Текущие_события/Последние_события");
+    const RU = `__NOTOC__<!--СОБЫТИЯ РАЗМЕЩАТЬ НИЖЕ-->
+<section begin="Январь" />
+
+=== [[2 января]] ===
+* Экономика
+** [[Центральный банк Истландии|Центробанк Истландии]] повысил ставку до 4,5 %<ref>{{cite web|title=Rate|url=https://bank.test/rate |publisher=[[Reuters]] |date=2027-01-02}}</ref>.
+
+=== [[31 декабря]] ===
+* Катастрофы и происшествия
+** Землетрясение магнитудой 6,1 произошло в [[Истландия|Истландии]]<ref name="q">{{cite news|url=https://news.test/q|издание=Пример}}</ref><ref name="q" />.
+`;
+    const items = parseCurrentEvents(RU, page, "ru", new Date("2027-01-03T10:00:00Z"));
+    expect(items.map((i) => [i.title, i.publishedAt, i.category])).toEqual([
+      ["Центробанк Истландии повысил ставку до 4,5 %.", "2027-01-02T12:00:00Z", "Экономика"],
+      ["Землетрясение магнитудой 6,1 произошло в Истландии.", "2026-12-31T12:00:00Z", "Катастрофы и происшествия"],
+    ]);
+    expect(items[0].text).toBe("Экономика\nЦентробанк Истландии повысил ставку до 4,5 %.\nИсточники: Reuters");
+    expect(items[1].text).toBe("Катастрофы и происшествия\nЗемлетрясение магнитудой 6,1 произошло в Истландии.\nИсточники: Пример");
+    expect(items[0].url.startsWith(`${page}#event-`)).toBe(true);
+  });
+
+  it("reads today's and yesterday's English pages (UTC) and the Russian page of the latest events, as raw wikitext", () => {
+    expect(currentEventsPages("en", new Date("2026-11-01T01:00:00Z"))).toEqual([
+      "https://en.wikipedia.org/wiki/Portal:Current_events/2026_November_1?action=raw",
+      "https://en.wikipedia.org/wiki/Portal:Current_events/2026_October_31?action=raw",
+    ]);
+    expect(currentEventsPages("ru", NOW)).toEqual([
+      "https://ru.wikipedia.org/wiki/%D0%9F%D0%BE%D1%80%D1%82%D0%B0%D0%BB:%D0%A2%D0%B5%D0%BA%D1%83%D1%89%D0%B8%D0%B5_%D1%81%D0%BE%D0%B1%D1%8B%D1%82%D0%B8%D1%8F/%D0%9F%D0%BE%D1%81%D0%BB%D0%B5%D0%B4%D0%BD%D0%B8%D0%B5_%D1%81%D0%BE%D0%B1%D1%8B%D1%82%D0%B8%D1%8F?action=raw",
+    ]);
+    expect(englishPageDay("https://en.wikipedia.org/wiki/Portal:Current_events/2026_November_1")).toBe("2026-11-01");
+  });
+
+  it("turns wikitext into plain text: links as their words, no templates, references, comments or bold", () => {
+    expect(plainText("'''[[Eastland]]''' {{a|{{b}}}}votes<!-- x --><ref>{{cite|url=y}}</ref> on [[Act of 2026|the act]] [https://x.test (X)] .")).toBe(
+      "Eastland votes on the act.",
+    );
   });
 });

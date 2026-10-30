@@ -536,7 +536,7 @@ So Roman in Czechia sees Czech decisions and what Czech media talk about, the EU
 **Steps, each its own pull request:**
 1. The rule change: these docs, and the app's About and Privacy texts.
 2. Countries per item: the summarizer's field, stored per item, and For you by the item's countries.
-3. Wikipedia's current events (English, Russian) as a source of events, with an event variant of the summary prompt, the cards' "Event" label and the attribution.
+3. Wikipedia's current events (English, Russian) as a source of events, with an event variant of the summary prompt, the cards' "Event" label and the attribution. In two: first the sources, hidden, and the prompt, so the summaries can be checked on real events; then (3b) the app's label and attribution, and the sources shown.
 4. Popularity: Wikipedia page views and GDELT, hourly.
 5. The order by score per country, and "In the media" links.
 6. Sources per country: the 20 Kickoff placeholders replaced with live sites; Czechia (parliament, ministries, the Czech National Bank) and Ukraine first.
