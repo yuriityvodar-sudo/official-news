@@ -235,13 +235,26 @@ class _GrowInState extends State<GrowIn> with SingleTickerProviderStateMixin {
     super.dispose();
   }
 
+  /// Clipped only while it is shorter than itself: a clip left on cut a
+  /// card's shadow to the card's own box, a band with square corners under
+  /// every card in the feed (Roman, build 54, 30 Oct).
   @override
-  Widget build(BuildContext context) => SizeTransition(
-    sizeFactor: Motion.reduced(context) ? kAlwaysCompleteAnimation : _size,
-    // Its bottom first, as if it slid down from above the others.
-    alignment: Alignment.bottomCenter,
-    child: FadeTransition(opacity: _fade, child: widget.child),
-  );
+  Widget build(BuildContext context) {
+    final size = Motion.reduced(context) ? kAlwaysCompleteAnimation : _size;
+    return AnimatedBuilder(
+      animation: size,
+      builder: (context, child) => ClipRect(
+        clipBehavior: size.value < 1 ? Clip.hardEdge : Clip.none,
+        child: Align(
+          // Its bottom first, as if it slid down from above the others.
+          alignment: Alignment.bottomCenter,
+          heightFactor: size.value < 0 ? 0 : size.value,
+          child: child,
+        ),
+      ),
+      child: FadeTransition(opacity: _fade, child: widget.child),
+    );
+  }
 }
 
 /// For `Image.frameBuilder`: a picture that has to be loaded fades in
