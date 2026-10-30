@@ -10,20 +10,56 @@ export { LANGUAGE_NAMES, SITE_LANGS, type SiteLang };
 
 export const isSiteLang = (value: string): value is SiteLang => (SITE_LANGS as readonly string[]).includes(value);
 
-// The parts of the site add the words they show.
-// eslint-disable-next-line @typescript-eslint/no-empty-object-type
-interface SiteTexts {}
+interface SiteTexts {
+  latestLink: string;
+  notFound: string;
+  error: string;
+  errorText: string;
+  skip: string;
+  /** In the header of every page: the name "Outer News" and the "Official source" mark must not read as a government's (OGL v3: no official status). */
+  independentNote: string;
+}
 
 const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
   en: {
+    latestLink: "Latest decisions",
+    notFound: "Page not found",
+    error: "Something went wrong",
+    errorText: "Please try again in a minute.",
+    skip: "Skip to content",
+    independentNote: "Independent website, not affiliated with any government.",
   },
   uk: {
+    latestLink: "Останні рішення",
+    notFound: "Сторінку не знайдено",
+    error: "Щось пішло не так",
+    errorText: "Спробуйте ще раз за хвилину.",
+    skip: "Перейти до вмісту",
+    independentNote: "Незалежний сайт, не пов’язаний із жодним урядом.",
   },
   ru: {
+    latestLink: "Последние решения",
+    notFound: "Страница не найдена",
+    error: "Что-то пошло не так",
+    errorText: "Попробуйте ещё раз через минуту.",
+    skip: "Перейти к содержимому",
+    independentNote: "Независимый сайт, не связанный ни с одним правительством.",
   },
   es: {
+    latestLink: "Últimas decisiones",
+    notFound: "Página no encontrada",
+    error: "Algo salió mal",
+    errorText: "Vuelve a intentarlo en un minuto.",
+    skip: "Saltar al contenido",
+    independentNote: "Sitio web independiente, sin vínculo con ningún gobierno.",
   },
   de: {
+    latestLink: "Neueste Entscheidungen",
+    notFound: "Seite nicht gefunden",
+    error: "Etwas ist schiefgelaufen",
+    errorText: "Bitte versuchen Sie es in einer Minute erneut.",
+    skip: "Zum Inhalt springen",
+    independentNote: "Unabhängige Website ohne Verbindung zu einer Regierung.",
   },
 };
 
