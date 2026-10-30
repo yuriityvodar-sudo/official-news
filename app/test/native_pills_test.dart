@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:official_news/core/card_zoom.dart';
 import 'package:official_news/core/filters.dart';
 import 'package:official_news/core/glass.dart';
 import 'package:official_news/core/topics.dart';
@@ -13,13 +12,11 @@ import 'test_app.dart';
 
 /// The native pills' side in Flutter (#166): what is sent to iOS's SwiftUI
 /// row (PillsView in the Runner), what a tap there does, and when Flutter's
-/// own row stands in. The glass itself is checked on a phone.
+/// own row stands in: only until iOS has made its row, never under a page or
+/// a sheet (Roman, 30 Oct). The glass itself is checked on a phone.
 void main() {
   setUp(() => FeedPills.debugNative = true);
-  tearDown(() {
-    FeedPills.debugNative = null;
-    CardZoomRoute.moving.value = false;
-  });
+  tearDown(() => FeedPills.debugNative = null);
 
   /// The params each native row was created with, by the view's id, and
   /// what its channel heard from Flutter afterwards.
@@ -202,10 +199,8 @@ void main() {
     expect(heard, hasLength(1));
   });
 
-  testWidgets("Flutter's row stands in until iOS has made its own and while "
-      "an article grows out of its card, swiped as far as iOS's", (
-    tester,
-  ) async {
+  testWidgets("Flutter's row stands in until iOS has made its own, swiped as "
+      "far as iOS's", (tester) async {
     final (rows, _) = recordRows(tester);
     await tester.pumpWidget(
       pills(topics: [for (final id in topicIds) FeedTopic(id, id)]),
@@ -214,22 +209,15 @@ void main() {
     await tester.pump();
     expect(shown(tester), (0.0, 1.0));
 
-    // Swiped on iOS, then an article opens from a card.
     final forYou = find.byKey(const ValueKey('pill-for-you'));
     final left = tester.getTopLeft(forYou).dx;
     await fromIos(tester, rows.keys.single, 'scrolled', 120.0);
-    CardZoomRoute.moving.value = true;
-    await tester.pump();
-    expect(shown(tester), (1.0, 0.0));
     expect(tester.getTopLeft(forYou).dx, left - 120);
-
-    CardZoomRoute.moving.value = false;
-    await tester.pump();
     expect(shown(tester), (0.0, 1.0));
   });
 
-  testWidgets("Flutter's row stands in while a sheet is over the feed, "
-      'until it has gone again', (tester) async {
+  testWidgets("iOS's row stays under a sheet, as it comes, stays and goes: the "
+      'sheet covers it, nothing stands in (Roman, 30 Oct)', (tester) async {
     recordRows(tester);
     await tester.pumpWidget(pills());
     await tester.pump();
@@ -245,15 +233,14 @@ void main() {
     );
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 50));
-    expect(shown(tester), (1.0, 0.0));
+    expect(shown(tester), (0.0, 1.0));
     await tester.pumpAndSettle();
-    expect(shown(tester), (1.0, 0.0));
+    expect(shown(tester), (0.0, 1.0));
 
-    // Still under the sheet as it slides away; iOS's again once it has gone.
     navigator.pop();
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 50));
-    expect(shown(tester), (1.0, 0.0));
+    expect(shown(tester), (0.0, 1.0));
     await tester.pumpAndSettle();
     expect(shown(tester), (0.0, 1.0));
   });

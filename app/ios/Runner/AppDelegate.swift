@@ -57,33 +57,44 @@ import firebase_messaging
 /// draws the glass, over whatever Flutter has under it. On iOS before 26 it
 /// draws the plain grey circle the button had (the app runs from iOS 15).
 class GlassViewFactory: NSObject, FlutterPlatformViewFactory {
+  func createArgsCodec() -> FlutterMessageCodec & NSObjectProtocol {
+    FlutterStandardMessageCodec.sharedInstance()
+  }
+
   func create(
     withFrame frame: CGRect,
     viewIdentifier viewId: Int64,
     arguments args: Any?
   ) -> FlutterPlatformView {
-    return GlassView(frame: frame)
+    let room = (args as? [String: Any])?["room"] as? Double ?? 0
+    return GlassView(frame: frame, room: CGFloat(room))
   }
 }
 
 class GlassView: NSObject, FlutterPlatformView {
   private let container: UIView
 
-  init(frame: CGRect) {
+  /// The glass, [room] inside the view on every side (`glassShadowRoom` in
+  /// glass.dart): the view clips at its frame, the only part Flutter draws a
+  /// page or a sheet over, so the glass's shadow never shows through one
+  /// (Roman, 30 Oct).
+  init(frame: CGRect, room: CGFloat) {
     container = UIView(frame: frame)
     container.backgroundColor = .clear
+    container.clipsToBounds = true
     // Taps fall through to Flutter's button (PlatformViewHitTestBehavior.transparent).
     container.isUserInteractionEnabled = false
+    let glassFrame = container.bounds.insetBy(dx: room, dy: room)
     if #available(iOS 26.0, *) {
       let glass = UIGlassEffect()
       glass.isInteractive = false
       let effect = UIVisualEffectView(effect: glass)
-      effect.frame = container.bounds
+      effect.frame = glassFrame
       effect.autoresizingMask = [.flexibleWidth, .flexibleHeight]
       effect.cornerConfiguration = .capsule()
       container.addSubview(effect)
     } else {
-      let circle = CircleView(frame: container.bounds)
+      let circle = CircleView(frame: glassFrame)
       circle.autoresizingMask = [.flexibleWidth, .flexibleHeight]
       container.addSubview(circle)
     }
@@ -225,6 +236,9 @@ class PillsView: NSObject, FlutterPlatformView {
     }
     host.view.frame = frame
     host.view.backgroundColor = .clear
+    // Nothing past the frame, where Flutter cannot draw a page or a sheet
+    // over it: the glass's shadow has its room inside (PillsRow.insets).
+    host.view.clipsToBounds = true
     host.overrideUserInterfaceStyle = model.dark ? .dark : .light
     // The same row takes every change, so the drop flows instead of a new row appearing.
     channel.setMethodCallHandler { [weak self] call, result in
@@ -303,8 +317,8 @@ struct PillsRow: View {
   /// The pills in Flutter's row (58 points at the usual text size, taller as
   /// the text grows), each in a place at least 44 high ([place]), exactly
   /// where Flutter's own pills are, with room under them for the glass's
-  /// shadow: nothing moves when one row stands in for the other (Roman,
-  /// 29 Oct).
+  /// shadow inside the view, which clips at its frame (PillsView): nothing
+  /// moves when Flutter's row gives way to this one (Roman, 29 Oct).
   static let insets = EdgeInsets(top: 4, leading: 16, bottom: 10, trailing: 16)
 
   /// A pill's place, as tall as Flutter's: the pill centred in it.

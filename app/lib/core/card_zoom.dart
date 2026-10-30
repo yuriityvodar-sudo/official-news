@@ -178,17 +178,6 @@ class CardZoomRoute<T> extends PageRoute<T> {
   /// The article's id: its card ([ZoomSource]) is hidden while it is open.
   final String sourceId;
 
-  /// True while an article grows out of its card, goes back into it, or is
-  /// shrunk by hand: the screen under it shows then, and its native glass is
-  /// drawn plainly meanwhile (`GlassCircle`).
-  static final moving = ValueNotifier<bool>(false);
-
-  /// The reader is shrinking the article by hand.
-  bool _dragging = false;
-
-  void _updateMoving() =>
-      moving.value = _dragging || (animation?.isAnimating ?? false);
-
   @override
   Color? get barrierColor => null;
 
@@ -211,12 +200,8 @@ class CardZoomRoute<T> extends PageRoute<T> {
       parent: animation!,
       curve: const Interval(0.25, 0.75, curve: Curves.easeOut),
     );
-    animation!
-      ..addListener(_hideCard)
-      ..addStatusListener(_statusChanged);
+    animation!.addListener(_hideCard);
   }
-
-  void _statusChanged(AnimationStatus _) => _updateMoving();
 
   /// The card in the feed hides as soon as its copy at the article's top is
   /// drawn over it, and shows again once that copy is back in its place.
@@ -235,8 +220,6 @@ class CardZoomRoute<T> extends PageRoute<T> {
   /// While the reader shrinks the article by hand, the feed shows under it.
   /// Once open, the page is opaque, so the feed is not drawn under it.
   void _showBelow(bool show) {
-    _dragging = show;
-    _updateMoving();
     if (overlayEntries.isEmpty) return;
     overlayEntries.first.opaque =
         !show && animation!.status == AnimationStatus.completed;
@@ -244,15 +227,12 @@ class CardZoomRoute<T> extends PageRoute<T> {
 
   @override
   void dispose() {
-    animation
-      ?..removeListener(_hideCard)
-      ..removeStatusListener(_statusChanged);
+    animation?.removeListener(_hideCard);
     // Not while the navigator builds: the feed rebuilds on the next frame.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (ZoomSource._hidden.value == sourceId) {
         ZoomSource._hidden.value = null;
       }
-      moving.value = false;
     });
     super.dispose();
   }

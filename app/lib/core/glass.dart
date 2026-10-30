@@ -3,8 +3,7 @@ import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show PlatformViewHitTestBehavior;
-
-import 'card_zoom.dart';
+import 'package:flutter/services.dart' show StandardMessageCodec;
 
 /// A round surface of [size] behind a small control, with [child] centred
 /// on it: Apple's Liquid Glass on iOS (a native view, `GlassView` in the
@@ -97,27 +96,48 @@ class _Glass extends StatelessWidget {
   Widget build(BuildContext context) {
     if (!GlassCircle.native) return plain;
     return NativeOrPlain(
-      native: const UiKitView(
-        viewType: 'official_news/glass',
-        hitTestBehavior: PlatformViewHitTestBehavior.transparent,
+      // iOS's view is [glassShadowRoom] larger on every side, for the shadow.
+      native: const Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned(
+            left: -glassShadowRoom,
+            top: -glassShadowRoom,
+            right: -glassShadowRoom,
+            bottom: -glassShadowRoom,
+            child: UiKitView(
+              viewType: 'official_news/glass',
+              hitTestBehavior: PlatformViewHitTestBehavior.transparent,
+              creationParams: {'room': glassShadowRoom},
+              creationParamsCodec: StandardMessageCodec(),
+            ),
+          ),
+        ],
       ),
       plain: plain,
     );
   }
 }
 
+/// Room around iOS's glass for its shadow, inside iOS's own view
+/// (`GlassView` in the Runner), which draws nothing past its frame: Flutter
+/// draws a page or a sheet over a native view only within its frame
+/// ([NativeOrPlain]).
+const double glassShadowRoom = 10;
+
 /// iOS's own [native] view (the glass, the topic pills), or Flutter's [plain]
-/// look in its place. iOS draws its views over Flutter, and the glass's
-/// shadow reaches past their frame, where Flutter cannot draw over it: under
-/// a sheet or the splash it showed through as a faint grey band (Roman, 27
-/// Oct). So [plain] stands in while anything is over the screen: another
-/// route (a sheet, a page coming in, until it has gone again), or an article
-/// growing out of its card, going back into it or shrunk by hand (#141),
-/// except on the article itself; and until iOS has made its view ([ready]).
-/// Under the splash ([NativeCover]) [native] comes in as the splash fades,
-/// as much as the app under it, so nothing changes once it has gone. Both
-/// stay in the tree, so each is there again at once.
-class NativeOrPlain extends StatefulWidget {
+/// look in its place until iOS has made its view ([ready]). Under the splash
+/// ([NativeCover]) [native] comes in as the splash fades, as much as the app
+/// under it, so nothing changes once it has gone. Both stay in the tree.
+///
+/// A page, a sheet or an article growing out of its card covers [native] as
+/// it covers Flutter's own views: iOS's views draw nothing past their frame
+/// (the glass's shadow has room inside it, [glassShadowRoom]), and Flutter
+/// draws over a native view within its frame. Until 30 Oct [plain] stood in
+/// whenever anything was over the screen, since the shadow showed through
+/// under a sheet (Roman, 27 Oct); its icons, text and flat look then took the
+/// glass's place each time a page opened (Roman, 30 Oct).
+class NativeOrPlain extends StatelessWidget {
   const NativeOrPlain({
     super.key,
     required this.native,
@@ -130,65 +150,30 @@ class NativeOrPlain extends StatefulWidget {
   final bool ready;
 
   @override
-  State<NativeOrPlain> createState() => _NativeOrPlainState();
-}
-
-class _NativeOrPlainState extends State<NativeOrPlain> {
-  /// How far a route over this screen has come in: at rest at the start
-  /// once none is, or the last one has gone.
-  Animation<double>? _over;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final over = ModalRoute.of(context)?.secondaryAnimation;
-    if (over == _over) return;
-    _over?.removeStatusListener(_changed);
-    _over = over?..addStatusListener(_changed);
-  }
-
-  @override
-  void dispose() {
-    _over?.removeStatusListener(_changed);
-    super.dispose();
-  }
-
-  void _changed(AnimationStatus _) {
-    if (mounted) setState(() {});
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final route = ModalRoute.of(context);
-    final clear =
-        widget.ready &&
-        (route?.isCurrent ?? true) &&
-        (_over?.isDismissed ?? true);
-    // The article's own views show while it grows out of its card.
-    final zooms = route is! CardZoomRoute;
     final cover = NativeCover.of(context);
-    return ListenableBuilder(
-      listenable: Listenable.merge([?cover, if (zooms) CardZoomRoute.moving]),
-      builder: (context, _) {
-        final shown = clear && !(zooms && CardZoomRoute.moving.value)
-            ? 1 - (cover?.value ?? 0.0)
-            : 0.0;
-        return Stack(
-          fit: StackFit.expand,
-          children: [
-            IgnorePointer(
-              ignoring: shown > 0,
-              child: Opacity(opacity: shown > 0 ? 0 : 1, child: widget.plain),
-            ),
-            IgnorePointer(
-              ignoring: shown == 0,
-              child: Opacity(opacity: shown, child: widget.native),
-            ),
-          ],
-        );
-      },
+    if (!ready || cover == null) return _layers(ready ? 1 : 0);
+    return ValueListenableBuilder<double>(
+      valueListenable: cover,
+      builder: (context, value, _) => _layers(1 - value),
     );
   }
+
+  /// [native] shown as much as [shown], [plain] only while it is not.
+  Widget _layers(double shown) => Stack(
+    fit: StackFit.expand,
+    clipBehavior: Clip.none,
+    children: [
+      IgnorePointer(
+        ignoring: shown > 0,
+        child: Opacity(opacity: shown > 0 ? 0 : 1, child: plain),
+      ),
+      IgnorePointer(
+        ignoring: shown == 0,
+        child: Opacity(opacity: shown, child: native),
+      ),
+    ],
+  );
 }
 
 /// Something of Flutter's over the whole app (the splash, `SplashHost`):

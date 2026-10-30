@@ -386,8 +386,10 @@ void main() {
     expect(tester.getRect(find.text('Card')), top);
   });
 
-  testWidgets('the native glass under the moving article is drawn plainly '
-      'meanwhile; the article keeps its own', (tester) async {
+  testWidgets("the feed's native glass stays as the article grows over it, "
+      'stays open and goes back; the article has its own (Roman, 30 Oct)', (
+    tester,
+  ) async {
     GlassCircle.debugNative = true;
     addTearDown(() => GlassCircle.debugNative = null);
     final messenger = tester.binding.defaultBinaryMessenger;
@@ -431,23 +433,20 @@ void main() {
     await tester.tap(find.text('Card'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
-    expect(CardZoomRoute.moving.value, isTrue);
-    expect(native('Gear'), 0);
+    expect(native('Gear'), 1);
     expect(native('Back'), 1);
 
+    // The article covers the feed's glass, which needs no stand-in (#160).
     await tester.pumpAndSettle();
-    expect(CardZoomRoute.moving.value, isFalse);
-    // Covered by the article, the feed's glass stays plain (#160).
-    expect(native('Gear'), 0);
+    expect(native('Gear'), 1);
     expect(native('Back'), 1);
 
     tester.state<NavigatorState>(find.byType(Navigator)).pop();
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
-    expect(native('Gear'), 0);
+    expect(native('Gear'), 1);
     await tester.pumpAndSettle();
     expect(native('Gear'), 1);
-    expect(CardZoomRoute.moving.value, isFalse);
   });
 
   group('the feed', () {

@@ -80,8 +80,9 @@ void main() {
       );
     }
 
-    testWidgets('the glass gives way to the plain capsule while a sheet is '
-        'over its screen, until the sheet has gone again', (tester) async {
+    testWidgets("iOS's glass stays under a sheet as it comes, stays and goes: "
+        'the sheet covers it, the plain capsule never stands in (Roman, '
+        '30 Oct)', (tester) async {
       fakeViews(tester);
       await tester.pumpWidget(capsule());
       expect(glass(tester), 1);
@@ -96,19 +97,21 @@ void main() {
       );
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 50));
-      expect(glass(tester), 0);
+      expect(glass(tester), 1);
       await tester.pumpAndSettle();
-      expect(glass(tester), 0);
+      expect(glass(tester), 1);
 
       navigator.pop();
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 50));
-      expect(glass(tester), 0);
+      expect(glass(tester), 1);
       await tester.pumpAndSettle();
       expect(glass(tester), 1);
     });
 
-    testWidgets('a popup over its screen hides the glass too', (tester) async {
+    testWidgets('a popup over its screen leaves the glass too', (
+      tester,
+    ) async {
       fakeViews(tester);
       await tester.pumpWidget(capsule());
       final navigator = tester.state<NavigatorState>(find.byType(Navigator));
@@ -118,10 +121,48 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(glass(tester), 0);
+      expect(glass(tester), 1);
       navigator.pop();
       await tester.pumpAndSettle();
       expect(glass(tester), 1);
+    });
+
+    testWidgets("iOS's view is larger than the glass by its shadow's room on "
+        'every side, and is told the room', (tester) async {
+      final created = <Map<Object?, Object?>>[];
+      final messenger = tester.binding.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(SystemChannels.platform_views, (
+        call,
+      ) async {
+        if (call.method == 'create') {
+          final args = call.arguments as Map<Object?, Object?>;
+          created.add(
+            const StandardMessageCodec().decodeMessage(
+                  ByteData.sublistView(args['params']! as Uint8List),
+                )
+                as Map<Object?, Object?>,
+          );
+        }
+        return null;
+      });
+      addTearDown(
+        () => messenger.setMockMethodCallHandler(
+          SystemChannels.platform_views,
+          null,
+        ),
+      );
+      await tester.pumpWidget(
+        testApp(
+          home: const Center(
+            child: GlassCircle(size: 36, child: Icon(CupertinoIcons.gear_alt)),
+          ),
+        ),
+      );
+      await tester.pump();
+      final circle = tester.getRect(find.byType(GlassCircle));
+      final view = tester.getRect(find.byType(UiKitView));
+      expect(view, circle.inflate(glassShadowRoom));
+      expect(created.single, {'room': glassShadowRoom});
     });
 
     testWidgets('under the splash the glass is hidden; it comes in as the '
