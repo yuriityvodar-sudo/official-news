@@ -96,29 +96,35 @@ const TOP_SIZE = 3;
  */
 const TOP_SCORE = "a.importance - 0.5 * (julianday('now') - julianday(a.published_at))";
 
+/** Whether article `a` (from source `s`) concerns `country`: its source's, or one the summarizer named (#230). */
+const concerns = (country: string) =>
+  `(s.country = '${country}' OR EXISTS (SELECT 1 FROM article_countries c WHERE c.article_id = a.id AND c.country = '${country}'))`;
+
 /**
- * The score in For you (#170): the reader's own country gets a point more,
- * and the EU institutions half a point for a reader in an EU member, so the
- * block becomes "Top stories for you".
+ * The score in For you (#170): a decision that concerns the reader's own
+ * country gets a point more, one that concerns the EU half a point for a
+ * reader in an EU member, so the block becomes "Top stories for you". Since
+ * #230 by the countries the decision concerns, not its source's.
  */
 function topScore(filters: Filters): string {
   if (filters.home === null) return TOP_SCORE;
   const [home, union] = homeCountries(filters.home);
-  return `${TOP_SCORE} + CASE s.country WHEN '${home}' THEN 1${union ? ` WHEN '${union}' THEN 0.5` : ""} ELSE 0 END`;
+  return `${TOP_SCORE} + CASE WHEN ${concerns(home)} THEN 1${union ? ` WHEN ${concerns(union)} THEN 0.5` : ""} ELSE 0 END`;
 }
 
 /**
  * Top stories: the highest scores of the last 72 hours, TOP_SIZE in all, at
  * most 1 from one country so one gazette cannot fill the block (a one-country
  * view has only its own), among the articles `where` picks (the feed's, or a
- * language's: #46). Best first; on equal scores the newer. Within a country
- * the For you bonus is the same for all, so the plain score ranks them.
+ * language's: #46). Best first; on equal scores the newer. Within a source
+ * country they are ranked by the same score, For you's bonus included: a US
+ * decision that concerns Canada leads the US ones for a reader in Canada.
  */
 const topQuery = (columns: string, from: string, where: string, filters: Filters) => `
   SELECT * FROM (
     SELECT ${columns}, ${topScore(filters)} AS score,
            ROW_NUMBER() OVER (
-             PARTITION BY s.country ORDER BY ${TOP_SCORE} DESC, a.published_at DESC, a.id DESC
+             PARTITION BY s.country ORDER BY ${topScore(filters)} DESC, a.published_at DESC, a.id DESC
            ) AS country_rank
     ${from}
     WHERE ${where} AND a.importance IS NOT NULL
@@ -173,7 +179,9 @@ function homeCountries(home: string): string[] {
 
 /**
  * For you (#170): every decision of the reader's own country (and of the EU
- * institutions for a reader in an EU member), and from the rest of the world
+ * institutions for a reader in an EU member), and every decision that
+ * concerns it, wherever it was published (#230: a US tariff on Canadian cars
+ * reaches a reader in Canada); and from the rest of the world
  * only what matters: importance FOR_YOU_MIN_IMPORTANCE or more, at most
  * FOR_YOU_PER_DAY a day from one country, the most important first, then the
  * first released. The world's picks are one subquery over the feed's 7 days,
@@ -184,6 +192,7 @@ function forYouCondition(home: string): string {
     .map((country) => `'${country}'`)
     .join(", ");
   return `(a.source_id IN (SELECT id FROM sources WHERE +country IN (${own}))
+    OR a.id IN (SELECT article_id FROM article_countries WHERE country IN (${own}))
     OR a.id IN (SELECT id FROM (
       SELECT w.id, ROW_NUMBER() OVER (
                PARTITION BY ws.country, substr(w.published_at, 1, 10) ORDER BY w.importance DESC, w.feed_seq
