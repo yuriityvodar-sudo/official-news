@@ -41,6 +41,7 @@
   "decisionTypeDecision": "Решение",
   "decisionTypeMeetingAgenda": "Повестка дня",
   "decisionTypeMeetingOutcome": "Итоги заседания",
+  "decisionTypeEvent": "Событие",
 
   "topicForeignAffairs": "Внешняя политика",
   "topicEconomy": "Экономика",

@@ -41,6 +41,7 @@
   "decisionTypeDecision": "Beschluss",
   "decisionTypeMeetingAgenda": "Tagesordnung",
   "decisionTypeMeetingOutcome": "Sitzungsergebnis",
+  "decisionTypeEvent": "Ereignis",
 
   "topicForeignAffairs": "Außenpolitik",
   "topicEconomy": "Wirtschaft",

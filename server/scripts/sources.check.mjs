@@ -173,7 +173,8 @@ test("the app has a name for every country and language in docs/sources.csv", ()
   const names = (file) => new Set([...readFileSync(new URL(`../../app/lib/core/${file}`, import.meta.url), "utf8").matchAll(/^\s*'([A-Za-z]{2})'\s*(?::|=>)/gm)].map((m) => m[1]));
   const countries = names("countries.dart");
   const languages = names("languages.dart");
-  const sources = toSources(readFileSync(csvPath, "utf8"));
+  // A hidden source's articles never reach the app (#230): its country gets a name when it is shown.
+  const sources = toSources(readFileSync(csvPath, "utf8")).filter((s) => !(s.config && JSON.parse(s.config).hidden));
   assert.deepEqual([...new Set(sources.map((s) => s.country))].filter((c) => !countries.has(c)), [], "add these to app/lib/core/countries.dart");
   assert.deepEqual([...new Set(sources.map((s) => s.language))].filter((l) => !languages.has(l)), [], "add these to app/lib/core/languages.dart");
 });
