@@ -21,7 +21,7 @@ const source = (id: string) =>
     .bind(id)
     .first<{ status: string; failed_checks: number; last_ok_at: string | null; last_error: string | null }>();
 
-const ok = (sourceId: string): SourceCheck => ({ sourceId, ok: true, httpStatus: 200, found: 3, saved: 0, waiting: 0, undated: 0, offSite: 0, error: null });
+const ok = (sourceId: string): SourceCheck => ({ sourceId, ok: true, httpStatus: 200, found: 3, saved: 0, waiting: 0, undated: 0, offSite: 0, reread: 0, error: null });
 const failed = (sourceId: string, httpStatus: number | null, error: string): SourceCheck => ({ ...ok(sourceId), ok: false, httpStatus, error });
 
 describe("source status after each check", () => {
