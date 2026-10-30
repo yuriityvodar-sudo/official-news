@@ -1,6 +1,8 @@
 # Decisions
 
-Newest first. Every decision that changes how we build goes here, through a pull request, with its date and reason. "Proposed" means waiting for the other person's confirmation.
+**From 30 Oct 2026, new decisions go into `docs/decisions/`, one file each** (`YYYY-MM-DD-short-name.md`), so two open pull requests never collide here: every one of them used to add a row at the top of this table, and on 30 Oct one pull request conflicted three times for that reason alone. This table stays as the history up to 30 Oct; a later change to one of these decisions gets its own file that names the row it replaces.
+
+Newest first. "Proposed" means waiting for the other person's confirmation.
 
 | Date | Decision | Why | Status |
 | --- | --- | --- | --- |
