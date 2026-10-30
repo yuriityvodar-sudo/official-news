@@ -104,7 +104,7 @@ describe("Google Analytics, after the visitor accepts cookies", () => {
     for (const path of ["/en", EN]) {
       const { body } = await site(path);
       expect(body, path).toContain('aria-modal="true" aria-label="Cookies" data-wall hidden>');
-      expect(body, path).toContain("We use cookies to give you a better experience on Outer News. Accept to continue.");
+      expect(body, path).toContain("We use cookies to give you a better experience on Outer News.");
       expect(body, path).toContain('<a href="/en/privacy">Details</a>');
       // The notice itself names no company; the privacy policy does.
       expect(body.slice(body.indexOf('<div class="consent"'), body.indexOf("<script>")), path).not.toContain("Google");
@@ -113,7 +113,7 @@ describe("Google Analytics, after the visitor accepts cookies", () => {
       expect((await site(`/en/${page}`)).body, page).toContain('aria-modal="false" aria-label="Cookies" hidden>');
     }
     expect((await site("/en/privacy")).body).toContain("Google Analytics");
-    // No way to say no: the only answer is Accept.
+    // No way to say no: the only answer is OK (Yurii, 30 Oct: "just OK button and no cancel button").
     expect(CONSENT_JS).not.toContain('"no"');
   });
 

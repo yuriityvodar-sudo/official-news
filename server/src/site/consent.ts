@@ -1,7 +1,7 @@
 // Google Analytics on the website, after the visitor's yes (Yurii, 28 Oct:
 // one analytics place for the website and the app; the website is the web
 // stream "Outer News website" of the app's Google Analytics property). Nothing
-// from Google loads until the visitor taps Accept: a small inline script
+// from Google loads until the visitor taps OK: a small inline script
 // shows the notice, keeps the answer in the browser (localStorage, no cookie
 // of ours) and only then adds Google's tag. Pages stay one cached HTML for
 // everyone; the choice is made in each browser.
@@ -42,7 +42,7 @@ export function consentHash(): Promise<string> {
 
 /**
  * The notice, hidden until the script shows it, then the script. `wall`
- * covers the page until Accept (articles and lists); without it, a bar at the
+ * covers the page until OK (articles and lists); without it, a bar at the
  * bottom (the information pages, so Details can be read). Without JavaScript
  * it never shows and nothing loads.
  */
