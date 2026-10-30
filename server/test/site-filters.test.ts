@@ -77,14 +77,16 @@ describe("routing", () => {
 
   it("has a page for every source country of docs/sources.csv but the EU institutions, one per group, and none for anything else (no D1 read)", async () => {
     // COUNTRY_PAGES is the source countries: a new one in docs/sources.csv fails here until it is added.
-    expect([...COUNTRY_PAGES].sort()).toEqual(env.TEST_SOURCE_COUNTRIES.filter((c) => c !== EU).sort());
+    // WW (the whole world: Wikipedia's current events, #230) is in no menu, so it has no page either.
+    const countries = env.TEST_SOURCE_COUNTRIES.filter((c) => c !== "WW");
+    expect([...COUNTRY_PAGES].sort()).toEqual(countries.filter((c) => c !== EU).sort());
     for (const code of COUNTRY_PAGES) expect(hasCountryName(code), code).toBe(true);
-    for (const code of env.TEST_SOURCE_COUNTRIES) expect((await site(`/en/${code.toLowerCase()}`)).status, code).toBe(200);
+    for (const code of countries) expect((await site(`/en/${code.toLowerCase()}`)).status, code).toBe(200);
     for (const group of GROUPS) expect((await site(`/uk/${group.id}`)).status, group.id).toBe(200);
     for (const path of ["/en/ua", "/en/pl", "/de/cz"]) expect((await site(path)).status, path).toBe(200);
     // The EU's other members were Local's pages: a country alone shows only its own sources, so they have none.
     // Russia is no source country (#42), Saudi Arabia not yet: the API names both, but neither is a page (#89 review).
-    for (const path of ["/en/ru", "/uk/ru", "/ru/ru?topic=economy", "/en/sa", "/es/sa", "/en/zz", "/en/xx", "/en/no", "/en/at", "/en/fi", "/en/local", "/en/global", "/en/brics", "/en/g8", "/en/d1", "/en/deu", "/en/g/g7", "/en/groups"]) {
+    for (const path of ["/en/ww", "/en/ru", "/uk/ru", "/ru/ru?topic=economy", "/en/sa", "/es/sa", "/en/zz", "/en/xx", "/en/no", "/en/at", "/en/fi", "/en/local", "/en/global", "/en/brics", "/en/g8", "/en/d1", "/en/deu", "/en/g/g7", "/en/groups"]) {
       let status = 0;
       expect(await rowsRead(async () => (status = (await site(path)).status)), path).toBe(0);
       expect(status, path).toBe(404);
