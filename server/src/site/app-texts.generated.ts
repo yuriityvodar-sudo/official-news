@@ -80,9 +80,12 @@ export type AppKey =
   | "languageZh"
   | "summaryByAi"
   | "summaryByAiTranslated"
+  | "summaryByAiOfWikipedia"
+  | "summaryByAiOfWikipediaTranslated"
   | "summaryComing"
   | "officialSource"
   | "readOfficialDecision"
+  | "readOnWikipedia"
   | "readOfficialDecisionOn"
   | "dateAndTime"
   | "language"
@@ -221,9 +224,12 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "languageZh": "Chinese",
     "summaryByAi": "Summary by AI",
     "summaryByAiTranslated": "Summary by AI · translated from {language}",
+    "summaryByAiOfWikipedia": "Summary by AI of Wikipedia's text",
+    "summaryByAiOfWikipediaTranslated": "Summary by AI of Wikipedia's text · translated from {language}",
     "summaryComing": "The AI summary is on its way. Until then, the headline is the original title, and the official page has the full text.",
     "officialSource": "Official source",
     "readOfficialDecision": "Read the official decision",
+    "readOnWikipedia": "Read on Wikipedia",
     "readOfficialDecisionOn": "Read the official decision on {site}",
     "dateAndTime": "{date}, {time}",
     "language": "Language",
@@ -356,9 +362,12 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "languageZh": "китайської",
     "summaryByAi": "Стислий виклад від ШІ",
     "summaryByAiTranslated": "Стислий виклад від ШІ · переклад з {language}",
+    "summaryByAiOfWikipedia": "Стислий виклад від ШІ за текстом Вікіпедії",
+    "summaryByAiOfWikipediaTranslated": "Стислий виклад від ШІ за текстом Вікіпедії · переклад з {language}",
     "summaryComing": "Стислий виклад від ШІ ще готується. Поки що заголовок — це оригінальна назва, а повний текст є на офіційній сторінці.",
     "officialSource": "Офіційне джерело",
     "readOfficialDecision": "Читати офіційне рішення",
+    "readOnWikipedia": "Читати у Вікіпедії",
     "readOfficialDecisionOn": "Читати офіційне рішення на {site}",
     "dateAndTime": "{date} о {time}",
     "language": "Мова",
@@ -491,9 +500,12 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "languageZh": "китайского",
     "summaryByAi": "Краткое изложение от ИИ",
     "summaryByAiTranslated": "Краткое изложение от ИИ · перевод с {language}",
+    "summaryByAiOfWikipedia": "Краткое изложение от ИИ по тексту Википедии",
+    "summaryByAiOfWikipediaTranslated": "Краткое изложение от ИИ по тексту Википедии · перевод с {language}",
     "summaryComing": "Краткое изложение от ИИ ещё готовится. Пока показан исходный заголовок, а полный текст можно прочитать на официальной странице.",
     "officialSource": "Официальный источник",
     "readOfficialDecision": "Читать официальное решение",
+    "readOnWikipedia": "Читать в Википедии",
     "readOfficialDecisionOn": "Читать официальное решение на {site}",
     "dateAndTime": "{date} в {time}",
     "language": "Язык",
@@ -626,9 +638,12 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "languageZh": "chino",
     "summaryByAi": "Resumido por IA",
     "summaryByAiTranslated": "Resumido por IA · traducido del {language}",
+    "summaryByAiOfWikipedia": "Resumido por IA a partir de Wikipedia",
+    "summaryByAiOfWikipediaTranslated": "Resumido por IA a partir de Wikipedia · traducido del {language}",
     "summaryComing": "El resumen de la IA llegará pronto. Mientras tanto, el titular es el título original y el texto completo está en la página oficial.",
     "officialSource": "Fuente oficial",
     "readOfficialDecision": "Leer la decisión oficial",
+    "readOnWikipedia": "Leer en Wikipedia",
     "readOfficialDecisionOn": "Leer la decisión oficial en {site}",
     "dateAndTime": "{date}, {time}",
     "language": "Idioma",
@@ -761,9 +776,12 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "languageZh": "Chinesischen",
     "summaryByAi": "KI-Zusammenfassung",
     "summaryByAiTranslated": "KI-Zusammenfassung · aus dem {language} übersetzt",
+    "summaryByAiOfWikipedia": "KI-Zusammenfassung aus Wikipedia",
+    "summaryByAiOfWikipediaTranslated": "KI-Zusammenfassung aus Wikipedia · aus dem {language} übersetzt",
     "summaryComing": "Die KI-Zusammenfassung folgt in Kürze. Bis dahin ist die Überschrift der Originaltitel; den vollständigen Text finden Sie auf der offiziellen Seite.",
     "officialSource": "Offizielle Quelle",
     "readOfficialDecision": "Offizielle Entscheidung lesen",
+    "readOnWikipedia": "Auf Wikipedia lesen",
     "readOfficialDecisionOn": "Offizielle Entscheidung auf {site} lesen",
     "dateAndTime": "{date} um {time}",
     "language": "Sprache",

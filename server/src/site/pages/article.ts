@@ -2,14 +2,16 @@
 // (detail_screen.dart): publisher, decision type, headline, the AI label right
 // under it, the summary, the one AI notice (also the licences' change notice),
 // the official link, then the credit line. The independence note is in every
-// page's header, so it is not repeated here (#88 review).
+// page's header, so it is not repeated here (#88 review). An event (#230) is
+// shown as the app shows it: the country it concerns, "Event" in place of the
+// official-source seal, and Wikipedia's words for the label, notice and link.
 // Never the source's picture (imageUrl): a site makes public, permanent copies.
 import { CREDITS } from "../credits.generated";
 import type { ApiArticle } from "../data";
 import { fullDate, isoTime, parseTime, publishedDate } from "../dates";
 import { type Html, html, safeHttps, siteName } from "../html";
 import { ARROW, type Alternate, type Page, SEAL, SITE_NAME, SPARKLE } from "../layout";
-import { LANGUAGE_NAMES, SITE_LANGS, type SiteLang, aiLabel, aiNotice, countryName, decisionLabel, t, text } from "../texts";
+import { LANGUAGE_NAMES, SITE_LANGS, type SiteLang, aiLabel, aiNotice, countryName, decisionLabel, isEvent, placeCode, t, text } from "../texts";
 import { articlePath } from "../urls";
 
 /** A language tag for `lang=""`: "de", "pt"; anything else is left out. */
@@ -56,8 +58,10 @@ export function articlePage(lang: SiteLang, origin: string, shown: Partial<Recor
   const aiText = article.headline !== null;
   const headline = article.headline ?? article.originalTitle;
   const summary = article.summary?.trim() ? paragraphs(article.summary) : [];
+  const event = isEvent(article);
   const type = decisionLabel(lang, article.decisionType);
-  const label = aiLabel(lang, article.originalLanguage);
+  const label = aiLabel(lang, article.originalLanguage, event);
+  const place = placeCode(article);
   const published = parseTime(article.publishedAt);
   const added = parseTime(article.addedAt);
   const official = safeHttps(article.originalUrl);
@@ -65,8 +69,8 @@ export function articlePage(lang: SiteLang, origin: string, shown: Partial<Recor
   const lead = article.shortSummary?.trim() || null;
 
   const body = html`<article>
-<div class="publisher"><span class="cc" aria-hidden="true">${article.country}</span><div><b>${article.source.name}</b>
-<span class="meta">${countryName(lang, article.country)} · ${SEAL} ${t(lang, "officialSource")}</span></div></div>
+<div class="publisher"><span class="cc" aria-hidden="true">${place}</span><div><b>${article.source.name}</b>
+<span class="meta">${countryName(lang, place)} · ${event ? t(lang, "decisionTypeEvent") : html`${SEAL} ${t(lang, "officialSource")}`}</span></div></div>
 ${type ? html`<p class="kind">${type}</p>` : ""}
 <h1>${headline}</h1>
 ${aiText ? html`<p class="ai meta">${SPARKLE}<span>${label}</span></p>` : ""}
@@ -77,11 +81,14 @@ ${
     ? html`<div class="body">${summary.map((p) => html`<p>${p.split("\n").map((line, i) => (i ? html`<br>${line}` : line))}</p>`)}</div>`
     : html`<p class="notice">${t(lang, "summaryComing")}</p>`
 }
-${aiText ? html`<p class="notice">${aiNotice(lang)}</p>` : ""}
-<p class="small">${t(lang, "originalTitle")}: <span${original ? html` lang="${original}"` : ""} dir="auto">${article.originalTitle}</span></p>
+${aiText ? html`<p class="notice">${aiNotice(lang, event ? "event" : "decisions")}</p>` : ""}
+${
+  // An event's original title is its sentence, already summarized above (as the app).
+  event ? "" : html`<p class="small">${t(lang, "originalTitle")}: <span${original ? html` lang="${original}"` : ""} dir="auto">${article.originalTitle}</span></p>`
+}
 ${
   official
-    ? html`<a class="official" href="${official}" rel="noopener"><span><b>${t(lang, "readOfficialDecision")}</b>
+    ? html`<a class="official" href="${official}" rel="noopener"><span><b>${t(lang, event ? "readOnWikipedia" : "readOfficialDecision")}</b>
 <span class="meta">${siteName(official)}</span></span>${ARROW}</a>`
     : ""
 }
@@ -115,15 +122,17 @@ export function notInLanguagePage(lang: SiteLang, shown: Partial<Record<SiteLang
     return html`<li><a href="${articlePath(l, a)}" hreflang="${l}" lang="${l}"><span>${a.headline ?? a.originalTitle}</span><span class="meta">${LANGUAGE_NAMES[l].nativeName}</span></a></li>`;
   });
   const aiText = languages.some((l) => shown[l]!.headline !== null);
+  const event = isEvent(shown[languages[0]]!);
+  const title = event ? "notInLangEvent" : "notInLang";
   return {
     lang,
     kind: "not-in-language",
-    title: `${text(lang, "notInLang")} · ${SITE_NAME}`,
+    title: `${text(lang, title)} · ${SITE_NAME}`,
     switcher: languages.map((l) => ({ lang: l, path: articlePath(l, shown[l]!) })),
-    body: html`<div class="info"><h1 class="page-title">${t(lang, "notInLang")}</h1>
+    body: html`<div class="info"><h1 class="page-title">${t(lang, title)}</h1>
 <p>${t(lang, "readIn")}</p>
 <ul class="choose">${links}</ul>
-${aiText ? html`<p class="notice">${aiNotice(lang)}</p>` : ""}</div>`,
+${aiText ? html`<p class="notice">${aiNotice(lang, event ? "event" : "decisions")}</p>` : ""}</div>`,
   };
 }
 
