@@ -123,6 +123,11 @@ class _ChatScreenState extends State<ChatScreen> {
   /// Room under the conversation, so the last question can stand at the top
   /// while its answer is shorter than the screen ([_fit]).
   double _room = 0;
+
+  /// How far under the title the last question stands, as the chat's first
+  /// line does: flush with it, the question slipped under the title on the
+  /// phone (Roman, 30 Oct).
+  static const _above = 8.0;
   String? _problem;
   bool _sending = false;
 
@@ -300,7 +305,10 @@ class _ChatScreenState extends State<ChatScreen> {
     final top = _offsetOf(_lastAsked.key);
     final end = _offsetOf(_end);
     if (top == null || end == null || !mounted) return;
-    final room = max(0.0, _scroll.position.viewportDimension - (end - top));
+    final room = max(
+      0.0,
+      _scroll.position.viewportDimension - _above - (end - top),
+    );
     if ((room - _room).abs() > 0.5) setState(() => _room = room);
   });
 
@@ -309,7 +317,7 @@ class _ChatScreenState extends State<ChatScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final top = _offsetOf(_lastAsked.key);
       if (top == null || !mounted) return;
-      final to = clampDouble(top, 0, _scroll.position.maxScrollExtent);
+      final to = clampDouble(top - _above, 0, _scroll.position.maxScrollExtent);
       if (Motion.reduced(context)) return _scroll.jumpTo(to);
       unawaited(
         _scroll.animateTo(
@@ -385,10 +393,12 @@ class _ChatScreenState extends State<ChatScreen> {
                   duration: fold,
                   curve: Curves.easeOutCubic,
                   alignment: Alignment.topLeft,
+                  // Up to two lines: on one the headline was cut short and
+                  // read as nothing (Roman, 30 Oct).
                   child: talking
                       ? Text(
                           article.headline,
-                          maxLines: 1,
+                          maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(fontSize: 12.5, color: muted),
                         )

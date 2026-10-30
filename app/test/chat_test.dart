@@ -594,6 +594,17 @@ void main() {
         final question = tester.getTopLeft(find.text('And then?')).dy;
         expect(question, greaterThanOrEqualTo(top));
         expect(question, lessThan(top + 40));
+        // Its bubble stands 8 points under the title, not flush with it, where
+        // it slipped under the title on the phone (Roman, 30 Oct).
+        final bubble = tester.getRect(
+          find
+              .ancestor(
+                of: find.text('And then?'),
+                matching: find.byType(Container),
+              )
+              .first,
+        );
+        expect(bubble.top, moreOrLessEquals(top + 8));
         // The start of the answer shows under it; its end is further down.
         expect(
           tester.getTopLeft(find.text('Line 1 of the answer.').last).dy,
