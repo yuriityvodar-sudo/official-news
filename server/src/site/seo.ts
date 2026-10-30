@@ -2,7 +2,7 @@
 // article's structured data (schema.org NewsArticle, in a JSON-LD block that
 // browsers never run, so the CSP's no-scripts rule still holds) and the
 // sitemap. Nothing is indexed until robots.txt and robotsFor() allow it.
-import type { ApiArticle } from "./data";
+import type { ApiArticle, ListArticle } from "./data";
 import { isoTime, parseTime } from "./dates";
 import { type Html, raw, safeHttps } from "./html";
 import { SITE_NAME } from "./layout";
@@ -51,8 +51,8 @@ const xml = (value: string) => value.replace(/&/g, "&amp;").replace(/</g, "&lt;"
  * is shown in, with its other languages as hreflang alternates, as the pages'
  * own <link rel="alternate">.
  */
-export function sitemapXml(origin: string, shown: Partial<Record<SiteLang, ApiArticle[]>>): string {
-  const byId = new Map<string, Partial<Record<SiteLang, ApiArticle>>>();
+export function sitemapXml(origin: string, shown: Partial<Record<SiteLang, ListArticle[]>>): string {
+  const byId = new Map<string, Partial<Record<SiteLang, ListArticle>>>();
   for (const lang of SITE_LANGS) {
     for (const article of shown[lang] ?? []) {
       const entry = byId.get(article.id) ?? {};

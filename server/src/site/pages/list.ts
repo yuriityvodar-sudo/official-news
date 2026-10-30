@@ -7,15 +7,15 @@
 // (`/{lang}/{group}`), and one topic (`?topic=`), chosen in the two menus
 // under the title (filters.ts); paging, the language links and the alternates
 // keep them.
-import type { ApiArticle, ApiList } from "../data";
+import type { ApiList, ListArticle, ListData, ListView, Menus } from "../data";
 import { fullDate, parseTime, publishedDate } from "../dates";
 import { html } from "../html";
 import { type Page, SITE_NAME } from "../layout";
 import { SITE_LANGS, type SiteLang, aiNotice, countryName, decisionLabel, isEvent, placeCode, t, text } from "../texts";
-import { type ListFilter, articlePath, listPath } from "../urls";
-import { type Menus, filterBar, placeName, topicLabel } from "./filters";
+import { articlePath, listPath } from "../urls";
+import { filterBar, placeName, topicLabel } from "./filters";
 
-function item(lang: SiteLang, article: ApiArticle) {
+function item(lang: SiteLang, article: ListArticle) {
   const type = decisionLabel(lang, article.decisionType);
   const published = parseTime(article.publishedAt);
   const lead = article.shortSummary?.trim();
@@ -28,7 +28,7 @@ ${lead ? html`<p>${lead}</p>` : ""}<p class="meta">${article.source.name} · ${c
 }
 
 /** The front page's lead (design 1a, Yurii 28 Oct): the first top story, big, with its short summary. */
-function leadStory(lang: SiteLang, article: ApiArticle) {
+function leadStory(lang: SiteLang, article: ListArticle) {
   const type = decisionLabel(lang, article.decisionType);
   const published = parseTime(article.publishedAt);
   const dek = article.shortSummary?.trim();
@@ -41,7 +41,7 @@ ${dek ? html`<p class="dek">${dek}</p>` : ""}<p class="meta">${article.source.na
 }
 
 /** When, in a stream row: the time (UTC) for today's decisions, else the day ("16.10"). */
-function when(article: ApiArticle, today: string): string {
+function when(article: ListArticle, today: string): string {
   const date = parseTime(article.publishedAt);
   if (!date) return "";
   const iso = date.toISOString();
@@ -50,7 +50,7 @@ function when(article: ApiArticle, today: string): string {
 }
 
 /** A row of the front page's Latest column: when, then the decision's kind, headline and source. */
-function streamItem(lang: SiteLang, article: ApiArticle, today: string) {
+function streamItem(lang: SiteLang, article: ListArticle, today: string) {
   const type = decisionLabel(lang, article.decisionType);
   return html`<li class="item row"><span class="when">${when(article, today)}</span><div>
 ${type ? html`<p class="kind">${type}</p>` : ""}<a class="title" href="${articlePath(lang, article)}">${article.headline ?? article.originalTitle}</a>
@@ -59,7 +59,7 @@ ${type ? html`<p class="kind">${type}</p>` : ""}<a class="title" href="${article
 }
 
 /** A card of the grid under the top part (design 1b's grid, Yurii 28 Oct): the first one wide, with its short summary. */
-function card(lang: SiteLang, article: ApiArticle, today: string, wide: boolean) {
+function card(lang: SiteLang, article: ListArticle, today: string, wide: boolean) {
   const type = decisionLabel(lang, article.decisionType);
   const dek = wide ? article.shortSummary?.trim() : undefined;
   const at = when(article, today);
@@ -76,17 +76,7 @@ const GRID = 5;
 /** The `before` of the next page: the last article's feedSeq, when the API says there is one. */
 export const nextBefore = (list: ApiList) => (list.nextCursor ? (list.items.at(-1)?.feedSeq ?? null) : null);
 
-/** Which list: its filters and its page (`before`, null for the first). */
-export interface ListView {
-  filter: ListFilter;
-  before: number | null;
-}
-
-/** What the API answered for it: the page, and on a first page what the menus offer. */
-export interface ListData {
-  list: ApiList;
-  menus: Menus | null;
-}
+export type { ListData, ListView, Menus };
 
 export function listPage(lang: SiteLang, origin: string, view: ListView, data: ListData): Page {
   const { filter, before } = view;

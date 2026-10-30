@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -301,6 +302,29 @@ void main() {
       await tester.pumpAndSettle();
       expect(top(tester, 'a1'), greaterThan(early));
       expect(top(tester, 'n1'), lessThan(top(tester, 'n2')));
+    });
+
+    testWidgets('are cut to their height only while they grow, so a card '
+        'keeps its whole shadow', (tester) async {
+      var items = [_article('a1')];
+      final controller = FeedController(api: _liveApi(() => items));
+      await _pumpScreen(tester, controller);
+      // How each row's growing box clips: a clip left on cut the card's
+      // shadow to the card's box (Roman, build 54, 30 Oct).
+      List<Clip> clips() => [
+        for (final grow in find.byType(GrowIn, skipOffstage: false).evaluate())
+          (grow.renderObject! as RenderClipRect).clipBehavior,
+      ];
+      expect(clips(), everyElement(Clip.none));
+
+      items = [_article('n1'), ...items];
+      await controller.refresh();
+      await tester.pump();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 60));
+      expect(clips(), contains(Clip.hardEdge));
+      await tester.pumpAndSettle();
+      expect(clips(), everyElement(Clip.none));
     });
 
     testWidgets('with Reduce Motion on, are there at once, fading in', (

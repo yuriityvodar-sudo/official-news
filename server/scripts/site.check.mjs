@@ -1,9 +1,10 @@
 // Guards for the website Worker (#88), `node --test` in `npm test`: it binds
 // only the api's database, has no AI binding, cron, secret or other binding,
-// and its code never runs SQL or a request of its own. What it shows and
-// writes comes only through the API's handler (src/api), which the site calls
-// for GET routes only; D1 has no read-only binding, so this is where "reads
-// only" is kept.
+// and its code never runs SQL or a request of its own. What it shows comes
+// only through the API's code (src/api): its handler, which the site calls for
+// GET routes only, and readSnapshot (src/api/snapshot.ts), which reads one row
+// the api Worker's cron wrote; D1 has no read-only binding, so this is where
+// "reads only" is kept.
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
