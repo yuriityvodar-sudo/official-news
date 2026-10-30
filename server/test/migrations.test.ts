@@ -58,3 +58,34 @@ describe("migration 0010 (release together)", () => {
     expect(names.filter((n) => n.startsWith("0007") && n !== "0007_source_health.sql")).toEqual([]);
   });
 });
+
+describe("migration 0022 (show events, #230)", () => {
+  it("makes the hidden events of the last 2 days news, and leaves older ones, those not news and decisions alone", async () => {
+    const show = env.TEST_MIGRATIONS.find((m) => m.name.startsWith("0022"))?.queries.find((q) => q.includes("SET is_news = 1"));
+    expect(show).toBeDefined();
+    const day = (n: number) => `${new Date(Date.now() - n * 86_400_000).toISOString().slice(0, 19)}Z`;
+    for (const [id, type, publishedAt] of [
+      ["event-new", "event", day(1)],
+      ["event-old", "event", day(3)],
+      ["not-news", null, day(1)],
+      ["decision", "law", day(1)],
+    ] as const) {
+      await env.DB.prepare(
+        `INSERT INTO articles (id, source_id, url, original_title, published_at, fetched_at, is_news, decision_type)
+         VALUES (?1, 'de-federal-government', 'https://example.gov/' || ?1, 'T', ?2, ?2, 0, ?3)`,
+      )
+        .bind(id, publishedAt, type)
+        .run();
+    }
+
+    await env.DB.prepare(show!).run();
+
+    const { results } = await env.DB.prepare("SELECT id, is_news FROM articles WHERE id IN ('event-new', 'event-old', 'not-news', 'decision') ORDER BY id").all();
+    expect(results).toEqual([
+      { id: "decision", is_news: 0 },
+      { id: "event-new", is_news: 1 },
+      { id: "event-old", is_news: 0 },
+      { id: "not-news", is_news: 0 },
+    ]);
+  });
+});
