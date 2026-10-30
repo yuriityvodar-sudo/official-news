@@ -8,7 +8,9 @@
 import { type toArticle, encodeCursor, handleApi } from "../api";
 import type { Env } from "../env";
 import type { SiteEnv } from "./env";
+import type { Topic } from "../summarizer/schema";
 import { SITE_LANGS, type SiteLang } from "./texts";
+import type { GroupId } from "../api/filters";
 import type { ListFilter, Place } from "./urls";
 
 /** An article as the API returns it (docs/contract.md); `lang` in a language other than English. */
@@ -74,6 +76,51 @@ export async function latest(env: SiteEnv, lang: SiteLang, filter: ListFilter, b
   const list = await api<ApiList>(env, `/articles?${params}`);
   if (!list) throw new ApiError("API 404 for /articles");
   return list;
+}
+
+export interface ApiTopic {
+  id: Topic;
+  name: string;
+}
+
+export interface ApiCountry {
+  code: string;
+  name: string;
+}
+
+export interface ApiGroup {
+  id: GroupId;
+  name: string;
+  /** The `country` values of the articles the group shows (`EU` for the EU institutions). */
+  members: string[];
+}
+
+/** The Where menu as GET /countries answers it: every group, then the countries with active sources. */
+export interface ApiWhere {
+  groups: ApiGroup[];
+  countries: ApiCountry[];
+}
+
+/** The Topics menu: `GET /topics`, the topics with articles in that place's (or the whole) feed in `lang`, busiest first. */
+export async function topicsMenu(env: SiteEnv, lang: SiteLang, place: Place): Promise<ApiTopic[]> {
+  const params = new URLSearchParams();
+  if (lang !== "en") params.set("lang", lang);
+  setPlace(params, place);
+  const query = params.toString();
+  const answer = await api<{ topics: ApiTopic[] }>(env, query ? `/topics?${query}` : "/topics");
+  if (!answer) throw new ApiError("API 404 for /topics");
+  return answer.topics;
+}
+
+/**
+ * The Where menu: `GET /countries`, its groups (always all of them, in their
+ * fixed order) and the countries with active sources, named in `lang` and
+ * sorted by that name.
+ */
+export async function whereMenu(env: SiteEnv, lang: SiteLang): Promise<ApiWhere> {
+  const answer = await api<ApiWhere>(env, lang === "en" ? "/countries" : `/countries?lang=${lang}`);
+  if (!answer) throw new ApiError("API 404 for /countries");
+  return { groups: answer.groups, countries: answer.countries };
 }
 
 /** Pages of 50 the sitemap reads at most per language (the API's 7 days are about 200 articles today). */

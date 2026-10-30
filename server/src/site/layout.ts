@@ -20,6 +20,19 @@ export const SITE_NAME = "Outer News";
 // of a break with no hyphen, but no hyphen in every other line of a headline.
 // Red small text on white is #D1102F (about 5.5:1), not the app's #FA2D48
 // (about 3.8:1, under WCAG AA); in dark mode the app's red on black.
+// The filter chips are the app's (feed_filters.dart, after the prototype's
+// review, 16 Oct): iOS's tertiarySystemFill on the page (`--fill`, #EFEFF0 on
+// white, #1C1C1F on black). One that is on stays that chip, its short label
+// or icon and chevron in the app's filterRed (`--on`): #C41230 light (about
+// 5.2:1 on the chip), #FF3B55 dark (about 4.85:1; on the lighter #2C2C2E of
+// `--chip`, the article's country tile, it would be 4.0:1, under AA for 15px
+// text), also the menus' checkmark. `.vh` keeps the full name for screen readers. A filter menu
+// (pages/filters.ts) opens over the list, under the chips, so neither chip
+// moves (#89 review): on a phone the row's full width, from 720px under its
+// own chip, 320px wide; the page scrolls as usual to a long one. A
+// transparent backdrop (the open chip's ::before) closes it on a click
+// outside, without a script, and it hides while keyboard focus is in the
+// page outside the filter bar (Tab past the menu), so it never covers it.
 export const CSS = `:root{color-scheme:light dark;--bg:#fff;--text:#000;--secondary:#6c6c70;--separator:#e5e5ea;--accent:#d1102f;--chip:#e3e8ef;--card:#f2f2f7;--verified:#1a8cff;--fill:rgba(118,118,128,.12);--on:#c41230;--menu:#fff;--band:#f2f2f7;--shadow:rgba(0,0,0,.16)}
 @media (prefers-color-scheme:dark){:root{--bg:#000;--text:#fff;--secondary:#98989f;--separator:#38383a;--accent:#fa2d48;--fill:rgba(118,118,128,.24);--on:#ff3b55;--chip:#2c2c2e;--card:#1c1c1e;--menu:#1c1c1e;--band:#000;--shadow:rgba(0,0,0,.6)}}
 *{box-sizing:border-box}
@@ -60,7 +73,32 @@ h1{margin:0 0 10px;font-size:31px;line-height:1.15;font-weight:700}
 .small a{color:inherit}
 .page-title{margin:0 0 4px;font-size:34px;font-weight:800;line-height:1.1}
 .section{margin:26px 0 0;font-size:22px;font-weight:800;color:var(--accent)}
+.filters{position:relative;display:flex;flex-wrap:wrap;gap:0 8px;margin:8px 0 0}
+.pick>summary{display:flex;align-items:center;min-height:44px;list-style:none;cursor:pointer;border-radius:18px}
+.pick>summary::-webkit-details-marker{display:none}
+.pick>summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.chip-link{display:inline-flex;align-items:center;max-width:100%;min-height:44px;text-decoration:none;border-radius:18px}
+.chip-link:focus-visible{border-radius:18px}
+.chip{display:inline-flex;align-items:center;gap:6px;max-width:100%;min-height:34px;padding:0 12px;border-radius:17px;background:var(--fill);color:var(--text);font-size:15px;font-weight:600}
+.chip.on{color:var(--on)}
+.chip svg{flex:none}
+.chip .glyph{display:block;width:18px;height:18px}
+.chip .chev{width:12px;height:12px;margin-left:-2px}
+.chip .label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .vh{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;border:0}
+.pick[open] .chev{transform:rotate(180deg)}
+.menu{position:absolute;z-index:2;left:0;right:0;top:100%;padding:6px 0;background:var(--menu);border:.5px solid var(--separator);border-radius:14px;box-shadow:0 10px 30px var(--shadow)}
+.pick[open]>summary::before{content:"";position:fixed;inset:0;z-index:1;cursor:default}
+body:has(main :focus-visible:not(.filters *),footer :focus-visible) .pick[open] .menu{display:none}
+.menu ul{list-style:none;margin:0;padding:0}
+.menu ul+ul{border-top:6px solid var(--band)}
+.menu li+li{border-top:.5px solid var(--separator)}
+.menu a{display:flex;align-items:center;gap:12px;min-height:44px;padding:8px 16px;color:var(--text);text-decoration:none;font-size:16px}
+.menu a>span:not(.glyph){flex:1}
+.menu .glyph{display:block;width:18px;height:18px;flex:none;color:var(--secondary)}
+.menu a:hover{background:var(--card)}
+.menu a:focus-visible{outline-offset:-2px}
+.menu .check{width:18px;height:18px;flex:none;color:var(--on)}
 .items{list-style:none;margin:0;padding:0}
 .item{padding:14px 0;border-bottom:.5px solid var(--separator)}
 .item .kind{margin-bottom:2px}
@@ -118,8 +156,8 @@ footer p{margin:8px 0 0}
 .card .title:hover{text-decoration:underline}
 .card .dek{margin:12px 0 0;font-size:15px;line-height:1.5}
 .card .meta{margin:auto 0 0;padding-top:18px;font-size:13px}
-@media (min-width:720px){h1{font-size:36px}.page-title{font-size:40px}}
-@media (min-width:960px){body:has(.front) .wrap{max-width:1120px;padding:0 32px}.top .wrap{display:flex;flex-wrap:wrap;align-items:center;column-gap:16px}.top .bar{display:contents}.top .brand{order:1}.top .note{order:2}.top .langs{order:3;margin-left:auto}.front-head{display:flex;align-items:center;justify-content:space-between;gap:24px;padding-bottom:18px;border-bottom:.5px solid var(--separator)}.page-title{font-size:56px}.front{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);column-gap:48px;margin-top:24px}.leadstory .title{font-size:44px;line-height:1.1}.leadstory .dek{font-size:18px}.latest-head{margin-top:0}.cards{grid-template-columns:repeat(3,minmax(0,1fr));margin-top:40px}.card.wide{grid-column:span 2}.card.wide .title{font-size:30px;line-height:1.15}.card{min-height:200px}.more-rows{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:48px;margin-top:36px}}
+@media (min-width:720px){h1{font-size:36px}.page-title{font-size:40px}.pick{position:relative}.menu{right:auto;width:320px}}
+@media (min-width:960px){body:has(.front) .wrap{max-width:1120px;padding:0 32px}.top .wrap{display:flex;flex-wrap:wrap;align-items:center;column-gap:16px}.top .bar{display:contents}.top .brand{order:1}.top .note{order:2}.top .langs{order:3;margin-left:auto}.front-head{display:flex;align-items:center;justify-content:space-between;gap:24px;padding-bottom:18px;border-bottom:.5px solid var(--separator)}.front-head .filters{margin:0;flex:none}.page-title{font-size:56px}.front{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);column-gap:48px;margin-top:24px}.leadstory .title{font-size:44px;line-height:1.1}.leadstory .dek{font-size:18px}.latest-head{margin-top:0}.cards{grid-template-columns:repeat(3,minmax(0,1fr));margin-top:40px}.card.wide{grid-column:span 2}.card.wide .title{font-size:30px;line-height:1.15}.card{min-height:200px}.more-rows{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:48px;margin-top:36px}}
 @media (min-width:720px) and (max-width:959px){.cards{grid-template-columns:repeat(2,minmax(0,1fr))}.card.wide{grid-column:span 2}}`;
 
 let styleHash: Promise<string> | undefined;
