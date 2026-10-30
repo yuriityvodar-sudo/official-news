@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/rendering.dart' show ImageFilterLayer;
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -8,6 +9,7 @@ import 'package:http/testing.dart';
 import 'package:official_news/core/api_client.dart';
 import 'package:official_news/core/card_zoom.dart';
 import 'package:official_news/core/glass.dart';
+import 'package:official_news/core/sheet.dart';
 import 'package:official_news/core/router.dart';
 import 'package:official_news/features/detail/detail_screen.dart';
 import 'package:official_news/features/feed/feed_controller.dart';
@@ -372,12 +374,12 @@ void main() {
     final top = tester.getRect(find.text('Card'));
 
     navigator.push(
-      CupertinoSheetRoute<void>(
-        scrollableBuilder: (_, _) => const Text('Paywall'),
-      ),
+      SheetRoute<void>(scrollableBuilder: (_, _) => const Text('Paywall')),
     );
     await tester.pumpAndSettle();
     expect(find.text('Paywall'), findsOneWidget);
+    // The article shrinks through a transform its glass follows (#166).
+    expect(tester.layers.whereType<ImageFilterLayer>(), isEmpty);
     navigator.pop();
     await tester.pumpAndSettle();
 

@@ -28,7 +28,7 @@ beforeEach(async () => {
  * something on them, the articles and the information pages. Everything else
  * says noindex (Yurii, 29 Oct: every article indexed).
  */
-const INDEXED = new Set(["/en", EN, UK, "/ru/about", "/es/privacy", "/de/terms", "/en/support"]);
+const INDEXED = new Set(["/en", EN, UK, "/ru/about", "/es/privacy", "/de/terms", "/en/support", "/en/de", "/en/g7"]);
 
 /** [path, status, cache kind, content-language] for every kind of response. */
 const ROUTES: [string, number, keyof typeof CACHE, string | null][] = [
@@ -50,7 +50,19 @@ const ROUTES: [string, number, keyof typeof CACHE, string | null][] = [
   ["/en/support", 200, "fixed", "en"],
   ["/nowhere", 404, "missing", "en"],
   ["/uk/nowhere", 404, "missing", "uk"],
+  ["/en/de", 200, "list", "en"],
+  ["/uk/de?topic=economy", 200, "list", "uk"],
+  ["/en/g7", 200, "list", "en"],
+  ["/uk/nato?topic=economy", 200, "list", "uk"],
+  ["/en?topic=economy&before=5", 200, "list", "en"],
+  ["/es/ua", 200, "list", "es"],
+  ["/en/zz", 404, "missing", "en"],
+  ["/en?topic=nonsense", 404, "missing", "en"],
+  ["/en/de/economy", 404, "missing", "en"],
+  ["/en/local", 404, "missing", "en"],
   ["/en?menu=where", 301, "redirect", null],
+  ["/en/de/", 301, "redirect", null],
+  ["/en/EU", 301, "redirect", null],
   ["/.well-known/apple-app-site-association", 404, "missing", "en"],
   ["/sitemap.xml", 200, "sitemap", null],
   ["/favicon.ico", 404, "icon", null],
@@ -198,7 +210,10 @@ describe("one URL per article (#89 review)", () => {
 describe("one request per page view", () => {
   it("no page refers to anything it would have to load: no script, image, stylesheet, font or frame", async () => {
     await env.DB.prepare("UPDATE articles SET image_url = 'https://www.bundesregierung.de/picture.jpg' WHERE id = ?").bind(ID).run();
-    const paths = ["/en", "/uk", EN, UK, ...SITE_LANGS.flatMap((l) => INFO_PAGES.map((p) => `/${l}/${p}`))];
+    const paths = [
+      "/en", "/uk", EN, UK, "/en/de", "/uk/de?topic=economy", "/en/g7", "/uk/nato?topic=health", "/en/ua",
+      ...SITE_LANGS.flatMap((l) => INFO_PAGES.map((p) => `/${l}/${p}`)),
+    ];
     for (const path of paths) {
       const { body } = await site(path);
       expect(withoutConsentScript(body).replace(/<script type="application\/ld\+json">[^<]*<\/script>/g, ""), path).not.toMatch(/<script|<iframe|<object|<embed|<video|<audio|<source|rel="stylesheet"|rel="preload"|rel="prefetch"|rel="preconnect"|rel="dns-prefetch"|@import|@font-face/i);
@@ -222,7 +237,7 @@ describe("one request per page view", () => {
 
 describe("the request's host", () => {
   it("never appears in a page: every absolute URL is SITE_ORIGIN's (the cache key has no host)", async () => {
-    for (const path of ["/", "/en", UK, `/uk/de/${ID}`, `${UK}?utm_source=x`, "/es/about", "/en/", `/uk/de/${NOT_IN_UK}`]) {
+    for (const path of ["/", "/en", UK, `/uk/de/${ID}`, `${UK}?utm_source=x`, "/es/about", "/en/", `/uk/de/${NOT_IN_UK}`, "/en/de", "/en/de/", "/en/G7", "/en?topic=economy&x=1"]) {
       const { body, headers } = await site(path, {}, "evil.test");
       expect(body).not.toContain("evil.test");
       expect(headers.get("location") ?? "").not.toContain("evil.test");
