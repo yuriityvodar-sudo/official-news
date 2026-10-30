@@ -2,7 +2,8 @@
 // app-texts.generated.ts, never copied; only what the app does not say is
 // written here, in all 5 languages (TypeScript requires each one). The uk and
 // ru texts need Yurii's review, es and de a native speaker's.
-import { countryName as apiCountryName, hasCountryName } from "../api/filters";
+import { GROUPS, type GroupId, TOPIC_NAMES, countryName as apiCountryName, groupName as apiGroupName, hasCountryName } from "../api/filters";
+import type { Topic } from "../summarizer/schema";
 import { APP_TEXTS, type AppKey, LANGUAGE_NAMES, PUBLISHER_DETAILS, PUBLISHER_NAME, SITE_LANGS, type SiteLang } from "./app-texts.generated";
 import { Html, esc } from "./html";
 
@@ -66,6 +67,21 @@ interface SiteTexts {
   prevails: string;
   /** The Support page; `{email}` is the support address (the app writes from its own screen). */
   emailUs: string;
+  /**
+   * The filters' words (#67, #68), word for word from the app's ARB keys of
+   * the same names (#87, feature/67-filters-app, after the chips prototype's
+   * review, prototype/chips 3d88cf3, 16 Oct), which main does not have yet;
+   * scripts/site-texts.check.mjs fails when a copy differs from an ARB file
+   * that has the key. Whichever of #87 and #89 merges second moves them to
+   * KEYS in scripts/site-texts.mjs, out of this file, and runs `npm run
+   * site:texts` in server/. `filterAllCountries` is "All countries", the
+   * Where chip and its menu's first item.
+   */
+  filterAllCountries: string;
+  filterAllTopics: string;
+  filterEmpty: string;
+  filterShowAllCountries: string;
+  filterShowAllTopics: string;
 }
 
 const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
@@ -108,6 +124,11 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     siteCovers: "The privacy policy and the terms of use cover both the Outer News app and this website.",
     prevails: "The English version prevails ({link}).",
     emailUs: "Write to us at {email}.",
+    filterAllCountries: "All countries",
+    filterAllTopics: "All topics",
+    filterEmpty: "No decisions here in the last 7 days.",
+    filterShowAllCountries: "Show all countries",
+    filterShowAllTopics: "Show all topics",
   },
   uk: {
     aiNotice:
@@ -148,6 +169,11 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     siteCovers: "Політика конфіденційності й умови використання стосуються і застосунку Outer News, і цього сайту.",
     prevails: "Це переклад; у разі розбіжностей переважну силу має англійська версія ({link}).",
     emailUs: "Пишіть нам на {email}.",
+    filterAllCountries: "Усі країни",
+    filterAllTopics: "Усі теми",
+    filterEmpty: "За останні 7 днів тут немає рішень.",
+    filterShowAllCountries: "Показати всі країни",
+    filterShowAllTopics: "Показати всі теми",
   },
   ru: {
     aiNotice:
@@ -188,6 +214,11 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     siteCovers: "Политика конфиденциальности и условия использования относятся и к приложению Outer News, и к этому сайту.",
     prevails: "Это перевод; в случае расхождений преимущественную силу имеет английская версия ({link}).",
     emailUs: "Пишите нам на {email}.",
+    filterAllCountries: "Все страны",
+    filterAllTopics: "Все темы",
+    filterEmpty: "За последние 7 дней здесь нет решений.",
+    filterShowAllCountries: "Показать все страны",
+    filterShowAllTopics: "Показать все темы",
   },
   es: {
     aiNotice:
@@ -228,6 +259,11 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     siteCovers: "La política de privacidad y los términos de uso se aplican tanto a la app Outer News como a este sitio web.",
     prevails: "Esto es una traducción; en caso de discrepancia, prevalece la versión en inglés ({link}).",
     emailUs: "Escríbenos a {email}.",
+    filterAllCountries: "Todos los países",
+    filterAllTopics: "Todos los temas",
+    filterEmpty: "No hay decisiones aquí en los últimos 7 días.",
+    filterShowAllCountries: "Mostrar todos los países",
+    filterShowAllTopics: "Mostrar todos los temas",
   },
   de: {
     aiNotice:
@@ -268,6 +304,11 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     siteCovers: "Die Datenschutzerklärung und die Nutzungsbedingungen gelten für die App Outer News und für diese Website.",
     prevails: "Dies ist eine Übersetzung; bei Abweichungen ist die englische Fassung maßgeblich ({link}).",
     emailUs: "Schreiben Sie uns an {email}.",
+    filterAllCountries: "Alle Länder",
+    filterAllTopics: "Alle Themen",
+    filterEmpty: "In den letzten 7 Tagen gab es hier keine Entscheidungen.",
+    filterShowAllCountries: "Alle Länder anzeigen",
+    filterShowAllTopics: "Alle Themen anzeigen",
   },
 };
 
@@ -340,6 +381,12 @@ export function placeCode(article: { country: string; countries: string[]; decis
   const main = isEvent(article) ? article.countries[0] : undefined;
   return main && (hasAppKey(`country${main}`) || hasCountryName(main)) ? main : article.country;
 }
+
+/** A group's name, as GET /countries names it (GROUPS in api/filters.ts): "European Union", "G7", "НАТО". */
+export const groupName = (lang: SiteLang, id: GroupId) => apiGroupName(GROUPS.find((g) => g.id === id)!, lang);
+
+/** A topic's name, as GET /topics names it (TOPIC_NAMES in api/filters.ts). */
+export const topicName = (lang: SiteLang, topic: Topic) => TOPIC_NAMES[lang][topic];
 
 /** A source language's name as it fills "translated from {language}" (languages.dart): an unknown code in capitals. */
 export function languageName(lang: SiteLang, code: string): string {

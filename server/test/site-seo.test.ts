@@ -134,8 +134,9 @@ describe("Google Analytics, after the visitor accepts cookies", () => {
 });
 
 describe("the front page's title", () => {
-  it("leads with the name", async () => {
+  it("leads with the name; a filtered list names its filters first", async () => {
     expect((await site("/uk")).body).toContain("<title>Outer News · ");
     expect((await site("/en")).body).toContain("<title>Outer News · Official decisions</title>");
+    expect((await site("/en/de")).body).toMatch(/<title>Germany · [^<]* · Outer News<\/title>/);
   });
 });
