@@ -1,7 +1,6 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart' show RenderClipRect;
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -29,9 +28,9 @@ void main() {
     GlassCircle.debugNative = null;
   });
 
-  testWidgets("the title's clip leaves the gear's glass room for its shadow "
-      "under the title's band: cut at the band's foot, it showed as a band "
-      'under the buttons (Roman, 30 Oct)', (tester) async {
+  testWidgets("the masthead's round buttons cast no shadow: iOS's view is "
+      "the circle itself, so nothing shows past the glass, where the title's "
+      'band once cut the shadow into a band (Roman, 30 Oct)', (tester) async {
     final messenger = tester.binding.defaultBinaryMessenger;
     messenger.setMockMethodCallHandler(
       SystemChannels.platform_views,
@@ -81,14 +80,11 @@ void main() {
       matching: find.byType(UiKitView),
     );
     expect(glass, findsWidgets);
-    final view = tester.getRect(glass.first);
-    final clip = tester.renderObject<RenderClipRect>(
-      find.ancestor(of: glass.first, matching: find.byType(ClipRect)).first,
-    );
-    final band = clip.describeApproximatePaintClip(clip.child!)!;
     expect(
-      clip.localToGlobal(band.bottomLeft).dy,
-      greaterThanOrEqualTo(view.bottom),
+      tester.getRect(glass.first),
+      tester.getRect(
+        find.ancestor(of: glass.first, matching: find.byType(GlassCircle)),
+      ),
     );
   });
 }
