@@ -1,18 +1,22 @@
 // The website (#88), the Worker `site` (wrangler.site.jsonc; index.ts). Plain HTML
 // rendered from what the app's API shows, one request per page view, nothing
 // indexed before the domain. URLs (docs/contract.md, "Website"):
+//   /{lang}/about|privacy|terms|support
 //   /robots.txt                    Disallow: /
 import type { SiteEnv } from "./env";
 import { APPLE_TOUCH_ICON, OG_IMAGE } from "./icon";
 import { type Page, cssHash, layout } from "./layout";
 import { errorPage, notFoundPage } from "./pages/errors";
+import { infoPage } from "./pages/info";
 import { type CacheKind, type Reply, respond, robotsFor } from "./respond";
 import { SITE_LANGS, type SiteLang, isSiteLang } from "./texts";
+import { INFO_PAGES, type InfoPage, originOf } from "./urls";
 
 /** Nothing is indexed yet: crawlers stay out of every page. */
 export const ROBOTS_TXT = "User-agent: *\nDisallow: /\n";
 
 const LANG_PATH = new RegExp(`^/(${SITE_LANGS.join("|")})(/.*)?$`);
+const INFO_PATH = new RegExp(`^/(${INFO_PAGES.join("|")})$`);
 
 /** A page's reply: its robots value is worked out once, for its header and its meta tag alike. */
 function page(p: Page, status: number, kind: CacheKind): Reply {
@@ -21,11 +25,12 @@ function page(p: Page, status: number, kind: CacheKind): Reply {
 }
 const notFound = (lang: SiteLang): Reply => page(notFoundPage(lang), 404, "missing");
 
-async function route(request: Request, _env: SiteEnv): Promise<Reply> {
+async function route(request: Request, env: SiteEnv): Promise<Reply> {
   if (request.method !== "GET" && request.method !== "HEAD") {
     return { kind: "none", status: 405, body: "Method not allowed\n", allow: "GET, HEAD" };
   }
   const url = new URL(request.url);
+  const origin = originOf(env.SITE_ORIGIN);
   const path = url.pathname;
 
   if (path === "/robots.txt") return { kind: "fixed", status: 200, body: ROBOTS_TXT };
@@ -38,6 +43,10 @@ async function route(request: Request, _env: SiteEnv): Promise<Reply> {
   const match = LANG_PATH.exec(path);
   if (!match || !isSiteLang(match[1])) return notFound("en");
   const lang = match[1];
+  const rest = match[2] ?? "";
+
+  const info = INFO_PATH.exec(rest);
+  if (info) return page(infoPage(lang, origin, info[1] as InfoPage), 200, "fixed");
 
   return notFound(lang);
 }
