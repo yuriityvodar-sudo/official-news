@@ -141,6 +141,10 @@ describe("POST /v1/chat (#146)", () => {
     expect(system.content).toContain("You are the AI analyst of Outer News");
     expect(system.content).toContain('Answer in the language the reader writes in; when that is unclear (a number, "ok"), in Ukrainian.');
     expect(system.content).not.toContain("120 words");
+    // The answer first, no labelled sections, no closing menu of offers (Roman, 30 Oct).
+    expect(system.content).toContain("Answer the question in your first one or two sentences");
+    expect(system.content).toContain("No headings or labelled sections");
+    expect(system.content).toContain("Never end with offers or a menu of what else you could explain");
     expect(rest).toEqual(conversation.map((m) => ({ role: m.role, content: m.text })));
   });
 
