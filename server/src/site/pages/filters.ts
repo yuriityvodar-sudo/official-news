@@ -70,7 +70,9 @@ interface Item {
 }
 
 const item = (i: Item) =>
-  html`<li><a href="${i.href}"${i.current ? raw(' aria-current="page"') : ""}>${
+  // nofollow: a filter's page is not indexed (Page.index) and robots.txt keeps
+  // crawlers from its query; some crawlers ignore robots.txt (30 Oct, D1).
+  html`<li><a href="${i.href}" rel="nofollow"${i.current ? raw(' aria-current="page"') : ""}>${
     i.icon === undefined ? "" : i.icon === null ? raw('<span class="glyph" aria-hidden="true"></span>') : topicIcon(i.icon)
   }<span>${i.label}</span>${i.current ? CHECK : ""}</a></li>`;
 

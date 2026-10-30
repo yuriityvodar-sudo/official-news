@@ -183,7 +183,7 @@ describe("a list page from the snapshot", () => {
   it("renders the same HTML as the API's queries do, and the same sitemap", async () => {
     const paths = ["/en", "/en/de", "/en/g7?topic=economy", "/uk", "/uk/eu", "/es?topic=health", "/de", "/en/fr", "/sitemap.xml"];
     const fromSnapshot = await Promise.all(paths.map((p) => site(p)));
-    const next = /<a class="more" href="([^"]+)" rel="next">/.exec(fromSnapshot[0].body)![1];
+    const next = /<a class="more" href="([^"]+)" rel="next nofollow">/.exec(fromSnapshot[0].body)![1];
     const laterFromSnapshot = await site(next);
     await env.DB.prepare("DELETE FROM site_snapshots").run();
     vi.spyOn(console, "warn").mockImplementation(() => {});

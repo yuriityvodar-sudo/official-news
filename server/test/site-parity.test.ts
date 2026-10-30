@@ -172,7 +172,7 @@ describe("latest lists", () => {
       const main = page.body.split("<footer")[0];
       const top = /<section[^>]*aria-labelledby="top">[\s\S]*?<\/section>/.exec(main)?.[0] ?? "";
       pages.push({ top: linkedIds(top), items: linkedIds(main.replace(top, "")) });
-      path = /<a class="more" href="([^"]+)" rel="next">/.exec(page.body)?.[1].replaceAll("&amp;", "&") ?? null;
+      path = /<a class="more" href="([^"]+)" rel="next nofollow">/.exec(page.body)?.[1].replaceAll("&amp;", "&") ?? null;
     }
     return pages;
   }
@@ -201,7 +201,7 @@ describe("latest lists", () => {
   });
 
   it("read one D1 row per page, the language's snapshot; the API's queries only without one", async () => {
-    const next = /<a class="more" href="([^"]+)" rel="next">/.exec((await site("/en")).body)![1];
+    const next = /<a class="more" href="([^"]+)" rel="next nofollow">/.exec((await site("/en")).body)![1];
     const first = await rowsRead(() => site("/en"));
     const later = await rowsRead(() => site(next));
     expect(first).toBe(1);
