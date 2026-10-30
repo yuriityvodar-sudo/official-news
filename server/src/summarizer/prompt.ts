@@ -42,6 +42,8 @@ Return JSON with these fields:
 - decisionType: one of ${DECISION_TYPES.join(", ")}; null when isNews is false.
 - topics: 1 to ${LIMITS.topics} of: ${TOPICS.join(", ")}, the first the one the decision changes most. Housing, benefits, pensions, budgets, banking and agriculture are economy; courts, criminal law, policing and prisons are justice; armed forces and emergencies are security-defence.
 - importance: 1 (minor, a formal step) to 5 (a major decision for a whole country).
+- countries: up to 5 ISO 3166-1 alpha-2 codes of the countries whose people the decision concerns most, the source's own first when it concerns it; EU for the European Union as a whole. A US tariff on Canadian cars: ["US", "CA"]; a rule for every EU member: ["EU"].
+- reach: "national" (one country), "regional" (a group of countries or a region, such as the EU) or "global" (the whole world).
 - summary: 100 to 130 words (600 to 900 characters) in short paragraphs separated by a blank line, for the people the decision affects most:
   1. Who this is for and what changes for them. The first sentence tells the reader whether this concerns them.
   2. "What to do:" only when the article gives the reader something to do (apply, respond, register, pay, comply) or a date to act by. Otherwise leave this paragraph out; never invent advice.

@@ -74,27 +74,36 @@ function workersAi(env: Env): Summarize {
   };
 }
 
-function store(env: Env, id: string, s: Summary, now: string): D1PreparedStatement {
+function store(env: Env, id: string, s: Summary, now: string, sourceCountry: string): D1PreparedStatement[] {
   // No feed_seq here: an article enters the feed when it is released, in English
   // and every language at once (release together, #46: translator/release.ts).
   // Since #133 no impact and no tags: what it means is in the summary.
-  return env.DB.prepare(
-    `UPDATE articles SET headline = ?, headline_type = ?, short_summary = ?, summary = ?, decision_type = ?, topics = ?,
-            tags = '[]', importance = ?, is_news = ?, summarized_at = ?, model = ?, impact = NULL
-     WHERE id = ?`,
-  ).bind(
-    s.headline,
-    s.headlineType,
-    s.shortSummary,
-    s.summary,
-    s.decisionType,
-    JSON.stringify(s.topics),
-    s.importance,
-    s.isNews ? 1 : 0,
-    now,
-    MODEL,
-    id,
-  );
+  return [
+    env.DB.prepare(
+      `UPDATE articles SET headline = ?, headline_type = ?, short_summary = ?, summary = ?, decision_type = ?, topics = ?,
+              tags = '[]', importance = ?, reach = ?, is_news = ?, summarized_at = ?, model = ?, impact = NULL
+       WHERE id = ?`,
+    ).bind(
+      s.headline,
+      s.headlineType,
+      s.shortSummary,
+      s.summary,
+      s.decisionType,
+      JSON.stringify(s.topics),
+      s.importance,
+      s.reach,
+      s.isNews ? 1 : 0,
+      now,
+      MODEL,
+      id,
+    ),
+    // The countries it concerns (#230): For you asks by them. The source's when the model gave none.
+    env.DB.prepare("DELETE FROM article_countries WHERE article_id = ?").bind(id),
+    env.DB.prepare("INSERT OR IGNORE INTO article_countries (article_id, country) SELECT ?1, value FROM json_each(?2)").bind(
+      id,
+      JSON.stringify(s.countries.length ? s.countries : [sourceCountry]),
+    ),
+  ];
 }
 
 /**
@@ -191,7 +200,7 @@ export async function runSummarizer(
         if (soft.length) warnings.push(`stored on its last try with: ${soft.join("; ")}`);
       }
       summary = clipped(summary);
-      await store(env, row.id, summary, toStoredTime(new Date())).run();
+      await env.DB.batch(store(env, row.id, summary, toStoredTime(new Date()), row.country));
       results.push({
         articleId: row.id,
         ok: true,
