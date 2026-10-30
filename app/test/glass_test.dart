@@ -125,7 +125,9 @@ void main() {
     });
 
     testWidgets("iOS's view is larger than the glass by its shadow's room on "
-        'every side, and is told the room', (tester) async {
+        'every side, and is told the room; with no shadow it is the circle', (
+      tester,
+    ) async {
       final created = <Map<Object?, Object?>>[];
       final messenger = tester.binding.defaultBinaryMessenger;
       messenger.setMockMethodCallHandler(SystemChannels.platform_views, (
@@ -159,7 +161,27 @@ void main() {
       final circle = tester.getRect(find.byType(GlassCircle));
       final view = tester.getRect(find.byType(UiKitView));
       expect(view, circle.inflate(glassShadowRoom));
-      expect(created.single, {'room': glassShadowRoom});
+      expect(created.single, {'room': glassShadowRoom, 'shadow': true});
+
+      // Without a shadow (the feed's round buttons, Roman, 30 Oct) the view
+      // is the circle itself, and iOS clips it round.
+      await tester.pumpWidget(
+        testApp(
+          home: const Center(
+            child: GlassCircle(
+              size: 36,
+              shadow: false,
+              child: Icon(CupertinoIcons.gear_alt),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      expect(
+        tester.getRect(find.byType(UiKitView)),
+        tester.getRect(find.byType(GlassCircle)),
+      );
+      expect(created.last, {'room': 0.0, 'shadow': false});
     });
 
     testWidgets('under the splash the glass is hidden; it comes in as the '

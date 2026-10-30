@@ -66,8 +66,10 @@ class GlassViewFactory: NSObject, FlutterPlatformViewFactory {
     viewIdentifier viewId: Int64,
     arguments args: Any?
   ) -> FlutterPlatformView {
-    let room = (args as? [String: Any])?["room"] as? Double ?? 0
-    return GlassView(frame: frame, room: CGFloat(room))
+    let params = args as? [String: Any]
+    let room = params?["room"] as? Double ?? 0
+    let shadow = params?["shadow"] as? Bool ?? true
+    return GlassView(frame: frame, room: CGFloat(room), shadow: shadow)
   }
 }
 
@@ -77,8 +79,10 @@ class GlassView: NSObject, FlutterPlatformView {
   /// The glass, [room] inside the view on every side (`glassShadowRoom` in
   /// glass.dart): the view clips at its frame, the only part Flutter draws a
   /// page or a sheet over, so the glass's shadow never shows through one
-  /// (Roman, 30 Oct).
-  init(frame: CGRect, room: CGFloat) {
+  /// (Roman, 30 Oct). Without [shadow] (the feed's round buttons, Roman,
+  /// 30 Oct) the view is the glass itself, clipped round, so nothing of the
+  /// glass's shadow shows past its edge.
+  init(frame: CGRect, room: CGFloat, shadow: Bool) {
     let glass: UIView
     if #available(iOS 26.0, *) {
       let effect = UIGlassEffect()
@@ -89,7 +93,7 @@ class GlassView: NSObject, FlutterPlatformView {
     } else {
       glass = CircleView(frame: .zero)
     }
-    container = RoomView(frame: frame, room: room, content: glass)
+    container = RoomView(frame: frame, room: room, content: glass, round: !shadow)
     container.backgroundColor = .clear
     container.clipsToBounds = true
     // Taps fall through to Flutter's button (PlatformViewHitTestBehavior.transparent).
@@ -107,10 +111,13 @@ class GlassView: NSObject, FlutterPlatformView {
 final class RoomView: UIView {
   private let room: CGFloat
   private let content: UIView
+  /// Clipped to a capsule as wide or tall as it is, as the glass is.
+  private let round: Bool
 
-  init(frame: CGRect, room: CGFloat, content: UIView) {
+  init(frame: CGRect, room: CGFloat, content: UIView, round: Bool = false) {
     self.room = room
     self.content = content
+    self.round = round
     super.init(frame: frame)
     addSubview(content)
   }
@@ -120,6 +127,7 @@ final class RoomView: UIView {
   override func layoutSubviews() {
     super.layoutSubviews()
     content.frame = bounds.insetBy(dx: room, dy: room)
+    if round { layer.cornerRadius = min(bounds.width, bounds.height) / 2 }
   }
 }
 

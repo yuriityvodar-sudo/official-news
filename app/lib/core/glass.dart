@@ -13,10 +13,19 @@ import 'package:flutter/services.dart' show StandardMessageCodec;
 /// The native view takes no touches: the control's own gesture, around
 /// this widget, gets the tap.
 class GlassCircle extends StatelessWidget {
-  const GlassCircle({super.key, required this.size, required this.child});
+  const GlassCircle({
+    super.key,
+    required this.size,
+    required this.child,
+    this.shadow = true,
+  });
 
   final double size;
   final Widget child;
+
+  /// Whether iOS's glass casts its shadow: not on the feed's round buttons
+  /// (Roman, 30 Oct), where iOS's view is the circle itself, clipped round.
+  final bool shadow;
 
   /// Where the native glass is used: the iOS app, not tests (macOS) or
   /// Android, unless a test sets [debugNative].
@@ -33,6 +42,7 @@ class GlassCircle extends StatelessWidget {
       fit: StackFit.expand,
       children: [
         _Glass(
+          shadow: shadow,
           plain: DecoratedBox(
             decoration: BoxDecoration(
               color: Theme.of(context).colorScheme.surfaceContainerHighest,
@@ -88,28 +98,33 @@ class GlassCapsule extends StatelessWidget {
 /// The native glass, or [plain] where there is none, and while anything is
 /// over its screen ([NativeOrPlain]).
 class _Glass extends StatelessWidget {
-  const _Glass({required this.plain});
+  const _Glass({required this.plain, this.shadow = true});
 
   final Widget plain;
+  final bool shadow;
 
   @override
   Widget build(BuildContext context) {
     if (!GlassCircle.native) return plain;
+    // iOS's view is [glassShadowRoom] larger on every side, for the shadow;
+    // without one it is the glass itself.
+    final room = shadow ? glassShadowRoom : 0.0;
     return NativeOrPlain(
-      // iOS's view is [glassShadowRoom] larger on every side, for the shadow.
-      native: const Stack(
+      native: Stack(
         clipBehavior: Clip.none,
         children: [
           Positioned(
-            left: -glassShadowRoom,
-            top: -glassShadowRoom,
-            right: -glassShadowRoom,
-            bottom: -glassShadowRoom,
+            left: -room,
+            top: -room,
+            right: -room,
+            bottom: -room,
             child: UiKitView(
+              // A new view if the shadow changes: iOS takes it when made.
+              key: ValueKey(shadow),
               viewType: 'official_news/glass',
               hitTestBehavior: PlatformViewHitTestBehavior.transparent,
-              creationParams: {'room': glassShadowRoom},
-              creationParamsCodec: StandardMessageCodec(),
+              creationParams: {'room': room, 'shadow': shadow},
+              creationParamsCodec: const StandardMessageCodec(),
             ),
           ),
         ],
@@ -127,8 +142,9 @@ class _Glass extends StatelessWidget {
 /// Roman, 30 Oct). Under the Settings button the shadow is still 3 of 255
 /// darker than the page 30 points down, halving about every 8 points, so by
 /// 56 it is gone (measured on the simulator, 30 Oct). Whatever holds the
-/// glass must not clip it closer (the news look's masthead leaves this room
-/// under its title's band). The view takes no touches in the room:
+/// glass must not clip it closer, or the shadow shows cut off as a band;
+/// the feed's round buttons cast none ([GlassCircle.shadow]). The view takes
+/// no touches in the room:
 /// Flutter hit-tests a box only inside its own size, and the view reaches
 /// past it.
 const double glassShadowRoom = 56;
