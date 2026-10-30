@@ -16,6 +16,16 @@ import type { Page } from "./layout";
 export const CACHE = {
   /** An article page: a re-summarized article shows within about 10 minutes (plus the browser's 5). */
   article: { browser: "public, max-age=300", edge: "max-age=600, stale-while-revalidate=3600, stale-if-error=86400" },
+  /**
+   * A latest list, 300 s (not 120 s: #88 review). Its D1 rows grow with the
+   * news (measured 16 Oct, docs/plan.md "D1 rows read, website"): page 1 about
+   * 45–65 rows plus about 6 per article of the last 24 hours, and a language
+   * with few or no translations (German while it is off) about 2 more per
+   * article of the 7 days, on every page. So the cache bounds renders per URL
+   * (144 a day per cache tier), not rows. 600 s (Yurii, 16 Oct, #89: cache the
+   * lists 10 minutes and measure real traffic before anything stricter).
+   */
+  list: { browser: "public, max-age=60", edge: "max-age=600, stale-while-revalidate=600, stale-if-error=86400" },
   /** Information pages, robots.txt: change only with a deploy. */
   fixed: { browser: "public, max-age=3600", edge: "max-age=86400" },
   /** An unknown page, or an article not released yet: short, it may appear soon. */
@@ -25,8 +35,10 @@ export const CACHE = {
   /** /apple-touch-icon*.png and /icon-512.png (icon.ts), and the 404 for /favicon.ico: kept a day. */
   icon: { browser: "public, max-age=86400", edge: "max-age=86400" },
   /**
-   * An article URL with a query (`fbclid`, `utm_*`), sent to its clean URL
-   * with no D1 read. The mapping never changes, so it is kept a day.
+   * Another spelling of a list or of `/` (a query it does not use,
+   * a trailing slash), or an article URL with a query
+   * (`fbclid`, `utm_*`), sent to its clean URL with no D1 read. The mapping
+   * never changes, so it is kept a day.
    */
   redirect: { browser: "public, max-age=86400", edge: "max-age=86400" },
   /**
@@ -36,6 +48,8 @@ export const CACHE = {
    * as long as an article page: a later change never meets a stale redirect.
    */
   moved: { browser: "public, max-age=300", edge: "max-age=600" },
+  /** `/`, sent to the visitor's own language: per visitor, so never stored anywhere. */
+  chooser: { browser: "private, no-store", edge: "no-store" },
   /** 405 and 500: never stored, so an outage is never cached as a page. */
   none: { browser: "no-store", edge: "no-store" },
 } as const;
