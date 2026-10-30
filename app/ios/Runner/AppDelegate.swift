@@ -79,29 +79,48 @@ class GlassView: NSObject, FlutterPlatformView {
   /// page or a sheet over, so the glass's shadow never shows through one
   /// (Roman, 30 Oct).
   init(frame: CGRect, room: CGFloat) {
-    container = UIView(frame: frame)
+    let glass: UIView
+    if #available(iOS 26.0, *) {
+      let effect = UIGlassEffect()
+      effect.isInteractive = false
+      let view = UIVisualEffectView(effect: effect)
+      view.cornerConfiguration = .capsule()
+      glass = view
+    } else {
+      glass = CircleView(frame: .zero)
+    }
+    container = RoomView(frame: frame, room: room, content: glass)
     container.backgroundColor = .clear
     container.clipsToBounds = true
     // Taps fall through to Flutter's button (PlatformViewHitTestBehavior.transparent).
     container.isUserInteractionEnabled = false
-    let glassFrame = container.bounds.insetBy(dx: room, dy: room)
-    if #available(iOS 26.0, *) {
-      let glass = UIGlassEffect()
-      glass.isInteractive = false
-      let effect = UIVisualEffectView(effect: glass)
-      effect.frame = glassFrame
-      effect.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-      effect.cornerConfiguration = .capsule()
-      container.addSubview(effect)
-    } else {
-      let circle = CircleView(frame: glassFrame)
-      circle.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-      container.addSubview(circle)
-    }
     super.init()
   }
 
   func view() -> UIView { container }
+}
+
+/// A view whose [content] stands [room] inside it on every side, laid out
+/// again whenever Flutter sizes the view: Flutter makes it before it knows
+/// its size, so a frame set once stayed empty and the glass never showed
+/// (build 50, Roman, 30 Oct).
+final class RoomView: UIView {
+  private let room: CGFloat
+  private let content: UIView
+
+  init(frame: CGRect, room: CGFloat, content: UIView) {
+    self.room = room
+    self.content = content
+    super.init(frame: frame)
+    addSubview(content)
+  }
+
+  required init?(coder: NSCoder) { fatalError("not used") }
+
+  override func layoutSubviews() {
+    super.layoutSubviews()
+    content.frame = bounds.insetBy(dx: room, dy: room)
+  }
 }
 
 /// The plain circle, iOS 15 to 18: the system's secondary fill, as the
@@ -223,6 +242,7 @@ class PillsView: NSObject, FlutterPlatformView {
 
   init(frame: CGRect, channel: FlutterMethodChannel, arguments: [String: Any]) {
     let model = PillsModel()
+    model.room = CGFloat(arguments["room"] as? Double ?? 0)
     model.update(arguments, animated: false)
     self.model = model
     self.channel = channel
@@ -271,6 +291,10 @@ final class PillsModel: ObservableObject {
   @Published var chosen = ""
   @Published var tint = Color.accentColor
   @Published var dark = false
+
+  /// How far the view reaches above and below the row, for the glass's
+  /// shadow (`glassShadowRoom` in glass.dart); set once, when it is made.
+  var room: CGFloat = 0
   var onSelect: (String) -> Void = { _ in }
   var onScroll: (CGFloat) -> Void = { _ in }
 
@@ -316,10 +340,12 @@ struct PillsRow: View {
 
   /// The pills in Flutter's row (58 points at the usual text size, taller as
   /// the text grows), each in a place at least 44 high ([place]), exactly
-  /// where Flutter's own pills are, with room under them for the glass's
-  /// shadow inside the view, which clips at its frame (PillsView): nothing
-  /// moves when Flutter's row gives way to this one (Roman, 29 Oct).
-  static let insets = EdgeInsets(top: 4, leading: 16, bottom: 10, trailing: 16)
+  /// where Flutter's own pills are: nothing moves when Flutter's row gives
+  /// way to this one (Roman, 29 Oct). The view reaches [room] above and
+  /// below the row, for the glass's shadow, and clips at its frame.
+  static func insets(room: CGFloat) -> EdgeInsets {
+    EdgeInsets(top: 4 + room, leading: 16, bottom: 10 + room, trailing: 16)
+  }
 
   /// A pill's place, as tall as Flutter's: the pill centred in it.
   static let place: CGFloat = 44
@@ -394,7 +420,7 @@ struct GlassPills: View {
               .id(pill.id)
             }
           }
-          .padding(PillsRow.insets)
+          .padding(PillsRow.insets(room: model.room))
         }
       }
       .scrollClipDisabled()
@@ -444,7 +470,7 @@ struct MaterialPills: View {
             .id(pill.id)
           }
         }
-        .padding(PillsRow.insets)
+        .padding(PillsRow.insets(room: model.room))
       }
       // Once, as GlassPills.
       .onAppear {

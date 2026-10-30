@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/rendering.dart' show RenderUiKitView;
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:official_news/core/filters.dart';
@@ -164,6 +165,7 @@ void main() {
       'chosen': 'pill-for-you',
       'tint': 0xFFC41230,
       'dark': false,
+      'room': glassShadowRoom,
     });
 
     // A topic is the whole world's (#170).
@@ -215,6 +217,30 @@ void main() {
     expect(tester.getTopLeft(forYou).dx, left - 120);
     expect(shown(tester), (0.0, 1.0));
   });
+
+  testWidgets(
+    "iOS's row reaches the shadow's room above and below the row, and "
+    'takes no touch there: it goes to the feed (Roman, 30 Oct)',
+    (tester) async {
+      recordRows(tester);
+      await tester.pumpWidget(pills());
+      await tester.pump();
+      final row = tester.getRect(find.byType(FeedPills));
+      final view = tester.getRect(find.byType(UiKitView));
+      expect(view.top, row.top - glassShadowRoom);
+      expect(view.bottom, row.bottom + glassShadowRoom);
+      expect(view.left, row.left);
+      expect(view.right, row.right);
+
+      bool reachesIos(Offset at) => tester
+          .hitTestOnBinding(at)
+          .path
+          .any((entry) => entry.target is RenderUiKitView);
+      expect(reachesIos(row.center), isTrue);
+      expect(reachesIos(Offset(row.center.dx, row.bottom + 10)), isFalse);
+      expect(reachesIos(Offset(row.center.dx, row.top - 10)), isFalse);
+    },
+  );
 
   testWidgets("iOS's row stays under a sheet, as it comes, stays and goes: the "
       'sheet covers it, nothing stands in (Roman, 30 Oct)', (tester) async {
