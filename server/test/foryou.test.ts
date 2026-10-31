@@ -2,7 +2,9 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import { type Ranked, decodeForYouCursor, encodeForYouCursor, nearCountries, rankForYou } from "../src/api/foryou";
-import { type ArticlesPage, get, hideSeed, hoursAgo, rowsRead } from "./helpers";
+import { type ArticlesPage, get, hideSeed, hoursAgo } from "./helpers";
+// Counts `first()` too, which For you reads its kept ranking with (#266: rowsRead alone missed it).
+import { siteRowsRead as rowsRead } from "./site-helpers";
 
 const NOW = Date.parse("2026-10-30T12:00:00Z");
 
@@ -158,5 +160,24 @@ describe("For you's D1 rows (Yurii's review of #260)", () => {
     expect(later).toBeLessThan(250);
     expect(first).toBeGreaterThan(4 * kept);
     console.log(JSON.stringify({ forYouRows: { first, kept, later } }));
+  });
+
+  // #266: the check for anything new since the kept ranking read the whole table (1,048 rows live on 31 Oct).
+  it("reads the same rows for a kept page however many articles the table holds besides the feed", async () => {
+    await week();
+    await get("/articles?for=CZ");
+    const before = await rowsRead(() => get("/articles?for=CZ"));
+    const unreleased: D1PreparedStatement[] = [];
+    for (let i = 0; i < 300; i++) {
+      unreleased.push(
+        env.DB.prepare(
+          `INSERT INTO articles (id, source_id, url, original_title, published_at, fetched_at, is_news)
+           VALUES (?1, 'cz-test-government', 'https://example.gov/old/' || ?1, ?1, ?2, ?2, 0)`,
+        ).bind(`old${i}`, hoursAgo(400)),
+      );
+    }
+    await env.DB.batch(unreleased);
+    const after = await rowsRead(() => get("/articles?for=CZ"));
+    expect(after).toBe(before);
   });
 });

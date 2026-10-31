@@ -239,7 +239,9 @@ const idList = (value: string): string[] => {
  * who pulls after "N new" sees them); a later page the one its cursor was
  * made from (the same moment and feed), whatever its age, while it is kept.
  * One row through the primary key, and for a first page the feed's newest
- * number through articles_feed_seq.
+ * number through articles_feed_seq, whose `feed_seq IS NOT NULL` the query
+ * must repeat: without it SQLite cannot use the partial index and reads every
+ * article ever fetched (#266: 1,048 rows on 31 Oct, growing each day).
  */
 export async function keptRanking(db: D1Database, key: RankingKey, cursor: ForYouCursor | null, now: number): Promise<Ranking | null> {
   type Row = { at: number; seq: number; ids: string; top: string; built_at: string; newest?: number | null };
@@ -250,7 +252,7 @@ export async function keptRanking(db: D1Database, key: RankingKey, cursor: ForYo
         .first<Row>()
     : await db
         .prepare(
-          `SELECT at, seq, ids, top, built_at, (SELECT MAX(feed_seq) FROM articles) AS newest
+          `SELECT at, seq, ids, top, built_at, (SELECT MAX(feed_seq) FROM articles WHERE feed_seq IS NOT NULL) AS newest
            FROM for_you_rankings WHERE home = ? AND lang = ? AND topic = ? AND size = ? ORDER BY at DESC LIMIT 1`,
         )
         .bind(...key)
