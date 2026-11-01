@@ -182,3 +182,42 @@ describe("GET /stories (#230)", () => {
     expect((await get("/stories?country=ZZ")).body).toEqual({ country: "ZZ", builtAt: null, stories: [] });
   });
 });
+
+describe("a failed build waits (#230, Yurii's review of #281)", () => {
+  it("lets a country whose build failed wait BUILD.failedMinutes, keeping the stories it has", async () => {
+    await addOutlets("CZ");
+    await buildCountryStories(env, "CZ", "2026-11-01T13:28:27Z", NOW);
+    await env.DB.prepare("UPDATE outlets SET last_item_at = '2026-11-01T14:01:00Z' WHERE id = 'cz-ct24'").run();
+    const at = (minutes: number) => new Date(NOW.getTime() + minutes * 60_000);
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    await storiesStep(
+      env,
+      async () => {
+        throw new Error("Worker exceeded CPU time limit.");
+      },
+      at(BUILD.minMinutes),
+    );
+    const row = await env.DB.prepare("SELECT failed_at, json FROM country_stories WHERE country = 'CZ'").first<{ failed_at: string; json: string }>();
+    expect(row?.failed_at).toBe("2026-11-01T14:05:00Z");
+    expect(JSON.parse(row!.json).stories.length).toBeGreaterThan(0);
+    expect(await dueCountries(env, at(BUILD.minMinutes + BUILD.failedMinutes - 1))).toEqual([]);
+    expect(await dueCountries(env, at(BUILD.minMinutes + BUILD.failedMinutes))).toEqual([{ country: "CZ", version: "2026-11-01T14:01:00Z" }]);
+    // A build that works clears it.
+    await buildCountryStories(env, "CZ", "2026-11-01T14:01:00Z", at(BUILD.minMinutes + BUILD.failedMinutes));
+    expect(await env.DB.prepare("SELECT failed_at FROM country_stories WHERE country = 'CZ'").first()).toEqual({ failed_at: null });
+  });
+
+  it("gives a country never built an empty row to wait in", async () => {
+    await addOutlets("CZ");
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    await storiesStep(
+      env,
+      async () => {
+        throw new Error("Worker exceeded CPU time limit.");
+      },
+      NOW,
+    );
+    expect(await dueCountries(env, NOW)).toEqual([]);
+    expect(await exports.default.fetch("https://api.test/stories?country=CZ").then((r) => r.json())).toEqual({ country: "CZ", builtAt: null, stories: [] });
+  });
+});
