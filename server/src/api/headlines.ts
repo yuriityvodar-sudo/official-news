@@ -1,13 +1,8 @@
 import type { Env } from "../env";
-import { type Headline, parseHeadlines } from "../fetcher/types";
+import { type OutletHeadline, parseHeadlines } from "../fetcher/types";
 
 /** Headlines a reply gives at most (GET /headlines). */
 export const HEADLINES_PER_REPLY = 200;
-
-/** A headline with the outlet that published it. */
-export interface OutletHeadline extends Headline {
-  outlet: { id: string; name: string; site: string };
-}
 
 /**
  * GET /headlines?country=XX (#230, the aggregator): the newest headlines of
