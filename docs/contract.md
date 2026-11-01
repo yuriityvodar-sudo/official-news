@@ -237,6 +237,7 @@ Base URL: `https://site.officialnews.workers.dev` (once deployed: `deploy.yml` d
 | `/{lang}/{cc}/{id}…?<any query>` (`fbclid`, `utm_*`) | A 301 to the same address without its query, with no D1 read (#89 review) | 301 |
 | `/{lang}/about`, `/privacy`, `/terms`, `/support` | The app's information pages | 200 |
 | `/robots.txt` | `User-agent: *` / `Disallow: /` | 200 |
+| `/sitemap.xml` | The sitemap index (30 Oct, #88): `/sitemap-latest.xml` (each language's list while it has articles, and the 7 days' articles in each language they are shown in, from the snapshots; kept an hour) and `/sitemap-YYYY-MM.xml` from `2026-10` to this month: every article released that month (`added_at`) in each language it is shown in, with hreflang alternates (`server/src/api/sitemap.ts`; a past month kept a day, the current one 6 hours). Article pages never expire. Any other month: 404 | 200 |
 | `/{lang}/`, `/{lang}/{cc}/`, `/{lang}/{group}/`, a place in capitals (`/en/DE`, `/en/NATO`), `/` with any query, and a list whose query is not exactly its parameters in the order `topic`, `before` (another order, an unused or repeated one, such as the former `menu=where`, or the API's `group=`) | A 301 to the list's one URL, with no D1 read | 301 |
 | `/favicon.ico`, `/apple-touch-icon*.png`, anything else (`/{lang}/local` is gone; reserved for later: `/.well-known/apple-app-site-association`, sitemaps) | | 404 |
 | Any method but GET and HEAD | | 405 |

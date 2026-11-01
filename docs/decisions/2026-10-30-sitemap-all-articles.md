@@ -1,0 +1,5 @@
+# The sitemap lists every article, not only the 7 days
+
+- **Decision:** `/sitemap.xml` is a sitemap index: `/sitemap-latest.xml` (the lists and the feed's 7 days, as the sitemap was) and one file per month from October 2026, `/sitemap-YYYY-MM.xml`, with every article released that month in each language it is shown in. A past month's file is kept a day at the edge, the current month's 6 hours; the index reads no D1 row.
+- **Why:** article pages never expire, but on 30 Oct the sitemap listed about 970 of the site's 3,250 indexable pages (804 articles: 804 English, 777 Ukrainian, 782 Spanish, 730 Russian, plus lists and information pages). Google finds unlisted pages slowly, if at all. A month's file reads its articles and their shown translations through the `(added_at)` index, about 10,000 rows at 1,300 articles; at a 6-hour edge cache in a few data centres that stays a small share of D1's 5 million a day. A file may hold 50,000 addresses (sitemaps.org); a month is about 5,000 today.
+- **Status:** Agreed (Yurii, 30 Oct: «you can do it, everything that is required»).

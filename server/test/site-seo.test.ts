@@ -1,10 +1,11 @@
 // What search engines read (#88, SEO): the sitemap, robots.txt's pointer to
 // it and an article's structured data.
+import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 import { slugify } from "../src/site/urls";
 import { CONSENT_JS, GA_ID, consentHash } from "../src/site/consent";
 import { SITE_LANGS } from "../src/site/texts";
-import { hideSeed } from "./helpers";
+import { hideSeed, rowsRead } from "./helpers";
 import { ORIGIN, insertArticle, insertTranslation, site, testId, withoutConsentScript } from "./site-helpers";
 
 const ID = testId(1);
@@ -21,7 +22,7 @@ beforeEach(async () => {
 
 describe("the sitemap", () => {
   it("lists each language's latest list while it has articles, and each article in each language it is shown in, with the others as alternates", async () => {
-    const { status, headers, body } = await site("/sitemap.xml");
+    const { status, headers, body } = await site("/sitemap-latest.xml");
     expect(status).toBe(200);
     expect(headers.get("content-type")).toBe("application/xml; charset=utf-8");
     expect(body.startsWith('<?xml version="1.0" encoding="UTF-8"?>')).toBe(true);
@@ -35,6 +36,45 @@ describe("the sitemap", () => {
     const enEntry = body.split("<url>").find((u) => u.includes(`<loc>${ORIGIN}${EN}</loc>`))!;
     expect(enEntry).toContain(`<xhtml:link rel="alternate" hreflang="uk" href="${ORIGIN}${UK}"/>`);
     expect(enEntry).toMatch(/<lastmod>\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ<\/lastmod>/);
+  });
+
+  // 30 Oct: article pages never expire, but the sitemap listed only the 7 days (about 970 of 3,250 pages).
+  it("is an index of the latest file and one file per month since October 2026, read with no D1 row", async () => {
+    const { status, headers, body } = await site("/sitemap.xml");
+    expect(status).toBe(200);
+    expect(headers.get("content-type")).toBe("application/xml; charset=utf-8");
+    const locs = [...body.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]);
+    expect(body).toContain('<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">');
+    expect(locs[0]).toBe(`${ORIGIN}/sitemap-latest.xml`);
+    expect(locs[1]).toBe(`${ORIGIN}/sitemap-2026-10.xml`);
+    const now = new Date();
+    expect(locs.at(-1)).toBe(`${ORIGIN}/sitemap-${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}.xml`);
+  });
+
+  it("lists in a month's file every article released that month, older than the 7 days too, in each language it is shown in", async () => {
+    const OLD = testId(9);
+    await insertArticle({ id: OLD, headline: "Old decision on water" });
+    await insertTranslation(OLD, "uk");
+    await env.DB.prepare("UPDATE articles SET added_at = '2026-10-15T09:00:00Z', published_at = '2026-10-15T08:00:00Z' WHERE id = ?").bind(OLD).run();
+    const month = await site("/sitemap-2026-10.xml");
+    expect(month.status).toBe(200);
+    const locs = [...month.body.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]);
+    const enOld = `${ORIGIN}/en/de/${OLD}-${slugify("Old decision on water", "en")}`;
+    expect(locs).toContain(enOld);
+    expect(locs.filter((l) => l.includes(OLD))).toHaveLength(2);
+    expect(month.body).toContain("<lastmod>2026-10-15T09:00:00Z</lastmod>");
+    // The latest file keeps to the 7 days.
+    expect((await site("/sitemap-latest.xml")).body).not.toContain(OLD);
+    // A month before the first, a future one, or a malformed one is no sitemap.
+    for (const path of ["/sitemap-2026-09.xml", "/sitemap-2099-01.xml", "/sitemap-2026-1.xml"]) expect((await site(path)).status, path).toBe(404);
+    // A past month is kept a day; the current one 6 hours (its new articles are in the latest file within the hour).
+    const past = month.headers.get("cloudflare-cdn-cache-control");
+    const now = new Date();
+    const currentMonth = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
+    expect(past).toBe(currentMonth === "2026-10" ? "max-age=21600, stale-if-error=604800" : "max-age=86400, stale-if-error=604800");
+    // What a month's file reads: the month's articles and their translations, through the (added_at) index.
+    console.log(JSON.stringify({ rowsRead: { sitemapMonth: await rowsRead(() => site("/sitemap-2026-10.xml")), sitemapIndex: await rowsRead(() => site("/sitemap.xml")) } }));
+    expect(await rowsRead(() => site("/sitemap.xml"))).toBe(0);
   });
 
   it("is named in robots.txt, which keeps crawlers only from addresses with a query", async () => {

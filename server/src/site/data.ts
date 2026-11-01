@@ -11,6 +11,7 @@
 // The rules are bundled into this Worker: they change on the site when
 // `deploy:site` runs, right after the api deploy (.github/workflows/deploy.yml).
 import { type toArticle, encodeCursor, handleApi } from "../api";
+import { type SitemapArticle, monthArticles } from "../api/sitemap";
 import { type SnapshotArticle, readSnapshot } from "../api/snapshot";
 import { rankTopics } from "../api/filters";
 import type { Env } from "../env";
@@ -232,4 +233,9 @@ export async function allLatest(env: SiteEnv, lang: SiteLang, now = new Date()):
     if (!cursor) break;
   }
   return out;
+}
+
+/** Every article released in `month` (YYYY-MM), in each language it is shown in, for that month's sitemap (api/sitemap.ts). */
+export async function monthSitemap(env: SiteEnv, month: string): Promise<Partial<Record<SiteLang, SitemapArticle[]>>> {
+  return (await monthArticles(apiEnv(env), month)) as Partial<Record<SiteLang, SitemapArticle[]>>;
 }
