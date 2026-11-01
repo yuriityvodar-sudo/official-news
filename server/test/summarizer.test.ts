@@ -472,6 +472,9 @@ describe("the headline kind (#133)", () => {
     expect(prompt).toContain('decisionType: "event"');
     expect(prompt).toContain("headlineType: plain.");
     expect(prompt).toContain("Nothing from memory");
+    // Since 1 Nov the text may end with a Background, the lead of Wikipedia's article on the story (fetcher).
+    expect(prompt).toContain("Background: the start of Wikipedia's article on the story it belongs to");
+    expect(prompt).toContain("never present something it says as part of the news");
     // From the first live events (30 Oct): no filler sentence, no outlet, and major prizes and titles are news.
     expect(prompt).toContain("Every sentence gives a fact from the text");
     expect(prompt).toContain("Never name the outlets that reported it");

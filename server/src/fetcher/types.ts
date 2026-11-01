@@ -154,6 +154,8 @@ export interface FoundItem {
   category: string | null;
   /** Feeds: the item's own `<title>`, when the config takes the title from another field. */
   headline?: string;
+  /** Wikipedia's current events (#230): the article whose lead is the event's background, on the same wiki (wikipedia.ts, backgroundOf). */
+  background?: string;
 }
 
 export function readConfig(source: SourceRow): SourceConfig {

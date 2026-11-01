@@ -6,7 +6,7 @@ import { parseFeed } from "../src/fetcher/feed";
 import { extractContent, findLink, parsePage } from "../src/fetcher/page";
 import { isAllowed, parseRobots, robotsFromResponse } from "../src/fetcher/robots";
 import { decodeBody, decodeEntities, fillTemplate, getPath, getStrings, htmlToText } from "../src/fetcher/text";
-import { currentEventsPages, englishPageDay, parseCurrentEvents, plainText } from "../src/fetcher/wikipedia";
+import { BACKGROUND_CHARS, backgroundOf, currentEventsPages, englishPageDay, leadOf, linkTargets, parseCurrentEvents, plainText } from "../src/fetcher/wikipedia";
 
 const NOW = new Date("2026-10-14T15:00:00Z");
 
@@ -502,6 +502,44 @@ describe("Wikipedia's current events", () => {
 *A topic line with no source
 `;
 
+  it("finds an event's background in the topics above it, the closest first (#230, 1 Nov)", () => {
+    // Wikipedia's own lines of 30 Oct 2026.
+    const oleshky = "Hundreds evacuate the Ukrainian city of Oleshky as part of the ceasefire brokered by U.S. First Lady Melania Trump.";
+    const topics = [
+      linkTargets("[[Peace negotiations in the Russo-Ukrainian war (2022–present)|Peace negotiations in the Russo-Ukrainian war]], [[Blockade of Oleshky]], [[United States and the Russo-Ukrainian war]]"),
+      linkTargets("[[Russo-Ukrainian war (2022–present)|Russo-Ukrainian war]]"),
+    ];
+    expect(topics[0]).toEqual(["Peace negotiations in the Russo-Ukrainian war (2022–present)", "Blockade of Oleshky", "United States and the Russo-Ukrainian war"]);
+    expect(backgroundOf(topics, oleshky, [])).toBe("Blockade of Oleshky");
+    const tanker = "Oman rescues 25 crew members from a burning Panamanian-flagged oil tanker in the Strait of Hormuz.";
+    expect(backgroundOf([linkTargets("[[2026 Strait of Hormuz crisis]]"), linkTargets("[[2026 Iran war]]")], tanker, ["Oman"])).toBe("2026 Strait of Hormuz crisis");
+    // No topics: its own link that shares a word, else its first; files and categories are no articles.
+    expect(backgroundOf([], "A flash flood hits Joshimath, India.", linkTargets("[[File:x.jpg]] [[flash flood]] [[Joshimath]]"))).toBe("flash flood");
+    expect(backgroundOf([], "Nothing in common.", ["Uttarakhand"])).toBe("Uttarakhand");
+    expect(backgroundOf([], "No links.", [])).toBeNull();
+  });
+
+  it("reads an article's lead, without its infobox, files and references, cut near a sentence", () => {
+    const article = [
+      "{{Short description|Blockade}}",
+      "{{Infobox military conflict",
+      "| conflict = Blockade of Oleshky",
+      "| date = {{start date|2025|1|1}}",
+      "}}",
+      "[[File:Oleshky map.png|thumb|The town on a map]]",
+      "The '''blockade of Oleshky''' is a [[siege]] of the town of [[Oleshky]] by [[Russia]]n forces.<ref>{{cite web|url=x}}</ref> It began in 2025.",
+      "",
+      "About 15,000 people remain in the town.",
+      "== Background ==",
+      "Not the lead.",
+    ].join("\n");
+    expect(leadOf(article)).toEqual({ lead: "The blockade of Oleshky is a siege of the town of Oleshky by Russian forces. It began in 2025. About 15,000 people remain in the town." });
+    expect(leadOf("#REDIRECT [[Blockade of Oleshky]]")).toEqual({ redirect: "Blockade of Oleshky" });
+    expect(leadOf("{{Infobox only}}\n== History ==\nText.")).toBeNull();
+    const long = leadOf("A sentence of the lead that goes on. ".repeat(60));
+    expect(long && "lead" in long && long.lead.length).toBeLessThanOrEqual(BACKGROUND_CHARS);
+  });
+
   it("takes each event with its category, the topics above it and the outlets that reported it", () => {
     const items = parseCurrentEvents(EN, EN_PAGE, "en", NOW, englishPageDay(EN_PAGE));
     expect(items.map((i) => i.title)).toEqual([
@@ -521,6 +559,8 @@ describe("Wikipedia's current events", () => {
     // Each links the page people read, told apart by its first source's link, the same on every read.
     expect(items[0].url).toMatch(/^https:\/\/en\.wikipedia\.org\/wiki\/Portal:Current_events\/2026_October_13#event-[0-9a-z]+$/);
     expect(new Set(items.map((i) => i.url)).size).toBe(3);
+    // Its background: the article of the topic just above it, else its own link that shares a word with it.
+    expect(items.map((i) => i.background)).toEqual(["Siege of Port Alba", "Eastland", "Eastland"]);
     expect(parseCurrentEvents(EN, EN_PAGE, "en", NOW, "2026-10-13").map((i) => i.url)).toEqual(items.map((i) => i.url));
   });
 
