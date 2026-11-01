@@ -1,4 +1,5 @@
 import type { Env } from "../env";
+import { recordChecks } from "../health/status";
 import { parseApi } from "./api";
 import { parseFeed } from "./feed";
 import { extractContent, findLink, parsePage } from "./page";
@@ -9,10 +10,24 @@ import { type EventsLang, articleRaw, currentEventsPages, englishPageDay, leadOf
 
 export const USER_AGENT = "OfficialNewsBot/0.1 (+https://github.com/yuriityvodar-sudo/official-news)";
 
-/** Limits that keep one run inside the free plan (50 outside requests, 10 ms CPU). */
+/** Limits that keep one source's check, a call of its own, inside the free plan (50 outside requests, 10 ms CPU). */
 export const LIMITS = {
-  /** One source per run: two often went over 10 ms of CPU and the run was stopped (#40). */
-  sourcesPerRun: 1,
+  /**
+   * A source is read in full at least this often: robots.txt, every listed
+   * item, known items read again (#227). The checks between only compare its
+   * list with the last one, so they parse nothing and write nothing.
+   */
+  fullCheckMinutes: 60,
+  /**
+   * A list is checked this often unless its source says otherwise (config.everyMinutes, 1 for
+   * those that publish as things happen). Every check is a request to the site, and a call
+   * through ctx.exports counts against the account's 100,000 Worker requests a day, since our
+   * Worker has Workers Caching on (Yurii's review of #274): every source every minute would
+   * take about 53,000 of them.
+   */
+  everyMinutes: 5,
+  /** A source whose last check failed is asked again after this long, not at every turn. */
+  failedCheckMinutes: 10,
   /** Newest items looked at per check. */
   itemsPerSource: 20,
   /** New items saved per check; the rest are saved on the next check. */
@@ -72,18 +87,29 @@ export interface SourceCheck {
   /** Known items read again: their text never came, or their publisher renamed them (#227). */
   reread: number;
   error: string | null;
+  /** Read in full (LIMITS.fullCheckMinutes), not only compared with the last list. */
+  full: boolean;
+  /** The list is the one read last time: nothing was parsed. */
+  unchanged: boolean;
 }
 
 export interface FetcherOptions {
   fetch?: typeof fetch;
   now?: Date;
   sleep?: (ms: number) => Promise<void>;
+  /**
+   * How a source is checked: in production a call of its own (`SourceChecker`, src/index.ts). Without it
+   * the check runs inside this call, and a run checks only one source (runFetcher).
+   */
+  call?: (source: SourceRow) => Promise<SourceCheck>;
 }
 
-/** Per-run state: request budget, robots.txt per site, last request per site. */
+/** Per-check state: request budget, robots.txt per site, last request per site. */
 interface Run {
   env: Env;
   now: Date;
+  /** A full check (LIMITS.fullCheckMinutes): robots.txt is read for the list, and the list is parsed even when unchanged. */
+  full: boolean;
   fetch: typeof fetch;
   sleep: (ms: number) => Promise<void>;
   requests: number;
@@ -200,6 +226,16 @@ interface ListResult {
   /** The list's validators, to send back next time (conditionalGet sources). */
   etag: string | null;
   lastModified: string | null;
+  /** The list's fingerprint, to compare at the next check; null when none was read. */
+  hash: string | null;
+  /** The list is the one read last time (a 304, or the same fingerprint between full checks). */
+  unchanged?: boolean;
+}
+
+/** SHA-256 of a list. */
+async function fingerprint(list: ArrayBuffer | string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", typeof list === "string" ? new TextEncoder().encode(list) : list);
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 /**
@@ -216,23 +252,24 @@ function listUrl(url: string, now: Date): string {
  * A day page not written yet (404 early in the UTC day) is skipped; the check
  * fails only when no page could be read.
  */
-async function readCurrentEvents(run: Run, lang: EventsLang, config: SourceConfig): Promise<ListResult> {
-  const items: FoundItem[] = [];
-  let read = false;
+async function readCurrentEvents(run: Run, source: SourceRow, lang: EventsLang, config: SourceConfig): Promise<ListResult> {
+  const pages: { page: string; wikitext: string }[] = [];
   let failed: number | null = null;
   for (const raw of currentEventsPages(lang, run.now)) {
-    if (await blockedBy(run, raw)) continue;
+    if (run.full && (await blockedBy(run, raw))) continue;
     const res = await request(run, raw, "text/x-wiki, text/plain;q=0.9", config.crawlDelaySeconds);
     if (!res.ok) {
       failed ??= res.status;
       continue;
     }
-    read = true;
     // The item links the page people read, not its wikitext.
-    const page = raw.replace(/\?action=raw$/, "");
-    items.push(...parseCurrentEvents(await res.text(), page, lang, run.now, englishPageDay(page)));
+    pages.push({ page: raw.replace(/\?action=raw$/, ""), wikitext: await res.text() });
   }
-  return { items, status: read ? 200 : (failed ?? 403), etag: null, lastModified: null };
+  if (!pages.length) return { items: [], status: failed ?? 403, etag: null, lastModified: null, hash: null };
+  const hash = await fingerprint(pages.map((p) => p.wikitext).join("\n"));
+  if (!run.full && hash === source.list_hash) return { items: [], status: 200, etag: null, lastModified: null, hash, unchanged: true };
+  const items = pages.flatMap(({ page, wikitext }) => parseCurrentEvents(wikitext, page, lang, run.now, englishPageDay(page)));
+  return { items, status: 200, etag: null, lastModified: null, hash };
 }
 
 /**
@@ -267,7 +304,7 @@ async function readLead(run: Run, pageUrl: string, title: string, redirects = 1)
 }
 
 async function readList(run: Run, source: SourceRow, config: SourceConfig, url: string): Promise<ListResult> {
-  if (config.currentEvents) return readCurrentEvents(run, config.currentEvents, config);
+  if (config.currentEvents) return readCurrentEvents(run, source, config.currentEvents, config);
   // Servers often match these exactly, so we send back what they sent, never a time of our own.
   const conditional: Record<string, string> = {};
   const form = config.listPost ? new URLSearchParams(config.listPost).toString() : undefined;
@@ -277,17 +314,20 @@ async function readList(run: Run, source: SourceRow, config: SourceConfig, url: 
   const etag = res.headers.get("etag");
   const lastModified = res.headers.get("last-modified");
   // 304: nothing changed since the last check.
-  if (res.status === 304) return { items: [], status: 304, etag: source.list_etag, lastModified: source.list_last_modified };
-  if (!res.ok) return { items: [], status: res.status, etag: null, lastModified: null };
+  if (res.status === 304) return { items: [], status: 304, etag: source.list_etag, lastModified: source.list_last_modified, hash: source.list_hash, unchanged: true };
+  if (!res.ok) return { items: [], status: res.status, etag: null, lastModified: null, hash: null };
   const bytes = await res.arrayBuffer();
-  const body = decodeBody(bytes, charsetOf(res, config, bytes));
+  const charset = charsetOf(res, config, bytes);
+  const hash = await fingerprint(config.listNoise ? decodeBody(bytes, charset).replace(new RegExp(config.listNoise, "g"), "") : bytes);
+  if (!run.full && hash === source.list_hash) return { items: [], status: res.status, etag, lastModified, hash, unchanged: true };
+  const body = decodeBody(bytes, charset);
   const items =
     source.kind === "rss"
       ? parseFeed(body, res.url || url, config, run.now)
       : source.kind === "page"
         ? await parsePage(body, res.url || url, config, run.now)
         : parseApi(JSON.parse(body), res.url || url, config, run.now);
-  return { items, status: res.status, etag, lastModified };
+  return { items, status: res.status, etag, lastModified, hash };
 }
 
 const pageBudgetLeft = (run: Run) => run.pages < LIMITS.pagesPerRun && run.requests < LIMITS.requestsPerRun;
@@ -544,17 +584,23 @@ async function rereadKnown(
 }
 
 async function checkSource(run: Run, source: SourceRow): Promise<SourceCheck> {
-  const check: SourceCheck = { sourceId: source.id, ok: false, httpStatus: null, found: 0, saved: 0, waiting: 0, undated: 0, offSite: 0, reread: 0, error: null };
+  const check: SourceCheck = { sourceId: source.id, ok: false, httpStatus: null, found: 0, saved: 0, waiting: 0, undated: 0, offSite: 0, reread: 0, error: null, full: run.full, unchanged: false };
   const config = readConfig(source);
   try {
     const url = listUrl(source.url, run.now);
-    const blocked = await blockedBy(run, url);
+    // Between full checks the list goes by robots.txt as read at the last one, at most an hour ago.
+    const blocked = run.full ? await blockedBy(run, url) : null;
     if (blocked) {
       check.error = blocked;
       return check;
     }
-    const { items, status, etag, lastModified } = await readList(run, source, config, url);
+    const { items, status, etag, lastModified, hash, unchanged } = await readList(run, source, config, url);
     check.httpStatus = status;
+    if (unchanged) {
+      check.ok = true;
+      check.unchanged = true;
+      return check;
+    }
     if (status !== 304 && (status < 200 || status >= 300)) {
       check.error = `HTTP ${status}`;
       return check;
@@ -655,13 +701,19 @@ async function checkSource(run: Run, source: SourceRow): Promise<SourceCheck> {
       .bind(newest, source.id)
       .run();
 
-    if (config.conditionalGet) {
-      // Remember the validators only once every new item is saved; with items still waiting,
-      // a 304 next time would hide them until the list changes again.
+    // Written only when it matters, so a list that differs at every read (config.listNoise takes out
+    // what it can) writes nothing between full checks. Remembered only once every new item is saved;
+    // with items still waiting, the same list or a 304 next time would hide them until the list changes again.
+    if (run.full || check.saved > 0 || check.waiting > 0 || source.list_hash === null) {
       const keep = check.waiting === 0;
-      await run.env.DB.prepare("UPDATE sources SET list_etag = ?, list_last_modified = ? WHERE id = ?")
-        .bind(keep ? etag : null, keep ? lastModified : null, source.id)
-        .run();
+      const listHash = keep ? hash : null;
+      const listEtag = keep && config.conditionalGet ? etag : null;
+      const listModified = keep && config.conditionalGet ? lastModified : null;
+      if (listHash !== source.list_hash || listEtag !== source.list_etag || listModified !== source.list_last_modified) {
+        await run.env.DB.prepare("UPDATE sources SET list_hash = ?, list_etag = ?, list_last_modified = ? WHERE id = ?")
+          .bind(listHash, listEtag, listModified, source.id)
+          .run();
+      }
     }
   } catch (error) {
     check.ok = false;
@@ -670,17 +722,42 @@ async function checkSource(run: Run, source: SourceRow): Promise<SourceCheck> {
   return check;
 }
 
+/** Whether this check reads the source in full: it was never read, its last check failed, or the last full one is an hour old. */
+function isFullCheck(source: SourceRow, now: Date): boolean {
+  if (source.last_checked_at === null || source.failed_checks > 0) return true;
+  return now.getTime() - Date.parse(source.last_checked_at) >= LIMITS.fullCheckMinutes * 60_000;
+}
+
 /**
- * Item 6. Takes the sources with the oldest `last_checked_at` (never the Kickoff
- * seed rows or blocked sources), reads their lists, and saves new items from
- * the last 7 days with their text. Every check moves `last_checked_at`, so a
- * broken source never blocks the others.
+ * Whether a source is checked this minute: at its turn, every config.everyMinutes, and
+ * whenever it is to be read in full. The turn comes from the clock, not from a stored time,
+ * so a check that finds nothing new writes nothing.
  */
-export async function runFetcher(env: Env, options: FetcherOptions = {}): Promise<SourceCheck[]> {
+function isDue(source: SourceRow, now: Date): boolean {
+  const every = Math.max(1, readConfig(source).everyMinutes ?? LIMITS.everyMinutes);
+  return isFullCheck(source, now) || (Math.floor(now.getTime() / 60_000) + spread(source.id)) % every === 0;
+}
+
+/** A number of the source's own, so that sources checked equally often fall on different minutes. */
+function spread(id: string): number {
+  let n = 0;
+  for (let i = 0; i < id.length; i++) n = (n * 31 + id.charCodeAt(i)) % 1_000_003;
+  return n;
+}
+
+/**
+ * One source's check: in production a call of its own (`SourceChecker`,
+ * src/index.ts), with its own 10 ms of CPU and 50 outside requests. Every check
+ * gives its source a status straight away (item 8), but one that found the same
+ * list between full checks has nothing to tell: it writes nothing.
+ */
+export async function checkOneSource(env: Env, source: SourceRow, options: FetcherOptions = {}): Promise<SourceCheck> {
   const started = Date.now();
+  const now = options.now ?? new Date();
   const run: Run = {
     env,
-    now: options.now ?? new Date(),
+    now,
+    full: isFullCheck(source, now),
     // Called as a plain function: Workers reject fetch called as a method of another object.
     fetch: options.fetch ?? ((input, init) => fetch(input, init)),
     sleep: options.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms))),
@@ -691,36 +768,61 @@ export async function runFetcher(env: Env, options: FetcherOptions = {}): Promis
     busy: new Set(),
     failed: new Map(),
   };
+  const check = await checkSource(run, source);
+  if (run.full || !check.ok || check.saved > 0) await recordChecks(env, [check], now);
+  if (!check.unchanged) {
+    // Wall time; Date.now() does not move during CPU work in Workers. CPU time per call is in Workers Observability.
+    console.log(JSON.stringify({ message: "fetcher check", wallMs: Date.now() - started, requests: run.requests, pages: run.pages, check }));
+  }
+  return check;
+}
 
-  // Claim the sources before reading them, in one statement: a run that is cut off
-  // (CPU or time limit) still moves them to the back of the line, and an overlapping
-  // run cannot pick the same sites.
-  const { results: sources } = await env.DB.prepare(
-    `UPDATE sources SET last_checked_at = ?1
-     WHERE id IN (
-       SELECT id FROM sources
-       WHERE status != 'blocked' AND (config IS NULL OR json_extract(config, '$.seed') IS NOT 1)
-       ORDER BY last_checked_at IS NOT NULL, last_checked_at, id
-       LIMIT ?2
-     )
-     RETURNING id, country, name, kind, url, config, language, last_checked_at, list_etag, list_last_modified`,
+/**
+ * Item 6, without a line (#230, Roman, 1 Nov: «почему очередь?»). Every minute
+ * each source whose turn it is gets a call of its own: every minute for those
+ * that publish as things happen, every LIMITS.everyMinutes for the rest
+ * (isDue), never the Kickoff seed rows or blocked sources; one that failed
+ * waits LIMITS.failedCheckMinutes. New items from the last 7 days are saved
+ * with their text. A call stopped by a limit stops only its own source, and
+ * that source is simply checked again at its next turn: it is logged, not
+ * counted as the source's failure.
+ *
+ * Without calls of their own (no `options.call`: no SourceChecker, as under
+ * `wrangler dev --remote`), every check would share this run's 10 ms of CPU and
+ * the whole run would be stopped. So such a run checks one source, the one read
+ * in full longest ago, as before #230, and warns: a missing entrypoint slows the
+ * fetcher instead of stopping it (Yurii's review of #274).
+ */
+export async function runFetcher(env: Env, options: FetcherOptions = {}): Promise<SourceCheck[]> {
+  const started = Date.now();
+  const now = options.now ?? new Date();
+  const { results: listed } = await env.DB.prepare(
+    `SELECT id, country, name, kind, url, config, language, last_checked_at, list_etag, list_last_modified, list_hash, failed_checks
+     FROM sources
+     WHERE status != 'blocked' AND (config IS NULL OR json_extract(config, '$.seed') IS NOT 1)
+       AND (failed_checks = 0 OR last_checked_at IS NULL OR last_checked_at <= ?1)
+     ORDER BY last_checked_at IS NOT NULL, last_checked_at, id`,
   )
-    .bind(toStoredTime(run.now), LIMITS.sourcesPerRun)
+    .bind(toStoredTime(new Date(now.getTime() - LIMITS.failedCheckMinutes * 60_000)))
     .all<SourceRow>();
-  // Logged before the work: a run stopped for CPU writes no "fetcher run" line, and this
-  // one still shows which source it was on.
-  if (sources.length) console.log(JSON.stringify({ message: "fetcher start", sources: sources.map((s) => s.id) }));
+  const due = listed.filter((source) => isDue(source, now));
+  const sources = options.call ? due : due.slice(0, 1);
+  if (sources.length < due.length) {
+    console.warn(JSON.stringify({ message: "fetcher without SourceChecker: one source a run", sourceId: sources[0].id, waiting: due.length - 1 }));
+  }
+  const call = options.call ?? ((source: SourceRow) => checkOneSource(env, source, options));
+  const settled = await Promise.allSettled(sources.map((source) => call(source)));
 
-  const checks = await Promise.all(sources.map((source) => checkSource(run, source)));
-
+  const checks = settled.flatMap((result) => (result.status === "fulfilled" ? [result.value] : []));
   console.log(
     JSON.stringify({
       message: "fetcher run",
-      // Wall time; Date.now() does not move during CPU work in Workers. CPU time per run is in Workers Observability.
       wallMs: Date.now() - started,
-      requests: run.requests,
-      pages: run.pages,
-      checks,
+      sources: sources.length,
+      unchanged: checks.filter((c) => c.unchanged).length,
+      saved: checks.reduce((n, c) => n + c.saved, 0),
+      failed: checks.filter((c) => !c.ok).map((c) => c.sourceId),
+      stopped: settled.flatMap((result, i) => (result.status === "rejected" ? [{ sourceId: sources[i].id, error: String(result.reason) }] : [])),
     }),
   );
   return checks;

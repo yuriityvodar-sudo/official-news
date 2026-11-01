@@ -4,17 +4,17 @@ import { toStoredTime } from "../fetcher/text";
 
 /** How a source's status follows its checks (docs/contract.md). */
 export const HEALTH = {
-  /** Checks that fail in a row before a source is broken: about an hour with 19 sources, 1 a minute. */
-  failuresToBreak: 3,
+  /** Checks that fail in a row before a source is broken: about an hour, one every 10 minutes (LIMITS.failedCheckMinutes). */
+  failuresToBreak: 6,
   /** A source whose newest listed item is older than this is stale: it answers, but nothing new. */
   staleDays: 14,
 } as const;
 
 /**
- * Item 8. Gives each source checked in a fetcher run its status, right after the run:
+ * Item 8. Gives a source its status, right after a check that has something to tell (checkOneSource):
  * - `active`: the check worked and the source listed an item from the last 14 days
  * - `stale`: the check worked, but nothing listed is newer than 14 days
- * - `broken`: 3 checks failed in a row (no answer, robots.txt, an HTTP error)
+ * - `broken`: 6 checks failed in a row, about an hour (no answer, robots.txt, an HTTP error)
  * - `moved`: the same, but the list page answers 404 or 410, so it needs a new URL
  *
  * One failed check keeps the status, so a single timeout does not mark a source
@@ -35,9 +35,10 @@ export async function recordChecks(env: Env, checks: SourceCheck[], now = new Da
            END,
            failed_checks = CASE WHEN ?1 THEN 0 ELSE failed_checks + 1 END,
            last_ok_at = CASE WHEN ?1 THEN ?5 ELSE last_ok_at END,
-           last_error = CASE WHEN ?1 THEN NULL ELSE ?6 END
+           last_error = CASE WHEN ?1 THEN NULL ELSE ?6 END,
+           last_checked_at = CASE WHEN ?8 THEN ?5 ELSE last_checked_at END
          WHERE id = ?7 AND status != 'blocked'`,
-      ).bind(check.ok ? 1 : 0, staleBefore, HEALTH.failuresToBreak, check.httpStatus, toStoredTime(now), check.error, check.sourceId),
+      ).bind(check.ok ? 1 : 0, staleBefore, HEALTH.failuresToBreak, check.httpStatus, toStoredTime(now), check.error, check.sourceId, check.full || !check.ok ? 1 : 0),
     ),
   );
 }
