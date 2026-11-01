@@ -19,6 +19,8 @@ The news outlets whose headlines the feed groups into stories per country live i
 
 An outlet comes in when its feed is open to our user agent and robots.txt allows it, its links stay on its site, it published in the last day, and Wikipedia's list of perennial sources does not deprecate it (the Daily Mail and CGTN are left out). One outlet per publisher and country: a second edition in another language counts the same story twice.
 
+Check a new outlet as the fetcher will read it: robots.txt with wildcards (`*`, `$`, RFC 9309; Python's `robotparser` has none, and on 1 Nov it missed Radio Svoboda's `Disallow: /api/*` and UN News's `Disallow: */news/`), and the feed from Cloudflare's network, not only from a laptop (on 1 Nov some outlets that answered a laptop answered the fetcher 403 now and then). After a deploy, `npx wrangler d1 execute official-news --remote --command "SELECT id, status, last_error FROM outlets WHERE failed_checks > 0"` in `server/` shows the outlets that fail. Take out one whose robots.txt closes its feed at once, and one still `broken` after a day.
+
 ## Names in the reader's language (#76)
 
 Cards and the article screen show the source's name ("Federal Government (Bundesregierung) · Germany"). The English name is `name` in `sources.csv`; the names in Ukrainian, Russian, Spanish and German are in [source-names.csv](source-names.csv), one row per source and language: `id,lang,name`, with `lang` one of `uk`, `ru`, `es`, `de` (the API's languages, `LANGS` in `server/src/translator/languages.ts`). It is a separate file so that editing a source never conflicts with editing its names.

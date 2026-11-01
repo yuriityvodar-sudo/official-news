@@ -28,7 +28,7 @@ export const LIMITS = {
   everyMinutes: 5,
   /**
    * A news outlet's feed (#230, docs/outlets.csv) is checked this often unless its config says
-   * otherwise: 107 outlets take about 12,300 Worker requests a day and at most about 15 calls a
+   * otherwise: 105 outlets take about 12,000 Worker requests a day and at most about 15 calls a
    * minute, next to the sources' 15.
    */
   outletEveryMinutes: 15,
