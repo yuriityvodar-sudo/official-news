@@ -6,7 +6,7 @@ export interface DateSpec {
    * Numeric pattern with yyyy, mm, dd, HH, MM, e.g. "dd/mm/yyyy" or "yyyy. mm. dd."; "fr" for "14 octobre 2026";
    * "en" for "7 September 2026" or "7 Sep 2026", also after other words ("Record of decisions | 7 September 2026");
    * "uk" for "16 жовтня 2026", "15 жовтня 17:34" or "12:31, 16 жовтня" (no year: the latest such date),
-   * also with the month's own name ("26 Жовтень 2026, Понеділок 16:21").
+   * also with the month's own name ("26 Жовтень 2026, Понеділок 16:21") or cut short ("29 жовт. 2026 14:00").
    */
   format?: string;
   /** Offset of the source's local time when the date has no zone, e.g. "+03:00". Default UTC. */
@@ -86,15 +86,17 @@ export function parseDate(raw: string | null | undefined, spec: DateSpec = {}, n
   }
   if (spec.format === "uk") {
     const lower = text.toLowerCase();
-    const m = lower.match(/(\d{1,2})\s+([а-яіїєґ]+)(?:\s+(\d{4}))?/);
-    const month = m ? Math.max(UKRAINIAN_MONTHS.indexOf(m[2]), UKRAINIAN_MONTH_NAMES.indexOf(m[2])) + 1 : 0;
+    // The month may be cut short with a dot, as the National Bank of Ukraine writes it ("29 жовт. 2026 14:00").
+    const m = lower.match(/(\d{1,2})\s+([а-яіїєґ]+)(\.?)(?:\s+(\d{4}))?/);
+    const short = m?.[3] === "." && m[2].length >= 3 ? UKRAINIAN_MONTHS.findIndex((name) => name.startsWith(m[2])) : -1;
+    const month = m ? Math.max(UKRAINIAN_MONTHS.indexOf(m[2]), UKRAINIAN_MONTH_NAMES.indexOf(m[2]), short) + 1 : 0;
     if (!m || !month) return null;
     // The time may come before or after the date ("12:31, 16 жовтня", "15 жовтня  17:34").
     const time = lower.match(/(\d{1,2}):(\d{2})/);
     const parts = { mo: month, d: Number(m[1]), h: time ? Number(time[1]) : undefined, mi: time ? Number(time[2]) : undefined };
-    let y = m[3] ? Number(m[3]) : now.getUTCFullYear();
+    let y = m[4] ? Number(m[4]) : now.getUTCFullYear();
     // No year: this year, unless that is more than a day ahead (31 December read on 1 January).
-    if (!m[3] && Date.UTC(y, month - 1, parts.d) > now.getTime() + 86_400_000) y--;
+    if (!m[4] && Date.UTC(y, month - 1, parts.d) > now.getTime() + 86_400_000) y--;
     return build({ y, ...parts }, spec, now);
   }
   if (spec.format) {

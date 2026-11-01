@@ -9,11 +9,11 @@ type Site = Record<string, { status?: number; body: string; type?: string } | ((
 
 /** A fake internet: answers only the URLs in `site`, records every request. */
 function fakeFetch(site: Site) {
-  const requests: { url: string; userAgent: string | null; headers: Headers }[] = [];
+  const requests: { url: string; userAgent: string | null; headers: Headers; method: string; body: string | null }[] = [];
   const fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     const headers = new Headers(init?.headers);
-    requests.push({ url, userAgent: headers.get("user-agent"), headers });
+    requests.push({ url, userAgent: headers.get("user-agent"), headers, method: init?.method ?? "GET", body: typeof init?.body === "string" ? init.body : null });
     const page = site[url];
     if (!page) return new Response("not found", { status: 404 });
     if (typeof page === "function") return page(headers);
@@ -292,6 +292,34 @@ describe("runFetcher", () => {
     expect(second).toMatchObject({ ok: true, httpStatus: 304, found: 0, saved: 0, error: null });
     const sent = requests.filter((r) => r.url.endsWith("list.json")).at(-1)?.headers;
     expect([sent?.get("if-none-match"), sent?.get("if-modified-since")]).toEqual(['"v1"', "Fri, 09 Oct 2026 10:19:05 GMT"]);
+  });
+
+  it("asks a list that the source's page loads by script with a form POST, as the page does (listPost, #230)", async () => {
+    await addSource("xx-bank", "https://bank.test/ua/component/source/news/all", "page", {
+      listPost: { page: "1", perPage: "25" },
+      item: "div.collection-item",
+      link: ".content p a",
+      date: { selector: ".mark time", format: "uk", utcOffset: "+02:00" },
+      exclude: { title: "(?i)^інтерв" },
+      itemPages: false,
+      conditionalGet: true,
+    });
+    const item = (href: string, title: string, when: string) =>
+      `<div class="collection-item post-inline"><div class="content"><p><a href="${href}">${title}</a></p><div class="mark"><time>${when}</time></div></div></div>`;
+    const { fetch, requests } = fakeFetch({
+      "https://bank.test/robots.txt": { body: "User-agent: *\nDisallow:\n", type: "text/plain" },
+      "https://bank.test/ua/component/source/news/all": (headers) =>
+        headers.get("content-type") === "application/x-www-form-urlencoded"
+          ? new Response(
+              `<div class="collection">${item("/ua/news/all/rate", "Національний банк України підвищив облікову ставку до 16,5%", "14 жовт. 2026 14:00")}${item("/ua/news/all/talk", "Інтерв'ю Голови", "13 жовт. 2026 10:00")}</div>`,
+            )
+          : new Response("not found", { status: 404 }),
+    });
+    const [check] = await runFetcher(env, { fetch, now: NOW });
+    expect(check).toMatchObject({ ok: true, httpStatus: 200, saved: 1 });
+    expect((await articlesOf("xx-bank")).map((a) => [a.url, a.published_at])).toEqual([["https://bank.test/ua/news/all/rate", "2026-10-14T12:00:00Z"]]);
+    const list = requests.find((r) => r.url.endsWith("/news/all"));
+    expect([list?.method, list?.body, list?.headers.get("if-none-match")]).toEqual(["POST", "page=1&perPage=25", null]);
   });
 
   it("stores http links of an https source as https", async () => {
