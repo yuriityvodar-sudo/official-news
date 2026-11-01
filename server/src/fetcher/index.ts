@@ -18,7 +18,15 @@ export const LIMITS = {
    * list with the last one, so they parse nothing and write nothing.
    */
   fullCheckMinutes: 60,
-  /** A source whose last check failed is asked again after this long, not every minute. */
+  /**
+   * A list is checked this often unless its source says otherwise (config.everyMinutes, 1 for
+   * those that publish as things happen). Every check is a request to the site, and a call
+   * through ctx.exports counts against the account's 100,000 Worker requests a day, since our
+   * Worker has Workers Caching on (Yurii's review of #274): every source every minute would
+   * take about 53,000 of them.
+   */
+  everyMinutes: 5,
+  /** A source whose last check failed is asked again after this long, not at every turn. */
   failedCheckMinutes: 10,
   /** Newest items looked at per check. */
   itemsPerSource: 20,
@@ -89,7 +97,10 @@ export interface FetcherOptions {
   fetch?: typeof fetch;
   now?: Date;
   sleep?: (ms: number) => Promise<void>;
-  /** How a source is checked: by default inside this call; in production a call of its own (`SourceChecker`, src/index.ts). */
+  /**
+   * How a source is checked: in production a call of its own (`SourceChecker`, src/index.ts). Without it
+   * the check runs inside this call, and a run checks only one source (runFetcher).
+   */
   call?: (source: SourceRow) => Promise<SourceCheck>;
 }
 
@@ -717,6 +728,23 @@ function isFullCheck(source: SourceRow, now: Date): boolean {
 }
 
 /**
+ * Whether a source is checked this minute: at its turn, every config.everyMinutes, and
+ * whenever it is to be read in full. The turn comes from the clock, not from a stored time,
+ * so a check that finds nothing new writes nothing.
+ */
+function isDue(source: SourceRow, now: Date): boolean {
+  const every = Math.max(1, readConfig(source).everyMinutes ?? LIMITS.everyMinutes);
+  return isFullCheck(source, now) || (Math.floor(now.getTime() / 60_000) + spread(source.id)) % every === 0;
+}
+
+/** A number of the source's own, so that sources checked equally often fall on different minutes. */
+function spread(id: string): number {
+  let n = 0;
+  for (let i = 0; i < id.length; i++) n = (n * 31 + id.charCodeAt(i)) % 1_000_003;
+  return n;
+}
+
+/**
  * One source's check: in production a call of its own (`SourceChecker`,
  * src/index.ts), with its own 10 ms of CPU and 50 outside requests. Every check
  * gives its source a status straight away (item 8), but one that found the same
@@ -750,23 +778,37 @@ export async function checkOneSource(env: Env, source: SourceRow, options: Fetch
 
 /**
  * Item 6, without a line (#230, Roman, 1 Nov: «почему очередь?»). Every minute
- * every source is checked, never the Kickoff seed rows or blocked sources; one
- * that failed waits LIMITS.failedCheckMinutes. New items from the last 7 days
- * are saved with their text. A call stopped by a limit stops only its own
- * source, and that source is simply checked again next minute: it is logged,
- * not counted as the source's failure.
+ * each source whose turn it is gets a call of its own: every minute for those
+ * that publish as things happen, every LIMITS.everyMinutes for the rest
+ * (isDue), never the Kickoff seed rows or blocked sources; one that failed
+ * waits LIMITS.failedCheckMinutes. New items from the last 7 days are saved
+ * with their text. A call stopped by a limit stops only its own source, and
+ * that source is simply checked again at its next turn: it is logged, not
+ * counted as the source's failure.
+ *
+ * Without calls of their own (no `options.call`: no SourceChecker, as under
+ * `wrangler dev --remote`), every check would share this run's 10 ms of CPU and
+ * the whole run would be stopped. So such a run checks one source, the one read
+ * in full longest ago, as before #230, and warns: a missing entrypoint slows the
+ * fetcher instead of stopping it (Yurii's review of #274).
  */
 export async function runFetcher(env: Env, options: FetcherOptions = {}): Promise<SourceCheck[]> {
   const started = Date.now();
   const now = options.now ?? new Date();
-  const { results: sources } = await env.DB.prepare(
+  const { results: listed } = await env.DB.prepare(
     `SELECT id, country, name, kind, url, config, language, last_checked_at, list_etag, list_last_modified, list_hash, failed_checks
      FROM sources
      WHERE status != 'blocked' AND (config IS NULL OR json_extract(config, '$.seed') IS NOT 1)
-       AND (failed_checks = 0 OR last_checked_at IS NULL OR last_checked_at <= ?1)`,
+       AND (failed_checks = 0 OR last_checked_at IS NULL OR last_checked_at <= ?1)
+     ORDER BY last_checked_at IS NOT NULL, last_checked_at, id`,
   )
     .bind(toStoredTime(new Date(now.getTime() - LIMITS.failedCheckMinutes * 60_000)))
     .all<SourceRow>();
+  const due = listed.filter((source) => isDue(source, now));
+  const sources = options.call ? due : due.slice(0, 1);
+  if (sources.length < due.length) {
+    console.warn(JSON.stringify({ message: "fetcher without SourceChecker: one source a run", sourceId: sources[0].id, waiting: due.length - 1 }));
+  }
   const call = options.call ?? ((source: SourceRow) => checkOneSource(env, source, options));
   const settled = await Promise.allSettled(sources.map((source) => call(source)));
 

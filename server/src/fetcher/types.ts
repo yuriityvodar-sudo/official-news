@@ -93,6 +93,11 @@ export interface SourceConfig {
   newStageIsNewItem?: boolean;
   /** Seconds between our requests to this site (from its robots.txt). */
   crawlDelaySeconds?: number;
+  /**
+   * How often the list is checked, in minutes (LIMITS.everyMinutes when not set): 1 for a source
+   * that publishes as things happen. Every check is a request to the site and a Worker request (#230).
+   */
+  everyMinutes?: number;
   /** Send back the list's ETag / Last-Modified; a 304 answer means nothing new (saves big downloads). */
   conditionalGet?: boolean;
   /**

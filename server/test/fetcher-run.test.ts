@@ -1,5 +1,5 @@
 import { env, exports } from "cloudflare:workers";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { LIMITS, USER_AGENT, type SourceCheck, checkOneSource, runFetcher } from "../src/fetcher";
 import type { SourceRow } from "../src/fetcher/types";
@@ -24,14 +24,21 @@ function fakeFetch(site: Site) {
   return { fetch, requests };
 }
 
+/** A source checked every minute, as these tests read it minute by minute, unless its config says otherwise. */
 async function addSource(id: string, url: string, kind: "rss" | "page" | "api", config: object | null = null, lastCheckedAt: string | null = null) {
   await env.DB.prepare(
     `INSERT INTO sources (id, country, name, kind, url, config, language, verified_by, verified_at, status, last_checked_at)
      VALUES (?, 'XX', ?, ?, ?, ?, 'en', 'domain', '2026-10-14', 'active', ?)`,
   )
-    .bind(id, id, kind, url, config ? JSON.stringify(config) : null, lastCheckedAt)
+    .bind(id, id, kind, url, JSON.stringify({ everyMinutes: 1, ...config }), lastCheckedAt)
     .run();
 }
+
+/** A run as in production: each source's check a call of its own (SourceChecker). */
+const inCalls = (options: { fetch: typeof globalThis.fetch; now: Date }) => ({
+  ...options,
+  call: (source: SourceRow) => checkOneSource(env, source, options),
+});
 
 const articlesOf = async (sourceId: string) =>
   (
@@ -98,7 +105,7 @@ describe("runFetcher", () => {
       "https://norobots.test/robots.txt": { body: "User-agent: *\nDisallow: /private/", type: "text/plain" },
       "https://down.test/robots.txt": { status: 503, body: "" },
     });
-    const checks = await runFetcher(env, { fetch, now: NOW });
+    const checks = await runFetcher(env, inCalls({ fetch, now: NOW }));
     expect(checks.map((c) => [c.sourceId, c.ok, c.error]).sort()).toEqual([
       ["xx-down", false, "robots.txt answered HTTP 503"],
       ["xx-robots", false, "robots.txt does not allow this path"],
@@ -871,6 +878,57 @@ describe("runFetcher: every source every minute, no line (#230, Roman, 1 Nov)", 
     expect(called.filter((id) => id === "xx-b")).toHaveLength(2);
   });
 
+  it("without calls of their own checks one source a run, the one read in full longest ago, and warns", async () => {
+    await addSource("xx-a", "https://xx-a.test/feed.xml", "rss", null, "2026-10-14T14:10:00Z");
+    await addSource("xx-b", "https://xx-b.test/feed.xml", "rss", null, "2026-10-14T13:50:00Z");
+    await addSource("xx-c", "https://xx-c.test/feed.xml", "rss", null, "2026-10-14T14:30:00Z");
+    const { fetch } = fakeFetch({});
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    // Every check here would share the run's 10 ms of CPU: a slower fetcher, not a stopped one.
+    const order = [];
+    for (const minute of [0, 1, 2]) order.push(...(await runFetcher(env, { fetch, now: at(minute) })).map((c) => c.sourceId));
+    expect(order).toEqual(["xx-b", "xx-a", "xx-c"]);
+    expect(JSON.parse(String(warn.mock.calls[0][0]))).toMatchObject({ message: "fetcher without SourceChecker: one source a run", sourceId: "xx-b", waiting: 2 });
+    // By the third run the other two failed and wait their 10 minutes: nothing waits for xx-c's turn.
+    expect(warn.mock.calls.map(([line]) => JSON.parse(String(line)).sourceId)).toEqual(["xx-b", "xx-a"]);
+  });
+
+  it("checks a list at its turn, every config.everyMinutes (LIMITS.everyMinutes by default), and in full every hour", async () => {
+    const ids = ["xx-fast", "xx-a", "xx-b", "xx-c", "xx-d", "xx-e"];
+    const site: Site = {};
+    for (const id of ids) {
+      site[`https://${id}.test/robots.txt`] = { status: 404, body: "" };
+      site[`https://${id}.test/feed.xml`] = { body: rss([{ ...news(1), link: `https://${id}.test/news/1` }]), type: "application/rss+xml" };
+      // everyMinutes left out: LIMITS.everyMinutes.
+      await addSource(id, `https://${id}.test/feed.xml`, "rss", { itemPages: false, everyMinutes: id === "xx-fast" ? 1 : undefined });
+    }
+    const { fetch } = fakeFetch(site);
+    // Never read: all at once, in full.
+    expect((await runFetcher(env, inCalls({ fetch, now: NOW }))).map((c) => c.sourceId).sort()).toEqual([...ids].sort());
+
+    const checked = new Map<string, number[]>(ids.map((id) => [id, []]));
+    const minutes = 2 * LIMITS.everyMinutes;
+    for (let minute = 1; minute <= minutes; minute++) {
+      for (const check of await runFetcher(env, inCalls({ fetch, now: at(minute) }))) {
+        expect(check).toMatchObject({ ok: true, full: false, unchanged: true });
+        checked.get(check.sourceId)?.push(minute);
+      }
+    }
+    expect(checked.get("xx-fast")).toHaveLength(minutes);
+    for (const id of ids.slice(1)) {
+      const turns = checked.get(id) ?? [];
+      expect(turns).toHaveLength(2);
+      expect(turns[1] - turns[0]).toBe(LIMITS.everyMinutes);
+    }
+    // Spread over the minutes, not all at the same one.
+    expect(new Set(ids.slice(1).map((id) => checked.get(id)?.[0])).size).toBeGreaterThan(1);
+
+    // An hour on, each is read in full whatever its turn.
+    const full = await runFetcher(env, inCalls({ fetch, now: at(LIMITS.fullCheckMinutes) }));
+    expect(full.map((c) => c.sourceId).sort()).toEqual([...ids].sort());
+    expect(full.every((c) => c.full)).toBe(true);
+  });
+
   it("reads an unchanged list with one request, parses nothing and writes nothing", async () => {
     await addSource("xx-quick", LIST, "rss", { itemPages: false });
     const { fetch, requests } = fakeFetch(quickSite());
@@ -974,12 +1032,12 @@ describe("runFetcher: every source every minute, no line (#230, Roman, 1 Nov)", 
       "https://clean.test/feed.xml": list("clean.test"),
     });
     const link = (id: string, checks: SourceCheck[]) => checks.find((c) => c.sourceId === id);
-    const first = await runFetcher(env, { fetch, now: NOW });
+    const first = await runFetcher(env, inCalls({ fetch, now: NOW }));
     expect(first).toHaveLength(2);
 
     let checks: SourceCheck[] = [];
     const rows = await d1Rows(async () => {
-      checks = await runFetcher(env, { fetch, now: at(1) });
+      checks = await runFetcher(env, inCalls({ fetch, now: at(1) }));
     });
     expect(link("xx-clean", checks)).toMatchObject({ unchanged: true });
     expect(link("xx-noisy", checks)).toMatchObject({ ok: true, unchanged: false, found: 1, saved: 0 });
