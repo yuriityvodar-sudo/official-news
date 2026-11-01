@@ -107,6 +107,17 @@ describe("parseDate", () => {
     expect(parseDate("26 Жовтнь  2026", kyiv, NOW)).toBeNull();
   });
 
+  it("reads a month cut short with a dot, as the National Bank of Ukraine writes it (#230)", () => {
+    const kyiv = { format: "uk", utcOffset: "+02:00" };
+    expect(parseDate("29 жовт. 2026 14:00", kyiv, NOW)).toEqual({ publishedAt: "2026-10-29T12:00:00Z", dateOnly: false });
+    expect(parseDate("11 вер. 2026 11:54", kyiv, NOW)?.publishedAt).toBe("2026-09-11T09:54:00Z");
+    expect(parseDate("4 черв. 2025 16:25", kyiv, NOW)?.publishedAt).toBe("2025-06-04T14:25:00Z");
+    expect(parseDate("17 бер. 2026 14:50", kyiv, NOW)?.publishedAt).toBe("2026-03-17T12:50:00Z");
+    // Only with its dot, and never two letters: "29 жо" or a word that only starts like a month is not a date.
+    expect(parseDate("29 жовт 2026", kyiv, NOW)).toBeNull();
+    expect(parseDate("29 жо. 2026", kyiv, NOW)).toBeNull();
+  });
+
   it("drops a meaningless midnight when asked", () => {
     expect(parseDate("2026-08-10 00:00:00.0", { dateOnly: true }, NOW)).toEqual({ publishedAt: "2026-08-10T12:00:00Z", dateOnly: true });
   });
