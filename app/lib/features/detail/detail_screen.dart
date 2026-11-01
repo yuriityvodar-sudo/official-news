@@ -731,8 +731,8 @@ class _WikipediaLicence extends StatelessWidget {
 
 /// A news story's credit before its text (#230), as its outlet asks: the
 /// author and the outlet, a tap opening the original; then the outlet's own
-/// words and its licence, a tap opening it (Global Voices' CC BY 3.0, RFE/RL's
-/// "Used with the permission of…").
+/// words, if it asks for any, and its licence, a tap opening it (Global
+/// Voices' CC BY 3.0).
 class _StoryCredit extends StatelessWidget {
   const _StoryCredit({required this.article, required this.openLink});
 

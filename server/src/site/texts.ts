@@ -22,7 +22,7 @@ interface SiteTexts {
   aiNotice: string;
   /** The AI notice on an event's page (#230): from Wikipedia's text, which is not an official one. */
   aiNoticeEvent: string;
-  /** The AI notice on a news story's page (#230: Global Voices, RFE/RL): from `{source}`'s text. */
+  /** The AI notice on a news story's page (#230: Global Voices): from `{source}`'s text. */
   aiNoticeStory: string;
   /** The AI notice on a list that has events among its decisions (#230). */
   aiNoticeWithEvents: string;
@@ -418,7 +418,7 @@ export function countryName(lang: SiteLang, code: string): string {
 /** An event from Wikipedia's current events, not an official decision (#230), as the app's `Article.isEvent`. */
 export const isEvent = (article: { decisionType: string | null }) => article.decisionType === "event";
 
-/** A news story (#230: Global Voices, RFE/RL): an event whose link is not Wikipedia's, so its outlet is named, not Wikipedia. */
+/** A news story (#230: Global Voices): an event whose link is not Wikipedia's, so its outlet is named, not Wikipedia. */
 export function isStory(article: { decisionType: string | null; originalUrl: string }): boolean {
   if (!isEvent(article)) return false;
   try {

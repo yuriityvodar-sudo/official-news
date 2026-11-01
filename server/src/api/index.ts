@@ -376,7 +376,7 @@ export function toArticle(row: ArticleRow) {
     // #230, additive: a story's author, named with a link to the original (Global Voices' licence); never a decision's.
     author: row.decision_type === "event" ? (row.author ?? null) : null,
     // #230, additive: what the source's licence asks to be shown with it (docs/source-credits.csv).
-    credit: creditOf(row.source_id, row.published_at),
+    credit: creditOf(row.source_id),
     // For you only (#230 step 5): "In the media", up to 3 of the reader's country's outlets about it.
     ...(row.media_links !== undefined ? { media: parseMedia(row.media_links) } : {}),
   };

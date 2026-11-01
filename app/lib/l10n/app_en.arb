@@ -546,11 +546,11 @@
   },
   "readOnSource": "Read on {source}",
   "@readOnSource": {
-    "description": "The link of a news story (#230: Global Voices, Radio Svoboda) to its page at the outlet, in place of Read the official decision.",
+    "description": "The link of a news story (#230: Global Voices) to its page at the outlet, in place of Read the official decision.",
     "placeholders": {
       "source": {
         "type": "String",
-        "example": "Radio Svoboda"
+        "example": "Global Voices"
       }
     }
   },
@@ -560,7 +560,7 @@
     "placeholders": {
       "source": {
         "type": "String",
-        "example": "Radio Svoboda"
+        "example": "Global Voices"
       }
     }
   },
@@ -570,7 +570,7 @@
     "placeholders": {
       "source": {
         "type": "String",
-        "example": "Radio Svoboda"
+        "example": "Global Voices"
       },
       "language": {
         "type": "String",

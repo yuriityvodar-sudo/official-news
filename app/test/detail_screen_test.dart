@@ -335,30 +335,28 @@ void main() {
   });
 
   testWidgets('a story names its outlet where an event names Wikipedia, and '
-      'gives its author, the original and the credit before the text (#230)', (
+      'gives its author, the original and the licence before the text (#230)', (
     tester,
   ) async {
     const page =
-        'https://www.radiosvoboda.org/a/news-zelenskyy-rakety/33888322.html';
-    const wording =
-        'Copyright (c) 2026 RFE/RL, Inc. Used with the permission of '
-        'Radio Free Europe/Radio Liberty.';
+        'https://globalvoices.org/2026/10/31/ukrainian-villages-rebuild-schools/';
+    const licence = 'https://creativecommons.org/licenses/by/3.0/';
     final story = Article.fromJson({
-      ..._article(language: 'uk', originalUrl: page).toJson(),
-      'country': 'UA',
+      ..._article(language: 'en', originalUrl: page).toJson(),
+      'country': 'WW',
       'countries': ['UA'],
       'decisionType': 'event',
       'source': {
-        'id': 'ua-radio-svoboda',
-        'name': 'Radio Svoboda',
-        'url': 'https://www.radiosvoboda.org',
+        'id': 'ww-global-voices',
+        'name': 'Global Voices',
+        'url': 'https://globalvoices.org',
       },
-      'author': 'Kateryna Trokhymchuk',
+      'author': 'Nurbek Bekmurzaev',
       'credit': {
-        'licence': 'Use Our Content',
-        'licenceUrl': 'https://about.rferl.org/use-our-content',
-        'wording': wording,
-        'wordingLang': 'en',
+        'licence': 'CC BY 3.0',
+        'licenceUrl': licence,
+        'wording': null,
+        'wordingLang': null,
       },
     });
     expect(story.isStory, isTrue);
@@ -367,28 +365,16 @@ void main() {
 
     expect(find.text('Ukraine · Event'), findsOneWidget);
     expect(find.byIcon(CupertinoIcons.checkmark_seal), findsNothing);
-    expect(
-      find.text(
-        "Summary by AI of Radio Svoboda's text · translated from Ukrainian",
-      ),
-      findsOneWidget,
-    );
+    expect(find.text("Summary by AI of Global Voices's text"), findsOneWidget);
     expect(find.textContaining('Wikipedia'), findsNothing);
-    expect(find.text(wording), findsOneWidget);
 
-    await tester.tap(
-      find.text('Story by Kateryna Trokhymchuk · Radio Svoboda'),
-    );
-    await tester.tap(find.text('Use Our Content'));
-    final read = find.text('Read on Radio Svoboda');
+    await tester.tap(find.text('Story by Nurbek Bekmurzaev · Global Voices'));
+    await tester.tap(find.text('CC BY 3.0'));
+    final read = find.text('Read on Global Voices');
     await tester.scrollUntilVisible(read, 200);
     await tester.pumpAndSettle();
     await tester.tap(read);
-    expect(opened, [
-      Uri.parse(page),
-      Uri.parse('https://about.rferl.org/use-our-content'),
-      Uri.parse(page),
-    ]);
+    expect(opened, [Uri.parse(page), Uri.parse(licence), Uri.parse(page)]);
   });
 
   // #52: the article screen in the app's language; the article's own text is

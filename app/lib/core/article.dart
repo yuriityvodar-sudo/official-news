@@ -130,7 +130,7 @@ class Article {
   /// events or a news outlet ([isStory]); no official-source seal.
   bool get isEvent => decisionType == 'event';
 
-  /// A news story (#230: Global Voices, RFE/RL): an event whose link is not
+  /// A news story (#230: Global Voices): an event whose link is not
   /// Wikipedia's, so its outlet is named where an event names Wikipedia.
   bool get isStory {
     if (!isEvent) return false;
@@ -166,8 +166,8 @@ class Article {
   };
 }
 
-/// What a source's licence asks to be shown with its articles (#230): Global
-/// Voices' CC BY 3.0, RFE/RL's "Used with the permission of…".
+/// What a source's licence asks to be shown with its articles (#230), as
+/// Global Voices' CC BY 3.0.
 class Credit {
   const Credit({this.licence, this.licenceUrl, this.wording});
 

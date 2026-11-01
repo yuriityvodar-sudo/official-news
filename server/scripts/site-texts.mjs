@@ -234,7 +234,7 @@ export function credits(creditsCsv, sourcesCsv) {
 
 export function creditsModule(rows) {
   return `${HEADER("docs/source-credits.csv")}
-/** How a source is credited (#88): on the site's article page, and in the app through the API's \`credit\` (#230, src/api/credit.ts). A \`{year}\` in the wording is the article's year. */
+/** How a source is credited (#88): on the site's article page, and in the app through the API's \`credit\` (#230, src/api/credit.ts). */
 export interface Credit {
   /** The licence's name, shown as a link when there is a URL. */
   licence?: string;

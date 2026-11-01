@@ -292,7 +292,7 @@ describe("GET /articles/:id", () => {
     expect((await get(`/articles/${id}`)).body).toMatchObject({ countries: [] });
   });
 
-  it("returns a story's author and the credit its outlet asks for, its year the story's, and never an author on a decision (#230)", async () => {
+  it("returns a story's author and the credit its outlet asks for, and never an author on a decision (#230)", async () => {
     const id = SEED_DECISIONS[0];
     expect((await get(`/articles/${id}`)).body).toMatchObject({ author: null });
     // A government feed's dc:creator stored before #230's fix: not shown on a decision.
@@ -300,18 +300,18 @@ describe("GET /articles/:id", () => {
     expect((await get(`/articles/${id}`)).body).toMatchObject({ author: null });
 
     await env.DB.prepare(
-      "INSERT INTO sources (id, country, name, kind, url, language) VALUES ('ww-rferl', 'WW', 'Radio Free Europe/Radio Liberty', 'rss', 'https://www.rferl.org/api/', 'en')",
+      "INSERT INTO sources (id, country, name, kind, url, language) VALUES ('ww-global-voices', 'WW', 'Global Voices', 'rss', 'https://globalvoices.org/feed/', 'en')",
     ).run();
-    await env.DB.prepare("UPDATE articles SET source_id = 'ww-rferl', decision_type = 'event', author = 'Jane Doe', published_at = '2025-12-31T23:00:00Z' WHERE id = ?")
+    await env.DB.prepare("UPDATE articles SET source_id = 'ww-global-voices', decision_type = 'event', author = 'Nurbek Bekmurzaev' WHERE id = ?")
       .bind(id)
       .run();
     expect((await get(`/articles/${id}`)).body).toMatchObject({
-      author: "Jane Doe",
+      author: "Nurbek Bekmurzaev",
       credit: {
-        licence: "Use Our Content",
-        licenceUrl: "https://about.rferl.org/use-our-content",
-        wording: "Copyright (c) 2025 RFE/RL, Inc. Used with the permission of Radio Free Europe/Radio Liberty.",
-        wordingLang: "en",
+        licence: "CC BY 3.0",
+        licenceUrl: "https://creativecommons.org/licenses/by/3.0/",
+        wording: null,
+        wordingLang: null,
       },
     });
   });

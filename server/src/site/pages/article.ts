@@ -5,7 +5,7 @@
 // page's header, so it is not repeated here (#88 review). An event (#230) is
 // shown as the app shows it: the country it concerns, "Event" in place of the
 // official-source seal, and Wikipedia's words for the label, notice and link;
-// a news story (#230: Global Voices, RFE/RL) its outlet's, and its author in
+// a news story (#230: Global Voices) its outlet's, and its author in
 // the credit line.
 // Never the source's picture (imageUrl): a site makes public, permanent copies.
 import type { ApiArticle } from "../data";
