@@ -96,7 +96,15 @@ interface Run {
   failed: Map<string, number>;
 }
 
-async function request(run: Run, url: string, accept: string, crawlDelaySeconds = 0, extraHeaders: Record<string, string> = {}): Promise<Response> {
+/** `form`: the body of a form POST (config.listPost), else a GET. */
+async function request(
+  run: Run,
+  url: string,
+  accept: string,
+  crawlDelaySeconds = 0,
+  extraHeaders: Record<string, string> = {},
+  form?: string,
+): Promise<Response> {
   if (run.requests >= LIMITS.requestsPerRun) throw new Error("request budget for this run used up");
   // Counted before the first await, so two checks running side by side cannot both pass the limit.
   run.requests++;
@@ -108,7 +116,13 @@ async function request(run: Run, url: string, accept: string, crawlDelaySeconds 
   }
   run.lastRequest.set(host, Date.now());
   return run.fetch(url, {
-    headers: { "user-agent": USER_AGENT, accept, ...extraHeaders },
+    ...(form === undefined ? {} : { method: "POST", body: form }),
+    headers: {
+      "user-agent": USER_AGENT,
+      accept,
+      ...(form === undefined ? {} : { "content-type": "application/x-www-form-urlencoded" }),
+      ...extraHeaders,
+    },
     redirect: "follow",
     signal: AbortSignal.timeout(LIMITS.timeoutMs),
   });
@@ -225,9 +239,10 @@ async function readList(run: Run, source: SourceRow, config: SourceConfig, url: 
   if (config.currentEvents) return readCurrentEvents(run, config.currentEvents, config);
   // Servers often match these exactly, so we send back what they sent, never a time of our own.
   const conditional: Record<string, string> = {};
-  if (config.conditionalGet && source.list_etag) conditional["if-none-match"] = source.list_etag;
-  if (config.conditionalGet && source.list_last_modified) conditional["if-modified-since"] = source.list_last_modified;
-  const res = await request(run, url, source.kind === "api" ? "application/json" : "*/*", config.crawlDelaySeconds, conditional);
+  const form = config.listPost ? new URLSearchParams(config.listPost).toString() : undefined;
+  if (config.conditionalGet && form === undefined && source.list_etag) conditional["if-none-match"] = source.list_etag;
+  if (config.conditionalGet && form === undefined && source.list_last_modified) conditional["if-modified-since"] = source.list_last_modified;
+  const res = await request(run, url, source.kind === "api" ? "application/json" : "*/*", config.crawlDelaySeconds, conditional, form);
   const etag = res.headers.get("etag");
   const lastModified = res.headers.get("last-modified");
   // 304: nothing changed since the last check.
