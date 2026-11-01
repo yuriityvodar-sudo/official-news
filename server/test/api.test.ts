@@ -328,7 +328,23 @@ describe("other requests", () => {
     const { status, body } = await get("/health");
     expect(status).toBe(200);
     // Only the 20 Kickoff seed sources exist here, and health skips them.
-    expect(body).toEqual({ sources: {}, lastFetcherRun: null, articles: { fetchedLast24h: expect.any(Number), waitingForSummary: 0, gaveUpOnSummary: 0, inFeed: 3 } });
+    expect(body).toEqual({
+      sources: {},
+      lastFetcherRun: null,
+      outlets: {},
+      lastHeadlineAt: null,
+      articles: { fetchedLast24h: expect.any(Number), waitingForSummary: 0, gaveUpOnSummary: 0, inFeed: 3 },
+    });
+  });
+
+  it("GET /health counts the news outlets per status and gives the newest headline of one that is read (#230)", async () => {
+    await env.DB.prepare(
+      `INSERT INTO outlets (id, country, name, url, site, language, status, last_item_at) VALUES
+         ('xx-a', 'XX', 'A', 'https://a.test/rss', 'https://a.test', 'en', 'active', '2026-11-01T12:00:00Z'),
+         ('xx-b', 'XX', 'B', 'https://b.test/rss', 'https://b.test', 'en', 'broken', '2026-11-01T09:00:00Z'),
+         ('xx-c', 'XX', 'C', 'https://c.test/rss', 'https://c.test', 'en', 'blocked', '2026-11-01T13:00:00Z')`,
+    ).run();
+    expect((await get("/health")).body).toMatchObject({ sources: {}, outlets: { active: 1, broken: 1, blocked: 1 }, lastHeadlineAt: "2026-11-01T12:00:00Z" });
   });
 
   it("GET /health shows the last fetcher run, the articles waiting for the AI and the ones it gave up on", async () => {
@@ -354,7 +370,7 @@ describe("other requests", () => {
   it("tells Cloudflare's cache what to keep: the lists for a minute, an article for 5, nothing else (#121)", async () => {
     const cacheControl = async (path: string, init?: RequestInit) =>
       (await exports.default.fetch(`https://api.test${path}`, init)).headers.get("cache-control");
-    for (const path of ["/articles", "/articles?lang=uk&country=DE", "/articles?after=1", "/topics?lang=uk", "/countries"]) {
+    for (const path of ["/articles", "/articles?lang=uk&country=DE", "/articles?after=1", "/topics?lang=uk", "/countries", "/headlines?country=CZ"]) {
       expect(await cacheControl(path), path).toBe("public, max-age=60");
     }
     expect(await cacheControl(`/articles/${SEED_DECISIONS[0]}`)).toBe("public, max-age=300");
@@ -363,6 +379,7 @@ describe("other requests", () => {
       "/articles/01JASEED000000000000000001",
       `/articles/${SEED_DECISIONS[0]}?lang=uk`,
       "/articles?limit=0",
+      "/headlines",
       "/nope",
       "/health",
       "/queue",
@@ -391,5 +408,39 @@ describe("other requests", () => {
     const post = await exports.default.fetch("https://api.test/articles", { method: "POST" });
     expect(post.status).toBe(405);
     expect(post.headers.get("allow")).toBe("GET");
+  });
+});
+
+describe("GET /headlines (#230, the aggregator)", () => {
+  const headline = (title: string, hours: number) => ({ title, url: `https://www.${title.split(" ")[0].toLowerCase()}.test/${hours}`, publishedAt: hoursAgo(hours) });
+
+  it("gives a country's outlets' headlines of the last 48 hours, newest first, each with its outlet and link", async () => {
+    const insert = (id: string, country: string, status: string, items: object[]) =>
+      env.DB.prepare(
+        "INSERT INTO outlets (id, country, name, url, site, language, status, headlines) VALUES (?, ?, ?, ?, ?, 'cs', ?, ?)",
+      ).bind(id, country, `Outlet ${id}`, `https://feeds.${id}.test/rss`, `https://www.${id}.test`, status, JSON.stringify(items));
+    await env.DB.batch([
+      insert("xx-a", "XX", "active", [headline("Floods close roads", 1), headline("Budget passed", 30), headline("Last week", 49)]),
+      insert("xx-b", "XX", "stale", [headline("Snow in the mountains", 3)]),
+      insert("xx-gone", "XX", "blocked", [headline("Taken out", 2)]),
+      insert("yy-a", "YY", "active", [headline("Elsewhere", 1)]),
+    ]);
+    const { status, body } = await get("/headlines?country=XX");
+    expect(status).toBe(200);
+    expect(body).toEqual({
+      country: "XX",
+      items: [
+        { ...headline("Floods close roads", 1), outlet: { id: "xx-a", name: "Outlet xx-a", site: "https://www.xx-a.test" } },
+        { ...headline("Snow in the mountains", 3), outlet: { id: "xx-b", name: "Outlet xx-b", site: "https://www.xx-b.test" } },
+        { ...headline("Budget passed", 30), outlet: { id: "xx-a", name: "Outlet xx-a", site: "https://www.xx-a.test" } },
+      ],
+    });
+  });
+
+  it("needs a country as a 2-letter code in capitals", async () => {
+    for (const path of ["/headlines", "/headlines?country=cz", "/headlines?country=CZE"]) {
+      expect((await get(path)).status, path).toBe(400);
+    }
+    expect((await get("/headlines?country=ZZ")).body).toEqual({ country: "ZZ", items: [] });
   });
 });

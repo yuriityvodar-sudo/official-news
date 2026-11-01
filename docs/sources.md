@@ -13,6 +13,12 @@ From media and aggregators only a headline and a link, never their text (EU law 
 
 **Official gazettes are allowed** (that is where decisions take effect), always with a title filter (`exclude`) for routine entries: exchange and interest rates, price indices, court edicts, company notices, tenders, routine appointments, technical standards. They never reach the AI, so they cost nothing.
 
+## News outlets (#230, the aggregator)
+
+The news outlets whose headlines the feed groups into stories per country live in [outlets.csv](outlets.csv), apart from the sources: `id,country,name,url,site,language,config,checked_at,note`. `url` is the outlet's feed; `site` its home page, since a link is kept only on that site or a subdomain of it (`config.allowedHosts` for another host of the outlet's, as `www.bbc.com` for BBC News); `config` takes a source's `everyMinutes`, `match`, `exclude` (Chosun Ilbo's Japanese, Chinese and English editions), `encoding` or `listNoise`; `note` says how the feed was checked. Only the headline, the link and the time are kept, never the text or a picture. The deploy loads the file with the sources; an outlet taken out is set to `blocked`, and one put back is read again. `npm test` checks every row and refuses an id that belongs to a source.
+
+An outlet comes in when its feed is open to our user agent and robots.txt allows it, its links stay on its site, it published in the last day, and Wikipedia's list of perennial sources does not deprecate it (the Daily Mail and CGTN are left out). One outlet per publisher and country: a second edition in another language counts the same story twice.
+
 ## Names in the reader's language (#76)
 
 Cards and the article screen show the source's name ("Federal Government (Bundesregierung) · Germany"). The English name is `name` in `sources.csv`; the names in Ukrainian, Russian, Spanish and German are in [source-names.csv](source-names.csv), one row per source and language: `id,lang,name`, with `lang` one of `uk`, `ru`, `es`, `de` (the API's languages, `LANGS` in `server/src/translator/languages.ts`). It is a separate file so that editing a source never conflicts with editing its names.

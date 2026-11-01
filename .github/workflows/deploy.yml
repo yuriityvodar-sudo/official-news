@@ -1,7 +1,7 @@
 name: Deploy
 
 # On every merge to main: apply new D1 migrations, load docs/sources.csv (with
-# the names in docs/source-names.csv), then deploy the Worker, then the website
+# the names in docs/source-names.csv) and docs/outlets.csv (#230), then deploy the Worker, then the website
 # (the Worker `site`, #88), which bundles the API's code and so shows its rules
 # from this deploy on.
 # Needs the repository secret CLOUDFLARE_API_TOKEN (see docs/setup.md). Until
@@ -18,6 +18,7 @@ on:
       - "server/**"
       - "docs/sources.csv"
       - "docs/source-names.csv"
+      - "docs/outlets.csv"
       - ".github/workflows/deploy.yml"
   workflow_dispatch:
 

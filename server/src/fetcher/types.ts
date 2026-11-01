@@ -16,6 +16,32 @@ export interface SourceRow {
   list_last_modified: string | null;
   list_hash: string | null;
   failed_checks: number;
+  /**
+   * Only on a news outlet (#230, the `outlets` table, docs/outlets.csv): its
+   * home page. Its headlines and links on this site are kept, never its text.
+   */
+  site?: string;
+}
+
+/** A news outlet's headline (#230), as kept in `outlets.headlines`: its words and link only. */
+export interface Headline {
+  title: string;
+  url: string;
+  publishedAt: string;
+}
+
+/** An outlet's stored headlines; anything that is not a list of them reads as none. */
+export function parseHeadlines(json: string | null | undefined): Headline[] {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(json ?? "[]");
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(parsed)) return [];
+  return parsed.filter(
+    (h): h is Headline => typeof h?.title === "string" && typeof h?.url === "string" && typeof h?.publishedAt === "string",
+  );
 }
 
 /**
@@ -94,8 +120,9 @@ export interface SourceConfig {
   /** Seconds between our requests to this site (from its robots.txt). */
   crawlDelaySeconds?: number;
   /**
-   * How often the list is checked, in minutes (LIMITS.everyMinutes when not set): 1 for a source
-   * that publishes as things happen. Every check is a request to the site and a Worker request (#230).
+   * How often the list is checked, in minutes (LIMITS.everyMinutes when not set, LIMITS.outletEveryMinutes
+   * for a news outlet): 1 for a source that publishes as things happen. Every check is a request to the
+   * site and a Worker request (#230).
    */
   everyMinutes?: number;
   /** Send back the list's ETag / Last-Modified; a 304 answer means nothing new (saves big downloads). */

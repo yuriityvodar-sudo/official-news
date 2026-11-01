@@ -5,7 +5,7 @@ import { parseFeed } from "./feed";
 import { extractContent, findLink, parsePage } from "./page";
 import { type Robots, isAllowed, robotsFromResponse } from "./robots";
 import { decodeBody, getStrings, htmlToText, toStoredTime, ulid } from "./text";
-import { type FilterField, type FoundItem, type SourceConfig, type SourceRow, configRegex, readConfig } from "./types";
+import { type FilterField, type FoundItem, type Headline, type SourceConfig, type SourceRow, configRegex, parseHeadlines, readConfig } from "./types";
 import { type EventsLang, articleRaw, currentEventsPages, englishPageDay, leadOf, parseCurrentEvents } from "./wikipedia";
 
 export const USER_AGENT = "OfficialNewsBot/0.1 (+https://github.com/yuriityvodar-sudo/official-news)";
@@ -26,6 +26,23 @@ export const LIMITS = {
    * take about 53,000 of them.
    */
   everyMinutes: 5,
+  /**
+   * A news outlet's feed (#230, docs/outlets.csv) is checked this often unless its config says
+   * otherwise: 107 outlets take about 12,300 Worker requests a day and at most about 15 calls a
+   * minute, next to the sources' 15.
+   */
+  outletEveryMinutes: 15,
+  /**
+   * Calls a run makes at most: Cloudflare allows 32 Worker invocations per request, the cron run
+   * itself among them, and a call past them throws. The sources go first, then the outlets; one
+   * left out goes at its next turn, or the next minute when it is due to be read in full.
+   */
+  callsPerRun: 30,
+  /** An outlet's headlines are kept this long (#230): its stories are ranked on the last two days. */
+  headlineHours: 48,
+  /** At most this many headlines are kept per outlet, the newest: two days of the busiest feeds. */
+  headlinesPerOutlet: 300,
+  headlineLength: 300,
   /** A source whose last check failed is asked again after this long, not at every turn. */
   failedCheckMinutes: 10,
   /** Newest items looked at per check. */
@@ -86,6 +103,8 @@ export interface SourceCheck {
   offSite: number;
   /** Known items read again: their text never came, or their publisher renamed them (#227). */
   reread: number;
+  /** A news outlet's new headlines (#230). */
+  headlines: number;
   error: string | null;
   /** Read in full (LIMITS.fullCheckMinutes), not only compared with the last list. */
   full: boolean;
@@ -323,7 +342,7 @@ async function readList(run: Run, source: SourceRow, config: SourceConfig, url: 
   const body = decodeBody(bytes, charset);
   const items =
     source.kind === "rss"
-      ? parseFeed(body, res.url || url, config, run.now)
+      ? parseFeed(body, res.url || url, config, run.now, source.site !== undefined)
       : source.kind === "page"
         ? await parsePage(body, res.url || url, config, run.now)
         : parseApi(JSON.parse(body), res.url || url, config, run.now);
@@ -584,7 +603,21 @@ async function rereadKnown(
 }
 
 async function checkSource(run: Run, source: SourceRow): Promise<SourceCheck> {
-  const check: SourceCheck = { sourceId: source.id, ok: false, httpStatus: null, found: 0, saved: 0, waiting: 0, undated: 0, offSite: 0, reread: 0, error: null, full: run.full, unchanged: false };
+  const check: SourceCheck = {
+    sourceId: source.id,
+    ok: false,
+    httpStatus: null,
+    found: 0,
+    saved: 0,
+    waiting: 0,
+    undated: 0,
+    offSite: 0,
+    reread: 0,
+    headlines: 0,
+    error: null,
+    full: run.full,
+    unchanged: false,
+  };
   const config = readConfig(source);
   try {
     const url = listUrl(source.url, run.now);
@@ -611,7 +644,8 @@ async function checkSource(run: Run, source: SourceRow): Promise<SourceCheck> {
     const seen = new Set<string>();
     const listed = items
       .filter((item) => passesFilters(item, config))
-      .map((item) => onSourceSite(item, source.url, config))
+      // An outlet's feed is often on a host of its own (feeds.npr.org): its links are on its site.
+      .map((item) => onSourceSite(item, source.site ?? source.url, config))
       .filter((item): item is FoundItem => {
         if (item === null) check.offSite++;
         return item !== null;
@@ -628,6 +662,11 @@ async function checkSource(run: Run, source: SourceRow): Promise<SourceCheck> {
       .filter((item) => !seen.has(item.url) && seen.add(item.url));
     check.found = listed.length;
     check.ok = true;
+    // A news outlet (#230): its headlines and links, never its text, so no item page is read.
+    if (source.site !== undefined) {
+      await saveHeadlines(run, source, listed, { hash, etag, lastModified }, check);
+      return check;
+    }
 
     const recent = listed
       .filter((item) => item.publishedAt! >= cutoff)
@@ -722,6 +761,46 @@ async function checkSource(run: Run, source: SourceRow): Promise<SourceCheck> {
   return check;
 }
 
+/**
+ * Keeps a news outlet's headlines (#230) in its one row: those of the last
+ * LIMITS.headlineHours, newest first, with the stored ones its list no longer
+ * shows, each under the title its list gives now; and the list's fingerprint,
+ * so the same list next time is not parsed. A list that changes nothing writes nothing.
+ */
+async function saveHeadlines(
+  run: Run,
+  source: SourceRow,
+  listed: FoundItem[],
+  list: Pick<ListResult, "hash" | "etag" | "lastModified">,
+  check: SourceCheck,
+): Promise<void> {
+  const config = readConfig(source);
+  const cutoff = toStoredTime(new Date(run.now.getTime() - LIMITS.headlineHours * 3_600_000));
+  const row = await run.env.DB.prepare("SELECT headlines FROM outlets WHERE id = ?").bind(source.id).first<{ headlines: string }>();
+  const stored = parseHeadlines(row?.headlines);
+  const titles = new Map(listed.map((item) => [item.url, item.title.slice(0, LIMITS.headlineLength)]));
+  const known = new Set(stored.map((h) => h.url));
+  const fresh: Headline[] = listed
+    .filter((item) => item.publishedAt! >= cutoff && !known.has(item.url))
+    .map((item) => ({ title: titles.get(item.url)!, url: item.url, publishedAt: item.publishedAt! }));
+  check.headlines = fresh.length;
+  const kept = [...fresh, ...stored.filter((h) => h.publishedAt >= cutoff).map((h) => ({ ...h, title: titles.get(h.url) ?? h.title }))]
+    .sort((a, b) => b.publishedAt.localeCompare(a.publishedAt))
+    .slice(0, LIMITS.headlinesPerOutlet);
+  const headlines = JSON.stringify(kept);
+  const etag = config.conditionalGet ? list.etag : null;
+  const lastModified = config.conditionalGet ? list.lastModified : null;
+  if (headlines === row?.headlines && list.hash === source.list_hash && etag === source.list_etag && lastModified === source.list_last_modified) return;
+  const newest = listed.reduce<string | null>((max, i) => (i.publishedAt && (!max || i.publishedAt > max) ? i.publishedAt : max), null);
+  await run.env.DB.prepare(
+    `UPDATE outlets SET headlines = ?1, list_hash = ?2, list_etag = ?3, list_last_modified = ?4,
+       last_item_at = CASE WHEN ?5 IS NOT NULL AND (last_item_at IS NULL OR last_item_at < ?5) THEN ?5 ELSE last_item_at END
+     WHERE id = ?6`,
+  )
+    .bind(headlines, list.hash, etag, lastModified, newest, source.id)
+    .run();
+}
+
 /** Whether this check reads the source in full: it was never read, its last check failed, or the last full one is an hour old. */
 function isFullCheck(source: SourceRow, now: Date): boolean {
   if (source.last_checked_at === null || source.failed_checks > 0) return true;
@@ -734,7 +813,7 @@ function isFullCheck(source: SourceRow, now: Date): boolean {
  * so a check that finds nothing new writes nothing.
  */
 function isDue(source: SourceRow, now: Date): boolean {
-  const every = Math.max(1, readConfig(source).everyMinutes ?? LIMITS.everyMinutes);
+  const every = Math.max(1, readConfig(source).everyMinutes ?? (source.site !== undefined ? LIMITS.outletEveryMinutes : LIMITS.everyMinutes));
   return isFullCheck(source, now) || (Math.floor(now.getTime() / 60_000) + spread(source.id)) % every === 0;
 }
 
@@ -769,7 +848,7 @@ export async function checkOneSource(env: Env, source: SourceRow, options: Fetch
     failed: new Map(),
   };
   const check = await checkSource(run, source);
-  if (run.full || !check.ok || check.saved > 0) await recordChecks(env, [check], now);
+  if (run.full || !check.ok || check.saved > 0) await recordChecks(env, [check], now, source.site !== undefined ? "outlets" : "sources");
   if (!check.unchanged) {
     // Wall time; Date.now() does not move during CPU work in Workers. CPU time per call is in Workers Observability.
     console.log(JSON.stringify({ message: "fetcher check", wallMs: Date.now() - started, requests: run.requests, pages: run.pages, check }));
@@ -787,6 +866,10 @@ export async function checkOneSource(env: Env, source: SourceRow, options: Fetch
  * that source is simply checked again at its next turn: it is logged, not
  * counted as the source's failure.
  *
+ * The news outlets (#230, docs/outlets.csv) are checked the same way, every
+ * LIMITS.outletEveryMinutes, after the sources: a run calls at most
+ * LIMITS.callsPerRun, since Cloudflare stops a request at 32 Worker invocations.
+ *
  * Without calls of their own (no `options.call`: no SourceChecker, as under
  * `wrangler dev --remote`), every check would share this run's 10 ms of CPU and
  * the whole run would be stopped. So such a run checks one source, the one read
@@ -796,18 +879,26 @@ export async function checkOneSource(env: Env, source: SourceRow, options: Fetch
 export async function runFetcher(env: Env, options: FetcherOptions = {}): Promise<SourceCheck[]> {
   const started = Date.now();
   const now = options.now ?? new Date();
-  const { results: listed } = await env.DB.prepare(
-    `SELECT id, country, name, kind, url, config, language, last_checked_at, list_etag, list_last_modified, list_hash, failed_checks
-     FROM sources
-     WHERE status != 'blocked' AND (config IS NULL OR json_extract(config, '$.seed') IS NOT 1)
-       AND (failed_checks = 0 OR last_checked_at IS NULL OR last_checked_at <= ?1)
-     ORDER BY last_checked_at IS NOT NULL, last_checked_at, id`,
-  )
-    .bind(toStoredTime(new Date(now.getTime() - LIMITS.failedCheckMinutes * 60_000)))
-    .all<SourceRow>();
-  const due = listed.filter((source) => isDue(source, now));
-  const sources = options.call ? due : due.slice(0, 1);
-  if (sources.length < due.length) {
+  const failedBefore = toStoredTime(new Date(now.getTime() - LIMITS.failedCheckMinutes * 60_000));
+  const [{ results: listed }, { results: outlets }] = await env.DB.batch<SourceRow>([
+    env.DB.prepare(
+      `SELECT id, country, name, kind, url, config, language, last_checked_at, list_etag, list_last_modified, list_hash, failed_checks
+       FROM sources
+       WHERE status != 'blocked' AND (config IS NULL OR json_extract(config, '$.seed') IS NOT 1)
+         AND (failed_checks = 0 OR last_checked_at IS NULL OR last_checked_at <= ?1)
+       ORDER BY last_checked_at IS NOT NULL, last_checked_at, id`,
+    ).bind(failedBefore),
+    // The news outlets (#230) come after the sources, so a run at LIMITS.callsPerRun leaves out outlets only.
+    env.DB.prepare(
+      `SELECT id, country, name, 'rss' AS kind, url, site, config, language, last_checked_at, list_etag, list_last_modified, list_hash, failed_checks
+       FROM outlets
+       WHERE status != 'blocked' AND (failed_checks = 0 OR last_checked_at IS NULL OR last_checked_at <= ?1)
+       ORDER BY last_checked_at IS NOT NULL, last_checked_at, id`,
+    ).bind(failedBefore),
+  ]);
+  const due = [...listed, ...outlets].filter((source) => isDue(source, now));
+  const sources = due.slice(0, options.call ? LIMITS.callsPerRun : 1);
+  if (!options.call && due.length > 1) {
     console.warn(JSON.stringify({ message: "fetcher without SourceChecker: one source a run", sourceId: sources[0].id, waiting: due.length - 1 }));
   }
   const call = options.call ?? ((source: SourceRow) => checkOneSource(env, source, options));
@@ -819,8 +910,11 @@ export async function runFetcher(env: Env, options: FetcherOptions = {}): Promis
       message: "fetcher run",
       wallMs: Date.now() - started,
       sources: sources.length,
+      // Due, but past LIMITS.callsPerRun.
+      waiting: due.length - sources.length,
       unchanged: checks.filter((c) => c.unchanged).length,
       saved: checks.reduce((n, c) => n + c.saved, 0),
+      headlines: checks.reduce((n, c) => n + c.headlines, 0),
       failed: checks.filter((c) => !c.ok).map((c) => c.sourceId),
       stopped: settled.flatMap((result, i) => (result.status === "rejected" ? [{ sourceId: sources[i].id, error: String(result.reason) }] : [])),
     }),

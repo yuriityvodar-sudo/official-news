@@ -8,13 +8,17 @@ import {
   COLUMNS,
   NAME_COLUMNS,
   NAME_LANGS,
+  OUTLET_COLUMNS,
   csvPath,
   namesPath,
+  outletsSql,
   parseCsv,
+  readOutlets,
   readSources,
   seedIds,
   seedPath,
   toNames,
+  toOutlets,
   toSources,
   toSql,
   withNames,
@@ -145,6 +149,60 @@ describe("source names (#76)", () => {
     const langs = /export const LANGS = \[([^\]]*)\]/.exec(languages)?.[1];
     assert.ok(langs, "LANGS not found in server/src/translator/languages.ts");
     assert.deepEqual([...langs.matchAll(/"([a-z]{2})"/g)].map((m) => m[1]), NAME_LANGS);
+  });
+});
+
+describe("news outlets (#230, docs/outlets.csv)", () => {
+  const outletHeader = OUTLET_COLUMNS.join(",");
+  const outlet = (overrides = {}) => {
+    const o = {
+      id: "cz-novinky",
+      country: "CZ",
+      name: "Novinky.cz",
+      url: "https://www.novinky.cz/rss",
+      site: "https://www.novinky.cz",
+      language: "cs",
+      config: "",
+      checked_at: "2026-11-01",
+      note: "Feed open, robots.txt allows it",
+      ...overrides,
+    };
+    return OUTLET_COLUMNS.map((c) => (/[",\n]/.test(o[c]) ? `"${o[c].replaceAll('"', '""')}"` : o[c])).join(",");
+  };
+
+  test("reads a valid row, the world's and the Union's too", () => {
+    const outlets = toOutlets(`${outletHeader}\n${outlet()}\n${outlet({ id: "ww-dw", country: "WW", site: "https://www.dw.com/" })}\n${outlet({ id: "eu-politico", country: "EU" })}\n`);
+    assert.deepEqual(outlets.map((o) => o.id), ["cz-novinky", "ww-dw", "eu-politico"]);
+  });
+
+  test("list every problem at once: a site that is not a home page, plain http, a source's id, an id twice", () => {
+    const csv = `${outletHeader}\n${outlet({ site: "https://www.novinky.cz/domaci" })}\n${outlet({ id: "cz-ct24", url: "http://ct24.cz/rss" })}\n${outlet({ id: "cz-government" })}\n${outlet({ id: "cz-ct24" })}\n`;
+    assert.throws(
+      () => toOutlets(csv, { sourceIds: new Set(["cz-government"]) }),
+      (error) => {
+        assert.deepEqual(error.message.split("\n").slice(1), [
+          "line 2 (cz-novinky): site must be the outlet's home page, such as https://www.example.com",
+          "line 3 (cz-ct24): url must start with https://",
+          "line 4 (cz-government): id belongs to a source in docs/sources.csv; choose another",
+          "line 5 (cz-ct24): id is used twice",
+        ]);
+        return true;
+      },
+    );
+  });
+
+  test("load as upserts, block an outlet taken out of the list and read one put back", () => {
+    const sql = outletsSql(toOutlets(`${outletHeader}\n${outlet({ name: "Novinky's" })}\n`));
+    assert.match(sql, /'Novinky''s'/);
+    assert.match(sql, /status = CASE WHEN outlets.status = 'blocked' THEN 'active' ELSE outlets.status END;/);
+    assert.match(sql, /UPDATE outlets SET status = 'blocked' WHERE id NOT IN \('cz-novinky'\) AND status != 'blocked'/);
+  });
+
+  test("docs/outlets.csv is valid, and no outlet has a source's id", () => {
+    const outlets = readOutlets(readSources());
+    assert.ok(outlets.length > 0);
+    // The site the links must be on is the outlet's own: never a feed service's.
+    assert.deepEqual(outlets.filter((o) => /feedburner|feedproxy/.test(o.site)).map((o) => o.id), []);
   });
 });
 
