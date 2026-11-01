@@ -419,9 +419,13 @@ describe("GET /headlines (#230, the aggregator)", () => {
       env.DB.prepare(
         "INSERT INTO outlets (id, country, name, url, site, language, status, headlines) VALUES (?, ?, ?, ?, ?, 'cs', ?, ?)",
       ).bind(id, country, `Outlet ${id}`, `https://feeds.${id}.test/rss`, `https://www.${id}.test`, status, JSON.stringify(items));
+    // Made once, so their times are the same in the rows and in what is expected, whenever the clock ticks.
+    const floods = headline("Floods close roads", 1);
+    const budget = headline("Budget passed", 30);
+    const snow = headline("Snow in the mountains", 3);
     await env.DB.batch([
-      insert("xx-a", "XX", "active", [headline("Floods close roads", 1), headline("Budget passed", 30), headline("Last week", 49)]),
-      insert("xx-b", "XX", "stale", [headline("Snow in the mountains", 3)]),
+      insert("xx-a", "XX", "active", [floods, budget, headline("Last week", 49)]),
+      insert("xx-b", "XX", "stale", [snow]),
       insert("xx-gone", "XX", "blocked", [headline("Taken out", 2)]),
       insert("yy-a", "YY", "active", [headline("Elsewhere", 1)]),
     ]);
@@ -430,9 +434,9 @@ describe("GET /headlines (#230, the aggregator)", () => {
     expect(body).toEqual({
       country: "XX",
       items: [
-        { ...headline("Floods close roads", 1), outlet: { id: "xx-a", name: "Outlet xx-a", site: "https://www.xx-a.test" } },
-        { ...headline("Snow in the mountains", 3), outlet: { id: "xx-b", name: "Outlet xx-b", site: "https://www.xx-b.test" } },
-        { ...headline("Budget passed", 30), outlet: { id: "xx-a", name: "Outlet xx-a", site: "https://www.xx-a.test" } },
+        { ...floods, outlet: { id: "xx-a", name: "Outlet xx-a", site: "https://www.xx-a.test" } },
+        { ...snow, outlet: { id: "xx-b", name: "Outlet xx-b", site: "https://www.xx-b.test" } },
+        { ...budget, outlet: { id: "xx-a", name: "Outlet xx-a", site: "https://www.xx-a.test" } },
       ],
     });
   });
