@@ -515,7 +515,11 @@ describe("Wikipedia's current events", () => {
     expect(backgroundOf([linkTargets("[[2026 Strait of Hormuz crisis]]"), linkTargets("[[2026 Iran war]]")], tanker, ["Oman"])).toBe("2026 Strait of Hormuz crisis");
     // No topics: its own link that shares a word, else its first; files and categories are no articles.
     expect(backgroundOf([], "A flash flood hits Joshimath, India.", linkTargets("[[File:x.jpg]] [[flash flood]] [[Joshimath]]"))).toBe("flash flood");
-    expect(backgroundOf([], "Nothing in common.", ["Uttarakhand"])).toBe("Uttarakhand");
+    // Nothing in common, or a country: no background, rather than a lead that says what a country is (Yurii's review of #270).
+    expect(backgroundOf([], "Nothing in common.", ["Uttarakhand"])).toBeNull();
+    expect(backgroundOf([], "Floods hit Malaysia and Thailand.", ["Malaysia", "Thailand"])).toBeNull();
+    expect(backgroundOf([["United States", "2026 United States elections"]], "Voting ends in the United States elections.", [])).toBe("2026 United States elections");
+    expect(backgroundOf([], "Наводнение в Малайзии.", ["Малайзия"], "ru")).toBeNull();
     expect(backgroundOf([], "No links.", [])).toBeNull();
   });
 

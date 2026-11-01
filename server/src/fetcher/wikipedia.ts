@@ -132,7 +132,7 @@ export function parseCurrentEvents(wikitext: string, pageUrl: string, lang: Even
       text: [category, context.join(" › "), sentence, reported].filter(Boolean).join("\n"),
       imageUrl: null,
       category: category || null,
-      background: backgroundOf(topicLinks.slice(0, depth - 1).reverse(), sentence, linkTargets(body)) ?? undefined,
+      background: backgroundOf(topicLinks.slice(0, depth - 1).reverse(), sentence, linkTargets(body), lang) ?? undefined,
     });
   }
   return items;
@@ -148,6 +148,25 @@ export function linkTargets(wikitext: string): string[] {
 /** Words of four letters or more, lowercased: what a title and a sentence share. */
 const words = (text: string) => new Set(text.toLowerCase().match(/[\p{L}\p{N}]{4,}/gu) ?? []);
 
+/** Every country's name in a wiki's language ("Malaysia", "Малайзия"), lowercased: a lead that only says what a country is. */
+const countryNames = new Map<EventsLang, Set<string>>();
+function isCountry(title: string, lang: EventsLang): boolean {
+  let names = countryNames.get(lang);
+  if (!names) {
+    const display = new Intl.DisplayNames([lang], { type: "region" });
+    const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    names = new Set();
+    for (const a of letters) {
+      for (const b of letters) {
+        const name = display.of(`${a}${b}`);
+        if (name && name !== `${a}${b}`) names.add(name.toLowerCase());
+      }
+    }
+    countryNames.set(lang, names);
+  }
+  return names.has(title.toLowerCase());
+}
+
 /**
  * The article whose lead gives an event its background (#230, Roman, 1 Nov:
  * «почему новости из википедии такие короткие?»): the topic lines above the
@@ -157,19 +176,23 @@ const words = (text: string) => new Set(text.toLowerCase().match(/[\p{L}\p{N}]{4
  * the most of, as a share of the title's words ("Blockade of Oleshky" 1 of 2
  * against "Peace negotiations in the Russo-Ukrainian war" 1 of 6; its first
  * on a tie); without topics, the event's own first link that shares a word
- * with it, else its first.
+ * with it. Never a country, whose lead only says what the country is
+ * ("Malaysia is a country in Southeast Asia…"), and never a link the
+ * sentence shares nothing with (Yurii's review of #270): no background then.
  */
-export function backgroundOf(topicLinksInnermostFirst: string[][], sentence: string, ownLinks: string[]): string | null {
+export function backgroundOf(topicLinksInnermostFirst: string[][], sentence: string, ownLinks: string[], lang: EventsLang = "en"): string | null {
   const said = words(sentence);
   const shared = (title: string) => {
     const own = [...words(title)];
     return own.length ? own.filter((w) => said.has(w)).length / own.length : 0;
   };
-  for (const links of topicLinksInnermostFirst) {
+  const story = (title: string) => !isCountry(title, lang);
+  for (const line of topicLinksInnermostFirst) {
+    const links = line.filter(story);
     if (!links.length) continue;
     return links.reduce((best, title) => (shared(title) > shared(best) ? title : best), links[0]);
   }
-  return ownLinks.find((title) => shared(title) > 0) ?? ownLinks[0] ?? null;
+  return ownLinks.filter(story).find((title) => shared(title) > 0) ?? null;
 }
 
 /** About this much of an article's lead is kept as an event's background: two or three paragraphs. */
