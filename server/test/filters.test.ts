@@ -751,13 +751,14 @@ describe("GET /articles?for= (For you, #170)", () => {
   it("keeps the reader's own country, the EU institutions for an EU member, and the world's that matter", async () => {
     // Czechia: all its own, whatever the importance, and the EU's. The world: importance 3 or more, at most 2 a
     // country a day, the most important first (de-3 is Germany's third of that day; de-3-earlier is another day).
-    // Ranked by score since #230 step 5 (more in foryou.test.ts): Germany is Czechia's neighbour, a point more.
-    expect(await ids("/articles?for=CZ")).toEqual(["de-5", "de-4", "de-3-earlier", "us-3", "eu-2", "cz-1", "cz-plain"]);
+    // Ranked by score since #230 step 5 (more in foryou.test.ts): Germany is Czechia's neighbour, a point more, and a
+    // day of age costs 2 (de-3-earlier, a day older, falls behind yesterday's 3s).
+    expect(await ids("/articles?for=CZ")).toEqual(["de-5", "de-4", "us-3", "eu-2", "cz-1", "de-3-earlier", "cz-plain"]);
     // Ukraine is not in the EU: the EU institutions' decision of importance 2 stays out, as Czechia's do.
     expect(await ids("/articles?for=UA")).toEqual(["de-5", "ua-2", "de-4", "us-3", "de-3-earlier"]);
     // An EU member without sources of its own still gets the EU's.
-    expect(await ids("/articles?for=AT")).toEqual(["de-5", "de-4", "de-3-earlier", "us-3", "eu-2"]);
-    expect(await ids("/articles?for=DE")).toEqual(["de-5", "de-4", "de-3", "de-3-earlier", "de-2", "us-3", "eu-2"]);
+    expect(await ids("/articles?for=AT")).toEqual(["de-5", "de-4", "us-3", "eu-2", "de-3-earlier"]);
+    expect(await ids("/articles?for=DE")).toEqual(["de-5", "de-4", "de-3", "de-2", "de-3-earlier", "us-3", "eu-2"]);
   });
 
   it("works with topic, lang and paging, as the other filters do", async () => {
@@ -765,8 +766,8 @@ describe("GET /articles?for= (For you, #170)", () => {
     await translated("cz-1", "de-5", "ua-2");
     expect(await ids("/articles?for=CZ&lang=uk")).toEqual(["de-5", "cz-1"]);
     const first = await page("/articles?for=CZ&limit=3");
-    expect(first.items.map((a) => a.id)).toEqual(["de-5", "de-4", "de-3-earlier"]);
-    expect(await ids(`/articles?for=CZ&limit=3&cursor=${first.nextCursor}`)).toEqual(["us-3", "eu-2", "cz-1"]);
+    expect(first.items.map((a) => a.id)).toEqual(["de-5", "de-4", "us-3"]);
+    expect(await ids(`/articles?for=CZ&limit=3&cursor=${first.nextCursor}`)).toEqual(["eu-2", "cz-1", "de-3-earlier"]);
     // What appeared after an article is counted in the feed's order, as before.
     expect(await ids(`/articles?for=CZ&after=${first.items[1].feedSeq}`)).toEqual(["eu-2", "cz-plain", "cz-1", "us-3"]);
   });
@@ -790,12 +791,12 @@ describe("GET /articles?for= (For you, #170)", () => {
       { id: "cz-3", country: "CZ", importance: 3, publishedAt: hoursAgo(2) },
       { id: "eu-3", country: "EU", importance: 3, publishedAt: hoursAgo(1) },
     );
-    // Importance less half a point a day: fr-5 3.54, us-4 3.46, eu-3 2.98, cz-3 2.96, de-4 2.85.
-    expect(await topIds("/articles")).toEqual(["fr-5-3-days", "us-4-yesterday", "eu-3"]);
-    // For Czechia: cz-3 4.96, eu-3 3.98 and Germany's de-4 3.85 (fr-5 3.54 drops out).
-    expect(await topIds("/articles?for=CZ")).toEqual(["cz-3", "eu-3", "de-4-2-days"]);
-    // For Ukraine, outside the EU but close to it: the EU's a point more (eu-3 3.98), none of its own.
-    expect(await topIds("/articles?for=UA")).toEqual(["eu-3", "fr-5-3-days", "us-4-yesterday"]);
+    // Importance less 2 points a day: eu-3 2.92, cz-3 2.83, us-4 1.83, de-4 −0.58, fr-5 −0.83.
+    expect(await topIds("/articles")).toEqual(["eu-3", "cz-3", "us-4-yesterday"]);
+    // For Czechia: cz-3 4.83, eu-3 3.92, then us-4 1.83 (Germany's de-4, a neighbour's, is 0.42 at two days old).
+    expect(await topIds("/articles?for=CZ")).toEqual(["cz-3", "eu-3", "us-4-yesterday"]);
+    // For Ukraine, outside the EU but close to it: the EU's a point more (eu-3 3.92), none of its own.
+    expect(await topIds("/articles?for=UA")).toEqual(["eu-3", "cz-3", "us-4-yesterday"]);
   });
 
   it("reads the feed's 7 days once, not older articles", async () => {

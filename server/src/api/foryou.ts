@@ -1,7 +1,7 @@
 // For you's order (#230 step 5, docs/plan.md "Sources and relevance by
 // country"): for a reader in country C, the highest score first, where the
 // score is importance (1 to 5) + relevance to C + popularity in C (0 to 2,
-// popularity/) − half a point a day of age. Relevance is 2 when the item
+// popularity/) − AGE_PER_DAY points a day of age. Relevance is 2 when the item
 // concerns C, 1 when it concerns C's neighbours or groups (the EU for its
 // members and for Ukraine), and 1 for a global item. From the rest of the
 // world at most 2 items a page (forYouCondition picks them, importance 3 or
@@ -116,8 +116,19 @@ export interface Ranked {
   popularity: number;
 }
 
-/** Half a point a day since publication, as the top stories (TOP_SCORE). */
-export const score = (row: Ranked, now: number) => (row.importance ?? 0) + row.relevance + row.popularity - (0.5 * (now - Date.parse(row.published_at))) / 86_400_000;
+/**
+ * What a day of age costs a decision's score, in For you, the top stories
+ * (TOP_SCORE) and the website's (site/snapshot.ts). Two points (Roman, 1 Nov:
+ * «в ленте должны быть более новые новости, а не трехдневней давности»), in
+ * place of the half point of #164: with half a point, a 5 from three days ago
+ * (3.5) beat a fresh 3, and For you's first ten for Czechia were 67 hours old
+ * at the middle (1 Nov); with two, a day-old 5 ties a fresh 3.
+ */
+export const AGE_PER_DAY = 2;
+
+/** Importance + relevance + popularity, less AGE_PER_DAY a day since publication. */
+export const score = (row: Ranked, now: number) =>
+  (row.importance ?? 0) + row.relevance + row.popularity - (AGE_PER_DAY * (now - Date.parse(row.published_at))) / 86_400_000;
 
 /** The top stories (#164): of the last 72 hours, with an importance, at most one a source country, TOP_SIZE in all. */
 export function topForYou<T extends Ranked & { country: string }>(rows: T[], now: number, size: number, hours: number): T[] {
