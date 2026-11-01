@@ -6,7 +6,7 @@
 // against the API's, page by page.
 import { TOP_HOURS, TOP_SIZE, encodeCursor } from "../api";
 import { GROUPS, groupCountries, rankTopics } from "../api/filters";
-import { AGE_PER_DAY } from "../api/foryou";
+import { ageCost } from "../api/foryou";
 import type { Snapshot, SnapshotArticle, TopCandidate } from "../api/snapshot";
 import type { SiteLang } from "./texts";
 import type { ListFilter, Place } from "./urls";
@@ -28,7 +28,8 @@ const stored = (date: Date) => `${date.toISOString().slice(0, 19)}Z`;
 /**
  * The top stories (#164, topQuery) among the candidates that pass the filters
  * and are of the last 72 hours as of `now`: scored as the API scores them (the
- * importance less AGE_PER_DAY points a day since publication; the same `now` for
+ * importance less AGE_PER_DAY points a day since publication (ageCost: one known
+ * only by its day from that day's end); the same `now` for
  * every candidate, so the order is the API's), best first, the newer on equal
  * scores, then the higher id; at most one a source country, or TOP_SIZE when
  * Where is one country; TOP_SIZE in all. In a language, the English picks it
@@ -38,7 +39,7 @@ const stored = (date: Date) => `${date.toISOString().slice(0, 19)}Z`;
 export function snapshotTop(snapshot: Snapshot, filter: ListFilter, now: Date): SnapshotArticle[] {
   const countries = placeCountries(filter.place);
   const since = stored(new Date(now.getTime() - TOP_HOURS * 3_600_000));
-  const score = (c: TopCandidate) => c.importance - (AGE_PER_DAY * (now.getTime() - Date.parse(c.publishedAt))) / 86_400_000;
+  const score = (c: TopCandidate) => c.importance - ageCost(c.publishedAt, c.dateOnly === true, now.getTime());
   const compare = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
   const ranked = snapshot.top
     .filter((c) => c.publishedAt >= since && passes(c, countries, filter.topic))

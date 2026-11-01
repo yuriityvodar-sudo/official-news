@@ -111,6 +111,8 @@ export interface Ranked {
   id: string;
   importance: number | null;
   published_at: string;
+  /** 1: known only by its day (ageFrom). */
+  date_only?: number;
   concern: number;
   relevance: number;
   popularity: number;
@@ -126,9 +128,23 @@ export interface Ranked {
  */
 export const AGE_PER_DAY = 2;
 
-/** Importance + relevance + popularity, less AGE_PER_DAY a day since publication. */
+/**
+ * When an article's age starts (Yurii's review of #269): its time; for one
+ * known only by its day (`date_only`, stored at 12:00 UTC, or at its fetch
+ * when that is earlier), 12 hours later, the end of that day, so today's
+ * count as fresh until the day ends. At 2 points a day a date-only item
+ * otherwise lost up to a point against one timed that evening: 164 of the
+ * feed's 304 on 1 Nov (Mexico's gazette, Argentina, Wikipedia's events, Korea).
+ */
+export const ageFrom = (publishedAt: string, dateOnly: boolean) => Date.parse(publishedAt) + (dateOnly ? 12 * 3_600_000 : 0);
+
+/** The age's cost in points at `now`: AGE_PER_DAY a day from ageFrom, never below 0. */
+export const ageCost = (publishedAt: string, dateOnly: boolean, now: number) =>
+  (AGE_PER_DAY * Math.max(0, now - ageFrom(publishedAt, dateOnly))) / 86_400_000;
+
+/** Importance + relevance + popularity, less ageCost. */
 export const score = (row: Ranked, now: number) =>
-  (row.importance ?? 0) + row.relevance + row.popularity - (AGE_PER_DAY * (now - Date.parse(row.published_at))) / 86_400_000;
+  (row.importance ?? 0) + row.relevance + row.popularity - ageCost(row.published_at, row.date_only === 1, now);
 
 /** The top stories (#164): of the last 72 hours, with an importance, at most one a source country, TOP_SIZE in all. */
 export function topForYou<T extends Ranked & { country: string }>(rows: T[], now: number, size: number, hours: number): T[] {

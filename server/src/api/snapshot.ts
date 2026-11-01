@@ -59,6 +59,8 @@ export interface TopCandidate {
   country: string;
   importance: number;
   publishedAt: string;
+  /** Known only by its day: its age counts from that day's end (ageFrom). Missing in a snapshot built before 1 Nov: false. */
+  dateOnly?: boolean;
   topics: string[];
 }
 
@@ -90,13 +92,14 @@ const toSnapshotArticle = (row: ListRow): SnapshotArticle => ({
   addedAt: row.added_at,
 });
 
-type CandidateRow = Pick<ListRow, "id" | "country" | "importance" | "published_at" | "topics">;
+type CandidateRow = Pick<ListRow, "id" | "country" | "importance" | "published_at" | "date_only" | "topics">;
 
 const toCandidate = (row: CandidateRow): TopCandidate => ({
   id: row.id,
   country: row.country,
   importance: row.importance ?? 0,
   publishedAt: row.published_at,
+  dateOnly: row.date_only === 1,
   topics: parseStringArray(row.topics),
 });
 
