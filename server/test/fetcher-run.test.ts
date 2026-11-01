@@ -9,11 +9,11 @@ type Site = Record<string, { status?: number; body: string; type?: string } | ((
 
 /** A fake internet: answers only the URLs in `site`, records every request. */
 function fakeFetch(site: Site) {
-  const requests: { url: string; userAgent: string | null; headers: Headers }[] = [];
+  const requests: { url: string; userAgent: string | null; headers: Headers; method: string; body: string | null }[] = [];
   const fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     const headers = new Headers(init?.headers);
-    requests.push({ url, userAgent: headers.get("user-agent"), headers });
+    requests.push({ url, userAgent: headers.get("user-agent"), headers, method: init?.method ?? "GET", body: typeof init?.body === "string" ? init.body : null });
     const page = site[url];
     if (!page) return new Response("not found", { status: 404 });
     if (typeof page === "function") return page(headers);
@@ -310,6 +310,34 @@ describe("runFetcher", () => {
     expect(saved.results).toEqual([{ url: "https://stories.test/1", author: "Nurbek Bekmurzaev", image_url: null }]);
   });
 
+  it("asks a list that the source's page loads by script with a form POST, as the page does (listPost, #230)", async () => {
+    await addSource("xx-bank", "https://bank.test/ua/component/source/news/all", "page", {
+      listPost: { page: "1", perPage: "25" },
+      item: "div.collection-item",
+      link: ".content p a",
+      date: { selector: ".mark time", format: "uk", utcOffset: "+02:00" },
+      exclude: { title: "(?i)^інтерв" },
+      itemPages: false,
+      conditionalGet: true,
+    });
+    const item = (href: string, title: string, when: string) =>
+      `<div class="collection-item post-inline"><div class="content"><p><a href="${href}">${title}</a></p><div class="mark"><time>${when}</time></div></div></div>`;
+    const { fetch, requests } = fakeFetch({
+      "https://bank.test/robots.txt": { body: "User-agent: *\nDisallow:\n", type: "text/plain" },
+      "https://bank.test/ua/component/source/news/all": (headers) =>
+        headers.get("content-type") === "application/x-www-form-urlencoded"
+          ? new Response(
+              `<div class="collection">${item("/ua/news/all/rate", "Національний банк України підвищив облікову ставку до 16,5%", "14 жовт. 2026 14:00")}${item("/ua/news/all/talk", "Інтерв'ю Голови", "13 жовт. 2026 10:00")}</div>`,
+            )
+          : new Response("not found", { status: 404 }),
+    });
+    const [check] = await runFetcher(env, { fetch, now: NOW });
+    expect(check).toMatchObject({ ok: true, httpStatus: 200, saved: 1 });
+    expect((await articlesOf("xx-bank")).map((a) => [a.url, a.published_at])).toEqual([["https://bank.test/ua/news/all/rate", "2026-10-14T12:00:00Z"]]);
+    const list = requests.find((r) => r.url.endsWith("/news/all"));
+    expect([list?.method, list?.body, list?.headers.get("if-none-match")]).toEqual(["POST", "page=1&perPage=25", null]);
+  });
+
   it("stores http links of an https source as https", async () => {
     await addSource("xx-kremlin", "https://kremlin.test/acts/feed", "rss", { itemPages: false });
     const { fetch } = fakeFetch({
@@ -458,7 +486,13 @@ describe("runFetcher", () => {
 
     const [check] = await runFetcher(env, { fetch, now: NOW });
     expect(check).toMatchObject({ sourceId: "xx-events", ok: true, httpStatus: 200, found: 1, saved: 1, error: null });
-    expect(requests.map((r) => r.url)).toEqual(["https://en.wikipedia.org/robots.txt", `${day(14)}?action=raw`, `${day(13)}?action=raw`]);
+    // Its background, the article it links (Eastland), has no page here: the event is saved as it is.
+    expect(requests.map((r) => r.url)).toEqual([
+      "https://en.wikipedia.org/robots.txt",
+      `${day(14)}?action=raw`,
+      `${day(13)}?action=raw`,
+      "https://en.wikipedia.org/wiki/Eastland?action=raw",
+    ]);
     const [saved] = await articlesOf("xx-events");
     expect(saved.url).toMatch(new RegExp(`^${day(13)}#event-[0-9a-z]+$`));
     expect(saved).toMatchObject({
@@ -472,6 +506,43 @@ describe("runFetcher", () => {
     await env.DB.prepare("UPDATE sources SET last_checked_at = NULL WHERE id = 'xx-events'").run();
     const { fetch: none } = fakeFetch({ "https://en.wikipedia.org/robots.txt": { body: "", type: "text/plain" } });
     expect(await runFetcher(env, { fetch: none, now: NOW })).toMatchObject([{ ok: false, httpStatus: 404, error: "HTTP 404" }]);
+  });
+});
+
+describe("runFetcher: an event's background (#230, 1 Nov)", () => {
+  it("adds the lead of the article its topics link, read once a run for events of the same story, and following a redirect", async () => {
+    await addSource("xx-events", "https://en.wikipedia.org/wiki/Portal:Current_events", "api", { currentEvents: "en", itemPages: false });
+    const day = (n: number) => `https://en.wikipedia.org/wiki/Portal:Current_events/2026_October_${n}`;
+    const { fetch, requests } = fakeFetch({
+      "https://en.wikipedia.org/robots.txt": { body: "User-agent: *\nDisallow: /w/\nDisallow: /api/", type: "text/plain" },
+      [`${day(13)}?action=raw`]: {
+        type: "text/x-wiki; charset=UTF-8",
+        body: [
+          "'''Armed conflicts and attacks'''",
+          "*[[Northland conflict]]",
+          "**[[Siege of Port Alba]]",
+          "***Northland forces shell [[Port Alba]], killing 12 civilians. [https://news.test/a1 (Example Wire)]",
+          "***Port Alba's mayor asks for a ceasefire. [https://news.test/a2 (Example Wire)]",
+        ].join("\n"),
+      },
+      "https://en.wikipedia.org/wiki/Siege_of_Port_Alba?action=raw": { type: "text/x-wiki", body: "#REDIRECT [[Port Alba siege]]" },
+      "https://en.wikipedia.org/wiki/Port_Alba_siege?action=raw": {
+        type: "text/x-wiki",
+        body: "{{Infobox}}\nThe '''siege of Port Alba''' began in March 2026, when [[Northland]] forces surrounded the port.\n== Course ==\nLater.",
+      },
+    });
+    const [check] = await runFetcher(env, { fetch, now: NOW });
+    expect(check).toMatchObject({ ok: true, saved: 2 });
+    const texts = (await articlesOf("xx-events")).map((a) => a.text);
+    expect(texts).toHaveLength(2);
+    for (const text of texts) {
+      expect(text).toMatch(/\nBackground from Wikipedia \(«Siege of Port Alba»\): The siege of Port Alba began in March 2026, when Northland forces surrounded the port\.$/);
+    }
+    // Read once for both events, through its redirect.
+    expect(requests.filter((r) => r.url.includes("Port_Alba")).map((r) => r.url)).toEqual([
+      "https://en.wikipedia.org/wiki/Siege_of_Port_Alba?action=raw",
+      "https://en.wikipedia.org/wiki/Port_Alba_siege?action=raw",
+    ]);
   });
 });
 

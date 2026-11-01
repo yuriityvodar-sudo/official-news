@@ -93,6 +93,14 @@ export interface SourceConfig {
   crawlDelaySeconds?: number;
   /** Send back the list's ETag / Last-Modified; a 304 answer means nothing new (saves big downloads). */
   conditionalGet?: boolean;
+  /**
+   * The list is the answer to a form POST of these fields, as the source's own
+   * page loads it by script (the National Bank of Ukraine's news, #230: its
+   * page holds no list, and a GET of the list's address answers 404). Sent as
+   * application/x-www-form-urlencoded; robots.txt is checked for the address
+   * as for any list, and a POST never sends conditionalGet's validators.
+   */
+  listPost?: Record<string, string>;
   /** Other hosts whose links count as this source's own (e.g. the Chamber's site for its open-data API). */
   allowedHosts?: string[];
   /** Days to keep the extracted text (default 30). */
@@ -157,6 +165,8 @@ export interface FoundItem {
   headline?: string;
   /** Feeds: its author (`dc:creator`, else `author`), for a source whose licence asks to name them (`stories`). */
   author?: string;
+  /** Wikipedia's current events (#230): the article whose lead is the event's background, on the same wiki (wikipedia.ts, backgroundOf). */
+  background?: string;
 }
 
 export function readConfig(source: SourceRow): SourceConfig {

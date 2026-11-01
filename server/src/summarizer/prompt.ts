@@ -97,11 +97,15 @@ Answer with the JSON object only.`;
  * Rules 2 and 3 and what isNews says of sport, prizes and accidents come from
  * the first 26 live events (30 Oct): a filler sentence, "reported by Reuters",
  * the Ballon d'Or and a world title taken for minor sport, a small fire for news.
+ * Since 1 Nov the text also has a Background, the lead of Wikipedia's article
+ * on the story (fetcher, withBackground): an event's one sentence alone made
+ * summaries of 88 to 286 characters (Roman: «почему новости из википедии
+ * такие короткие?»), so the summary adds what the Background explains.
  */
 export function eventPrompt(): string {
   return `You write for a news app that tells people about events in the world in a few short, plain sentences.
 
-The text is one event from Wikipedia's current events: its category, the topics it belongs to, the sentence that tells it, and the outlets that reported it. It may be in another language; you always write in English.
+The text is one event from Wikipedia's current events: its category, the topics it belongs to, the sentence that tells it, the outlets that reported it, and often a Background: the start of Wikipedia's article on the story it belongs to. It may be in another language; you always write in English.
 
 Return JSON with these fields:
 - isNews: true if the event matters to people beyond the place it happened: politics, elections, conflicts, disasters, the economy, health, science and courts. Sport and prizes are news only when they name a winner: a world, continental or Olympic champion in any sport, a world record, or the winner of a major prize such as a Nobel Prize or the Ballon d'Or; never the start of a tournament or a minor result. False for a local fire or accident in which no one was hurt, the death of someone little known, or an anniversary.
@@ -110,14 +114,14 @@ Return JSON with these fields:
 - importance: 1 (of interest only where it happened) to 5 (a major event for a whole country or the world).
 - countries: up to 5 ISO 3166-1 alpha-2 codes of the countries whose people the event concerns most, where it happened first; EU for the European Union as a whole.
 - reach: "national" (one country), "regional" (a group of countries or a region, such as the EU) or "global" (the whole world).
-- summary: 1 to 3 short sentences, up to 400 characters: what happened, where, when and to whom, as far as the text says. When the text gives one fact, write one sentence.
-- shortSummary: one sentence, up to ${LIMITS.shortSummary} characters, for the feed card. Do not repeat the headline.
-- headline: up to ${HEADLINE_TARGET} characters, plain and factual: what happened and where. No full stop.
+- summary: 2 to 5 short sentences, up to 700 characters, in one or two short paragraphs separated by a blank line. First what happened, where, when and to whom, as the event's sentence says. Then, from the Background, one to three sentences that help the reader understand it: who or what it is about, what led to it, how long it has been going on. When there is no Background and the text gives one fact, write one or two sentences.
+- shortSummary: one sentence, up to ${LIMITS.shortSummary} characters, for the feed card: the event itself, never the Background. Do not repeat the headline.
+- headline: up to ${HEADLINE_TARGET} characters, plain and factual: what happened and where, never the Background. No full stop.
 - headlineType: plain.
 ${popularityFields("event")}
 
 Rules:
-1. Only what the text says and what follows directly from it. Nothing from memory, no background, no predictions, no invented numbers, dates, names or reasons. ${NEVER_WRITE}.
+1. Only what the text says (the event's sentence and its Background) and what follows directly from it. Nothing from memory, no background of your own, no predictions, no invented numbers, dates, names or reasons. ${NEVER_WRITE}. The Background is older than the event: never present something it says as part of the news, and keep its dates.
 2. Every sentence gives a fact from the text. No sentence that only says in general words what the event means or whom it affects, such as “The event affects the political leadership of the country”.
 3. Never name the outlets that reported it and never write that it was reported: the app shows where the event comes from.
 4. Write it in your own words; never copy the sentence.
