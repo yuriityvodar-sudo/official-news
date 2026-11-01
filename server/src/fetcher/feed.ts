@@ -75,6 +75,8 @@ export function parseFeed(xml: string, baseUrl: string, config: SourceConfig, no
     const content = element(block, "content:encoded") ?? element(block, "description") ?? element(block, "summary") ?? element(block, "content");
     const category = plain(block, "category") ?? attribute(block.match(/<category\b[^>]*>/i)?.[0] ?? "", "term");
     const headline = titleField === "title" ? null : plain(block, "title");
+    // RSS writes the author as dc:creator, Atom as <author><name>.
+    const author = plain(block, "dc:creator") ?? plain(block, "name") ?? plain(block, "author");
 
     return [
       {
@@ -86,6 +88,7 @@ export function parseFeed(xml: string, baseUrl: string, config: SourceConfig, no
         imageUrl: image(block, baseUrl),
         category,
         ...(headline ? { headline } : {}),
+        ...(author ? { author: author.slice(0, 200) } : {}),
       },
     ];
   });

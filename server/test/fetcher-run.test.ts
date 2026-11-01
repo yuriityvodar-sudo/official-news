@@ -294,6 +294,22 @@ describe("runFetcher", () => {
     expect([sent?.get("if-none-match"), sent?.get("if-modified-since")]).toEqual(['"v1"', "Fri, 09 Oct 2026 10:19:05 GMT"]);
   });
 
+  it("keeps a story's author, takes no picture when the source asks (images: false), and leaves out its own announcements (#230)", async () => {
+    await addSource("xx-stories", "https://stories.test/feed/", "rss", { stories: true, images: false, itemPages: false, exclude: { category: "^Announcements$" } });
+    const feed = `<rss xmlns:dc="http://purl.org/dc/elements/1.1/"><channel>
+      <item><title>Rural women form collectives</title><link>https://stories.test/1</link><pubDate>Wed, 14 Oct 2026 10:00:00 +0000</pubDate><dc:creator>Nurbek Bekmurzaev</dc:creator><category>Central Asia</category><media:content url="https://stories.test/photo.jpg" medium="image"/><content:encoded><![CDATA[<p>${longText}</p>]]></content:encoded></item>
+      <item><title>Support our work</title><link>https://stories.test/2</link><pubDate>Wed, 14 Oct 2026 09:00:00 +0000</pubDate><dc:creator>Announcements</dc:creator><category>Announcements</category><content:encoded><![CDATA[<p>${longText}</p>]]></content:encoded></item>
+    </channel></rss>`;
+    const { fetch } = fakeFetch({
+      "https://stories.test/robots.txt": { body: "User-agent: *\nCrawl-delay: 10", type: "text/plain" },
+      "https://stories.test/feed/": { body: feed, type: "application/rss+xml" },
+    });
+    const [check] = await runFetcher(env, { fetch, now: NOW });
+    expect(check).toMatchObject({ ok: true, saved: 1 });
+    const saved = await env.DB.prepare("SELECT url, author, image_url FROM articles WHERE source_id = 'xx-stories'").all();
+    expect(saved.results).toEqual([{ url: "https://stories.test/1", author: "Nurbek Bekmurzaev", image_url: null }]);
+  });
+
   it("asks a list that the source's page loads by script with a form POST, as the page does (listPost, #230)", async () => {
     await addSource("xx-bank", "https://bank.test/ua/component/source/news/all", "page", {
       listPost: { page: "1", perPage: "25" },

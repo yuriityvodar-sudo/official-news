@@ -82,7 +82,7 @@ describe("GET /articles", () => {
     expect(page.top).toEqual([]);
     expect(Object.keys(page.items[0]).sort()).toEqual(
       [
-        "addedAt", "countries", "country", "dateOnly", "decisionType", "feedSeq", "headline", "headlineType", "id", "imageUrl", "impact", "importance",
+        "addedAt", "author", "countries", "country", "dateOnly", "decisionType", "feedSeq", "headline", "headlineType", "id", "imageUrl", "impact", "importance",
         "originalLanguage", "originalTitle", "originalUrl", "publishedAt", "shortSummary",
         "source", "summary", "tags", "topics",
       ].sort(),
@@ -290,6 +290,13 @@ describe("GET /articles/:id", () => {
     expect((await get(`/articles/${id}`)).body).toMatchObject({ countries: ["US", "CA", "AR"] });
     await env.DB.prepare("DELETE FROM article_countries WHERE article_id = ?").bind(id).run();
     expect((await get(`/articles/${id}`)).body).toMatchObject({ countries: [] });
+  });
+
+  it("returns a story's author, named with a link to the original by its licence, and null for a decision (#230)", async () => {
+    const id = SEED_DECISIONS[0];
+    expect((await get(`/articles/${id}`)).body).toMatchObject({ author: null });
+    await env.DB.prepare("UPDATE articles SET author = 'Nurbek Bekmurzaev' WHERE id = ?").bind(id).run();
+    expect((await get(`/articles/${id}`)).body).toMatchObject({ author: "Nurbek Bekmurzaev" });
   });
 
   it("returns 404 for a hidden or unknown article", async () => {

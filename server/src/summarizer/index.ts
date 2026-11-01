@@ -1,7 +1,7 @@
 import type { Env } from "../env";
 import { toStoredTime } from "../fetcher/text";
 import { checkSummary, namedOutlets } from "./checks";
-import { type ArticleInput, MAX_TEXT, eventPrompt, headlineKind, publishedDate, systemPrompt, userMessage } from "./prompt";
+import { type ArticleInput, MAX_TEXT, eventPrompt, headlineKind, publishedDate, storyPrompt, systemPrompt, userMessage } from "./prompt";
 import { SUMMARY_SCHEMA, type Summary, clipped, overLimits, parseJson, toSummary } from "./schema";
 import { twinOf } from "./twins";
 
@@ -36,6 +36,8 @@ interface ArticleRow {
   summary_attempts: number;
   /** The source reads Wikipedia's current events (#230). */
   is_event: number;
+  /** The source publishes news stories under an open licence (#230: Global Voices). */
+  is_story: number;
   /** The source is hidden (#230): its news is stored as not news. */
   hidden: number;
 }
@@ -66,7 +68,7 @@ function workersAi(env: Env): Summarize {
   return async (article) => {
     const output = await env.AI.run(MODEL, {
       messages: [
-        { role: "system", content: article.event ? eventPrompt() : systemPrompt(article.headlineKind) },
+        { role: "system", content: article.story ? storyPrompt() : article.event ? eventPrompt() : systemPrompt(article.headlineKind) },
         { role: "user", content: userMessage(article) },
       ],
       response_format: { type: "json_schema", json_schema: { name: "article_summary", schema: SUMMARY_SCHEMA, strict: true } },
@@ -162,7 +164,8 @@ export async function runSummarizer(
   const { results: rows } = await env.DB.prepare(
     `SELECT a.id, a.original_title, a.text, a.original_language, s.name AS source_name, s.country,
             a.published_at, a.fetched_at, a.summary_attempts,
-            json_extract(s.config, '$.currentEvents') IS NOT NULL AS is_event, json_extract(s.config, '$.hidden') IS 1 AS hidden
+            json_extract(s.config, '$.currentEvents') IS NOT NULL AS is_event, json_extract(s.config, '$.stories') IS 1 AS is_story,
+            json_extract(s.config, '$.hidden') IS 1 AS hidden
      FROM articles a JOIN sources s ON s.id = a.source_id
      WHERE a.id IN (SELECT value FROM json_each(?))
      ORDER BY a.fetched_at DESC, a.id DESC`,
@@ -181,6 +184,7 @@ export async function runSummarizer(
       published: publishedDate(row.published_at, row.country),
       headlineKind: headlineKind(row.id, row.text),
       event: row.is_event === 1,
+      story: row.is_story === 1,
     };
     try {
       const answer = await summarize(article);
@@ -190,7 +194,8 @@ export async function runSummarizer(
       } catch {
         throw new UnusableAnswer("the answer is not valid JSON");
       }
-      const checked = toSummary(parsed, article.headlineKind, article.event);
+      // A story is news, not an official decision: typed as an event (#230).
+      const checked = toSummary(parsed, article.headlineKind, article.event || article.story === true);
       if ("problems" in checked) throw new UnusableAnswer(checked.problems.join("; "));
       // A number the article does not give, or a summary not in English, is never
       // stored (#63). A ruled-out word, text copied from the article, a field over
