@@ -102,5 +102,9 @@ export const CREDITS: Record<string, Credit> = {
     "licenceUrl": "https://creativecommons.org/licenses/by-sa/4.0/"
   },
   "cz-finance-ministry": {},
-  "cz-national-bank": {}
+  "cz-national-bank": {},
+  "ww-global-voices": {
+    "licence": "CC BY 3.0",
+    "licenceUrl": "https://creativecommons.org/licenses/by/3.0/"
+  }
 };

@@ -2,15 +2,7 @@ import { env, exports } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 import { CLAIM_MINUTES, MAX_ATTEMPTS, MODEL, runSummarizer, type Summarize } from "../src/summarizer";
 import { runTranslator } from "../src/translator";
-import {
-  type ArticleInput,
-  eventPrompt,
-  headlineKind,
-  publishedDate,
-  systemPrompt,
-  typographicQuotes,
-  userMessage,
-} from "../src/summarizer/prompt";
+import { type ArticleInput, eventPrompt, headlineKind, publishedDate, storyPrompt, systemPrompt, typographicQuotes, userMessage } from "../src/summarizer/prompt";
 import { LIMITS, clipped, overLimits, toSummary } from "../src/summarizer/schema";
 
 const now = () => `${new Date().toISOString().slice(0, 19)}Z`;
@@ -61,6 +53,21 @@ function fakeModel(...answers: (string | Error)[]) {
 }
 
 describe("runSummarizer", () => {
+  it("summarizes a news story under an open licence as an event, with the story prompt (#230, Global Voices)", async () => {
+    await env.DB.prepare(
+      "INSERT INTO sources (id, country, name, kind, url, config, language, verified_by, verified_at, status) VALUES ('xx-stories', 'WW', 'Global Voices', 'rss', 'https://globalvoices.org/feed/', '{\"stories\":true}', 'en', 'wikidata', '2026-11-01', 'active')",
+    ).run();
+    await env.DB.prepare(
+      "INSERT INTO articles (id, source_id, url, original_title, published_at, fetched_at, text, original_language, author) VALUES ('story', 'xx-stories', 'https://globalvoices.org/x', 'Rural women form collectives', ?1, ?1, 'Women in rural Kazakhstan form collectives.', 'en', 'Nurbek Bekmurzaev')",
+    )
+      .bind(now())
+      .run();
+    const { summarize, calls } = fakeModel(answer({ decisionType: "law", topics: ["economy"] }));
+    await runSummarizer(env, { maxArticles: 1 }, summarize);
+    expect(calls[0]).toMatchObject({ story: true, event: false });
+    expect(await row("story")).toMatchObject({ decision_type: "event", is_news: 1, author: "Nurbek Bekmurzaev" });
+  });
+
   it("stores the countries a decision concerns and its reach, or its source's country when the model names none (#230)", async () => {
     const earlier = `${new Date(Date.now() - 60_000).toISOString().slice(0, 19)}Z`;
     await insertUnsummarized("named", now());
@@ -463,6 +470,16 @@ describe("the headline kind (#133)", () => {
     expect(prompt).toContain("Write it as a contrast headline");
     expect(prompt).toContain("headlineType: what you wrote: contrast, or plain.");
     expect(systemPrompt("question")).not.toContain("contrast headline");
+  });
+
+  it("asks a story for what is happening and why it matters, its views as its authors', and never other outlets (#230, Global Voices)", () => {
+    const prompt = storyPrompt();
+    expect(prompt).toContain("a news story from Global Voices");
+    expect(prompt).toContain('decisionType: "event"');
+    expect(prompt).toContain("announcements and fundraising of Global Voices itself");
+    expect(prompt).toContain("write them as theirs");
+    expect(prompt).toContain("Never name the other outlets it cites");
+    expect(prompt).toContain("Nothing from memory");
   });
 
   it("is plain for an event, whose prompt asks for a short summary from the given lines only, in English (#230)", () => {

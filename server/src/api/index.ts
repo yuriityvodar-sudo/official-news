@@ -64,6 +64,8 @@ interface ArticleRow {
   impact: string | null;
   /** The countries it concerns (#230), as a JSON array in the summarizer's order. */
   countries: string | null;
+  /** A story's author (#230: Global Voices, whose licence asks to name them); null otherwise. */
+  author: string | null;
   /** For you only (#230 step 5): the reader's country's media about it, as stored in article_media. */
   media_links?: string | null;
 }
@@ -86,7 +88,7 @@ const articleColumns = (lang: Lang | null) => `
   a.id, s.country, a.source_id, ${sourceName(lang)} AS source_name, s.url AS source_url,
   a.url, a.original_title, a.published_at, a.date_only, a.headline, a.headline_type, a.short_summary,
   a.summary, a.decision_type, a.image_url, a.original_language, a.topics, a.tags, a.importance,
-  a.feed_seq, a.added_at, a.impact, ${COUNTRIES_COLUMN}`;
+  a.feed_seq, a.added_at, a.impact, a.author, ${COUNTRIES_COLUMN}`;
 
 const ARTICLE_COLUMNS = articleColumns(null);
 
@@ -367,6 +369,8 @@ export function toArticle(row: ArticleRow) {
     addedAt: row.added_at,
     impact: parseImpact(row.impact),
     countries: parseStringArray(row.countries),
+    // #230, additive: a story's author, named with a link to the original (Global Voices' licence).
+    author: row.author ?? null,
     // For you only (#230 step 5): "In the media", up to 3 of the reader's country's outlets about it.
     ...(row.media_links !== undefined ? { media: parseMedia(row.media_links) } : {}),
   };

@@ -165,6 +165,14 @@ describe("text helpers", () => {
 });
 
 describe("parseFeed", () => {
+  it("takes a story's author from dc:creator, or an Atom author's name (#230, Global Voices)", () => {
+    const rss = `<rss xmlns:dc="http://purl.org/dc/elements/1.1/"><channel><item><title>In Kazakhstan, rural women form collectives</title><link>https://globalvoices.org/2026/10/31/x/</link><pubDate>Sat, 31 Oct 2026 13:38:41 +0000</pubDate><dc:creator><![CDATA[Nurbek Bekmurzaev]]></dc:creator><content:encoded><![CDATA[<p>Text.</p>]]></content:encoded></item></channel></rss>`;
+    expect(parseFeed(rss, "https://globalvoices.org/feed/", {}, NOW)[0].author).toBe("Nurbek Bekmurzaev");
+    const atom = `<feed><entry><title>T</title><link href="https://x.test/1"/><updated>2026-10-31T10:00:00Z</updated><author><name>Jane Doe</name></author></entry></feed>`;
+    expect(parseFeed(atom, "https://x.test/feed", {}, NOW)[0].author).toBe("Jane Doe");
+    expect(parseFeed(rss.replace(/<dc:creator>.*<\/dc:creator>/, ""), "https://globalvoices.org/feed/", {}, NOW)[0].author).toBeUndefined();
+  });
+
   it("reads RSS items with CDATA, escaped HTML and an image", () => {
     const xml = `<?xml version="1.0"?><rss><channel><title>x</title>
       <item><title><![CDATA[Decree on visas]]></title><link>http://kremlin.ru/acts/news/80977</link>

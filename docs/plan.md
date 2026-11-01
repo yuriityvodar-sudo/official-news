@@ -524,7 +524,7 @@ Roman, 29 Oct: «only official это устаревшее, его надо ве
 | --- | --- | --- |
 | Official websites (`docs/sources.csv`) | Decisions: laws, decrees, government decisions | As before, per source |
 | Wikipedia's current events: English (`Portal:Current events/<date>`, about 130 events a week) and Russian (`Портал:Текущие события/Последние события`, updated daily) | Events, one or two sentences each, with links to their articles and to news sources | CC BY-SA 4.0: the card names Wikipedia and links the page; our summary of it is CC BY-SA too |
-| Global Voices | Stories from around the world | CC BY: the author and a link |
+| Global Voices | Stories from around the world (since 1 Nov: `ww-global-voices`, about 3 a day, every day, summarized with the story prompt, its author kept; hidden until the app and the site name the author) | CC BY: the author and a link |
 | Wikipedia page views per language | What a country's readers look up today | Open data |
 | GDELT | How many articles a country's own media publish about an item, with their headlines and links | Free and unrestricted, citing GDELT and linking it; one request every 5 seconds at most |
 | Other media (Novinky, iDNES, BBC, Reuters…) | Only the headline, the outlet and a link | EU law (Directive 2019/790, art. 15): links and very short extracts only, never the text |

@@ -575,8 +575,8 @@ async function checkSource(run: Run, source: SourceRow): Promise<SourceCheck> {
       inserts.push(
         run.env.DB.prepare(
           `INSERT OR IGNORE INTO articles
-             (id, source_id, url, original_title, published_at, date_only, fetched_at, text, text_expires_at, image_url, original_language)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             (id, source_id, url, original_title, published_at, date_only, fetched_at, text, text_expires_at, image_url, original_language, author)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         ).bind(
           ulid(run.now.getTime()),
           source.id,
@@ -587,8 +587,9 @@ async function checkSource(run: Run, source: SourceRow): Promise<SourceCheck> {
           fetchedAt,
           item.text ? item.text.slice(0, LIMITS.maxText) : null,
           item.text ? expires : null,
-          item.imageUrl,
+          config.images === false ? null : item.imageUrl,
           source.language,
+          item.author ?? null,
         ),
       );
     }

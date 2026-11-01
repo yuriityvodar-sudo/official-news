@@ -111,6 +111,15 @@ export interface SourceConfig {
    */
   hidden?: boolean;
   /**
+   * News stories under an open licence, not official decisions (#230: Global
+   * Voices, CC BY): summarized with the story prompt (summarizer/prompt.ts),
+   * typed `event`, and stored with their author, whom the licence asks to name
+   * with a link to the original.
+   */
+  stories?: boolean;
+  /** `false`: no picture from this source at all, from its list or its pages (Global Voices: its photos are often other creators', on other terms). */
+  images?: boolean;
+  /**
    * The source's name in the app's other languages (#76), from
    * docs/source-names.csv (never written in docs/sources.csv). Not read by the
    * fetcher: the API sends it as `source.name` for `?lang=`.
@@ -146,6 +155,8 @@ export interface FoundItem {
   category: string | null;
   /** Feeds: the item's own `<title>`, when the config takes the title from another field. */
   headline?: string;
+  /** Feeds: its author (`dc:creator`, else `author`), for a source whose licence asks to name them (`stories`). */
+  author?: string;
 }
 
 export function readConfig(source: SourceRow): SourceConfig {
