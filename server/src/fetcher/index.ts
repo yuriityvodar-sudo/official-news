@@ -5,7 +5,7 @@ import { extractContent, findLink, parsePage } from "./page";
 import { type Robots, isAllowed, robotsFromResponse } from "./robots";
 import { decodeBody, getStrings, htmlToText, toStoredTime, ulid } from "./text";
 import { type FilterField, type FoundItem, type SourceConfig, type SourceRow, configRegex, readConfig } from "./types";
-import { type EventsLang, currentEventsPages, englishPageDay, parseCurrentEvents } from "./wikipedia";
+import { type EventsLang, articleRaw, currentEventsPages, englishPageDay, leadOf, parseCurrentEvents } from "./wikipedia";
 
 export const USER_AGENT = "OfficialNewsBot/0.1 (+https://github.com/yuriityvodar-sudo/official-news)";
 
@@ -219,6 +219,37 @@ async function readCurrentEvents(run: Run, lang: EventsLang, config: SourceConfi
     items.push(...parseCurrentEvents(await res.text(), page, lang, run.now, englishPageDay(page)));
   }
   return { items, status: read ? 200 : (failed ?? 403), etag: null, lastModified: null };
+}
+
+/**
+ * An event from Wikipedia's current events with its background (#230, Roman,
+ * 1 Nov: «почему новости из википедии такие короткие?»): its one sentence
+ * left the summary nothing to tell, so the text gets the lead of the article
+ * its topics link (FoundItem.background), read as wikitext from the same wiki
+ * (`/wiki/<title>?action=raw`, robots.txt checked as for any page), once per
+ * title a run. A page that fails, or a run out of requests, saves the event
+ * as it was.
+ */
+async function withBackground(run: Run, item: FoundItem, leads: Map<string, string | null>): Promise<FoundItem> {
+  const title = item.background!;
+  let lead = leads.get(title);
+  if (lead === undefined) {
+    lead = await readLead(run, item.url, title).catch(() => null);
+    leads.set(title, lead);
+  }
+  return lead ? { ...item, text: `${item.text ?? item.title}\nBackground from Wikipedia («${title}»): ${lead}` } : item;
+}
+
+/** The lead of `title` on the wiki of `pageUrl`, following one redirect; null when there is none to read. */
+async function readLead(run: Run, pageUrl: string, title: string, redirects = 1): Promise<string | null> {
+  const url = articleRaw(pageUrl, title);
+  if (await blockedBy(run, url)) return null;
+  const res = await request(run, url, "text/x-wiki, text/plain;q=0.9");
+  if (!res.ok) return null;
+  const lead = leadOf(await res.text());
+  if (!lead) return null;
+  if ("redirect" in lead) return redirects > 0 ? readLead(run, pageUrl, lead.redirect, redirects - 1) : null;
+  return lead.lead;
 }
 
 async function readList(run: Run, source: SourceRow, config: SourceConfig, url: string): Promise<ListResult> {
@@ -557,8 +588,11 @@ async function checkSource(run: Run, source: SourceRow): Promise<SourceCheck> {
 
     const expires = toStoredTime(new Date(run.now.getTime() + (config.textDays ?? LIMITS.textDays) * 86_400_000));
     const inserts: D1PreparedStatement[] = [];
+    const backgrounds = new Map<string, string | null>();
     for (const found of recent.filter((i) => !known.has(i.url)).slice(0, LIMITS.newPerSource)) {
       let item = found;
+      // An event's background (#230): the lead of Wikipedia's article on its story.
+      if (config.currentEvents && item.background) item = await withBackground(run, item, backgrounds);
       const teaser = (item.text?.length ?? 0) < LIMITS.teaserText;
       // undefined: nothing to read; null: read it on a later check.
       let read: FoundItem | null | undefined;

@@ -77,12 +77,15 @@ export function parseCurrentEvents(wikitext: string, pageUrl: string, lang: Even
   let date = day ?? null;
   let category = "";
   const topics: string[] = [];
+  // The links of each topic line above, by depth: the articles on the story it belongs to.
+  const topicLinks: string[][] = [];
   for (const raw of wikitext.split("\n")) {
     const line = raw.trim();
     const heading = /^'''([^']+)'''$/.exec(line);
     if (heading) {
       category = plainText(heading[1]);
       topics.length = 0;
+      topicLinks.length = 0;
       continue;
     }
     const dayHeading = /^===\s*\[\[(\d{1,2}) ([а-яё]+)\]\]\s*===$/i.exec(line);
@@ -96,6 +99,7 @@ export function parseCurrentEvents(wikitext: string, pageUrl: string, lang: Even
       }
       category = "";
       topics.length = 0;
+      topicLinks.length = 0;
       continue;
     }
     const bullet = /^(\*+)\s*(.*)$/.exec(line);
@@ -104,11 +108,16 @@ export function parseCurrentEvents(wikitext: string, pageUrl: string, lang: Even
     const body = bullet[2];
     const { url, outlets } = lang === "ru" ? russianCites(body) : englishCites(body);
     topics.length = Math.min(topics.length, depth - 1);
+    topicLinks.length = Math.min(topicLinks.length, depth - 1);
     if (!url) {
       if (lang === "ru" && depth === 1) {
         category = plainText(body);
         topics.length = 0;
-      } else topics[depth - 1] = plainText(body);
+        topicLinks.length = 0;
+      } else {
+        topics[depth - 1] = plainText(body);
+        topicLinks[depth - 1] = linkTargets(body);
+      }
       continue;
     }
     const sentence = plainText(body);
@@ -123,10 +132,76 @@ export function parseCurrentEvents(wikitext: string, pageUrl: string, lang: Even
       text: [category, context.join(" › "), sentence, reported].filter(Boolean).join("\n"),
       imageUrl: null,
       category: category || null,
+      background: backgroundOf(topicLinks.slice(0, depth - 1).reverse(), sentence, linkTargets(body)) ?? undefined,
     });
   }
   return items;
 }
+
+/** The articles a wikitext links, as their titles ("[[Blockade of Oleshky|the blockade]]" links "Blockade of Oleshky"), no files or categories. */
+export function linkTargets(wikitext: string): string[] {
+  return [...wikitext.matchAll(/\[\[([^|\]#]+)(?:#[^|\]]*)?(?:\|[^\]]*)?\]\]/g)]
+    .map((m) => m[1].replace(/_/g, " ").trim())
+    .filter((t) => t && !/^(file|image|category|файл|изображение|категория):/i.test(t));
+}
+
+/** Words of four letters or more, lowercased: what a title and a sentence share. */
+const words = (text: string) => new Set(text.toLowerCase().match(/[\p{L}\p{N}]{4,}/gu) ?? []);
+
+/**
+ * The article whose lead gives an event its background (#230, Roman, 1 Nov:
+ * «почему новости из википедии такие короткие?»): the topic lines above the
+ * event link Wikipedia's articles on the story it belongs to ("Blockade of
+ * Oleshky" above "Hundreds evacuate the Ukrainian city of Oleshky…"). The
+ * innermost line first, and on it the link whose words the sentence shares
+ * the most of, as a share of the title's words ("Blockade of Oleshky" 1 of 2
+ * against "Peace negotiations in the Russo-Ukrainian war" 1 of 6; its first
+ * on a tie); without topics, the event's own first link that shares a word
+ * with it, else its first.
+ */
+export function backgroundOf(topicLinksInnermostFirst: string[][], sentence: string, ownLinks: string[]): string | null {
+  const said = words(sentence);
+  const shared = (title: string) => {
+    const own = [...words(title)];
+    return own.length ? own.filter((w) => said.has(w)).length / own.length : 0;
+  };
+  for (const links of topicLinksInnermostFirst) {
+    if (!links.length) continue;
+    return links.reduce((best, title) => (shared(title) > shared(best) ? title : best), links[0]);
+  }
+  return ownLinks.find((title) => shared(title) > 0) ?? ownLinks[0] ?? null;
+}
+
+/** About this much of an article's lead is kept as an event's background: two or three paragraphs. */
+export const BACKGROUND_CHARS = 1200;
+
+/**
+ * The lead of an article's wikitext (`/wiki/<title>?action=raw`), as plain
+ * text: what comes before its first heading, without files, tables and
+ * templates (the infobox), cut at a sentence near BACKGROUND_CHARS. A
+ * redirect gives its target instead, to read once more; null when there is
+ * no lead.
+ */
+export function leadOf(wikitext: string): { lead: string } | { redirect: string } | null {
+  const redirect = /^#(?:redirect|перенаправление)\s*\[\[([^|\]#]+)/i.exec(wikitext.trim());
+  if (redirect) return { redirect: redirect[1].trim() };
+  const top = wikitext.split(/^==[^=].*$/m)[0] ?? "";
+  const text = plainText(
+    top
+      .replace(/\[\[(?:file|image|файл|изображение):[^\n]*\]\]/gi, "")
+      .replace(/\{\|[\s\S]*?\|\}/g, "")
+      .replace(/<gallery[\s\S]*?<\/gallery>/gi, ""),
+  );
+  if (text.length < 40) return null;
+  if (text.length <= BACKGROUND_CHARS) return { lead: text };
+  const cut = text.slice(0, BACKGROUND_CHARS);
+  const end = cut.lastIndexOf(". ");
+  return { lead: end > BACKGROUND_CHARS / 2 ? cut.slice(0, end + 1) : `${cut}…` };
+}
+
+/** The raw wikitext of an article on the wiki of `pageUrl` (`/wiki/` is what robots.txt allows). */
+export const articleRaw = (pageUrl: string, title: string) =>
+  `${new URL(pageUrl).origin}/wiki/${encodeURIComponent(title.replace(/ /g, "_")).replace(/%2F/g, "/")}?action=raw`;
 
 /** The day of an English day page, from its address: `…/2026_October_29?action=raw` is 2026-10-29. */
 export function englishPageDay(page: string): string | undefined {

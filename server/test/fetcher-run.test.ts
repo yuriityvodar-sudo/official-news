@@ -442,7 +442,13 @@ describe("runFetcher", () => {
 
     const [check] = await runFetcher(env, { fetch, now: NOW });
     expect(check).toMatchObject({ sourceId: "xx-events", ok: true, httpStatus: 200, found: 1, saved: 1, error: null });
-    expect(requests.map((r) => r.url)).toEqual(["https://en.wikipedia.org/robots.txt", `${day(14)}?action=raw`, `${day(13)}?action=raw`]);
+    // Its background, the article it links (Eastland), has no page here: the event is saved as it is.
+    expect(requests.map((r) => r.url)).toEqual([
+      "https://en.wikipedia.org/robots.txt",
+      `${day(14)}?action=raw`,
+      `${day(13)}?action=raw`,
+      "https://en.wikipedia.org/wiki/Eastland?action=raw",
+    ]);
     const [saved] = await articlesOf("xx-events");
     expect(saved.url).toMatch(new RegExp(`^${day(13)}#event-[0-9a-z]+$`));
     expect(saved).toMatchObject({
@@ -456,6 +462,43 @@ describe("runFetcher", () => {
     await env.DB.prepare("UPDATE sources SET last_checked_at = NULL WHERE id = 'xx-events'").run();
     const { fetch: none } = fakeFetch({ "https://en.wikipedia.org/robots.txt": { body: "", type: "text/plain" } });
     expect(await runFetcher(env, { fetch: none, now: NOW })).toMatchObject([{ ok: false, httpStatus: 404, error: "HTTP 404" }]);
+  });
+});
+
+describe("runFetcher: an event's background (#230, 1 Nov)", () => {
+  it("adds the lead of the article its topics link, read once a run for events of the same story, and following a redirect", async () => {
+    await addSource("xx-events", "https://en.wikipedia.org/wiki/Portal:Current_events", "api", { currentEvents: "en", itemPages: false });
+    const day = (n: number) => `https://en.wikipedia.org/wiki/Portal:Current_events/2026_October_${n}`;
+    const { fetch, requests } = fakeFetch({
+      "https://en.wikipedia.org/robots.txt": { body: "User-agent: *\nDisallow: /w/\nDisallow: /api/", type: "text/plain" },
+      [`${day(13)}?action=raw`]: {
+        type: "text/x-wiki; charset=UTF-8",
+        body: [
+          "'''Armed conflicts and attacks'''",
+          "*[[Northland conflict]]",
+          "**[[Siege of Port Alba]]",
+          "***Northland forces shell [[Port Alba]], killing 12 civilians. [https://news.test/a1 (Example Wire)]",
+          "***Port Alba's mayor asks for a ceasefire. [https://news.test/a2 (Example Wire)]",
+        ].join("\n"),
+      },
+      "https://en.wikipedia.org/wiki/Siege_of_Port_Alba?action=raw": { type: "text/x-wiki", body: "#REDIRECT [[Port Alba siege]]" },
+      "https://en.wikipedia.org/wiki/Port_Alba_siege?action=raw": {
+        type: "text/x-wiki",
+        body: "{{Infobox}}\nThe '''siege of Port Alba''' began in March 2026, when [[Northland]] forces surrounded the port.\n== Course ==\nLater.",
+      },
+    });
+    const [check] = await runFetcher(env, { fetch, now: NOW });
+    expect(check).toMatchObject({ ok: true, saved: 2 });
+    const texts = (await articlesOf("xx-events")).map((a) => a.text);
+    expect(texts).toHaveLength(2);
+    for (const text of texts) {
+      expect(text).toMatch(/\nBackground from Wikipedia \(«Siege of Port Alba»\): The siege of Port Alba began in March 2026, when Northland forces surrounded the port\.$/);
+    }
+    // Read once for both events, through its redirect.
+    expect(requests.filter((r) => r.url.includes("Port_Alba")).map((r) => r.url)).toEqual([
+      "https://en.wikipedia.org/wiki/Siege_of_Port_Alba?action=raw",
+      "https://en.wikipedia.org/wiki/Port_Alba_siege?action=raw",
+    ]);
   });
 });
 
