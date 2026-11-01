@@ -6,6 +6,7 @@ import { postSupportMessage, supportThread } from "../support";
 import type { Topic } from "../summarizer/schema";
 import { LANGS, type Lang, SHOWN, isLang, queueStatus, releaseStatus } from "../translator";
 import { creditOf } from "./credit";
+import { countryHeadlines } from "./headlines";
 import {
   EU,
   EU_MEMBERS,
@@ -951,6 +952,13 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (url.pathname === "/articles") return listArticles(url, env);
   if (url.pathname === "/topics") return listTopics(url, env);
   if (url.pathname === "/countries") return listCountries(url, env);
+
+  // The news outlets' headlines of a country (#230), for a minute in each data centre's cache, as the lists.
+  if (url.pathname === "/headlines") {
+    const country = url.searchParams.get("country") ?? "";
+    if (!/^[A-Z]{2}$/.test(country)) return badRequest("country must be a 2-letter code in capitals, such as CZ, EU or WW");
+    return json({ country, items: await countryHeadlines(env, country) }, 200, LIST_CACHE);
+  }
 
   const match = url.pathname.match(/^\/articles\/([^/]+)$/);
   if (match) {

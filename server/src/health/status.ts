@@ -19,15 +19,16 @@ export const HEALTH = {
  *
  * One failed check keeps the status, so a single timeout does not mark a source
  * broken. `blocked` is set by people (docs/sources.csv) and never changed here.
+ * A news outlet's checks (#230) go to `outlets`, which has the same columns.
  */
-export async function recordChecks(env: Env, checks: SourceCheck[], now = new Date()): Promise<void> {
+export async function recordChecks(env: Env, checks: SourceCheck[], now = new Date(), table: "sources" | "outlets" = "sources"): Promise<void> {
   if (!checks.length) return;
   const staleBefore = toStoredTime(new Date(now.getTime() - HEALTH.staleDays * 86_400_000));
   await env.DB.batch(
     checks.map((check) =>
       // In SET, every column still holds its value from before this statement.
       env.DB.prepare(
-        `UPDATE sources SET
+        `UPDATE ${table} SET
            status = CASE
              WHEN ?1 THEN CASE WHEN last_item_at >= ?2 THEN 'active' ELSE 'stale' END
              WHEN failed_checks + 1 >= ?3 THEN CASE WHEN ?4 IN (404, 410) THEN 'moved' ELSE 'broken' END

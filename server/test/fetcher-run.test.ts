@@ -1082,3 +1082,134 @@ describe("runFetcher: every source every minute, no line (#230, Roman, 1 Nov)", 
     expect(await row("xx-call")).toMatchObject({ failed_checks: 1 });
   });
 });
+
+describe("runFetcher: news outlets' headlines (#230, the aggregator)", () => {
+  const at = (minutes: number) => new Date(NOW.getTime() + minutes * 60_000);
+  const FEED = "https://feeds.outlet.test/rss.xml";
+  const hoursAgo = (hours: number) => new Date(NOW.getTime() - hours * 3_600_000).toUTCString();
+  const stored = (hours: number) => `${new Date(NOW.getTime() - hours * 3_600_000).toISOString().slice(0, 19)}Z`;
+
+  /** An outlet checked every minute, as these tests read it minute by minute, unless its config says otherwise. */
+  async function addOutlet(id: string, config: object | null = { everyMinutes: 1 }, headlines = "[]", lastCheckedAt: string | null = null) {
+    await env.DB.prepare(
+      `INSERT INTO outlets (id, country, name, url, site, language, config, headlines, last_checked_at)
+       VALUES (?, 'XX', ?, ?, 'https://www.outlet.test', 'en', ?, ?, ?)`,
+    )
+      .bind(id, `Outlet ${id}`, id === "xx-outlet" ? FEED : `https://feeds.${id}.test/rss.xml`, config && JSON.stringify(config), headlines, lastCheckedAt)
+      .run();
+  }
+  const outlet = (id = "xx-outlet") =>
+    env.DB.prepare("SELECT headlines, list_hash, last_item_at, last_checked_at, failed_checks, last_error, status FROM outlets WHERE id = ?")
+      .bind(id)
+      .first<{ headlines: string; list_hash: string | null; last_item_at: string | null; last_checked_at: string | null; failed_checks: number; last_error: string | null; status: string }>();
+  const headlinesOf = async (id = "xx-outlet") => JSON.parse((await outlet(id))?.headlines ?? "[]");
+  const outletSite = (items: { title: string; link: string; date: string }[]): Site => ({
+    "https://feeds.outlet.test/robots.txt": { status: 404, body: "" },
+    [FEED]: { body: rss(items), type: "application/rss+xml" },
+  });
+
+  it("keeps the headlines and links on the outlet's site from the last 48 hours, newest first, and never an article", async () => {
+    await addOutlet("xx-outlet");
+    const { fetch, requests } = fakeFetch(
+      outletSite([
+        { title: "Floods close the main road", link: "https://www.outlet.test/news/floods", date: hoursAgo(2) },
+        { title: "Advertisement", link: "https://ads.elsewhere.test/promo", date: hoursAgo(1) },
+        { title: "Cup final tonight", link: "http://sport.outlet.test/final", date: hoursAgo(5) },
+        { title: "Last week's budget vote", link: "https://www.outlet.test/news/budget", date: hoursAgo(49) },
+      ]),
+    );
+    expect(await runFetcher(env, inCalls({ fetch, now: NOW }))).toMatchObject([{ sourceId: "xx-outlet", ok: true, full: true, found: 3, offSite: 1, headlines: 2, saved: 0 }]);
+    expect(await headlinesOf()).toEqual([
+      { title: "Floods close the main road", url: "https://www.outlet.test/news/floods", publishedAt: stored(2) },
+      // A subdomain of its site, always over https.
+      { title: "Cup final tonight", url: "https://sport.outlet.test/final", publishedAt: stored(5) },
+    ]);
+    // Only robots.txt and the feed: no item page, no text, no picture.
+    expect(requests.map((r) => r.url)).toEqual(["https://feeds.outlet.test/robots.txt", FEED]);
+    expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM articles WHERE source_id = 'xx-outlet'").first()).toEqual({ n: 0 });
+    expect(await outlet()).toMatchObject({ last_item_at: stored(2), last_checked_at: "2026-10-14T15:00:00Z", status: "active", failed_checks: 0 });
+  });
+
+  it("keeps the stored headlines its list no longer shows, under the title the list gives now, until they are 48 hours old", async () => {
+    await addOutlet(
+      "xx-outlet",
+      { everyMinutes: 1 },
+      JSON.stringify([
+        { title: "Minister resigns", url: "https://www.outlet.test/news/minister", publishedAt: stored(10) },
+        { title: "Storm warning", url: "https://www.outlet.test/news/storm", publishedAt: stored(30) },
+        { title: "Old news", url: "https://www.outlet.test/news/old", publishedAt: stored(47.9) },
+      ]),
+    );
+    const { fetch } = fakeFetch(
+      outletSite([
+        { title: "Election called for March", link: "https://www.outlet.test/news/election", date: hoursAgo(1) },
+        { title: "Minister resigns after the vote", link: "https://www.outlet.test/news/minister", date: hoursAgo(10) },
+      ]),
+    );
+    expect(await runFetcher(env, inCalls({ fetch, now: NOW }))).toMatchObject([{ headlines: 1 }]);
+    expect((await headlinesOf()).map((h: { title: string }) => h.title)).toEqual([
+      "Election called for March",
+      "Minister resigns after the vote",
+      "Storm warning",
+      "Old news",
+    ]);
+    // An hour on, the oldest is past 48 hours and goes.
+    const { fetch: later } = fakeFetch(outletSite([{ title: "Election called for March", link: "https://www.outlet.test/news/election", date: hoursAgo(1) }]));
+    await runFetcher(env, inCalls({ fetch: later, now: at(60) }));
+    expect((await headlinesOf()).map((h: { title: string }) => h.title)).toEqual(["Election called for March", "Minister resigns after the vote", "Storm warning"]);
+  });
+
+  it("reads an unchanged feed with one request and writes nothing", async () => {
+    await addOutlet("xx-outlet");
+    const { fetch, requests } = fakeFetch(outletSite([{ title: "Floods close the main road", link: "https://www.outlet.test/news/floods", date: hoursAgo(2) }]));
+    await runFetcher(env, inCalls({ fetch, now: NOW }));
+    requests.length = 0;
+    let checks: SourceCheck[] = [];
+    const rows = await d1Rows(async () => {
+      checks = await runFetcher(env, inCalls({ fetch, now: at(1) }));
+    });
+    expect(checks).toMatchObject([{ ok: true, full: false, unchanged: true, headlines: 0 }]);
+    expect(requests.map((r) => r.url)).toEqual([FEED]);
+    expect(rows.written).toBe(0);
+  });
+
+  it("gives a failing outlet its status in `outlets`, as a source's", async () => {
+    await addOutlet("xx-outlet");
+    const { fetch } = fakeFetch({ "https://feeds.outlet.test/robots.txt": { status: 404, body: "" }, [FEED]: { status: 404, body: "" } });
+    expect(await runFetcher(env, inCalls({ fetch, now: NOW }))).toMatchObject([{ ok: false, error: "HTTP 404" }]);
+    expect(await outlet()).toMatchObject({ failed_checks: 1, last_error: "HTTP 404", status: "active" });
+    // Asked again every 10 minutes, as a failed source: about an hour of 404s makes it moved.
+    for (let i = 1; i < 6; i++) await runFetcher(env, inCalls({ fetch, now: at(i * LIMITS.failedCheckMinutes) }));
+    expect(await outlet()).toMatchObject({ failed_checks: 6, status: "moved" });
+  });
+
+  it("checks an outlet every LIMITS.outletEveryMinutes, and never a blocked one", async () => {
+    await addOutlet("xx-outlet", null, "[]", "2026-10-14T14:59:00Z");
+    await addOutlet("xx-gone", null);
+    await env.DB.prepare("UPDATE outlets SET status = 'blocked' WHERE id = 'xx-gone'").run();
+    const { fetch } = fakeFetch(outletSite([]));
+    const minutes: number[] = [];
+    for (let minute = 0; minute < 2 * LIMITS.outletEveryMinutes; minute++) {
+      if ((await runFetcher(env, inCalls({ fetch, now: at(minute) }))).length) minutes.push(minute);
+    }
+    expect(minutes).toHaveLength(2);
+    expect(minutes[1] - minutes[0]).toBe(LIMITS.outletEveryMinutes);
+  });
+
+  it("calls at most LIMITS.callsPerRun a run, the sources first, and logs how many wait", async () => {
+    await addSource("xx-a", "https://xx-a.test/feed.xml", "rss");
+    await addSource("xx-b", "https://xx-b.test/feed.xml", "rss");
+    for (let i = 0; i < LIMITS.callsPerRun + 5; i++) await addOutlet(`xx-o${String(i).padStart(2, "0")}`);
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    const called: string[] = [];
+    const call = async (source: SourceRow) => {
+      called.push(source.id);
+      return { sourceId: source.id, ok: true, unchanged: true, saved: 0, headlines: 0 } as SourceCheck;
+    };
+    await runFetcher(env, { now: NOW, call });
+    expect(called).toHaveLength(LIMITS.callsPerRun);
+    expect(called.slice(0, 2)).toEqual(["xx-a", "xx-b"]);
+    const run = log.mock.calls.map(([line]) => JSON.parse(String(line))).find((line) => line.message === "fetcher run");
+    expect(run).toMatchObject({ sources: LIMITS.callsPerRun, waiting: 7 });
+  });
+});

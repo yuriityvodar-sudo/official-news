@@ -48,7 +48,12 @@ function image(entry: string, baseUrl: string): string | null {
   return null;
 }
 
-export function parseFeed(xml: string, baseUrl: string, config: SourceConfig, now = new Date()): FoundItem[] {
+/**
+ * The feed's items. `headlinesOnly` (a news outlet's feed, #230) reads only what
+ * a headline needs, never an item's text or picture: some outlets put whole
+ * articles in their feed (elDiario.es, 1.4 MB), whose text took 24 ms to read.
+ */
+export function parseFeed(xml: string, baseUrl: string, config: SourceConfig, now = new Date(), headlinesOnly = false): FoundItem[] {
   const blocks = xml.match(/<(item|entry)\b[^>]*>[\s\S]*?<\/\1>/gi) ?? [];
   const spec = dateSpec(config);
   const dateFields = spec.field ? [spec.field].flat() : ["pubDate", "dc:date", "published", "updated"];
@@ -72,8 +77,9 @@ export function parseFeed(xml: string, baseUrl: string, config: SourceConfig, no
       if (date) break;
     }
 
-    const content = element(block, "content:encoded") ?? element(block, "description") ?? element(block, "summary") ?? element(block, "content");
     const category = plain(block, "category") ?? attribute(block.match(/<category\b[^>]*>/i)?.[0] ?? "", "term");
+    if (headlinesOnly) return [{ url, title, publishedAt: date?.publishedAt ?? null, dateOnly: date?.dateOnly ?? false, text: null, imageUrl: null, category }];
+    const content = element(block, "content:encoded") ?? element(block, "description") ?? element(block, "summary") ?? element(block, "content");
     const headline = titleField === "title" ? null : plain(block, "title");
     // RSS writes the author as dc:creator, Atom as <author><name>.
     const author = plain(block, "dc:creator") ?? plain(block, "name") ?? plain(block, "author");

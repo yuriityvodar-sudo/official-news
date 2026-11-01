@@ -9,6 +9,10 @@ export interface Health {
   sources: Record<string, number>;
   /** The latest time the fetcher checked a source, or null before its first run. */
   lastFetcherRun: string | null;
+  /** News outlets per status (#230): their headlines and links only, in `outlets`. */
+  outlets: Record<string, number>;
+  /** The newest headline of an outlet that is read, or null before the first. */
+  lastHeadlineAt: string | null;
   articles: {
     /** Fetched in the last 24 hours. */
     fetchedLast24h: number;
@@ -23,9 +27,11 @@ export interface Health {
 
 /** `GET /health`: whether the fetcher and the AI step are running, readable in a browser. */
 export async function health(env: Env): Promise<Health> {
-  const [statuses, lastRun, articles] = await env.DB.batch<Record<string, unknown>>([
+  const [statuses, lastRun, outlets, lastHeadline, articles] = await env.DB.batch<Record<string, unknown>>([
     env.DB.prepare(`SELECT status, COUNT(*) AS n FROM sources WHERE ${REAL_SOURCE} GROUP BY status`),
     env.DB.prepare(`SELECT MAX(last_checked_at) AS at FROM sources WHERE ${REAL_SOURCE}`),
+    env.DB.prepare("SELECT status, COUNT(*) AS n FROM outlets GROUP BY status"),
+    env.DB.prepare("SELECT MAX(last_item_at) AS at FROM outlets WHERE status != 'blocked'"),
     env.DB.prepare(
       `SELECT
          SUM(fetched_at >= strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-24 hours')) AS fetched,
@@ -39,6 +45,8 @@ export async function health(env: Env): Promise<Health> {
   return {
     sources: Object.fromEntries(statuses.results.map((r) => [String(r.status), Number(r.n)])),
     lastFetcherRun: (lastRun.results[0]?.at as string | null | undefined) ?? null,
+    outlets: Object.fromEntries(outlets.results.map((r) => [String(r.status), Number(r.n)])),
+    lastHeadlineAt: (lastHeadline.results[0]?.at as string | null | undefined) ?? null,
     articles: {
       fetchedLast24h: Number(totals.fetched ?? 0),
       waitingForSummary: Number(totals.waiting ?? 0),

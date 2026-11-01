@@ -184,6 +184,14 @@ describe("parseFeed", () => {
     expect(parseFeed(rss.replace(/<dc:creator>.*<\/dc:creator>/, ""), "https://globalvoices.org/feed/", {}, NOW)[0].author).toBeUndefined();
   });
 
+  it("reads a news outlet's feed for its headlines only: never an item's text or picture (#230)", () => {
+    const rss = `<rss xmlns:content="http://purl.org/rss/1.0/modules/content/"><channel><item><title>Floods close the main road</title><link>https://www.outlet.test/news/floods</link><pubDate>Sat, 31 Oct 2026 13:38:41 +0000</pubDate><category>Weather</category><enclosure url="https://www.outlet.test/floods.jpg" type="image/jpeg"/><content:encoded><![CDATA[<p>The whole article.</p>]]></content:encoded></item></channel></rss>`;
+    expect(parseFeed(rss, "https://feeds.outlet.test/rss", {}, NOW, true)).toEqual([
+      { url: "https://www.outlet.test/news/floods", title: "Floods close the main road", publishedAt: "2026-10-31T13:38:41Z", dateOnly: false, text: null, imageUrl: null, category: "Weather" },
+    ]);
+    expect(parseFeed(rss, "https://feeds.outlet.test/rss", {}, NOW)[0]).toMatchObject({ text: "The whole article.", imageUrl: "https://www.outlet.test/floods.jpg" });
+  });
+
   it("reads RSS items with CDATA, escaped HTML and an image", () => {
     const xml = `<?xml version="1.0"?><rss><channel><title>x</title>
       <item><title><![CDATA[Decree on visas]]></title><link>http://kremlin.ru/acts/news/80977</link>
