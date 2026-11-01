@@ -22,6 +22,8 @@ interface SiteTexts {
   aiNotice: string;
   /** The AI notice on an event's page (#230): from Wikipedia's text, which is not an official one. */
   aiNoticeEvent: string;
+  /** The AI notice on a news story's page (#230: Global Voices, RFE/RL): from `{source}`'s text. */
+  aiNoticeStory: string;
   /** The AI notice on a list that has events among its decisions (#230). */
   aiNoticeWithEvents: string;
   creditSource: string;
@@ -100,8 +102,10 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
       "Headlines and summaries are written by AI for Outer News ({publisher}) from the official text and are not reviewed by a person. They are not the official text and can contain mistakes: before you rely on one, read the original.",
     aiNoticeEvent:
       "Headlines and summaries are written by AI for Outer News ({publisher}) from Wikipedia's text and are not reviewed by a person. They can contain mistakes: before you rely on one, read the original.",
+    aiNoticeStory:
+      "Headlines and summaries are written by AI for Outer News ({publisher}) from {source}'s text and are not reviewed by a person. They can contain mistakes: before you rely on one, read the original.",
     aiNoticeWithEvents:
-      "Headlines and summaries are written by AI for Outer News ({publisher}) from the official text, or for events from Wikipedia's text, and are not reviewed by a person. They are not the official text and can contain mistakes: before you rely on one, read the original.",
+      "Headlines and summaries are written by AI for Outer News ({publisher}) from the official text, or for events from the text of Wikipedia or of a news outlet, and are not reviewed by a person. They are not the official text and can contain mistakes: before you rely on one, read the original.",
     creditSource: "Source: {source}",
     published: "Published {date}",
     added: "In Outer News since {date}",
@@ -150,8 +154,10 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
       "Заголовки й стислі виклади пише ШІ для Outer News ({publisher}) на основі офіційного тексту, і людина їх не перевіряє. Вони не є офіційним текстом і можуть містити помилки: перш ніж покладатися на них, прочитайте оригінал.",
     aiNoticeEvent:
       "Заголовки й стислі виклади пише ШІ для Outer News ({publisher}) на основі тексту Вікіпедії, і людина їх не перевіряє. Вони можуть містити помилки: перш ніж покладатися на них, прочитайте оригінал.",
+    aiNoticeStory:
+      "Заголовки й стислі виклади пише ШІ для Outer News ({publisher}) на основі тексту {source}, і людина їх не перевіряє. Вони можуть містити помилки: перш ніж покладатися на них, прочитайте оригінал.",
     aiNoticeWithEvents:
-      "Заголовки й стислі виклади пише ШІ для Outer News ({publisher}) на основі офіційного тексту, а для подій — тексту Вікіпедії, і людина їх не перевіряє. Вони не є офіційним текстом і можуть містити помилки: перш ніж покладатися на них, прочитайте оригінал.",
+      "Заголовки й стислі виклади пише ШІ для Outer News ({publisher}) на основі офіційного тексту, а для подій — тексту Вікіпедії чи медіа, і людина їх не перевіряє. Вони не є офіційним текстом і можуть містити помилки: перш ніж покладатися на них, прочитайте оригінал.",
     creditSource: "Джерело: {source}",
     published: "Опубліковано {date}",
     added: "В Outer News з {date}",
@@ -200,8 +206,10 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
       "Заголовки и краткие изложения пишет ИИ для Outer News ({publisher}) на основе официального текста, и человек их не проверяет. Они не являются официальным текстом и могут содержать ошибки: прежде чем полагаться на них, прочитайте оригинал.",
     aiNoticeEvent:
       "Заголовки и краткие изложения пишет ИИ для Outer News ({publisher}) на основе текста Википедии, и человек их не проверяет. Они могут содержать ошибки: прежде чем полагаться на них, прочитайте оригинал.",
+    aiNoticeStory:
+      "Заголовки и краткие изложения пишет ИИ для Outer News ({publisher}) на основе текста {source}, и человек их не проверяет. Они могут содержать ошибки: прежде чем полагаться на них, прочитайте оригинал.",
     aiNoticeWithEvents:
-      "Заголовки и краткие изложения пишет ИИ для Outer News ({publisher}) на основе официального текста, а для событий — текста Википедии, и человек их не проверяет. Они не являются официальным текстом и могут содержать ошибки: прежде чем полагаться на них, прочитайте оригинал.",
+      "Заголовки и краткие изложения пишет ИИ для Outer News ({publisher}) на основе официального текста, а для событий — текста Википедии или СМИ, и человек их не проверяет. Они не являются официальным текстом и могут содержать ошибки: прежде чем полагаться на них, прочитайте оригинал.",
     creditSource: "Источник: {source}",
     published: "Опубликовано {date}",
     added: "В Outer News с {date}",
@@ -250,8 +258,10 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
       "Los titulares y los resúmenes los escribe una IA para Outer News ({publisher}) a partir del texto oficial, y ninguna persona los revisa. No son el texto oficial y pueden contener errores: antes de fiarte de uno, lee el original.",
     aiNoticeEvent:
       "Los titulares y los resúmenes los escribe una IA para Outer News ({publisher}) a partir del texto de Wikipedia, y ninguna persona los revisa. Pueden contener errores: antes de fiarte de uno, lee el original.",
+    aiNoticeStory:
+      "Los titulares y los resúmenes los escribe una IA para Outer News ({publisher}) a partir del texto de {source}, y ninguna persona los revisa. Pueden contener errores: antes de fiarte de uno, lee el original.",
     aiNoticeWithEvents:
-      "Los titulares y los resúmenes los escribe una IA para Outer News ({publisher}) a partir del texto oficial o, en los acontecimientos, del texto de Wikipedia, y ninguna persona los revisa. No son el texto oficial y pueden contener errores: antes de fiarte de uno, lee el original.",
+      "Los titulares y los resúmenes los escribe una IA para Outer News ({publisher}) a partir del texto oficial o, en los acontecimientos, del texto de Wikipedia o de un medio, y ninguna persona los revisa. No son el texto oficial y pueden contener errores: antes de fiarte de uno, lee el original.",
     creditSource: "Fuente: {source}",
     published: "Publicado el {date}",
     added: "En Outer News desde el {date}",
@@ -300,8 +310,10 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
       "Überschriften und Zusammenfassungen schreibt eine KI für Outer News ({publisher}) auf Grundlage des offiziellen Textes, und kein Mensch prüft sie. Sie sind nicht der offizielle Text und können Fehler enthalten: Lesen Sie das Original, bevor Sie sich darauf verlassen.",
     aiNoticeEvent:
       "Überschriften und Zusammenfassungen schreibt eine KI für Outer News ({publisher}) auf Grundlage des Wikipedia-Textes, und kein Mensch prüft sie. Sie können Fehler enthalten: Lesen Sie das Original, bevor Sie sich darauf verlassen.",
+    aiNoticeStory:
+      "Überschriften und Zusammenfassungen schreibt eine KI für Outer News ({publisher}) auf Grundlage des Textes von {source}, und kein Mensch prüft sie. Sie können Fehler enthalten: Lesen Sie das Original, bevor Sie sich darauf verlassen.",
     aiNoticeWithEvents:
-      "Überschriften und Zusammenfassungen schreibt eine KI für Outer News ({publisher}) auf Grundlage des offiziellen Textes, bei Ereignissen des Wikipedia-Textes, und kein Mensch prüft sie. Sie sind nicht der offizielle Text und können Fehler enthalten: Lesen Sie das Original, bevor Sie sich darauf verlassen.",
+      "Überschriften und Zusammenfassungen schreibt eine KI für Outer News ({publisher}) auf Grundlage des offiziellen Textes, bei Ereignissen des Textes von Wikipedia oder eines Mediums, und kein Mensch prüft sie. Sie sind nicht der offizielle Text und können Fehler enthalten: Lesen Sie das Original, bevor Sie sich darauf verlassen.",
     creditSource: "Quelle: {source}",
     published: "Veröffentlicht am {date}",
     added: "Bei Outer News seit dem {date}",
@@ -383,12 +395,12 @@ export const publisher = (lang: SiteLang) => text(lang, "publisher", { name: PUB
 export const publisherDetails = (lang: SiteLang) => text(lang, "publisherDetails", { name: PUBLISHER_NAME, ...PUBLISHER_DETAILS });
 
 /** Whose text the AI wrote from: official ones, Wikipedia's for an event (#230), or both on a list with events. */
-export type NoticeOf = "decisions" | "event" | "both";
-const NOTICE_KEYS = { decisions: "aiNotice", event: "aiNoticeEvent", both: "aiNoticeWithEvents" } as const;
+export type NoticeOf = "decisions" | "event" | "story" | "both";
+const NOTICE_KEYS = { decisions: "aiNotice", event: "aiNoticeEvent", story: "aiNoticeStory", both: "aiNoticeWithEvents" } as const;
 
-/** The AI notice, which names us as the text's editor (see SiteTexts.aiNotice). */
-export const aiNotice = (lang: SiteLang, of: NoticeOf = "decisions") => t(lang, NOTICE_KEYS[of], { publisher: PUBLISHER_NAME });
-export const aiNoticeText = (lang: SiteLang, of: NoticeOf = "decisions") => text(lang, NOTICE_KEYS[of], { publisher: PUBLISHER_NAME });
+/** The AI notice, which names us as the text's editor (see SiteTexts.aiNotice); a story's names its outlet, `source`. */
+export const aiNotice = (lang: SiteLang, of: NoticeOf = "decisions", source = "") => t(lang, NOTICE_KEYS[of], { publisher: PUBLISHER_NAME, source });
+export const aiNoticeText = (lang: SiteLang, of: NoticeOf = "decisions", source = "") => text(lang, NOTICE_KEYS[of], { publisher: PUBLISHER_NAME, source });
 
 const hasAppKey = (key: string): key is AppKey => key in APP_TEXTS.en;
 
@@ -405,6 +417,16 @@ export function countryName(lang: SiteLang, code: string): string {
 
 /** An event from Wikipedia's current events, not an official decision (#230), as the app's `Article.isEvent`. */
 export const isEvent = (article: { decisionType: string | null }) => article.decisionType === "event";
+
+/** A news story (#230: Global Voices, RFE/RL): an event whose link is not Wikipedia's, so its outlet is named, not Wikipedia. */
+export function isStory(article: { decisionType: string | null; originalUrl: string }): boolean {
+  if (!isEvent(article)) return false;
+  try {
+    return !/(^|\.)wikipedia\.org$/i.test(new URL(article.originalUrl).hostname);
+  } catch {
+    return false;
+  }
+}
 
 /**
  * The country a card or an article names, as the app's `placeName`
@@ -452,8 +474,13 @@ export function decisionLabel(lang: SiteLang, id: string | null): string | null 
  * "Summary by AI · translated from German". The app reads a missing source
  * language as English. An event's says it is of Wikipedia's text (#230).
  */
-export function aiLabel(lang: SiteLang, originalLanguage: string | null, event = false): string {
+export function aiLabel(lang: SiteLang, originalLanguage: string | null, event = false, story: string | null = null): string {
   const source = originalLanguage ?? "en";
+  // A news story's label names its outlet (#230), as the app's.
+  if (story) {
+    if (source === lang) return text(lang, "summaryByAiOfSource", { source: story });
+    return text(lang, "summaryByAiOfSourceTranslated", { source: story, language: languageName(lang, source) });
+  }
   if (source === lang) return text(lang, event ? "summaryByAiOfWikipedia" : "summaryByAi");
   return text(lang, event ? "summaryByAiOfWikipediaTranslated" : "summaryByAiTranslated", { language: languageName(lang, source) });
 }

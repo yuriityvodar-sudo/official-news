@@ -544,6 +544,50 @@
   "@wikipediaLicence": {
     "description": "Under an event's link (#230): Wikipedia's licence, which its reuse must name; a tap opens it."
   },
+  "readOnSource": "Read on {source}",
+  "@readOnSource": {
+    "description": "The link of a news story (#230: Global Voices, Radio Svoboda) to its page at the outlet, in place of Read the official decision.",
+    "placeholders": {
+      "source": {
+        "type": "String",
+        "example": "Radio Svoboda"
+      }
+    }
+  },
+  "summaryByAiOfSource": "Summary by AI of {source}'s text",
+  "@summaryByAiOfSource": {
+    "description": "Above a news story's summary (#230): written by AI from the outlet's text.",
+    "placeholders": {
+      "source": {
+        "type": "String",
+        "example": "Radio Svoboda"
+      }
+    }
+  },
+  "summaryByAiOfSourceTranslated": "Summary by AI of {source}'s text · translated from {language}",
+  "@summaryByAiOfSourceTranslated": {
+    "description": "Above a news story's summary (#230), for a story in another language than the one the article is read in.",
+    "placeholders": {
+      "source": {
+        "type": "String",
+        "example": "Radio Svoboda"
+      },
+      "language": {
+        "type": "String",
+        "example": "Ukrainian"
+      }
+    }
+  },
+  "storyBy": "Story by {author}",
+  "@storyBy": {
+    "description": "In a news story's credit line (#230): its author, whom the outlet's licence asks to name.",
+    "placeholders": {
+      "author": {
+        "type": "String",
+        "example": "Jane Doe"
+      }
+    }
+  },
   "readOfficialDecisionOn": "Read the official decision on {site}",
   "@readOfficialDecisionOn": {
     "description": "What VoiceOver says for that card.",

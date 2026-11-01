@@ -182,6 +182,10 @@ describe("parseFeed", () => {
     const atom = `<feed><entry><title>T</title><link href="https://x.test/1"/><updated>2026-10-31T10:00:00Z</updated><author><name>Jane Doe</name></author></entry></feed>`;
     expect(parseFeed(atom, "https://x.test/feed", {}, NOW)[0].author).toBe("Jane Doe");
     expect(parseFeed(rss.replace(/<dc:creator>.*<\/dc:creator>/, ""), "https://globalvoices.org/feed/", {}, NOW)[0].author).toBeUndefined();
+    // RSS's own <author> is "address (Name)" (RFE/RL); a bare address names nobody.
+    const rferl = rss.replace(/<dc:creator>.*<\/dc:creator>/, "<author>UkrWebMaster@rferl.org (Катерина Трохимчук)</author>");
+    expect(parseFeed(rferl, "https://www.radiosvoboda.org/api/", {}, NOW)[0].author).toBe("Катерина Трохимчук");
+    expect(parseFeed(rferl.replace(/ \(.*\)/, ""), "https://www.radiosvoboda.org/api/", {}, NOW)[0].author).toBeUndefined();
   });
 
   it("reads RSS items with CDATA, escaped HTML and an image", () => {

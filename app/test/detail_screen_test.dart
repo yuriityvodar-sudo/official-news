@@ -192,8 +192,16 @@ void main() {
     final article = Article.fromJson({
       ..._article().toJson(),
       'media': [
-        {'title': 'Vláda schválila rozpočet', 'outlet': 'novinky.cz', 'url': 'https://www.novinky.cz/clanek/1'},
-        {'title': 'Not a page', 'outlet': 'x.test', 'url': 'javascript:alert(1)'},
+        {
+          'title': 'Vláda schválila rozpočet',
+          'outlet': 'novinky.cz',
+          'url': 'https://www.novinky.cz/clanek/1',
+        },
+        {
+          'title': 'Not a page',
+          'outlet': 'x.test',
+          'url': 'javascript:alert(1)',
+        },
       ],
     });
     expect(article.media.map((m) => m.outlet), ['novinky.cz']);
@@ -324,6 +332,63 @@ void main() {
       'Two trains collided in Toledo province, Spain.\n\n'
       'Source: $page',
     );
+  });
+
+  testWidgets('a story names its outlet where an event names Wikipedia, and '
+      'gives its author, the original and the credit before the text (#230)', (
+    tester,
+  ) async {
+    const page =
+        'https://www.radiosvoboda.org/a/news-zelenskyy-rakety/33888322.html';
+    const wording =
+        'Copyright (c) 2026 RFE/RL, Inc. Used with the permission of '
+        'Radio Free Europe/Radio Liberty.';
+    final story = Article.fromJson({
+      ..._article(language: 'uk', originalUrl: page).toJson(),
+      'country': 'UA',
+      'countries': ['UA'],
+      'decisionType': 'event',
+      'source': {
+        'id': 'ua-radio-svoboda',
+        'name': 'Radio Svoboda',
+        'url': 'https://www.radiosvoboda.org',
+      },
+      'author': 'Kateryna Trokhymchuk',
+      'credit': {
+        'licence': 'Use Our Content',
+        'licenceUrl': 'https://about.rferl.org/use-our-content',
+        'wording': wording,
+        'wordingLang': 'en',
+      },
+    });
+    expect(story.isStory, isTrue);
+    final opened = <Uri>[];
+    await _pump(tester, story, openLink: (uri) async => opened.add(uri));
+
+    expect(find.text('Ukraine · Event'), findsOneWidget);
+    expect(find.byIcon(CupertinoIcons.checkmark_seal), findsNothing);
+    expect(
+      find.text(
+        "Summary by AI of Radio Svoboda's text · translated from Ukrainian",
+      ),
+      findsOneWidget,
+    );
+    expect(find.textContaining('Wikipedia'), findsNothing);
+    expect(find.text(wording), findsOneWidget);
+
+    await tester.tap(
+      find.text('Story by Kateryna Trokhymchuk · Radio Svoboda'),
+    );
+    await tester.tap(find.text('Use Our Content'));
+    final read = find.text('Read on Radio Svoboda');
+    await tester.scrollUntilVisible(read, 200);
+    await tester.pumpAndSettle();
+    await tester.tap(read);
+    expect(opened, [
+      Uri.parse(page),
+      Uri.parse('https://about.rferl.org/use-our-content'),
+      Uri.parse(page),
+    ]);
   });
 
   // #52: the article screen in the app's language; the article's own text is

@@ -48,6 +48,14 @@ function image(entry: string, baseUrl: string): string | null {
   return null;
 }
 
+/** An author as a name: RSS's `<author>` is "address (Name)" (RFE/RL), and a bare address names nobody. */
+function authorName(value: string | null): string | null {
+  if (!value) return null;
+  const named = value.match(/^\S+@\S+\s*\((.+)\)$/);
+  if (named) return named[1].trim() || null;
+  return /^\S+@\S+$/.test(value) ? null : value;
+}
+
 export function parseFeed(xml: string, baseUrl: string, config: SourceConfig, now = new Date()): FoundItem[] {
   const blocks = xml.match(/<(item|entry)\b[^>]*>[\s\S]*?<\/\1>/gi) ?? [];
   const spec = dateSpec(config);
@@ -76,7 +84,7 @@ export function parseFeed(xml: string, baseUrl: string, config: SourceConfig, no
     const category = plain(block, "category") ?? attribute(block.match(/<category\b[^>]*>/i)?.[0] ?? "", "term");
     const headline = titleField === "title" ? null : plain(block, "title");
     // RSS writes the author as dc:creator, Atom as <author><name>.
-    const author = plain(block, "dc:creator") ?? plain(block, "name") ?? plain(block, "author");
+    const author = authorName(plain(block, "dc:creator") ?? plain(block, "name") ?? plain(block, "author"));
 
     return [
       {

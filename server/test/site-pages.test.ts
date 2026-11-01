@@ -127,6 +127,47 @@ describe("every page in every language", () => {
   });
 });
 
+describe("a news story from an outlet (#230: RFE/RL, Global Voices)", () => {
+  const story = testId(11);
+  const original = "https://www.rferl.org/a/belarus-political-prisoners/33888300.html";
+
+  beforeEach(async () => {
+    await hideSeed();
+    await env.DB.prepare(
+      `INSERT OR IGNORE INTO sources (id, country, name, kind, url, config, language)
+       VALUES ('ww-rferl', 'WW', 'Radio Free Europe/Radio Liberty', 'rss', 'https://www.rferl.org/api/', '{"stories":true,"images":false}', 'en')`,
+    ).run();
+    await insertArticle({
+      id: story,
+      sourceId: "ww-rferl",
+      decisionType: "event",
+      originalLanguage: "en",
+      originalUrl: original,
+      publishedAt: "2026-10-31T10:00:00Z",
+      headline: "Belarus holds political prisoners in psychiatric hospitals",
+    });
+    await env.DB.prepare("UPDATE articles SET author = 'Jane Doe' WHERE id = ?").bind(story).run();
+  });
+
+  it("names its outlet where an event names Wikipedia, and gives the author, the original and the outlet's credit before the text", async () => {
+    const { body } = await site(`/en/ww/${story}`);
+    expect(body).toMatch(/<p class="ai meta">.*Summary by AI of Radio Free Europe\/Radio Liberty&#39;s text</);
+    expect(body).toContain(esc(aiNoticeText("en", "story", "Radio Free Europe/Radio Liberty")));
+    expect(body).toContain("<b>Read on Radio Free Europe/Radio Liberty</b>");
+    expect(body).not.toContain(text("en", "readOnWikipedia"));
+    const credit = `<p class="small"><a href="${original}" rel="noopener">Story by Jane Doe · Radio Free Europe/Radio Liberty</a> · <span lang="en">Copyright (c) 2026 RFE/RL, Inc. Used with the permission of Radio Free Europe/Radio Liberty.</span> · <a href="https://about.rferl.org/use-our-content" rel="license">Use Our Content</a></p>`;
+    expect(body).toContain(credit);
+    // Before the text, as the outlet asks, and not again at the end.
+    expect(body.indexOf(credit)).toBeLessThan(body.indexOf('<p class="lead">'));
+    expect(body).not.toContain("Source: Radio Free Europe/Radio Liberty");
+  });
+
+  it("leaves out the author where the outlet names none", async () => {
+    await env.DB.prepare("UPDATE articles SET author = NULL WHERE id = ?").bind(story).run();
+    expect((await site(`/en/ww/${story}`)).body).toContain(`<a href="${original}" rel="noopener">Radio Free Europe/Radio Liberty</a> · <span lang="en">Copyright`);
+  });
+});
+
 describe("an event from Wikipedia's current events (#230)", () => {
   const event = testId(10);
 

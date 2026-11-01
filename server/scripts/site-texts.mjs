@@ -41,7 +41,11 @@ export const KEYS = [
   "summaryByAiTranslated",
   "summaryByAiOfWikipedia",
   "summaryByAiOfWikipediaTranslated",
+  "summaryByAiOfSource",
+  "summaryByAiOfSourceTranslated",
   "readOnWikipedia",
+  "readOnSource",
+  "storyBy",
   "summaryComing",
   "officialSource",
   "readOfficialDecision",
@@ -230,7 +234,7 @@ export function credits(creditsCsv, sourcesCsv) {
 
 export function creditsModule(rows) {
   return `${HEADER("docs/source-credits.csv")}
-/** How the site credits a source (#88). Temporary home: once #84 merges, credits move into the sources' config and the API, so the app shows them too. */
+/** How a source is credited (#88): on the site's article page, and in the app through the API's \`credit\` (#230, src/api/credit.ts). A \`{year}\` in the wording is the article's year. */
 export interface Credit {
   /** The licence's name, shown as a link when there is a URL. */
   licence?: string;

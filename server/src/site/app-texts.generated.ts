@@ -86,6 +86,10 @@ export type AppKey =
   | "officialSource"
   | "readOfficialDecision"
   | "readOnWikipedia"
+  | "readOnSource"
+  | "summaryByAiOfSource"
+  | "summaryByAiOfSourceTranslated"
+  | "storyBy"
   | "readOfficialDecisionOn"
   | "dateAndTime"
   | "language"
@@ -230,6 +234,10 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "officialSource": "Official source",
     "readOfficialDecision": "Read the official decision",
     "readOnWikipedia": "Read on Wikipedia",
+    "readOnSource": "Read on {source}",
+    "summaryByAiOfSource": "Summary by AI of {source}'s text",
+    "summaryByAiOfSourceTranslated": "Summary by AI of {source}'s text · translated from {language}",
+    "storyBy": "Story by {author}",
     "readOfficialDecisionOn": "Read the official decision on {site}",
     "dateAndTime": "{date}, {time}",
     "language": "Language",
@@ -368,6 +376,10 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "officialSource": "Офіційне джерело",
     "readOfficialDecision": "Читати офіційне рішення",
     "readOnWikipedia": "Читати у Вікіпедії",
+    "readOnSource": "Читати на {source}",
+    "summaryByAiOfSource": "Стислий виклад від ШІ за текстом {source}",
+    "summaryByAiOfSourceTranslated": "Стислий виклад від ШІ за текстом {source} · переклад з {language}",
+    "storyBy": "Автор: {author}",
     "readOfficialDecisionOn": "Читати офіційне рішення на {site}",
     "dateAndTime": "{date} о {time}",
     "language": "Мова",
@@ -506,6 +518,10 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "officialSource": "Официальный источник",
     "readOfficialDecision": "Читать официальное решение",
     "readOnWikipedia": "Читать в Википедии",
+    "readOnSource": "Читать на {source}",
+    "summaryByAiOfSource": "Краткое изложение от ИИ по тексту {source}",
+    "summaryByAiOfSourceTranslated": "Краткое изложение от ИИ по тексту {source} · перевод с {language}",
+    "storyBy": "Автор: {author}",
     "readOfficialDecisionOn": "Читать официальное решение на {site}",
     "dateAndTime": "{date} в {time}",
     "language": "Язык",
@@ -644,6 +660,10 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "officialSource": "Fuente oficial",
     "readOfficialDecision": "Leer la decisión oficial",
     "readOnWikipedia": "Leer en Wikipedia",
+    "readOnSource": "Leer en {source}",
+    "summaryByAiOfSource": "Resumido por IA a partir de {source}",
+    "summaryByAiOfSourceTranslated": "Resumido por IA a partir de {source} · traducido del {language}",
+    "storyBy": "Por {author}",
     "readOfficialDecisionOn": "Leer la decisión oficial en {site}",
     "dateAndTime": "{date}, {time}",
     "language": "Idioma",
@@ -782,6 +802,10 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "officialSource": "Offizielle Quelle",
     "readOfficialDecision": "Offizielle Entscheidung lesen",
     "readOnWikipedia": "Auf Wikipedia lesen",
+    "readOnSource": "Auf {source} lesen",
+    "summaryByAiOfSource": "KI-Zusammenfassung aus {source}",
+    "summaryByAiOfSourceTranslated": "KI-Zusammenfassung aus {source} · aus dem {language} übersetzt",
+    "storyBy": "Von {author}",
     "readOfficialDecisionOn": "Offizielle Entscheidung auf {site} lesen",
     "dateAndTime": "{date} um {time}",
     "language": "Sprache",

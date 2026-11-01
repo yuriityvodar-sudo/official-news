@@ -4,14 +4,15 @@
 // the official link, then the credit line. The independence note is in every
 // page's header, so it is not repeated here (#88 review). An event (#230) is
 // shown as the app shows it: the country it concerns, "Event" in place of the
-// official-source seal, and Wikipedia's words for the label, notice and link.
+// official-source seal, and Wikipedia's words for the label, notice and link;
+// a news story (#230: Global Voices, RFE/RL) its outlet's, and its author in
+// the credit line.
 // Never the source's picture (imageUrl): a site makes public, permanent copies.
-import { CREDITS } from "../credits.generated";
 import type { ApiArticle } from "../data";
 import { fullDate, isoTime, parseTime, publishedDate } from "../dates";
 import { type Html, html, safeHttps, siteName } from "../html";
 import { ARROW, type Alternate, type Page, SEAL, SITE_NAME, SPARKLE } from "../layout";
-import { LANGUAGE_NAMES, SITE_LANGS, type SiteLang, aiLabel, aiNotice, countryName, decisionLabel, isEvent, placeCode, t, text } from "../texts";
+import { LANGUAGE_NAMES, SITE_LANGS, type SiteLang, aiLabel, aiNotice, countryName, decisionLabel, isEvent, isStory, placeCode, t, text } from "../texts";
 import { articlePath } from "../urls";
 import { articleJsonLd } from "../seo";
 
@@ -38,10 +39,27 @@ export function alternates(origin: string, shown: Partial<Record<SiteLang, ApiAr
 /**
  * "Source: White House · Public domain", "Source: European Commission ·
  * © European Union, 1995-2026 · CC BY 4.0". A wording that names its licence
- * (the OGL's statement) is itself the licence link, so the licence is not said twice.
+ * (the OGL's statement) is itself the licence link, so the licence is not said
+ * twice. A news story's credit comes before its text instead (storyCredit).
  */
 function credit(lang: SiteLang, article: ApiArticle): Html {
-  const row = CREDITS[article.source.id];
+  return html`<p class="small">${t(lang, "creditSource", { source: article.source.name })}${creditParts(article).map((part) => html` · ${part}`)}</p>`;
+}
+
+/**
+ * A news story's credit before its text (#230), as its outlet asks: the
+ * author and the outlet, linking the original, then the outlet's own words
+ * and licence: "Story by Jane Doe · Global Voices · CC BY 3.0".
+ */
+function storyCredit(lang: SiteLang, article: ApiArticle): Html {
+  const original = safeHttps(article.originalUrl);
+  const by = [...(article.author ? [text(lang, "storyBy", { author: article.author })] : []), article.source.name].join(" · ");
+  return html`<p class="small">${original ? html`<a href="${original}" rel="noopener">${by}</a>` : by}${creditParts(article).map((part) => html` · ${part}`)}</p>`;
+}
+
+/** The source's own wording and its licence (docs/source-credits.csv, through the API's `credit`). */
+function creditParts(article: ApiArticle): (Html | string)[] {
+  const row = article.credit;
   const licenceUrl = safeHttps(row?.licenceUrl);
   const link = (label: string, attrs: Html | string = "") =>
     licenceUrl ? html`<a href="${licenceUrl}" rel="license"${attrs}>${label}</a>` : label;
@@ -50,7 +68,7 @@ function credit(lang: SiteLang, article: ApiArticle): Html {
   const parts: (Html | string)[] = [];
   if (row?.wording) parts.push(namesLicence ? link(row.wording, wordingLang) : html`<span${wordingLang}>${row.wording}</span>`);
   if (row?.licence && !namesLicence) parts.push(link(row.licence));
-  return html`<p class="small">${t(lang, "creditSource", { source: article.source.name })}${parts.map((part) => html` · ${part}`)}</p>`;
+  return parts;
 }
 
 /** The article page in `lang`, which the API shows it in. */
@@ -60,8 +78,10 @@ export function articlePage(lang: SiteLang, origin: string, shown: Partial<Recor
   const headline = article.headline ?? article.originalTitle;
   const summary = article.summary?.trim() ? paragraphs(article.summary) : [];
   const event = isEvent(article);
+  // A news story's outlet, named where an event names Wikipedia.
+  const story = isStory(article) ? article.source.name : null;
   const type = decisionLabel(lang, article.decisionType);
-  const label = aiLabel(lang, article.originalLanguage, event);
+  const label = aiLabel(lang, article.originalLanguage, event, story);
   const place = placeCode(article);
   const published = parseTime(article.publishedAt);
   const added = parseTime(article.addedAt);
@@ -76,24 +96,25 @@ ${type ? html`<p class="kind">${type}</p>` : ""}
 <h1>${headline}</h1>
 ${aiText ? html`<p class="ai meta">${SPARKLE}<span>${label}</span></p>` : ""}
 ${published ? html`<p class="meta"><time datetime="${isoTime(published)}">${t(lang, "published", { date: publishedDate(lang, published, article.dateOnly) })}</time></p>` : ""}
+${story ? storyCredit(lang, article) : ""}
 ${lead ? html`<p class="lead">${lead}</p>` : ""}
 ${
   summary.length
     ? html`<div class="body">${summary.map((p) => html`<p>${p.split("\n").map((line, i) => (i ? html`<br>${line}` : line))}</p>`)}</div>`
     : html`<p class="notice">${t(lang, "summaryComing")}</p>`
 }
-${aiText ? html`<p class="notice">${aiNotice(lang, event ? "event" : "decisions")}</p>` : ""}
+${aiText ? html`<p class="notice">${aiNotice(lang, story ? "story" : event ? "event" : "decisions", story ?? "")}</p>` : ""}
 ${
   // An event's original title is its sentence, already summarized above (as the app).
   event ? "" : html`<p class="small">${t(lang, "originalTitle")}: <span${original ? html` lang="${original}"` : ""} dir="auto">${article.originalTitle}</span></p>`
 }
 ${
   official
-    ? html`<a class="official" href="${official}" rel="noopener"><span><b>${t(lang, event ? "readOnWikipedia" : "readOfficialDecision")}</b>
+    ? html`<a class="official" href="${official}" rel="noopener"><span><b>${story ? t(lang, "readOnSource", { source: story }) : t(lang, event ? "readOnWikipedia" : "readOfficialDecision")}</b>
 <span class="meta">${siteName(official)}</span></span>${ARROW}</a>`
     : ""
 }
-${credit(lang, article)}
+${story ? "" : credit(lang, article)}
 ${added ? html`<p class="small"><time datetime="${isoTime(added)}">${t(lang, "added", { date: fullDate(lang, added) })}</time></p>` : ""}
 </article>
 ${articleJsonLd(lang, origin, article)}`;
@@ -127,6 +148,7 @@ export function notInLanguagePage(lang: SiteLang, shown: Partial<Record<SiteLang
   });
   const aiText = languages.some((l) => shown[l]!.headline !== null);
   const event = isEvent(shown[languages[0]]!);
+  const story = isStory(shown[languages[0]]!) ? shown[languages[0]]!.source.name : null;
   const title = event ? "notInLangEvent" : "notInLang";
   return {
     lang,
@@ -136,7 +158,7 @@ export function notInLanguagePage(lang: SiteLang, shown: Partial<Record<SiteLang
     body: html`<div class="info"><h1 class="page-title">${t(lang, title)}</h1>
 <p>${t(lang, "readIn")}</p>
 <ul class="choose">${links}</ul>
-${aiText ? html`<p class="notice">${aiNotice(lang, event ? "event" : "decisions")}</p>` : ""}</div>`,
+${aiText ? html`<p class="notice">${aiNotice(lang, story ? "story" : event ? "event" : "decisions", story ?? "")}</p>` : ""}</div>`,
   };
 }
 

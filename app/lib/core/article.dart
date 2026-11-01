@@ -38,6 +38,8 @@ class Article {
     this.lang,
     this.countries = const [],
     this.media = const [],
+    this.author,
+    this.credit,
   });
 
   factory Article.fromJson(Map<String, dynamic> json) {
@@ -71,6 +73,10 @@ class Article {
           if (m is Map<String, dynamic> && MediaLink.isValid(m))
             MediaLink.fromJson(m),
       ],
+      author: json['author'] as String?,
+      credit: json['credit'] is Map<String, dynamic>
+          ? Credit.fromJson(json['credit'] as Map<String, dynamic>)
+          : null,
     );
   }
 
@@ -112,9 +118,25 @@ class Article {
   /// while there are none.
   final List<MediaLink> media;
 
-  /// An event from Wikipedia's current events, not an official decision
-  /// (#230): no official-source seal, and its link opens Wikipedia.
+  /// A news story's author (#230: Global Voices), whom its licence asks to
+  /// name; null for anything else.
+  final String? author;
+
+  /// What the source's licence asks to be shown with it (#230), as the site
+  /// shows it; null for a source with neither licence nor wording.
+  final Credit? credit;
+
+  /// An event, not an official decision (#230): from Wikipedia's current
+  /// events or a news outlet ([isStory]); no official-source seal.
   bool get isEvent => decisionType == 'event';
+
+  /// A news story (#230: Global Voices, RFE/RL): an event whose link is not
+  /// Wikipedia's, so its outlet is named where an event names Wikipedia.
+  bool get isStory {
+    if (!isEvent) return false;
+    final host = Uri.tryParse(originalUrl)?.host ?? '';
+    return host != 'wikipedia.org' && !host.endsWith('.wikipedia.org');
+  }
 
   /// The contract format, so the last feed can be saved on the phone and read back.
   Map<String, dynamic> toJson() => {
@@ -139,13 +161,44 @@ class Article {
     'lang': lang,
     'countries': countries,
     'media': [for (final m in media) m.toJson()],
+    'author': author,
+    'credit': credit?.toJson(),
+  };
+}
+
+/// What a source's licence asks to be shown with its articles (#230): Global
+/// Voices' CC BY 3.0, RFE/RL's "Used with the permission of…".
+class Credit {
+  const Credit({this.licence, this.licenceUrl, this.wording});
+
+  factory Credit.fromJson(Map<String, dynamic> json) => Credit(
+    licence: json['licence'] as String?,
+    licenceUrl: json['licenceUrl'] as String?,
+    wording: json['wording'] as String?,
+  );
+
+  /// The licence's name, a link when there is [licenceUrl].
+  final String? licence;
+  final String? licenceUrl;
+
+  /// The exact words the source asks for.
+  final String? wording;
+
+  Map<String, dynamic> toJson() => {
+    'licence': licence,
+    'licenceUrl': licenceUrl,
+    'wording': wording,
   };
 }
 
 /// One of the media's articles about a decision (#230 step 5): its headline,
 /// the outlet and the link, never its text.
 class MediaLink {
-  const MediaLink({required this.title, required this.outlet, required this.url});
+  const MediaLink({
+    required this.title,
+    required this.outlet,
+    required this.url,
+  });
 
   factory MediaLink.fromJson(Map<String, dynamic> json) => MediaLink(
     title: json['title'] as String,
@@ -164,7 +217,11 @@ class MediaLink {
   final String outlet;
   final String url;
 
-  Map<String, dynamic> toJson() => {'title': title, 'outlet': outlet, 'url': url};
+  Map<String, dynamic> toJson() => {
+    'title': title,
+    'outlet': outlet,
+    'url': url,
+  };
 }
 
 class ArticlesPage {
