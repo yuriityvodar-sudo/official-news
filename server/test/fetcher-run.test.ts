@@ -1,7 +1,9 @@
-import { env } from "cloudflare:workers";
-import { describe, expect, it } from "vitest";
+import { env, exports } from "cloudflare:workers";
+import { describe, expect, it, vi } from "vitest";
 
-import { LIMITS, USER_AGENT, runFetcher } from "../src/fetcher";
+import { LIMITS, USER_AGENT, type SourceCheck, checkOneSource, runFetcher } from "../src/fetcher";
+import type { SourceRow } from "../src/fetcher/types";
+import { d1Rows } from "./helpers";
 
 const NOW = new Date("2026-10-14T15:00:00Z");
 
@@ -22,14 +24,21 @@ function fakeFetch(site: Site) {
   return { fetch, requests };
 }
 
+/** A source checked every minute, as these tests read it minute by minute, unless its config says otherwise. */
 async function addSource(id: string, url: string, kind: "rss" | "page" | "api", config: object | null = null, lastCheckedAt: string | null = null) {
   await env.DB.prepare(
     `INSERT INTO sources (id, country, name, kind, url, config, language, verified_by, verified_at, status, last_checked_at)
      VALUES (?, 'XX', ?, ?, ?, ?, 'en', 'domain', '2026-10-14', 'active', ?)`,
   )
-    .bind(id, id, kind, url, config ? JSON.stringify(config) : null, lastCheckedAt)
+    .bind(id, id, kind, url, JSON.stringify({ everyMinutes: 1, ...config }), lastCheckedAt)
     .run();
 }
+
+/** A run as in production: each source's check a call of its own (SourceChecker). */
+const inCalls = (options: { fetch: typeof globalThis.fetch; now: Date }) => ({
+  ...options,
+  call: (source: SourceRow) => checkOneSource(env, source, options),
+});
 
 const articlesOf = async (sourceId: string) =>
   (
@@ -89,20 +98,6 @@ describe("runFetcher", () => {
     expect(requests).toEqual([]);
   });
 
-  it("takes the source checked longest ago, one per run", async () => {
-    await addSource("xx-a", "https://a.test/feed.xml", "rss", null, "2026-10-14T14:00:00Z");
-    await addSource("xx-b", "https://b.test/feed.xml", "rss", null, "2026-10-14T13:00:00Z");
-    await addSource("xx-c", "https://c.test/feed.xml", "rss", null, null);
-    const { fetch } = fakeFetch({});
-    const order: string[] = [];
-    for (let minute = 0; minute < 3; minute++) {
-      const checks = await runFetcher(env, { fetch, now: new Date(NOW.getTime() + minute * 60_000) });
-      order.push(...checks.map((c) => c.sourceId));
-    }
-    expect(order).toEqual(["xx-c", "xx-b", "xx-a"]);
-    expect(LIMITS.sourcesPerRun).toBe(1);
-  });
-
   it("respects robots.txt and stays away when it cannot be read", async () => {
     await addSource("xx-robots", "https://norobots.test/private/feed.xml", "rss");
     await addSource("xx-down", "https://down.test/feed.xml", "rss");
@@ -110,10 +105,7 @@ describe("runFetcher", () => {
       "https://norobots.test/robots.txt": { body: "User-agent: *\nDisallow: /private/", type: "text/plain" },
       "https://down.test/robots.txt": { status: 503, body: "" },
     });
-    const checks = [
-      ...(await runFetcher(env, { fetch, now: NOW })),
-      ...(await runFetcher(env, { fetch, now: new Date(NOW.getTime() + 60_000) })),
-    ];
+    const checks = await runFetcher(env, inCalls({ fetch, now: NOW }));
     expect(checks.map((c) => [c.sourceId, c.ok, c.error]).sort()).toEqual([
       ["xx-down", false, "robots.txt answered HTTP 503"],
       ["xx-robots", false, "robots.txt does not allow this path"],
@@ -346,24 +338,6 @@ describe("runFetcher", () => {
     });
     await runFetcher(env, { fetch, now: NOW });
     expect((await articlesOf("xx-kremlin")).map((a) => a.url)).toEqual(["https://kremlin.test/acts/80977"]);
-  });
-
-  it("claims its sources before reading them, so a cut-off run cannot stall the line", async () => {
-    await addSource("xx-claim", "https://claim.test/feed.xml", "rss", null, "2026-10-01T00:00:00Z");
-    let seenWhileFetching: unknown = null;
-    const { fetch } = fakeFetch({
-      "https://claim.test/robots.txt": () => new Response("", { status: 404 }),
-      "https://claim.test/feed.xml": () => {
-        throw new Error("the run is killed here");
-      },
-    });
-    const watching = (async (input: RequestInfo | URL, init?: RequestInit) => {
-      seenWhileFetching ??= (await env.DB.prepare("SELECT last_checked_at FROM sources WHERE id = 'xx-claim'").first())?.last_checked_at;
-      return fetch(input, init);
-    }) as typeof globalThis.fetch;
-    const [check] = await runFetcher(env, { fetch: watching, now: NOW });
-    expect(seenWhileFetching).toBe("2026-10-14T15:00:00Z");
-    expect(check).toMatchObject({ ok: false, error: "the run is killed here" });
   });
 
   it("keeps only links on the source's own site, or hosts the config allows", async () => {
@@ -869,5 +843,231 @@ describe("runFetcher: whole texts (#71)", () => {
     const [second] = await runFetcher(env, { fetch, now: new Date("2026-10-14T15:20:00Z") });
     expect(second).toMatchObject({ saved: 1, waiting: 0 });
     expect((await articlesOf("xx-ar")).at(-1)?.text).toContain("Resolución 1447/2026");
+  });
+});
+
+describe("runFetcher: every source every minute, no line (#230, Roman, 1 Nov)", () => {
+  const at = (minutes: number) => new Date(NOW.getTime() + minutes * 60_000);
+  const LIST = "https://quick.test/feed.xml";
+  const ROBOTS = "https://quick.test/robots.txt";
+  const news = (n: number) => ({ title: `Decision ${n}`, link: `https://quick.test/news/${n}`, date: "Wed, 14 Oct 2026 09:00:00 GMT" });
+  const row = (id: string) =>
+    env.DB.prepare("SELECT last_checked_at, list_hash, failed_checks, last_error FROM sources WHERE id = ?")
+      .bind(id)
+      .first<{ last_checked_at: string | null; list_hash: string | null; failed_checks: number; last_error: string | null }>();
+  const quickSite = (): Site => ({
+    [ROBOTS]: { body: "User-agent: *\nDisallow: /private/", type: "text/plain" },
+    [LIST]: { body: rss([news(1)]), type: "application/rss+xml" },
+  });
+
+  it("checks every source in the same run, each in its own call; a stopped call stops only its own source", async () => {
+    for (const id of ["xx-a", "xx-b", "xx-c"]) await addSource(id, `https://${id}.test/feed.xml`, "rss");
+    const { fetch } = fakeFetch({});
+    const called: string[] = [];
+    const call = async (source: SourceRow) => {
+      called.push(source.id);
+      if (source.id === "xx-b") throw new Error("Worker exceeded CPU time limit.");
+      return checkOneSource(env, source, { fetch, now: NOW });
+    };
+    const checks = await runFetcher(env, { now: NOW, call });
+    expect(called.sort()).toEqual(["xx-a", "xx-b", "xx-c"]);
+    expect(checks.map((c) => c.sourceId).sort()).toEqual(["xx-a", "xx-c"]);
+    // A limit is not the source's fault: nothing is counted against it, and the next minute asks it again.
+    expect(await row("xx-b")).toMatchObject({ failed_checks: 0, last_checked_at: null });
+    expect((await runFetcher(env, { now: at(1), call })).map((c) => c.sourceId)).toEqual([]);
+    expect(called.filter((id) => id === "xx-b")).toHaveLength(2);
+  });
+
+  it("without calls of their own checks one source a run, the one read in full longest ago, and warns", async () => {
+    await addSource("xx-a", "https://xx-a.test/feed.xml", "rss", null, "2026-10-14T14:10:00Z");
+    await addSource("xx-b", "https://xx-b.test/feed.xml", "rss", null, "2026-10-14T13:50:00Z");
+    await addSource("xx-c", "https://xx-c.test/feed.xml", "rss", null, "2026-10-14T14:30:00Z");
+    const { fetch } = fakeFetch({});
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    // Every check here would share the run's 10 ms of CPU: a slower fetcher, not a stopped one.
+    const order = [];
+    for (const minute of [0, 1, 2]) order.push(...(await runFetcher(env, { fetch, now: at(minute) })).map((c) => c.sourceId));
+    expect(order).toEqual(["xx-b", "xx-a", "xx-c"]);
+    expect(JSON.parse(String(warn.mock.calls[0][0]))).toMatchObject({ message: "fetcher without SourceChecker: one source a run", sourceId: "xx-b", waiting: 2 });
+    // By the third run the other two failed and wait their 10 minutes: nothing waits for xx-c's turn.
+    expect(warn.mock.calls.map(([line]) => JSON.parse(String(line)).sourceId)).toEqual(["xx-b", "xx-a"]);
+  });
+
+  it("checks a list at its turn, every config.everyMinutes (LIMITS.everyMinutes by default), and in full every hour", async () => {
+    const ids = ["xx-fast", "xx-a", "xx-b", "xx-c", "xx-d", "xx-e"];
+    const site: Site = {};
+    for (const id of ids) {
+      site[`https://${id}.test/robots.txt`] = { status: 404, body: "" };
+      site[`https://${id}.test/feed.xml`] = { body: rss([{ ...news(1), link: `https://${id}.test/news/1` }]), type: "application/rss+xml" };
+      // everyMinutes left out: LIMITS.everyMinutes.
+      await addSource(id, `https://${id}.test/feed.xml`, "rss", { itemPages: false, everyMinutes: id === "xx-fast" ? 1 : undefined });
+    }
+    const { fetch } = fakeFetch(site);
+    // Never read: all at once, in full.
+    expect((await runFetcher(env, inCalls({ fetch, now: NOW }))).map((c) => c.sourceId).sort()).toEqual([...ids].sort());
+
+    const checked = new Map<string, number[]>(ids.map((id) => [id, []]));
+    const minutes = 2 * LIMITS.everyMinutes;
+    for (let minute = 1; minute <= minutes; minute++) {
+      for (const check of await runFetcher(env, inCalls({ fetch, now: at(minute) }))) {
+        expect(check).toMatchObject({ ok: true, full: false, unchanged: true });
+        checked.get(check.sourceId)?.push(minute);
+      }
+    }
+    expect(checked.get("xx-fast")).toHaveLength(minutes);
+    for (const id of ids.slice(1)) {
+      const turns = checked.get(id) ?? [];
+      expect(turns).toHaveLength(2);
+      expect(turns[1] - turns[0]).toBe(LIMITS.everyMinutes);
+    }
+    // Spread over the minutes, not all at the same one.
+    expect(new Set(ids.slice(1).map((id) => checked.get(id)?.[0])).size).toBeGreaterThan(1);
+
+    // An hour on, each is read in full whatever its turn.
+    const full = await runFetcher(env, inCalls({ fetch, now: at(LIMITS.fullCheckMinutes) }));
+    expect(full.map((c) => c.sourceId).sort()).toEqual([...ids].sort());
+    expect(full.every((c) => c.full)).toBe(true);
+  });
+
+  it("reads an unchanged list with one request, parses nothing and writes nothing", async () => {
+    await addSource("xx-quick", LIST, "rss", { itemPages: false });
+    const { fetch, requests } = fakeFetch(quickSite());
+    expect(await runFetcher(env, { fetch, now: NOW })).toMatchObject([{ ok: true, full: true, unchanged: false, saved: 1 }]);
+
+    requests.length = 0;
+    let checks: SourceCheck[] = [];
+    const rows = await d1Rows(async () => {
+      checks = await runFetcher(env, { fetch, now: at(1) });
+    });
+    expect(checks).toMatchObject([{ ok: true, full: false, unchanged: true, httpStatus: 200, found: 0, saved: 0 }]);
+    expect(requests.map((r) => r.url)).toEqual([LIST]);
+    expect(rows.written).toBe(0);
+    // Only the run's one read of the sources table.
+    expect(rows.read).toBeLessThan(25);
+    expect(await row("xx-quick")).toMatchObject({ last_checked_at: "2026-10-14T15:00:00Z" });
+  });
+
+  it("saves a new item the minute after it appears", async () => {
+    await addSource("xx-quick", LIST, "rss", { itemPages: false });
+    const site = quickSite();
+    const { fetch, requests } = fakeFetch(site);
+    await runFetcher(env, { fetch, now: NOW });
+    const before = (await row("xx-quick"))?.list_hash;
+
+    site[LIST] = { body: rss([news(2), news(1)]), type: "application/rss+xml" };
+    requests.length = 0;
+    expect(await runFetcher(env, { fetch, now: at(1) })).toMatchObject([{ ok: true, full: false, unchanged: false, saved: 1 }]);
+    expect(requests.map((r) => r.url)).toEqual([LIST]);
+    expect((await articlesOf("xx-quick")).map((a) => a.original_title).sort()).toEqual(["Decision 1", "Decision 2"]);
+    // The new list is remembered, and the time of the last full check stays.
+    const after = await row("xx-quick");
+    expect(after?.list_hash).not.toBe(before);
+    expect(after?.last_checked_at).toBe("2026-10-14T15:00:00Z");
+    expect(await runFetcher(env, { fetch, now: at(2) })).toMatchObject([{ unchanged: true }]);
+  });
+
+  it("reads each source in full every hour: robots.txt again, the list parsed even when unchanged", async () => {
+    await addSource("xx-quick", LIST, "rss", { itemPages: false });
+    const { fetch, requests } = fakeFetch(quickSite());
+    await runFetcher(env, { fetch, now: NOW });
+
+    requests.length = 0;
+    expect(await runFetcher(env, { fetch, now: at(LIMITS.fullCheckMinutes - 1) })).toMatchObject([{ full: false, unchanged: true }]);
+    expect(requests.map((r) => r.url)).toEqual([LIST]);
+
+    requests.length = 0;
+    expect(await runFetcher(env, { fetch, now: at(LIMITS.fullCheckMinutes) })).toMatchObject([{ ok: true, full: true, unchanged: false, found: 1, saved: 0 }]);
+    expect(requests.map((r) => r.url)).toEqual([ROBOTS, LIST]);
+    expect(await row("xx-quick")).toMatchObject({ last_checked_at: "2026-10-14T16:00:00Z" });
+  });
+
+  it("stops reading a list at the next full check once robots.txt forbids it, and asks a failed source again after 10 minutes", async () => {
+    await addSource("xx-quick", LIST, "rss", { itemPages: false });
+    const site = quickSite();
+    const { fetch, requests } = fakeFetch(site);
+    await runFetcher(env, { fetch, now: NOW });
+
+    site[ROBOTS] = { body: "User-agent: *\nDisallow: /", type: "text/plain" };
+    requests.length = 0;
+    expect(await runFetcher(env, { fetch, now: at(60) })).toMatchObject([{ ok: false, full: true, error: "robots.txt does not allow this path" }]);
+    expect(requests.map((r) => r.url)).toEqual([ROBOTS]);
+    expect(await row("xx-quick")).toMatchObject({ failed_checks: 1, last_checked_at: "2026-10-14T16:00:00Z" });
+
+    // Not asked again for 10 minutes; then in full, so never without reading robots.txt.
+    requests.length = 0;
+    expect(await runFetcher(env, { fetch, now: at(60 + LIMITS.failedCheckMinutes - 1) })).toEqual([]);
+    expect(requests).toEqual([]);
+    expect(await runFetcher(env, { fetch, now: at(60 + LIMITS.failedCheckMinutes) })).toMatchObject([{ ok: false, full: true }]);
+    expect(requests.map((r) => r.url)).toEqual([ROBOTS]);
+
+    // Allowed again: back to every minute.
+    site[ROBOTS] = { status: 404, body: "" };
+    expect(await runFetcher(env, { fetch, now: at(60 + 2 * LIMITS.failedCheckMinutes) })).toMatchObject([{ ok: true, full: true }]);
+    expect(await row("xx-quick")).toMatchObject({ failed_checks: 0, last_error: null });
+    expect(await runFetcher(env, { fetch, now: at(60 + 2 * LIMITS.failedCheckMinutes + 1) })).toMatchObject([{ ok: true, full: false, unchanged: true }]);
+  });
+
+  it("counts a list that fails between full checks at once", async () => {
+    await addSource("xx-quick", LIST, "rss", { itemPages: false });
+    const site = quickSite();
+    const { fetch } = fakeFetch(site);
+    await runFetcher(env, { fetch, now: NOW });
+    site[LIST] = { status: 500, body: "" };
+    expect(await runFetcher(env, { fetch, now: at(1) })).toMatchObject([{ ok: false, full: false, httpStatus: 500, error: "HTTP 500" }]);
+    expect(await row("xx-quick")).toMatchObject({ failed_checks: 1, last_error: "HTTP 500", last_checked_at: "2026-10-14T15:01:00Z" });
+  });
+
+  it("does not count what config.listNoise takes out as a change; a list that differs at every read parses each time and writes nothing", async () => {
+    await addSource("xx-noisy", "https://noisy.test/feed.xml", "rss", { itemPages: false });
+    await addSource("xx-clean", "https://clean.test/feed.xml", "rss", { itemPages: false, listNoise: "<lastBuildDate>[^<]*</lastBuildDate>" });
+    let read = 0;
+    const list = (host: string) => () =>
+      new Response(rss([{ ...news(1), link: `https://${host}/news/1` }]).replace("<channel>", `<channel><lastBuildDate>${read++}</lastBuildDate>`), {
+        headers: { "content-type": "application/rss+xml" },
+      });
+    const { fetch } = fakeFetch({
+      "https://noisy.test/robots.txt": { status: 404, body: "" },
+      "https://clean.test/robots.txt": { status: 404, body: "" },
+      "https://noisy.test/feed.xml": list("noisy.test"),
+      "https://clean.test/feed.xml": list("clean.test"),
+    });
+    const link = (id: string, checks: SourceCheck[]) => checks.find((c) => c.sourceId === id);
+    const first = await runFetcher(env, inCalls({ fetch, now: NOW }));
+    expect(first).toHaveLength(2);
+
+    let checks: SourceCheck[] = [];
+    const rows = await d1Rows(async () => {
+      checks = await runFetcher(env, inCalls({ fetch, now: at(1) }));
+    });
+    expect(link("xx-clean", checks)).toMatchObject({ unchanged: true });
+    expect(link("xx-noisy", checks)).toMatchObject({ ok: true, unchanged: false, found: 1, saved: 0 });
+    expect(rows.written).toBe(0);
+    expect((await articlesOf("xx-clean"))[0].original_title).toBe("Decision 1");
+  });
+
+  it("reads Wikipedia's unchanged pages once each, and nothing else", async () => {
+    await addSource("xx-events", "https://en.wikipedia.org/wiki/Portal:Current_events", "api", { currentEvents: "en", itemPages: false });
+    const raw = (n: number) => `https://en.wikipedia.org/wiki/Portal:Current_events/2026_October_${n}?action=raw`;
+    const page = "*Disasters and accidents\n** An earthquake of magnitude 6.1 strikes Eastland. ([https://example.com/1 Example Wire])\n";
+    const site: Site = { "https://en.wikipedia.org/robots.txt": { body: "", type: "text/plain" }, [raw(14)]: { body: page }, [raw(13)]: { body: "" } };
+    const { fetch, requests } = fakeFetch(site);
+    await runFetcher(env, { fetch, now: NOW });
+
+    requests.length = 0;
+    expect(await runFetcher(env, { fetch, now: at(1) })).toMatchObject([{ ok: true, full: false, unchanged: true }]);
+    expect(requests.every((r) => r.url.endsWith("?action=raw"))).toBe(true);
+    expect(requests.length).toBeGreaterThan(0);
+
+    site[raw(14)] = { body: `${page}** Parliament approves the budget. ([https://example.com/2 Example Wire])\n` };
+    expect(await runFetcher(env, { fetch, now: at(2) })).toMatchObject([{ ok: true, full: false, unchanged: false }]);
+  });
+
+  it("runs a check as a call of its own through the SourceChecker entrypoint", async () => {
+    await addSource("xx-call", "https://nowhere.invalid/feed.xml", "rss");
+    const source = await env.DB.prepare("SELECT * FROM sources WHERE id = 'xx-call'").first<SourceRow>();
+    const checker = (exports as unknown as { SourceChecker: { check(source: SourceRow): Promise<SourceCheck> } }).SourceChecker;
+    expect(await checker.check(source as SourceRow)).toMatchObject({ sourceId: "xx-call", ok: false, full: true });
+    // The call writes the source's status itself.
+    expect(await row("xx-call")).toMatchObject({ failed_checks: 1 });
   });
 });

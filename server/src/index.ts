@@ -1,9 +1,10 @@
+import { WorkerEntrypoint } from "cloudflare:workers";
 import { handleApi } from "./api";
 import { snapshotStep } from "./api/snapshot";
 import type { Env } from "./env";
-import { runFetcher } from "./fetcher";
+import { type SourceCheck, checkOneSource, runFetcher } from "./fetcher";
+import type { SourceRow } from "./fetcher/types";
 import { runCleanup } from "./health/cleanup";
-import { recordChecks } from "./health/status";
 import { popularityStep } from "./popularity";
 import { runPush } from "./push";
 import { runSummarizer } from "./summarizer";
@@ -59,12 +60,25 @@ async function pushStep(env: Env, unlessTranslatorRuns = false): Promise<void> {
   }
 }
 
+/**
+ * One source's check as a call of its own (#230, 1 Nov): Cloudflare counts 10 ms
+ * of CPU and 50 outside requests per call, so sources never share them, and a
+ * call stopped by a limit stops nothing else. Measured on a test Worker
+ * (docs/decisions/2026-11-01-no-fetcher-line.md). Not reachable from the
+ * internet: only the default export answers requests.
+ */
+export class SourceChecker extends WorkerEntrypoint<Env> {
+  check(source: SourceRow): Promise<SourceCheck> {
+    return checkOneSource(this.env, source);
+  }
+}
+
 export default {
   fetch(request: Request, env: Env): Promise<Response> {
     return handleApi(request, env);
   },
 
-  async scheduled(controller: ScheduledController, env: Env): Promise<void> {
+  async scheduled(controller: ScheduledController, env: Env, ctx?: ExecutionContext): Promise<void> {
     const step = stepFor(controller.cron);
     if (step === "summarizer") {
       try {
@@ -91,8 +105,8 @@ export default {
     } else if (step === "cleanup") {
       await runCleanup(env);
     } else {
-      // Every check gives its source a status straight away (item 8).
-      await recordChecks(env, await runFetcher(env));
+      const checker = (ctx?.exports as unknown as { SourceChecker?: Pick<SourceChecker, "check"> } | undefined)?.SourceChecker;
+      await runFetcher(env, checker ? { call: (source) => checker.check(source) } : {});
     }
   },
 } satisfies ExportedHandler<Env>;

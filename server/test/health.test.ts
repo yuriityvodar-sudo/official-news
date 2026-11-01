@@ -21,19 +21,19 @@ const source = (id: string) =>
     .bind(id)
     .first<{ status: string; failed_checks: number; last_ok_at: string | null; last_error: string | null }>();
 
-const ok = (sourceId: string): SourceCheck => ({ sourceId, ok: true, httpStatus: 200, found: 3, saved: 0, waiting: 0, undated: 0, offSite: 0, reread: 0, error: null });
+const ok = (sourceId: string): SourceCheck => ({ sourceId, ok: true, httpStatus: 200, found: 3, saved: 0, waiting: 0, undated: 0, offSite: 0, reread: 0, error: null, full: true, unchanged: false });
 const failed = (sourceId: string, httpStatus: number | null, error: string): SourceCheck => ({ ...ok(sourceId), ok: false, httpStatus, error });
 
 describe("source status after each check", () => {
-  it("is broken after 3 failed checks in a row, and active again after one that works", async () => {
+  it("is broken after 6 failed checks in a row, about an hour, and active again after one that works", async () => {
     await addSource("xx-a");
     for (let i = 1; i < HEALTH.failuresToBreak; i++) {
       await recordChecks(env, [failed("xx-a", null, "The operation was aborted due to timeout")], NOW);
-      // One or two failures keep the status: a single timeout is not a broken source.
+      // The failures before that keep the status: a single timeout is not a broken source.
       expect(await source("xx-a")).toMatchObject({ status: "active", failed_checks: i, last_error: "The operation was aborted due to timeout" });
     }
     await recordChecks(env, [failed("xx-a", 500, "HTTP 500")], NOW);
-    expect(await source("xx-a")).toMatchObject({ status: "broken", failed_checks: 3, last_error: "HTTP 500" });
+    expect(await source("xx-a")).toMatchObject({ status: "broken", failed_checks: HEALTH.failuresToBreak, last_error: "HTTP 500" });
 
     await recordChecks(env, [ok("xx-a")], NOW);
     expect(await source("xx-a")).toMatchObject({ status: "active", failed_checks: 0, last_ok_at: "2026-10-15T12:00:00Z", last_error: null });
@@ -67,10 +67,9 @@ describe("source status after each check", () => {
     const down = (async () => {
       throw new Error("The operation was aborted due to timeout");
     }) as typeof globalThis.fetch;
-    // The seed sources are never fetched, so each run takes xx-down.
-    for (let minute = 0; minute < HEALTH.failuresToBreak; minute++) {
-      const now = new Date(NOW.getTime() + minute * 60_000);
-      await recordChecks(env, await runFetcher(env, { fetch: down, now }), now);
+    // A source that failed is asked again after 10 minutes: broken after about an hour.
+    for (let minutes = 0; minutes < 10 * HEALTH.failuresToBreak; minutes += 10) {
+      await runFetcher(env, { fetch: down, now: new Date(NOW.getTime() + minutes * 60_000) });
     }
     expect((await source("xx-down"))?.status).toBe("broken");
     const health = (await (await exports.default.fetch("https://api.test/health")).json()) as { sources: Record<string, number> };

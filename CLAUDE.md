@@ -58,7 +58,7 @@ After the MVP, towards the App Store release (call, 16 Oct; each is an issue ass
 - The shared definitions in `docs/plan.md` (repo layout, article format, API, database). From the Kickoff they live in `docs/contract.md`.
 - One AI call per article for its summary, run once on the server and stored (an unusable answer is asked again, at most 3 tries in all); translations add one call per language (#46).
 - Paid AI only for the chat: the AI chat by subscription (#146) is the one exception to the line above, one call per subscriber's question, paid for by the subscription. Summaries and translations stay on free tiers.
-- The fetcher works in small runs (every minute, 1 source) to stay within Cloudflare's free limits.
+- The fetcher checks each source in a call of its own, at the source's own interval, as feed readers do: every minute for the sources that publish as things happen, every 5 minutes for the rest. That stays within Cloudflare's free limits and spares the sites: a call has its own 10 ms of CPU and 50 outside requests, and a list that has not changed costs no parsing and no database writes (#230, Roman, 1 Nov; replaces "every minute, 1 source").
 - Never bypass CAPTCHAs or bot checks on source websites; respect `robots.txt`.
 
 ## Secrets (the repo is public)
