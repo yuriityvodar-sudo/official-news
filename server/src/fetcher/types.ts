@@ -30,6 +30,11 @@ export interface Headline {
   publishedAt: string;
 }
 
+/** A headline with the outlet that published it (GET /headlines, the stories). */
+export interface OutletHeadline extends Headline {
+  outlet: { id: string; name: string; site: string };
+}
+
 /** An outlet's stored headlines; anything that is not a list of them reads as none. */
 export function parseHeadlines(json: string | null | undefined): Headline[] {
   let parsed: unknown;

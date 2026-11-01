@@ -2,6 +2,7 @@ import { receiveNotification } from "../appstore";
 import { answerChat, chatStatus, creditChatPack } from "../chat";
 import type { Env } from "../env";
 import { REAL_SOURCE, health } from "../health";
+import { countryStories } from "../stories";
 import { postSupportMessage, supportThread } from "../support";
 import type { Topic } from "../summarizer/schema";
 import { LANGS, type Lang, SHOWN, isLang, queueStatus, releaseStatus } from "../translator";
@@ -958,6 +959,13 @@ async function route(request: Request, env: Env): Promise<Response> {
     const country = url.searchParams.get("country") ?? "";
     if (!/^[A-Z]{2}$/.test(country)) return badRequest("country must be a 2-letter code in capitals, such as CZ, EU or WW");
     return json({ country, items: await countryHeadlines(env, country) }, 200, LIST_CACHE);
+  }
+
+  // A country's stories (#230, step 2): its outlets' headlines grouped, the weightiest now first, from one row.
+  if (url.pathname === "/stories") {
+    const country = url.searchParams.get("country") ?? "";
+    if (!/^[A-Z]{2}$/.test(country)) return badRequest("country must be a 2-letter code in capitals, such as CZ, EU or WW");
+    return json({ country, ...(await countryStories(env, country)) }, 200, LIST_CACHE);
   }
 
   const match = url.pathname.match(/^\/articles\/([^/]+)$/);
