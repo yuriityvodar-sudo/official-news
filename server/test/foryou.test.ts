@@ -36,6 +36,18 @@ describe("rankForYou", () => {
     expect(rankForYou(more, 3, NOW).map((r) => r.id)).toEqual(["world-1", "world-2", "own-1", "world-3", "world-4", "own-2", "world-5", "world-6", "own-3"]);
   });
 
+  it("counts an article known only by its day from that day's end, so today's ranks with this evening's (Yurii's review of #269)", () => {
+    const evening = Date.parse("2026-10-30T20:00:00Z");
+    const dated = { id: "gazette", importance: 3, published_at: "2026-10-30T12:00:00Z", date_only: 1, concern: 2, relevance: 2, popularity: 0 };
+    const timed = { id: "decree", importance: 3, published_at: "2026-10-30T19:00:00Z", date_only: 0, concern: 2, relevance: 2, popularity: 0 };
+    // The gazette's day ends at midnight: no age yet. The decree is an hour old.
+    expect(rankForYou([timed, dated], 20, evening).map((r) => r.id)).toEqual(["gazette", "decree"]);
+    // The next evening both are a day older: the gazette 20 hours from its day's end, the decree 25.
+    const next = Date.parse("2026-10-31T20:00:00Z");
+    expect(rankForYou([timed, dated], 20, next).map((r) => r.id)).toEqual(["gazette", "decree"]);
+    expect(rankForYou([{ ...dated, importance: 2 }, timed], 20, next).map((r) => r.id)).toEqual(["decree", "gazette"]);
+  });
+
   it("keeps the EU for its members and for Ukraine among a reader's neighbours and groups", () => {
     expect(nearCountries("CZ")).toEqual(["AT", "DE", "PL", "SK", "EU"]);
     expect(nearCountries("UA")).toContain("EU");

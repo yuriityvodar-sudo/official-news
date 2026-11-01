@@ -229,16 +229,16 @@ describe("the top stories from a snapshot", () => {
     id, country, countries: [country], source: { name: country }, headline: id, originalTitle: id, shortSummary: null, decisionType: null,
     topics: ["economy"], publishedAt: hoursBefore(1), dateOnly: false, feedSeq: 1, addedAt: null,
   });
-  // Scores now: a 4.98, d 4.17 (a 5 from 40 hours ago), b 3.98, c 3.96; e is older than 72 hours.
+  // Scores now, at 2 points a day: a 4.92, b 3.92, c 3.83, d 1.67 (a 5 from 40 hours ago); e is older than 72 hours.
   const top = [candidate("c", "US", 4, 2), candidate("b", "DE", 4, 1), candidate("a", "DE", 5, 1), candidate("d", "FR", 5, 40), candidate("e", "GB", 5, 73)];
   const snapshot = (shown: string[]): Snapshot => ({ builtAt: hoursBefore(0), where: { groups: [], countries: [] }, top, articles: shown.map((id) => article(id, top.find((c) => c.id === id)!.country)) });
   const topIds = (s: Snapshot, filter: ListFilter) => snapshotTop(s, filter, now).map((a) => a.id);
 
   it("picks as topQuery does: best score first, one a source country, 3 in all, within 72 hours as of the request", () => {
-    expect(topIds(snapshot(["a", "b", "c", "d", "e"]), { place: null, topic: null })).toEqual(["a", "d", "c"]);
+    expect(topIds(snapshot(["a", "b", "c", "d", "e"]), { place: null, topic: null })).toEqual(["a", "c", "d"]);
     // Where is one country: up to 3 of its own.
     expect(topIds(snapshot(["a", "b", "c", "d", "e"]), { place: { country: "DE" }, topic: null })).toEqual(["a", "b"]);
-    expect(topIds(snapshot(["a", "b", "c", "d", "e"]), { place: { group: "nato" }, topic: null })).toEqual(["a", "d", "c"]);
+    expect(topIds(snapshot(["a", "b", "c", "d", "e"]), { place: { group: "nato" }, topic: null })).toEqual(["a", "c", "d"]);
     expect(topIds(snapshot(["a", "b", "c", "d", "e"]), { place: { group: "nato" }, topic: "health" })).toEqual([]);
     // Older than 72 hours by the time of the request: out, however it scored when the row was built.
     expect(topIds(snapshot(["e"]), { place: { country: "GB" }, topic: null })).toEqual([]);

@@ -1,7 +1,7 @@
 // For you's order (#230 step 5, docs/plan.md "Sources and relevance by
 // country"): for a reader in country C, the highest score first, where the
 // score is importance (1 to 5) + relevance to C + popularity in C (0 to 2,
-// popularity/) − half a point a day of age. Relevance is 2 when the item
+// popularity/) − AGE_PER_DAY points a day of age. Relevance is 2 when the item
 // concerns C, 1 when it concerns C's neighbours or groups (the EU for its
 // members and for Ukraine), and 1 for a global item. From the rest of the
 // world at most 2 items a page (forYouCondition picks them, importance 3 or
@@ -111,13 +111,40 @@ export interface Ranked {
   id: string;
   importance: number | null;
   published_at: string;
+  /** 1: known only by its day (ageFrom). */
+  date_only?: number;
   concern: number;
   relevance: number;
   popularity: number;
 }
 
-/** Half a point a day since publication, as the top stories (TOP_SCORE). */
-export const score = (row: Ranked, now: number) => (row.importance ?? 0) + row.relevance + row.popularity - (0.5 * (now - Date.parse(row.published_at))) / 86_400_000;
+/**
+ * What a day of age costs a decision's score, in For you, the top stories
+ * (TOP_SCORE) and the website's (site/snapshot.ts). Two points (Roman, 1 Nov:
+ * «в ленте должны быть более новые новости, а не трехдневней давности»), in
+ * place of the half point of #164: with half a point, a 5 from three days ago
+ * (3.5) beat a fresh 3, and For you's first ten for Czechia were 67 hours old
+ * at the middle (1 Nov); with two, a day-old 5 ties a fresh 3.
+ */
+export const AGE_PER_DAY = 2;
+
+/**
+ * When an article's age starts (Yurii's review of #269): its time; for one
+ * known only by its day (`date_only`, stored at 12:00 UTC, or at its fetch
+ * when that is earlier), 12 hours later, the end of that day, so today's
+ * count as fresh until the day ends. At 2 points a day a date-only item
+ * otherwise lost up to a point against one timed that evening: 164 of the
+ * feed's 304 on 1 Nov (Mexico's gazette, Argentina, Wikipedia's events, Korea).
+ */
+export const ageFrom = (publishedAt: string, dateOnly: boolean) => Date.parse(publishedAt) + (dateOnly ? 12 * 3_600_000 : 0);
+
+/** The age's cost in points at `now`: AGE_PER_DAY a day from ageFrom, never below 0. */
+export const ageCost = (publishedAt: string, dateOnly: boolean, now: number) =>
+  (AGE_PER_DAY * Math.max(0, now - ageFrom(publishedAt, dateOnly))) / 86_400_000;
+
+/** Importance + relevance + popularity, less ageCost. */
+export const score = (row: Ranked, now: number) =>
+  (row.importance ?? 0) + row.relevance + row.popularity - ageCost(row.published_at, row.date_only === 1, now);
 
 /** The top stories (#164): of the last 72 hours, with an importance, at most one a source country, TOP_SIZE in all. */
 export function topForYou<T extends Ranked & { country: string }>(rows: T[], now: number, size: number, hours: number): T[] {

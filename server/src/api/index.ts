@@ -23,6 +23,7 @@ import {
   whereCountries,
 } from "./filters";
 import {
+  AGE_PER_DAY,
   type ForYouCursor,
   type Ranked,
   type RankingKey,
@@ -163,11 +164,13 @@ export const TOP_SIZE = 3;
 export const TOP_HOURS = 72;
 
 /**
- * A top story's score (#164): the AI's importance (1 to 5) less half a point
- * for each day since it was published, so a 4 from yesterday beats a fresh 3.
+ * A top story's score (#164): the AI's importance (1 to 5) less AGE_PER_DAY
+ * points for each day since it was published (two since 1 Nov, half a point
+ * before), so a fresh 3 beats a 4 from yesterday; one known only by its day
+ * counts from that day's end (ageFrom in foryou.ts).
  * The website's snapshot scores the same way in the Worker (site/snapshot.ts).
  */
-const TOP_SCORE = "a.importance - 0.5 * (julianday('now') - julianday(a.published_at))";
+const TOP_SCORE = `a.importance - ${AGE_PER_DAY} * MAX(0, julianday('now') - julianday(a.published_at, CASE WHEN a.date_only = 1 THEN '+12 hours' ELSE '+0 hours' END))`;
 
 /**
  * The score in For you (#170; since #230 step 5 the list's score, foryou.ts):
@@ -222,7 +225,7 @@ const topWhere = (filters: Filters) => [TOP_WHERE, ...filters.where].join(" AND 
  * translation (translatedTop), so one list serves every language.
  */
 export const topCandidates = (env: Env) =>
-  env.DB.prepare(`SELECT a.id, s.country, a.importance, a.published_at, a.topics ${FROM_ARTICLES} WHERE ${TOP_WHERE} AND ${TOP_CANDIDATE}`);
+  env.DB.prepare(`SELECT a.id, s.country, a.importance, a.published_at, a.date_only, a.topics ${FROM_ARTICLES} WHERE ${TOP_WHERE} AND ${TOP_CANDIDATE}`);
 /** The top stories among the feed's articles that pass `filters`. */
 const englishTop = (filters: Filters) => topQuery(ARTICLE_COLUMNS, FROM_ARTICLES, topWhere(filters), filters);
 

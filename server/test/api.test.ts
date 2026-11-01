@@ -249,9 +249,9 @@ describe("GET /articles", () => {
       { id: "it-5-4-days", publishedAt: hoursAgo(80), importance: 5, sourceId: "it-government-pm-meloni" },
     ]);
     const top = (await getPage("/articles")).top;
-    // Importance less half a point a day: de-5 4.98, us-4 3.46 (yesterday's 4 beats a fresh 3), fr-3 2.98, jp-4 2.54, gb-2 1.98.
-    // de-4 is Germany's second; it-5 is past the 72 hours.
-    expect(top.map((a) => a.id)).toEqual(["de-5", "us-4-yesterday", "fr-3"]);
+    // Importance less 2 points a day (1 Nov; half a point before): de-5 4.92, fr-3 2.92, gb-2 1.92, us-4 1.83 (a fresh 3
+    // beats yesterday's 4 now), jp-4 −1.83. de-4 is Germany's second; it-5 is past the 72 hours.
+    expect(top.map((a) => a.id)).toEqual(["de-5", "fr-3", "gb-2"]);
   });
 
   it("reads broken JSON in topics as an empty list instead of failing the feed", async () => {
