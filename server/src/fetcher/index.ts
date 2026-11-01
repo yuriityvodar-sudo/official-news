@@ -692,14 +692,27 @@ export async function runFetcher(env: Env, options: FetcherOptions = {}): Promis
 
   // Claim the sources before reading them, in one statement: a run that is cut off
   // (CPU or time limit) still moves them to the back of the line, and an overlapping
-  // run cannot pick the same sites.
+  // run cannot pick the same sites. Besides the line, the fast source checked longest
+  // ago whose `everyMinutes` have passed (#230), so it is read every few minutes and
+  // not once a round of every source.
   const { results: sources } = await env.DB.prepare(
     `UPDATE sources SET last_checked_at = ?1
      WHERE id IN (
-       SELECT id FROM sources
-       WHERE status != 'blocked' AND (config IS NULL OR json_extract(config, '$.seed') IS NOT 1)
-       ORDER BY last_checked_at IS NOT NULL, last_checked_at, id
-       LIMIT ?2
+       SELECT id FROM (
+         SELECT id FROM sources
+         WHERE status != 'blocked' AND (config IS NULL OR json_extract(config, '$.seed') IS NOT 1)
+         ORDER BY last_checked_at IS NOT NULL, last_checked_at, id
+         LIMIT ?2
+       )
+       UNION
+       SELECT id FROM (
+         SELECT id FROM sources
+         WHERE status != 'blocked' AND json_valid(config) AND json_extract(config, '$.everyMinutes') > 0
+           AND (last_checked_at IS NULL
+                OR last_checked_at <= strftime('%Y-%m-%dT%H:%M:%SZ', ?1, '-' || json_extract(config, '$.everyMinutes') || ' minutes'))
+         ORDER BY last_checked_at IS NOT NULL, last_checked_at, id
+         LIMIT 1
+       )
      )
      RETURNING id, country, name, kind, url, config, language, last_checked_at, list_etag, list_last_modified`,
   )

@@ -1,0 +1,5 @@
+# Fast sources are checked every few minutes (#230)
+
+- **Decision:** a source can be fast (`config.everyMinutes`): each fetcher run checks, besides the next source in line, the fast source checked longest ago whose minutes have passed. Wikipedia's current events in English every 5 minutes, in Russian every 10, the Verkhovna Rada every 10, the National Bank of Ukraine every 15. Every other source stays in the line, about 40 minutes a round.
+- **Why:** Roman, 1 Nov: «каждый новостной портал в течении минут (если не секунд) сообщает о важных новостях». Measured on the live database (3 days, timed items): from our fetch to the feed takes 3 to 7 minutes (summary, translation, release), but a source waits up to a round of every source, about 40 minutes, to be read at all. The fast ones are those that publish as things happen; most official sites list their decisions hours or days late (Canada's bills 650 minutes on average, the Commission's press releases 509), so reading them more often would not make them faster.
+- **Status:** Proposed (Roman's Claude, on Roman's word of 1 Nov)

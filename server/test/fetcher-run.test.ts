@@ -2,6 +2,7 @@ import { env } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 
 import { LIMITS, USER_AGENT, runFetcher } from "../src/fetcher";
+import { toStoredTime } from "../src/fetcher/text";
 
 const NOW = new Date("2026-10-14T15:00:00Z");
 
@@ -87,6 +88,27 @@ describe("runFetcher", () => {
     const checks = await runFetcher(env, { fetch, now: NOW });
     expect(checks).toEqual([]);
     expect(requests).toEqual([]);
+  });
+
+  it("checks a fast source again once its everyMinutes have passed, besides the line (#230, 1 Nov)", async () => {
+    const ago = (minutes: number) => toStoredTime(new Date(NOW.getTime() - minutes * 60_000));
+    await addSource("xx-line-1", "https://one.test/feed", "rss", { itemPages: false }, ago(60));
+    await addSource("xx-line-2", "https://two.test/feed", "rss", { itemPages: false }, ago(50));
+    await addSource("xx-fast", "https://fast.test/feed", "rss", { itemPages: false, everyMinutes: 5 }, ago(6));
+    const site: Site = {};
+    for (const host of ["one.test", "two.test", "fast.test"]) {
+      site[`https://${host}/robots.txt`] = { status: 404, body: "" };
+      site[`https://${host}/feed`] = { body: rss([{ title: `News of ${host}`, link: `https://${host}/1`, date: "Wed, 14 Oct 2026 14:00:00 +0000" }]) };
+    }
+    const { fetch } = fakeFetch(site);
+    const checked = async (minutes: number) =>
+      (await runFetcher(env, { fetch, now: new Date(NOW.getTime() + minutes * 60_000) })).map((c) => c.sourceId).sort();
+    // The line's oldest, and the fast one, 6 minutes after its last check.
+    expect(await checked(0)).toEqual(["xx-fast", "xx-line-1"]);
+    // A minute later the fast one is not due: the line goes on alone.
+    expect(await checked(1)).toEqual(["xx-line-2"]);
+    // Five minutes after its check it comes again, whatever the line's turn.
+    expect(await checked(5)).toContain("xx-fast");
   });
 
   it("takes the source checked longest ago, one per run", async () => {

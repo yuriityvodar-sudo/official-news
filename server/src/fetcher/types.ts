@@ -91,6 +91,13 @@ export interface SourceConfig {
   newStageIsNewItem?: boolean;
   /** Seconds between our requests to this site (from its robots.txt). */
   crawlDelaySeconds?: number;
+  /**
+   * A fast source (#230, Roman, 1 Nov: «каждый новостной портал в течении
+   * минут сообщает о важных новостях»): checked again once this many minutes
+   * have passed, in a run of its own besides the line (runFetcher), instead of
+   * once a round of every source (about 40 minutes).
+   */
+  everyMinutes?: number;
   /** Send back the list's ETag / Last-Modified; a 304 answer means nothing new (saves big downloads). */
   conditionalGet?: boolean;
   /**
