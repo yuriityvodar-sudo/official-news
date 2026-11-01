@@ -218,6 +218,11 @@ class _DetailScreenState extends State<DetailScreen> {
                 ...[
                   if (hasSummary) ...[
                     _AiLabel(article),
+                    // A story's outlet asks for the author and a link to the original before the text (#230).
+                    if (article.isStory) ...[
+                      const SizedBox(height: 6),
+                      _StoryCredit(article: article, openLink: widget.openLink),
+                    ],
                     const SizedBox(height: 10),
                     for (final paragraph in _paragraphs(summary)) ...[
                       Text(paragraph, style: text.body),
@@ -250,7 +255,7 @@ class _DetailScreenState extends State<DetailScreen> {
                     ),
                   ],
                   // Wikipedia's text is CC BY-SA 4.0: its name, the page and the licence (#230).
-                  if (article.isEvent) ...[
+                  if (article.isEvent && !article.isStory) ...[
                     const SizedBox(height: 10),
                     _WikipediaLicence(
                       onTap: () => widget.openLink(wikipediaLicence),
@@ -640,8 +645,15 @@ class _AiLabel extends StatelessWidget {
     final source = article.originalLanguage;
     final reading = article.lang ?? 'en';
     final language = languageName(source, l10n);
-    // An event's summary is of Wikipedia's text (#230), and says so.
-    final label = article.isEvent
+    // An event's summary is of Wikipedia's text (#230), a story's of its outlet's, and says so.
+    final label = article.isStory
+        ? (source == reading
+              ? l10n.summaryByAiOfSource(article.source.name)
+              : l10n.summaryByAiOfSourceTranslated(
+                  article.source.name,
+                  language,
+                ))
+        : article.isEvent
         ? (source == reading
               ? l10n.summaryByAiOfWikipedia
               : l10n.summaryByAiOfWikipediaTranslated(language))
@@ -717,6 +729,79 @@ class _WikipediaLicence extends StatelessWidget {
   }
 }
 
+/// A news story's credit before its text (#230), as its outlet asks: the
+/// author and the outlet, a tap opening the original; then the outlet's own
+/// words, if it asks for any, and its licence, a tap opening it (Global
+/// Voices' CC BY 3.0).
+class _StoryCredit extends StatelessWidget {
+  const _StoryCredit({required this.article, required this.openLink});
+
+  final Article article;
+  final OpenLink openLink;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = NewsText.from(context);
+    final l10n = AppLocalizations.of(context);
+    final credit = article.credit;
+    final author = article.author;
+    final licence = credit?.licenceUrl == null
+        ? null
+        : officialPage(credit!.licenceUrl!);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _CreditLink(
+          label: [
+            if (author != null) l10n.storyBy(author),
+            article.source.name,
+          ].join(' · '),
+          page: officialPage(article.originalUrl),
+          openLink: openLink,
+        ),
+        if (credit?.wording != null) Text(credit!.wording!, style: text.meta),
+        if (credit?.licence != null)
+          _CreditLink(
+            label: credit!.licence!,
+            page: licence,
+            openLink: openLink,
+          ),
+      ],
+    );
+  }
+}
+
+/// A line of a credit: underlined and opening [page] when there is one.
+class _CreditLink extends StatelessWidget {
+  const _CreditLink({
+    required this.label,
+    required this.page,
+    required this.openLink,
+  });
+
+  final String label;
+  final Uri? page;
+  final OpenLink openLink;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = NewsText.from(context);
+    final page = this.page;
+    if (page == null) return Text(label, style: text.meta);
+    return Semantics(
+      link: true,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => openLink(page),
+        child: Text(
+          label,
+          style: text.meta.copyWith(decoration: TextDecoration.underline),
+        ),
+      ),
+    );
+  }
+}
+
 /// "In the media" (#230 step 5): up to 3 of the reader's country's outlets
 /// about the decision, the outlet above its headline, each opening its page.
 /// Only the headline, the outlet and the link: never their text (EU
@@ -751,7 +836,9 @@ class _MediaLinks extends StatelessWidget {
                     const SizedBox(height: 2),
                     Text(
                       link.title,
-                      style: text.meta.copyWith(color: Theme.of(context).colorScheme.onSurface),
+                      style: text.meta.copyWith(
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -780,7 +867,9 @@ class _OfficialLink extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     return Semantics(
       button: true,
-      label: article.isEvent
+      label: article.isStory
+          ? '${l10n.readOnSource(article.source.name)}, ${_site(article.originalUrl)}'
+          : article.isEvent
           ? '${l10n.readOnWikipedia}, ${_site(article.originalUrl)}'
           : l10n.readOfficialDecisionOn(_site(article.originalUrl)),
       excludeSemantics: true,
@@ -800,7 +889,9 @@ class _OfficialLink extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      article.isEvent
+                      article.isStory
+                          ? l10n.readOnSource(article.source.name)
+                          : article.isEvent
                           ? l10n.readOnWikipedia
                           : l10n.readOfficialDecision,
                       style: text.publisher,

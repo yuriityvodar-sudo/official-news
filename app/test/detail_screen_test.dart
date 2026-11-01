@@ -192,8 +192,16 @@ void main() {
     final article = Article.fromJson({
       ..._article().toJson(),
       'media': [
-        {'title': 'Vláda schválila rozpočet', 'outlet': 'novinky.cz', 'url': 'https://www.novinky.cz/clanek/1'},
-        {'title': 'Not a page', 'outlet': 'x.test', 'url': 'javascript:alert(1)'},
+        {
+          'title': 'Vláda schválila rozpočet',
+          'outlet': 'novinky.cz',
+          'url': 'https://www.novinky.cz/clanek/1',
+        },
+        {
+          'title': 'Not a page',
+          'outlet': 'x.test',
+          'url': 'javascript:alert(1)',
+        },
       ],
     });
     expect(article.media.map((m) => m.outlet), ['novinky.cz']);
@@ -324,6 +332,49 @@ void main() {
       'Two trains collided in Toledo province, Spain.\n\n'
       'Source: $page',
     );
+  });
+
+  testWidgets('a story names its outlet where an event names Wikipedia, and '
+      'gives its author, the original and the licence before the text (#230)', (
+    tester,
+  ) async {
+    const page =
+        'https://globalvoices.org/2026/10/31/ukrainian-villages-rebuild-schools/';
+    const licence = 'https://creativecommons.org/licenses/by/3.0/';
+    final story = Article.fromJson({
+      ..._article(language: 'en', originalUrl: page).toJson(),
+      'country': 'WW',
+      'countries': ['UA'],
+      'decisionType': 'event',
+      'source': {
+        'id': 'ww-global-voices',
+        'name': 'Global Voices',
+        'url': 'https://globalvoices.org',
+      },
+      'author': 'Nurbek Bekmurzaev',
+      'credit': {
+        'licence': 'CC BY 3.0',
+        'licenceUrl': licence,
+        'wording': null,
+        'wordingLang': null,
+      },
+    });
+    expect(story.isStory, isTrue);
+    final opened = <Uri>[];
+    await _pump(tester, story, openLink: (uri) async => opened.add(uri));
+
+    expect(find.text('Ukraine · Event'), findsOneWidget);
+    expect(find.byIcon(CupertinoIcons.checkmark_seal), findsNothing);
+    expect(find.text("Summary by AI of Global Voices's text"), findsOneWidget);
+    expect(find.textContaining('Wikipedia'), findsNothing);
+
+    await tester.tap(find.text('Story by Nurbek Bekmurzaev · Global Voices'));
+    await tester.tap(find.text('CC BY 3.0'));
+    final read = find.text('Read on Global Voices');
+    await tester.scrollUntilVisible(read, 200);
+    await tester.pumpAndSettle();
+    await tester.tap(read);
+    expect(opened, [Uri.parse(page), Uri.parse(licence), Uri.parse(page)]);
   });
 
   // #52: the article screen in the app's language; the article's own text is

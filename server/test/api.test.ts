@@ -82,7 +82,7 @@ describe("GET /articles", () => {
     expect(page.top).toEqual([]);
     expect(Object.keys(page.items[0]).sort()).toEqual(
       [
-        "addedAt", "author", "countries", "country", "dateOnly", "decisionType", "feedSeq", "headline", "headlineType", "id", "imageUrl", "impact", "importance",
+        "addedAt", "author", "countries", "country", "credit", "dateOnly", "decisionType", "feedSeq", "headline", "headlineType", "id", "imageUrl", "impact", "importance",
         "originalLanguage", "originalTitle", "originalUrl", "publishedAt", "shortSummary",
         "source", "summary", "tags", "topics",
       ].sort(),
@@ -292,11 +292,28 @@ describe("GET /articles/:id", () => {
     expect((await get(`/articles/${id}`)).body).toMatchObject({ countries: [] });
   });
 
-  it("returns a story's author, named with a link to the original by its licence, and null for a decision (#230)", async () => {
+  it("returns a story's author and the credit its outlet asks for, and never an author on a decision (#230)", async () => {
     const id = SEED_DECISIONS[0];
     expect((await get(`/articles/${id}`)).body).toMatchObject({ author: null });
-    await env.DB.prepare("UPDATE articles SET author = 'Nurbek Bekmurzaev' WHERE id = ?").bind(id).run();
-    expect((await get(`/articles/${id}`)).body).toMatchObject({ author: "Nurbek Bekmurzaev" });
+    // A government feed's dc:creator stored before #230's fix: not shown on a decision.
+    await env.DB.prepare("UPDATE articles SET author = 'admin' WHERE id = ?").bind(id).run();
+    expect((await get(`/articles/${id}`)).body).toMatchObject({ author: null });
+
+    await env.DB.prepare(
+      "INSERT INTO sources (id, country, name, kind, url, language) VALUES ('ww-global-voices', 'WW', 'Global Voices', 'rss', 'https://globalvoices.org/feed/', 'en')",
+    ).run();
+    await env.DB.prepare("UPDATE articles SET source_id = 'ww-global-voices', decision_type = 'event', author = 'Nurbek Bekmurzaev' WHERE id = ?")
+      .bind(id)
+      .run();
+    expect((await get(`/articles/${id}`)).body).toMatchObject({
+      author: "Nurbek Bekmurzaev",
+      credit: {
+        licence: "CC BY 3.0",
+        licenceUrl: "https://creativecommons.org/licenses/by/3.0/",
+        wording: null,
+        wordingLang: null,
+      },
+    });
   });
 
   it("returns 404 for a hidden or unknown article", async () => {

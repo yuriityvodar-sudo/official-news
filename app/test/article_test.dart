@@ -73,6 +73,39 @@ void main() {
     expect(Article.fromJson(full).countries, isEmpty);
   });
 
+  test('reads a story\'s author and credit and keeps them when saved; only an '
+      'event whose link is not Wikipedia\'s is a story (#230)', () {
+    final story = Article.fromJson({
+      ...full,
+      'decisionType': 'event',
+      'originalUrl': 'https://globalvoices.org/2026/10/31/rural-women/',
+      'author': 'Nurbek Bekmurzaev',
+      'credit': {
+        'licence': 'CC BY 3.0',
+        'licenceUrl': 'https://creativecommons.org/licenses/by/3.0/',
+        'wording': null,
+        'wordingLang': null,
+      },
+    });
+    expect(story.isStory, isTrue);
+    final saved = Article.fromJson(story.toJson());
+    expect(saved.author, 'Nurbek Bekmurzaev');
+    expect(saved.credit?.licence, 'CC BY 3.0');
+    expect(
+      saved.credit?.licenceUrl,
+      'https://creativecommons.org/licenses/by/3.0/',
+    );
+    final wikipedia = Article.fromJson({
+      ...full,
+      'decisionType': 'event',
+      'originalUrl': 'https://en.wikipedia.org/wiki/Portal:Current_events',
+    });
+    expect(wikipedia.isStory, isFalse);
+    // A decision is never a story; a server before #230 sends no credit.
+    expect(Article.fromJson(full).isStory, isFalse);
+    expect(Article.fromJson(full).credit, isNull);
+  });
+
   test('an event names the country it concerns most, or the world when the '
       'app has no name for it; a decision its source\'s country (#230)', () {
     final l10n = lookupAppLocalizations(const Locale('en'));

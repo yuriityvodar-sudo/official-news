@@ -302,6 +302,17 @@ describe("runFetcher", () => {
     expect(saved.results).toEqual([{ url: "https://stories.test/1", author: "Nurbek Bekmurzaev", image_url: null }]);
   });
 
+  it("keeps no author but a story's: a government feed's dc:creator is nobody to name (#230)", async () => {
+    await addSource("xx-gov", "https://gov.test/feed/", "rss", { itemPages: false });
+    const feed = `<rss xmlns:dc="http://purl.org/dc/elements/1.1/"><channel><item><title>Cabinet decision</title><link>https://gov.test/1</link><pubDate>Wed, 14 Oct 2026 10:00:00 +0000</pubDate><dc:creator>admin</dc:creator><description>${longText}</description></item></channel></rss>`;
+    const { fetch } = fakeFetch({
+      "https://gov.test/robots.txt": { status: 404, body: "" },
+      "https://gov.test/feed/": { body: feed, type: "application/rss+xml" },
+    });
+    expect(await runFetcher(env, { fetch, now: NOW })).toMatchObject([{ ok: true, saved: 1 }]);
+    expect(await env.DB.prepare("SELECT author FROM articles WHERE source_id = 'xx-gov'").first()).toEqual({ author: null });
+  });
+
   it("asks a list that the source's page loads by script with a form POST, as the page does (listPost, #230)", async () => {
     await addSource("xx-bank", "https://bank.test/ua/component/source/news/all", "page", {
       listPost: { page: "1", perPage: "25" },

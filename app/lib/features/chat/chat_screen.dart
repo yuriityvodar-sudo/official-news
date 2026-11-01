@@ -694,7 +694,9 @@ class _ChatScreenState extends State<ChatScreen> {
                                         const SizedBox(width: 6),
                                         Flexible(
                                           child: Text(
-                                            article.isEvent
+                                            article.isStory
+                                                ? '${l10n.readOnSource(article.source.name)}, $site'
+                                                : article.isEvent
                                                 ? '${l10n.readOnWikipedia}, $site'
                                                 : l10n.readOfficialDecisionOn(
                                                     site,

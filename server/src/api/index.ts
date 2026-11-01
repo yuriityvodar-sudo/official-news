@@ -5,6 +5,7 @@ import { REAL_SOURCE, health } from "../health";
 import { postSupportMessage, supportThread } from "../support";
 import type { Topic } from "../summarizer/schema";
 import { LANGS, type Lang, SHOWN, isLang, queueStatus, releaseStatus } from "../translator";
+import { creditOf } from "./credit";
 import {
   EU,
   EU_MEMBERS,
@@ -372,8 +373,10 @@ export function toArticle(row: ArticleRow) {
     addedAt: row.added_at,
     impact: parseImpact(row.impact),
     countries: parseStringArray(row.countries),
-    // #230, additive: a story's author, named with a link to the original (Global Voices' licence).
-    author: row.author ?? null,
+    // #230, additive: a story's author, named with a link to the original (Global Voices' licence); never a decision's.
+    author: row.decision_type === "event" ? (row.author ?? null) : null,
+    // #230, additive: what the source's licence asks to be shown with it (docs/source-credits.csv).
+    credit: creditOf(row.source_id),
     // For you only (#230 step 5): "In the media", up to 3 of the reader's country's outlets about it.
     ...(row.media_links !== undefined ? { media: parseMedia(row.media_links) } : {}),
   };

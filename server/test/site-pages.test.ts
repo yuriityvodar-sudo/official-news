@@ -127,6 +127,47 @@ describe("every page in every language", () => {
   });
 });
 
+describe("a news story from an outlet (#230: Global Voices)", () => {
+  const story = testId(11);
+  const original = "https://globalvoices.org/2026/10/31/rural-women-in-kyrgyzstan/";
+
+  beforeEach(async () => {
+    await hideSeed();
+    await env.DB.prepare(
+      `INSERT OR IGNORE INTO sources (id, country, name, kind, url, config, language)
+       VALUES ('ww-global-voices', 'WW', 'Global Voices', 'rss', 'https://globalvoices.org/feed/', '{"stories":true,"images":false}', 'en')`,
+    ).run();
+    await insertArticle({
+      id: story,
+      sourceId: "ww-global-voices",
+      decisionType: "event",
+      originalLanguage: "en",
+      originalUrl: original,
+      publishedAt: "2026-10-31T10:00:00Z",
+      headline: "Rural women in Kyrgyzstan run their own seed banks",
+    });
+    await env.DB.prepare("UPDATE articles SET author = 'Nurbek Bekmurzaev' WHERE id = ?").bind(story).run();
+  });
+
+  it("names its outlet where an event names Wikipedia, and gives the author, the original and the outlet's credit before the text", async () => {
+    const { body } = await site(`/en/ww/${story}`);
+    expect(body).toMatch(/<p class="ai meta">.*Summary by AI of Global Voices&#39;s text</);
+    expect(body).toContain(esc(aiNoticeText("en", "story", "Global Voices")));
+    expect(body).toContain("<b>Read on Global Voices</b>");
+    expect(body).not.toContain(text("en", "readOnWikipedia"));
+    const credit = `<p class="small"><a href="${original}" rel="noopener">Story by Nurbek Bekmurzaev · Global Voices</a> · <a href="https://creativecommons.org/licenses/by/3.0/" rel="license">CC BY 3.0</a></p>`;
+    expect(body).toContain(credit);
+    // Before the text, as the outlet asks, and not again at the end.
+    expect(body.indexOf(credit)).toBeLessThan(body.indexOf('<p class="lead">'));
+    expect(body).not.toContain("Source: Global Voices");
+  });
+
+  it("leaves out the author where the outlet names none", async () => {
+    await env.DB.prepare("UPDATE articles SET author = NULL WHERE id = ?").bind(story).run();
+    expect((await site(`/en/ww/${story}`)).body).toContain(`<a href="${original}" rel="noopener">Global Voices</a> · <a href="https://creativecommons.org/licenses/by/3.0/" rel="license">CC BY 3.0</a></p>`);
+  });
+});
+
 describe("an event from Wikipedia's current events (#230)", () => {
   const event = testId(10);
 

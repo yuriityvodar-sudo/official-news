@@ -684,7 +684,8 @@ async function checkSource(run: Run, source: SourceRow): Promise<SourceCheck> {
           item.text ? expires : null,
           config.images === false ? null : item.imageUrl,
           source.language,
-          item.author ?? null,
+          // Only a story's: a government feed's dc:creator ("admin") is nobody to name (Yurii's review of #271).
+          config.stories ? (item.author ?? null) : null,
         ),
       );
     }
