@@ -105,7 +105,7 @@ The MVP is a Kickoff plus 8 items, 4 each. This is our suggested split: Yurii ow
 | 3 | Feed screen | Yurii | 4 | The feed shows articles from the deployed API on both simulators |
 | 4 | Article detail screen | Roman | 2 | Every article opens with its summary and source link |
 | 5 | Source list: 20 official sites, one per G20 country | Yurii | 2 | 20 verified sources in the database |
-| 6 | Fetcher: small run every minute, 1 source at a time | Yurii | 4 | All sources checked at least hourly, new articles saved without duplicates |
+| 6 | Fetcher: every source every minute, each in a call of its own (#230, 1 Nov; until then 1 source at a time) | Yurii | 4 | All sources checked at least hourly, new articles saved without duplicates |
 | 7 | AI summaries, noise filter and tags | Roman | 4 | New articles get all summary fields within an hour |
 | 8 | Source health and cleanup of old texts | Roman | 2 | Each source shows its status; expired texts are cleared |
 | 9 | Translations, after the MVP: Ukrainian, Russian, Spanish and German | Yurii | 3 | News in the feed gets its text in each language through a queue we can see and manage, and the API returns only translated articles with `lang` |
@@ -198,8 +198,8 @@ The feed card reads `headline`, `shortSummary`, `imageUrl` and `topics` (shown a
 **Fetcher rule (keeps us on the free plan)**
 
 - The scheduled handler runs every minute and calls `fetcher.run()` then `summarizer.run({ maxArticles: 5 })`; the handler is committed in the Kickoff, and each owner changes only their own module. **Changed 15 Oct (#41):** the summarizer has its own cron trigger every odd minute, so the two never share one run's CPU
-- The fetcher takes the source with the oldest `last_checked_at`, so every source is checked within the hour (up to 60 sources)
-- One run shares one budget (one run per step since #41): on the free plan at most 50 outside requests and 10 ms of processing. The requests fit easily; the 10 ms is measured in item 6, and if text extraction needs more, the Worker moves to the paid plan (about $5 a month) and the small runs stay
+- The fetcher checks every source every minute, each in a call of its own; a list that has not changed costs no parsing and no writes, and each source is read in full once an hour (#230, 1 Nov; until then it took the source with the oldest `last_checked_at`)
+- One run shares one budget (one run per step since #41, one call per source since 1 Nov, #230): on the free plan at most 50 outside requests and 10 ms of processing. The requests fit easily; the 10 ms is measured in item 6, and if text extraction needs more, the Worker moves to the paid plan (about $5 a month) and the small runs stay
 
 **Speed rules (fast app, and about 10,000 daily users for free)**
 
@@ -362,7 +362,7 @@ The app is Flutter; everything behind it runs on one Cloudflare account, with Wo
 | --- | --- |
 | Flutter | The iOS and Android app, one codebase |
 | Cloudflare Workers | All backend code: fetching sources and the API the app calls |
-| Cloudflare Cron Triggers | Runs the fetcher every minute, 1 source at a time |
+| Cloudflare Cron Triggers | Runs the fetcher every minute: every source, each in a call of its own |
 | Cloudflare D1 | Database: sources, articles, summaries, tags |
 | Cloudflare Workers (`site`) | The website (#88): article pages, latest lists and the information pages, rendered from the API's own code in the same request; its own Worker, deployed after the api, with Workers Cache in front |
 | Cloudflare Browser Rendering | After the MVP: reading official sites whose news lists are built by JavaScript |

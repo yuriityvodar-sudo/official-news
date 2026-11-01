@@ -14,6 +14,8 @@ export interface SourceRow {
   last_checked_at: string | null;
   list_etag: string | null;
   list_last_modified: string | null;
+  list_hash: string | null;
+  failed_checks: number;
 }
 
 /**
@@ -101,6 +103,13 @@ export interface SourceConfig {
    * as for any list, and a POST never sends conditionalGet's validators.
    */
   listPost?: Record<string, string>;
+  /**
+   * A regular expression for what differs at every read of the list although
+   * nothing was published (a token, a build time, a view counter): taken out
+   * before the list is compared with the last one, so it does not count as a
+   * change. Only for the comparison; the list is parsed as it came.
+   */
+  listNoise?: string;
   /** Other hosts whose links count as this source's own (e.g. the Chamber's site for its open-data API). */
   allowedHosts?: string[];
   /** Days to keep the extracted text (default 30). */
