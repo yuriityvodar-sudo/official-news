@@ -50,12 +50,20 @@ export const STORIES = {
 // Scripts written without spaces between words, and Hangul, whose words carry
 // their endings: compared by pairs of characters instead of words.
 const PAIRS = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\p{Script=Thai}\p{Script=Lao}\p{Script=Khmer}\p{Script=Myanmar}]/u;
+const WORD = /[\p{L}\p{M}\p{N}]+/gu;
+const DIGITS = /^\p{N}+$/u;
+const CAPITAL = /^\p{Lu}/u;
+const SPACE = /\s/u;
+/** What may stand between a phrase's end and its first word: quotes and brackets. */
+const PASSED = new Set([..."\"'«»„“”‚‘’()[]"]);
+const PHRASE_END = new Set([..."．.!?:;…|-–—"]);
 
 /** Whether the word at `index` begins the headline or a phrase in it ("Hackerangriff - FBI macht…"). */
 function phraseStart(text: string, index: number): boolean {
   for (let i = index - 1; i >= 0; i--) {
-    if (/[\s"'«»„“”‚‘’()[\]]/u.test(text[i])) continue;
-    return /[.!?:;…|\-–—]/u.test(text[i]);
+    const c = text[i];
+    if (c === " " || PASSED.has(c) || SPACE.test(c)) continue;
+    return PHRASE_END.has(c);
   }
   return true;
 }
@@ -68,34 +76,42 @@ function phraseStart(text: string, index: number): boolean {
 function readTerms(title: string): Map<string, boolean> {
   const text = title.normalize("NFKC");
   const found = new Map<string, boolean>();
-  for (const match of text.matchAll(/[\p{L}\p{M}\p{N}]+/gu)) {
-    const chars = [...match[0].toLowerCase()];
-    const name = /^\p{Lu}/u.test(match[0]) && !phraseStart(text, match.index);
+  for (const match of text.matchAll(WORD)) {
+    const word = match[0];
+    const name = CAPITAL.test(word) && !phraseStart(text, match.index);
     const add = (term: string) => found.set(term, name || (found.get(term) ?? false));
-    if (PAIRS.test(match[0])) {
+    if (PAIRS.test(word)) {
+      const chars = [...word.toLowerCase()];
       for (let i = 0; i + 1 < chars.length; i++) add(chars[i] + chars[i + 1]);
-    } else if (/^\p{N}+$/u.test(match[0])) {
-      add(match[0]);
-    } else if (chars.length >= STORIES.minWordLength) {
-      add(chars.slice(0, STORIES.stemLength).join(""));
+    } else if (DIGITS.test(word)) {
+      add(word);
+    } else {
+      const chars = [...word.toLowerCase()];
+      if (chars.length >= STORIES.minWordLength) add(chars.slice(0, STORIES.stemLength).join(""));
     }
+  }
+  return found;
+}
+
+/**
+ * Headlines already read, by title: a country's stories are built every few
+ * minutes from mostly the same headlines, and a call's isolate often serves
+ * the next one. Emptied when it holds this many.
+ */
+const READ = new Map<string, Map<string, boolean>>();
+const READ_MAX = 20_000;
+function readTermsOnce(title: string): Map<string, boolean> {
+  let found = READ.get(title);
+  if (!found) {
+    if (READ.size >= READ_MAX) READ.clear();
+    found = readTerms(title);
+    READ.set(title, found);
   }
   return found;
 }
 
 /** A headline's words as they are compared: stems, numbers, or pairs of characters. */
 export const terms = (title: string): string[] => [...readTerms(title).keys()];
-
-type Vector = Map<string, number>;
-
-const norm = (v: Vector) => Math.sqrt([...v.values()].reduce((sum, w) => sum + w * w, 0));
-
-function similarity(a: Vector, aNorm: number, b: Vector, bNorm: number): number {
-  if (!aNorm || !bNorm) return 0;
-  let dot = 0;
-  for (const [term, weight] of a) dot += weight * (b.get(term) ?? 0);
-  return dot / (aNorm * bNorm);
-}
 
 /** 32-bit FNV-1a, in base 36: short ids for links. */
 function hash(text: string): string {
@@ -104,18 +120,43 @@ function hash(text: string): string {
   return h.toString(36);
 }
 
+/** Text in the order of its UTF-16 code units: what the times and links need, cheaper than localeCompare. */
+const byText = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
+
+/** A headline's words as numbers (this call's), in increasing order, with their weights. */
 interface Member {
   headline: OutletHeadline;
   /** Its rarest words that other headlines have too: the stories it is compared with share one. */
-  leads: string[];
-  vector: Vector;
+  leads: number[];
+  ids: number[];
+  weights: number[];
   norm: number;
 }
 
 interface Group {
   members: Member[];
-  centre: Vector;
-  centreNorm: number;
+  /** The sum of its headlines' vectors, each of length 1, and that sum's squared length. */
+  centre: Map<number, number>;
+  centreSquared: number;
+}
+
+function toCentre(member: Member, group: Group): number {
+  const centreNorm = Math.sqrt(group.centreSquared);
+  if (!member.norm || !centreNorm) return 0;
+  let dot = 0;
+  for (let k = 0; k < member.ids.length; k++) dot += member.weights[k] * (group.centre.get(member.ids[k]) ?? 0);
+  return dot / (member.norm * centreNorm);
+}
+
+function toMember(a: Member, b: Member): number {
+  if (!a.norm || !b.norm) return 0;
+  let dot = 0;
+  for (let i = 0, j = 0; i < a.ids.length && j < b.ids.length; ) {
+    if (a.ids[i] === b.ids[j]) dot += a.weights[i++] * b.weights[j++];
+    else if (a.ids[i] < b.ids[j]) i++;
+    else j++;
+  }
+  return dot / (a.norm * b.norm);
 }
 
 /**
@@ -126,53 +167,75 @@ interface Group {
  * it is compared only with the stories that share one of its rarest words.
  * Then each headline left alone looks again, now that the stories have grown: a
  * long headline that came second, to a story of one short headline, joins the
- * story it is like, as long as it is like one of its headlines too.
+ * story it is like, as long as it is like one of its headlines too. Words are
+ * numbers within a call and each headline is read once per isolate, so a call
+ * stays within its 10 ms of CPU (1 Nov: India's 450 headlines took 38 ms before).
  */
 export function clusterHeadlines(headlines: OutletHeadline[]): Story[] {
-  const sorted = [...headlines].sort((a, b) => a.publishedAt.localeCompare(b.publishedAt) || a.url.localeCompare(b.url));
-  const termsOf = sorted.map((h) => readTerms(h.title));
-  const df = new Map<string, number>();
-  for (const found of termsOf) for (const term of found.keys()) df.set(term, (df.get(term) ?? 0) + 1);
+  const sorted = [...headlines].sort((a, b) => byText(a.publishedAt, b.publishedAt) || byText(a.url, b.url));
+  const termIds = new Map<string, number>();
+  const read = sorted.map((h) => {
+    const found = readTermsOnce(h.title);
+    const ids: number[] = [];
+    const names: boolean[] = [];
+    for (const [term, name] of found) {
+      let id = termIds.get(term);
+      if (id === undefined) termIds.set(term, (id = termIds.size));
+      ids.push(id);
+      names.push(name);
+    }
+    return { ids, names };
+  });
+  const df = new Int32Array(termIds.size);
+  for (const { ids } of read) for (const id of ids) df[id]++;
   const total = sorted.length;
   const common = Math.max(STORIES.commonFloor, total * STORIES.commonShare);
+  const corpus = Math.max(total, STORIES.idfHeadlines);
 
   const groups: Group[] = [];
-  const index = new Map<string, Set<number>>();
+  const index: number[][] = Array.from({ length: termIds.size }, () => []);
+  const seen = new Int32Array(Math.max(1, total)).fill(-1);
+  let looked = 0;
   const best = (member: Member, eligible: (g: number) => boolean) => {
-    const candidates = new Set<number>();
-    for (const term of member.leads) for (const g of index.get(term) ?? []) if (eligible(g)) candidates.add(g);
+    looked++;
     let found = -1;
     let top = 0;
-    for (const g of candidates) {
-      const s = similarity(member.vector, member.norm, groups[g].centre, groups[g].centreNorm);
-      if (s > top) [found, top] = [g, s];
+    for (const term of member.leads) {
+      for (const g of index[term]) {
+        if (seen[g] === looked || !eligible(g)) continue;
+        seen[g] = looked;
+        const s = toCentre(member, groups[g]);
+        if (s > top) [found, top] = [g, s];
+      }
     }
     return top >= STORIES.joinAt ? found : -1;
   };
   const join = (g: number, member: Member) => {
     const group = groups[g];
     group.members.push(member);
-    // The centre: the sum of its headlines' vectors, each of length 1.
-    if (member.norm) for (const [term, weight] of member.vector) group.centre.set(term, (group.centre.get(term) ?? 0) + weight / member.norm);
-    group.centreNorm = norm(group.centre);
-    for (const term of member.vector.keys()) {
-      if (!index.has(term)) index.set(term, new Set());
-      index.get(term)!.add(g);
+    for (let k = 0; k < member.ids.length; k++) {
+      const id = member.ids[k];
+      const before = group.centre.get(id);
+      const after = (before ?? 0) + (member.norm ? member.weights[k] / member.norm : 0);
+      group.centre.set(id, after);
+      group.centreSquared += after * after - (before ?? 0) * (before ?? 0);
+      if (before === undefined) index[id].push(g);
     }
   };
 
   sorted.forEach((headline, i) => {
-    const vector: Vector = new Map(
-      [...termsOf[i]].map(([term, name]) => [term, Math.log(Math.max(total, STORIES.idfHeadlines) / df.get(term)!) * (name ? STORIES.nameWeight : 1)]),
-    );
+    const { ids: unordered, names } = read[i];
+    const order = unordered.map((_, k) => k).sort((a, b) => unordered[a] - unordered[b]);
+    const ids = order.map((k) => unordered[k]);
+    const weights = order.map((k) => Math.log(corpus / df[unordered[k]]) * (names[k] ? STORIES.nameWeight : 1));
     // A word no other headline has leads nowhere.
-    const leads = [...termsOf[i].keys()]
-      .filter((term) => df.get(term)! > 1 && df.get(term)! <= common)
-      .sort((a, b) => df.get(a)! - df.get(b)!)
+    const leads = unordered
+      .filter((id) => df[id] > 1 && df[id] <= common)
+      .sort((a, b) => df[a] - df[b])
       .slice(0, STORIES.leadTerms);
-    const member = { headline, leads, vector, norm: norm(vector) };
+    const member: Member = { headline, leads, ids, weights, norm: Math.sqrt(weights.reduce((sum, w) => sum + w * w, 0)) };
     const found = best(member, () => true);
-    join(found >= 0 ? found : groups.push({ members: [], centre: new Map(), centreNorm: 0 }) - 1, member);
+    join(found >= 0 ? found : groups.push({ members: [], centre: new Map(), centreSquared: 0 }) - 1, member);
   });
 
   groups.forEach((group, g) => {
@@ -181,7 +244,7 @@ export function clusterHeadlines(headlines: OutletHeadline[]): Story[] {
     const found = best(alone, (other) => other !== g && groups[other].members.length > 1);
     // Like the story's centre and like one of its headlines: a centre made of a few headlines of
     // the same kind (two shootings: "dead", "injured") draws a third of that kind.
-    if (found < 0 || !groups[found].members.some((m) => similarity(alone.vector, alone.norm, m.vector, m.norm) >= STORIES.joinAt)) return;
+    if (found < 0 || !groups[found].members.some((m) => toMember(alone, m) >= STORIES.joinAt)) return;
     join(found, alone);
     group.members = [];
   });
@@ -189,14 +252,17 @@ export function clusterHeadlines(headlines: OutletHeadline[]): Story[] {
   return groups
     .filter((group) => group.members.length)
     .map((group) => {
-      const byTime = [...group.members].sort((a, b) => a.headline.publishedAt.localeCompare(b.headline.publishedAt));
+      const byTime = [...group.members].sort((a, b) => byText(a.headline.publishedAt, b.headline.publishedAt));
       // One headline per outlet, its latest on the story.
       const latest = new Map<string, OutletHeadline>();
       for (const { headline } of byTime) latest.set(headline.outlet.id, headline);
-      const typical = byTime.reduce((a, b) =>
-        similarity(b.vector, b.norm, group.centre, group.centreNorm) > similarity(a.vector, a.norm, group.centre, group.centreNorm) ? b : a,
-      );
-      const items = [...latest.values()].sort((a, b) => b.publishedAt.localeCompare(a.publishedAt));
+      let typical = byTime[0];
+      let closest = toCentre(typical, group);
+      for (const member of byTime.slice(1)) {
+        const s = toCentre(member, group);
+        if (s > closest) [typical, closest] = [member, s];
+      }
+      const items = [...latest.values()].sort((a, b) => byText(b.publishedAt, a.publishedAt));
       return {
         id: hash(byTime[0].headline.url),
         title: typical.headline.title,

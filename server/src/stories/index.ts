@@ -11,18 +11,21 @@ export const BUILD = {
   /** Stories are made of the last day's headlines: a story's weight halves every 6 hours, so older ones barely count. */
   windowHours: 24,
   /**
-   * At most this many of them, the newest: grouping took up to 7 ms of CPU for India's 439 headlines of
-   * 1 Nov (laptop), of the 10 ms a call has.
+   * At most this many of them, the newest. On Workers a build of 1 Nov took 38 ms of CPU for India's
+   * 450 headlines and 15 to 30 for most countries, against the 10 ms a call has (Yurii's check of #281):
+   * with fewer headlines, the faster grouping and a smaller row, India's takes about a third.
    */
-  maxHeadlines: 450,
-  /** Stories kept per country, the weightiest when built. */
-  perCountry: 100,
+  maxHeadlines: 300,
+  /** Stories kept per country, the weightiest when built: the app shows the first ones. */
+  perCountry: 50,
   /** Countries a run builds at most, each in a call of its own. */
   perRun: 6,
   /** A country is built again at most this often, and only when its outlets have something new... */
   minMinutes: 5,
   /** ...or at least this often, as its oldest headlines leave the window. */
   maxMinutes: 30,
+  /** A country whose build failed (its call stopped by a limit) is tried again after this long. */
+  failedMinutes: 30,
 } as const;
 
 /** What `country_stories.json` holds. */
@@ -32,6 +35,8 @@ export interface CountryStories {
 }
 
 const stored = (date: Date) => `${date.toISOString().slice(0, 19)}Z`;
+/** Stored times in order, newest first, without localeCompare's cost. */
+const newestFirst = (a: string, b: string) => (a < b ? 1 : a > b ? -1 : 0);
 
 /**
  * Builds a country's stories from its outlets' headlines of the last
@@ -49,7 +54,7 @@ export async function buildCountryStories(env: Env, country: string, version: st
         .filter((h) => h.publishedAt >= cutoff)
         .map((h) => ({ ...h, outlet: { id: o.id, name: o.name, site: o.site } })),
     )
-    .sort((a, b) => b.publishedAt.localeCompare(a.publishedAt))
+    .sort((a, b) => newestFirst(a.publishedAt, b.publishedAt))
     .slice(0, BUILD.maxHeadlines);
   const stories = clusterHeadlines(headlines)
     .map((story) => ({ story, score: storyScore(story, now) }))
@@ -59,7 +64,7 @@ export async function buildCountryStories(env: Env, country: string, version: st
   const json = JSON.stringify({ builtAt: stored(now), stories } satisfies CountryStories);
   await env.DB.prepare(
     `INSERT INTO country_stories (country, json, version, built_at) VALUES (?1, ?2, ?3, ?4)
-     ON CONFLICT (country) DO UPDATE SET json = excluded.json, version = excluded.version, built_at = excluded.built_at`,
+     ON CONFLICT (country) DO UPDATE SET json = excluded.json, version = excluded.version, built_at = excluded.built_at, failed_at = NULL`,
   )
     .bind(country, json, version, stored(now))
     .run();
@@ -70,14 +75,16 @@ export async function buildCountryStories(env: Env, country: string, version: st
 /**
  * The countries due to be built: their outlets have a newer headline than
  * their stories (and those are BUILD.minMinutes old), or their stories are
- * BUILD.maxMinutes old; never built first, then the longest waiting. Two small
+ * BUILD.maxMinutes old; never built first, then the longest waiting; not one
+ * whose last build failed less than BUILD.failedMinutes ago (Yurii's review
+ * of #281: a build stopped by a limit would take a call every run). Two small
  * reads: the outlets' newest headline per country (by its index), and the
  * stories' versions.
  */
 export async function dueCountries(env: Env, now = new Date()): Promise<{ country: string; version: string }[]> {
   const [newest, built] = await env.DB.batch<Record<string, string | null>>([
     env.DB.prepare("SELECT country, MAX(last_item_at) AS version FROM outlets WHERE status != 'blocked' GROUP BY country"),
-    env.DB.prepare("SELECT country, version, built_at FROM country_stories"),
+    env.DB.prepare("SELECT country, version, built_at, failed_at FROM country_stories"),
   ]);
   const stories = new Map(built.results.map((r) => [r.country!, r]));
   const minutes = (since: string) => (now.getTime() - Date.parse(since)) / 60_000;
@@ -86,10 +93,11 @@ export async function dueCountries(env: Env, now = new Date()): Promise<{ countr
     .map((r) => ({ country: r.country!, version: r.version!, built: stories.get(r.country!) }))
     .filter(({ version, built }) => {
       if (!built) return true;
+      if (built.failed_at && minutes(built.failed_at) < BUILD.failedMinutes) return false;
       const age = minutes(built.built_at!);
       return age >= BUILD.maxMinutes || (version !== built.version && age >= BUILD.minMinutes);
     })
-    .sort((a, b) => (a.built?.built_at ?? "").localeCompare(b.built?.built_at ?? ""))
+    .sort((a, b) => -newestFirst(a.built?.built_at ?? "", b.built?.built_at ?? ""))
     .slice(0, BUILD.perRun)
     .map(({ country, version }) => ({ country, version }));
 }
@@ -106,7 +114,18 @@ export async function storiesStep(env: Env, build?: (country: string, version: s
     const calls = build ? due : due.slice(0, 1);
     const settled = await Promise.allSettled(calls.map(({ country, version }) => (build ?? ((c, v) => buildCountryStories(env, c, v, now)))(country, version)));
     const failed = settled.flatMap((result, i) => (result.status === "rejected" ? [{ country: calls[i].country, error: String(result.reason) }] : []));
-    if (failed.length) console.error(JSON.stringify({ message: "stories step error", failed }));
+    if (failed.length) {
+      console.error(JSON.stringify({ message: "stories step error", failed }));
+      // It waits BUILD.failedMinutes, keeping the stories it has; one never built gets an empty row to wait in.
+      await env.DB.batch(
+        failed.map(({ country }) =>
+          env.DB.prepare(
+            `INSERT INTO country_stories (country, json, version, built_at, failed_at) VALUES (?1, '{"builtAt":null,"stories":[]}', '', '1970-01-01T00:00:00Z', ?2)
+             ON CONFLICT (country) DO UPDATE SET failed_at = excluded.failed_at`,
+          ).bind(country, stored(now)),
+        ),
+      );
+    }
   } catch (error) {
     console.error(JSON.stringify({ message: "stories step error", error: error instanceof Error ? error.message : String(error) }));
   }
@@ -128,6 +147,6 @@ export async function countryStories(env: Env, country: string, now = new Date()
   const saved = JSON.parse(row.json) as CountryStories;
   const stories = saved.stories
     .map((story) => ({ ...story, outlets: story.items.length, score: Math.round(storyScore(story, now) * 1000) / 1000 }))
-    .sort((a, b) => b.score - a.score || b.lastSeen.localeCompare(a.lastSeen));
+    .sort((a, b) => b.score - a.score || newestFirst(a.lastSeen, b.lastSeen));
   return { builtAt: saved.builtAt, stories };
 }
