@@ -292,7 +292,7 @@ class _DetailScreenState extends State<DetailScreen> {
               child: Row(
                 children: [
                   if (ModalRoute.of(context)?.canPop ?? false)
-                    _BarButton(
+                    GlassBarButton(
                       compact: _compact,
                       onPressed: () => Navigator.of(context).maybePop(),
                       // Its name for VoiceOver (and tests), never shown.
@@ -310,7 +310,7 @@ class _DetailScreenState extends State<DetailScreen> {
                     ),
                   const Spacer(),
                   Builder(
-                    builder: (buttonContext) => _BarButton(
+                    builder: (buttonContext) => GlassBarButton(
                       compact: _compact,
                       onPressed: () {
                         unawaited(analytics.shared(article));
@@ -339,9 +339,11 @@ class _DetailScreenState extends State<DetailScreen> {
 }
 
 /// A round Liquid Glass button floating over the article, with a 48-pt
-/// target and a light tap back (#141); smaller while [compact].
-class _BarButton extends StatelessWidget {
-  const _BarButton({
+/// target and a light tap back (#141); smaller while [compact]. A story's
+/// page has its back button too (#230).
+class GlassBarButton extends StatelessWidget {
+  const GlassBarButton({
+    super.key,
     required this.compact,
     required this.onPressed,
     required this.child,

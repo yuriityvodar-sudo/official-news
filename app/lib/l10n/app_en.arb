@@ -588,6 +588,10 @@
       }
     }
   },
+  "storyKind": "Story",
+  "@storyKind": {
+    "description": "Above a story's headline on its page (#230, the aggregator), after the country: \"Czechia · Story\"."
+  },
   "storyOutlets": "{count, plural, =1{outlet} other{outlets}}",
   "@storyOutlets": {
     "description": "Under the number of outlets on a story's card (#230), in the picture's place: \"4\" then this.",
@@ -615,6 +619,10 @@
         "example": "2"
       }
     }
+  },
+  "storyHeadlineByAi": "Headline by AI",
+  "@storyHeadlineByAi": {
+    "description": "Under a story's headline on its page when the model wrote it (#230): the headline is AI's, from the outlets' headlines."
   },
   "storyOutletsSpoken": "{count, plural, =1{1 outlet} other{{count} outlets}}",
   "@storyOutletsSpoken": {
