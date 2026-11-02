@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { LIMITS, USER_AGENT, type SourceCheck, checkOneSource, runFetcher } from "../src/fetcher";
 import type { SourceRow } from "../src/fetcher/types";
+import { headlineWords } from "../src/stories/cluster";
 import { d1Rows } from "./helpers";
 
 const NOW = new Date("2026-10-14T15:00:00Z");
@@ -1120,9 +1121,9 @@ describe("runFetcher: news outlets' headlines (#230, the aggregator)", () => {
     );
     expect(await runFetcher(env, inCalls({ fetch, now: NOW }))).toMatchObject([{ sourceId: "xx-outlet", ok: true, full: true, found: 3, offSite: 1, headlines: 2, saved: 0 }]);
     expect(await headlinesOf()).toEqual([
-      { title: "Floods close the main road", url: "https://www.outlet.test/news/floods", publishedAt: stored(2) },
+      { title: "Floods close the main road", url: "https://www.outlet.test/news/floods", publishedAt: stored(2), words: headlineWords("Floods close the main road") },
       // A subdomain of its site, always over https.
-      { title: "Cup final tonight", url: "https://sport.outlet.test/final", publishedAt: stored(5) },
+      { title: "Cup final tonight", url: "https://sport.outlet.test/final", publishedAt: stored(5), words: headlineWords("Cup final tonight") },
     ]);
     // Only robots.txt and the feed: no item page, no text, no picture.
     expect(requests.map((r) => r.url)).toEqual(["https://feeds.outlet.test/robots.txt", FEED]);
@@ -1157,6 +1158,43 @@ describe("runFetcher: news outlets' headlines (#230, the aggregator)", () => {
     const { fetch: later } = fakeFetch(outletSite([{ title: "Election called for March", link: "https://www.outlet.test/news/election", date: hoursAgo(1) }]));
     await runFetcher(env, inCalls({ fetch: later, now: at(60) }));
     expect((await headlinesOf()).map((h: { title: string }) => h.title)).toEqual(["Election called for March", "Minister resigns after the vote", "Storm warning"]);
+  });
+
+  it("reads each headline's words once for the stories, again when its title changes, at most LIMITS.wordsPerCheck a check", async () => {
+    const kept = (title: string, path: string, hours: number, words?: string[]) => ({ title, url: `https://www.outlet.test/news/${path}`, publishedAt: stored(hours), ...(words && { words }) });
+    await addOutlet(
+      "xx-outlet",
+      { everyMinutes: 1 },
+      JSON.stringify([
+        // Kept with words that are not its own: an unchanged title keeps them.
+        kept("Minister resigns", "minister", 10, ["kept"]),
+        kept("Storm warning", "storm", 30, ["kept"]),
+        // Kept before words were: read now.
+        ...Array.from({ length: LIMITS.wordsPerCheck + 5 }, (_, i) => kept(`Old story ${i}`, `old-${i}`, 31 + i / 10)),
+      ]),
+    );
+    const { fetch } = fakeFetch(
+      outletSite([
+        { title: "Minister resigns", link: "https://www.outlet.test/news/minister", date: hoursAgo(10) },
+        { title: "Storm warning for the coast", link: "https://www.outlet.test/news/storm", date: hoursAgo(30) },
+      ]),
+    );
+    await runFetcher(env, inCalls({ fetch, now: NOW }));
+    const first = await headlinesOf();
+    expect(first[0].words).toEqual(["kept"]);
+    expect(first[1].words).toEqual(headlineWords("Storm warning for the coast"));
+    // The retitled one and the first old ones, LIMITS.wordsPerCheck in all; the rest when the list changes next.
+    expect(first.filter((h: { words?: string[] }) => h.words && h.words[0] !== "kept")).toHaveLength(LIMITS.wordsPerCheck);
+    const { fetch: later } = fakeFetch(
+      outletSite([
+        { title: "Election called for March", link: "https://www.outlet.test/news/election", date: hoursAgo(1) },
+        { title: "Minister resigns", link: "https://www.outlet.test/news/minister", date: hoursAgo(10) },
+        { title: "Storm warning for the coast", link: "https://www.outlet.test/news/storm", date: hoursAgo(30) },
+      ]),
+    );
+    await runFetcher(env, inCalls({ fetch: later, now: at(1) }));
+    const second = await headlinesOf();
+    expect(second.every((h: { title: string; words?: string[] }) => h.title === "Minister resigns" || JSON.stringify(h.words) === JSON.stringify(headlineWords(h.title)))).toBe(true);
   });
 
   it("reads an unchanged feed with one request and writes nothing", async () => {

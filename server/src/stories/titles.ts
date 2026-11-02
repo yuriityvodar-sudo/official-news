@@ -6,8 +6,8 @@
 // the 350 or so stories that reach a country's first places.
 import type { Env } from "../env";
 import { MODEL } from "../summarizer";
-import { LANGS, LANGUAGES, type Lang } from "../translator/languages";
-import { inLanguage } from "../translator/prompt";
+import { LANGS, LANGUAGES, type Lang, OTHER_LETTERS, OTHER_WORDS } from "../translator/languages";
+import { NAME_PARTICLES } from "../translator/words";
 import type { Story } from "./cluster";
 
 export const TITLES = {
@@ -52,15 +52,118 @@ export const TITLES_SCHEMA = {
 export const titlesMessage = (country: string, story: Story): string =>
   `Country: ${country}.\n${story.items.map((item) => `- ${item.outlet.name}: ${item.title}`).join("\n")}`;
 
-/** A Latin word in lower case: in Ukrainian or Russian, a word left untranslated. Names, acronyms and brands have a capital (Binance, IG Metall, KT-1). */
-const latinLowerWord = (text: string) => (text.match(/[\p{L}\d]+(?:['’-][\p{L}\d]+)*/gu) ?? []).some((w) => /\p{Script=Latin}/u.test(w) && w === w.toLowerCase() && /\p{L}/u.test(w));
+// The check reads a headline's letters by their codes. The translator's check
+// (inLanguage) does it with Unicode regexes, whose compiling took 9 ms of the
+// first answer's check in a call that starts cold (2 Nov), most of a build's
+// 10 ms; it is the same check, for one sentence.
+const isLatin = (c: number) => (c >= 65 && c <= 90) || (c >= 97 && c <= 122) || (c >= 0xc0 && c <= 0x24f && c !== 0xd7 && c !== 0xf7);
+const isCyrillic = (c: number) => c >= 0x400 && c <= 0x4ff;
+const isLetter = (c: number) => isLatin(c) || isCyrillic(c) || (c >= 0x370 && c <= 0x3ff);
+const isDigit = (c: number) => c >= 48 && c <= 57;
+const isCapital = (word: string) => word[0] !== word[0].toLowerCase();
+const isAcronym = (word: string) => word.length > 1 && word === word.toUpperCase() && word !== word.toLowerCase();
+
+/** A headline's words: its runs of letters. */
+function wordsOf(text: string): string[] {
+  const words: string[] = [];
+  let start = -1;
+  for (let i = 0; i <= text.length; i++) {
+    const letter = i < text.length && isLetter(text.charCodeAt(i));
+    if (letter && start < 0) start = i;
+    else if (!letter && start >= 0) {
+      words.push(text.slice(start, i));
+      start = -1;
+    }
+  }
+  return words;
+}
+
+/**
+ * A Latin word in lower case, of letters and digits joined by an apostrophe or
+ * a hyphen: in Ukrainian or Russian, a word left untranslated. Names, acronyms
+ * and brands have a capital (Binance, IG Metall, KT-1).
+ */
+function latinLowerWord(text: string): boolean {
+  let latin = false;
+  let capital = false;
+  let letter = false;
+  for (let i = 0; i <= text.length; i++) {
+    const c = i < text.length ? text.charCodeAt(i) : 32;
+    const joins = (c === 39 || c === 0x2019 || c === 45) && i + 1 < text.length && (isLetter(text.charCodeAt(i + 1)) || isDigit(text.charCodeAt(i + 1)));
+    if (isLetter(c) || isDigit(c) || (joins && (letter || latin || capital || isDigit(text.charCodeAt(i - 1))))) {
+      if (isLatin(c)) latin = true;
+      if (isLetter(c)) {
+        letter = true;
+        const ch = text[i];
+        if (ch !== ch.toLowerCase()) capital = true;
+      }
+      continue;
+    }
+    if (latin && letter && !capital) return true;
+    latin = capital = letter = false;
+  }
+  return false;
+}
+
+/** Ukrainian or Russian: Cyrillic, none of the other one's letters or words, and in a long one its own letters. */
+function inCyrillic(text: string, lang: "uk" | "ru"): boolean {
+  let cyrillic = 0;
+  for (let i = 0; i < text.length; i++) if (isCyrillic(text.charCodeAt(i))) cyrillic++;
+  if (!cyrillic) return false;
+  const lower = text.toLowerCase();
+  for (const letter of OTHER_LETTERS[lang]) if (lower.includes(letter)) return false;
+  for (const word of wordsOf(lower)) {
+    for (const other of OTHER_WORDS[lang]) if (other.endsWith("*") ? word.startsWith(other.slice(0, -1)) : word === other) return false;
+  }
+  // As the translator asks of a field of 100 letters or more (OWN_LETTERS_FROM).
+  return lang !== "uk" || cyrillic < 100 || /[іїєґ]/.test(lower);
+}
+
+/**
+ * Spanish or German: Latin letters, not the English unchanged, and no more
+ * function words of English or of the other language than of its own, as the
+ * translator counts them (prompt.ts, functionWords): one inside a name does not
+ * count, nor an acronym.
+ */
+function inLatin(text: string, english: string, lang: "es" | "de"): boolean {
+  let latin = false;
+  for (let i = 0; i < text.length && !latin; i++) latin = isLatin(text.charCodeAt(i));
+  if (!latin) return false;
+  const tokens = wordsOf(text);
+  const plain = (s: string) => s.toLowerCase().replace(/\s+/g, " ").trim().replace(/\.$/, "");
+  if (tokens.length >= 3 && plain(text) === plain(english)) return false;
+  const stopWords = LANGUAGES[lang].stopWords!;
+  const capitalNext = (i: number, step: 1 | -1, skip: number): boolean => {
+    const next = tokens[i + step];
+    if (next === undefined) return false;
+    if (isCapital(next)) return true;
+    return skip > 0 && NAME_PARTICLES.has(next) && capitalNext(i + step, step, skip - 1);
+  };
+  let own = 0;
+  const foreign = [0, 0];
+  tokens.forEach((token, i) => {
+    if (isAcronym(token)) return;
+    const word = token.toLowerCase();
+    if (stopWords.own.has(word)) {
+      own++;
+      return;
+    }
+    const j = stopWords.english.has(word) ? 0 : stopWords.other.has(word) ? 1 : -1;
+    if (j < 0) return;
+    const skip = NAME_PARTICLES.has(token) ? 1 : 0;
+    const inName = isCapital(token) ? i > 0 || (j === 1 && capitalNext(i, 1, 1)) : capitalNext(i, -1, skip) && capitalNext(i, 1, skip);
+    if (!inName) foreign[j]++;
+  });
+  return foreign.every((n) => n <= own) && (tokens.length < 8 || own > 0);
+}
 
 /**
  * Checks the model's answer: JSON with all five headlines, none empty or
- * longer than TITLES.maxLength, each in its language (the translator's
- * inLanguage), and in Ukrainian and Russian no Latin word in lower case: the
- * trial's one slip ("медіа sharply розділяє") passed inLanguage, which lets a
- * few English letters through in a long text. The titles, or why not.
+ * longer than TITLES.maxLength, each in its language (inCyrillic, inLatin: the
+ * translator's check for one sentence), and in Ukrainian and Russian no Latin
+ * word in lower case: the trial's one slip ("медіа sharply розділяє") passed
+ * the translator's check, which lets a few English letters through in a long
+ * text. The titles, or why not.
  */
 export function toTitles(answer: string): Titles | { problems: string[] } {
   let parsed: unknown;
@@ -76,12 +179,18 @@ export function toTitles(answer: string): Titles | { problems: string[] } {
     const text = typeof value === "string" ? value.replace(/\s+/g, " ").trim().replace(/\.$/, "") : "";
     if (!text) problems.push(`${lang} is missing`);
     else if (text.length > TITLES.maxLength) problems.push(`${lang} is longer than ${TITLES.maxLength} characters`);
-    else if (lang === "en" ? !/\p{Script=Latin}/u.test(text) : !inLanguage(text, String((parsed as Record<string, unknown>).en ?? ""), LANGUAGES[lang])) {
-      problems.push(`${lang} is not in its language`);
-    } else if ((lang === "uk" || lang === "ru") && latinLowerWord(text)) problems.push(`${lang} has a word in Latin letters`);
+    else if (!inItsLanguage(text, String((parsed as Record<string, unknown>).en ?? ""), lang)) problems.push(`${lang} is not in its language`);
+    else if ((lang === "uk" || lang === "ru") && latinLowerWord(text)) problems.push(`${lang} has a word in Latin letters`);
     titles[lang] = text;
   }
   return problems.length ? { problems } : titles;
+}
+
+function inItsLanguage(text: string, english: string, lang: TitleLang): boolean {
+  if (lang === "uk" || lang === "ru") return inCyrillic(text, lang);
+  if (lang === "es" || lang === "de") return inLatin(text, english, lang);
+  for (let i = 0; i < text.length; i++) if (isLatin(text.charCodeAt(i))) return true;
+  return false;
 }
 
 /** The model's answer to one story; tests pass their own. */

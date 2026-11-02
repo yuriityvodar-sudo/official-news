@@ -12,15 +12,30 @@ export const isLang = (value: string): value is Lang => (LANGS as readonly strin
 
 const LATIN = /\p{Script=Latin}/u;
 
+/**
+ * Letters and words one of Ukrainian and Russian has and the other does not:
+ * in a field of the one, a sign of the other. A word ending in "*" stands for
+ * every word it begins. The translator's check reads them as one regex
+ * (`foreign`); the stories' headlines check reads them without one (#230).
+ */
+export const OTHER_LETTERS = { uk: "ыэъё", ru: "іїєґ" } as const;
+export const OTHER_WORDS = {
+  // Russian words Ukrainian does not have.
+  uk: ["и", "что", "его", "как", "также", "будет", "будут", "котор*", "или", "из", "она", "они", "был", "была", "было", "были", "правительств*"],
+  // Ukrainian words Russian does not have.
+  ru: ["що", "це", "щодо", "також", "буде", "будуть", "й", "який", "яка", "яке", "якого", "яких", "якому", "або", "але", "його", "вона", "вони", "був", "була", "було", "були", "цей", "ця", "цього", "уряд", "уряду", "урядом", "тепер"],
+} as const;
+
+const otherLanguage = (lang: keyof typeof OTHER_WORDS) =>
+  new RegExp(`[${OTHER_LETTERS[lang]}]|(?<!\\p{L})(?:${OTHER_WORDS[lang].map((w) => (w.endsWith("*") ? `${w.slice(0, -1)}\\p{L}*` : w)).join("|")})(?!\\p{L})`, "iu");
+
 /** What the prompt and the answer check need for each language in LANGS. */
 export const LANGUAGES: Record<Lang, Language> = {
   uk: {
     name: "Ukrainian",
     letters: /\p{Script=Cyrillic}/u,
     own: /[іїєґ]/iu,
-    // Russian letters, and Russian words Ukrainian does not have.
-    foreign:
-      /[ыэъё]|(?<!\p{L})(?:и|что|его|как|также|будет|будут|котор\p{L}*|или|из|она|они|был|была|было|были|правительств\p{L}*)(?!\p{L})/iu,
+    foreign: otherLanguage("uk"),
     numbers: {
       decimalComma: true,
       months: ["січня", "лютого", "березня", "квітня", "травня", "червня", "липня", "серпня", "вересня", "жовтня", "листопада", "грудня"],
@@ -30,9 +45,7 @@ export const LANGUAGES: Record<Lang, Language> = {
   ru: {
     name: "Russian",
     letters: /\p{Script=Cyrillic}/u,
-    // Ukrainian letters, and Ukrainian words Russian does not have.
-    foreign:
-      /[іїєґ]|(?<!\p{L})(?:що|це|щодо|також|буде|будуть|й|який|яка|яке|якого|яких|якому|або|але|його|вона|вони|був|була|було|були|цей|ця|цього|уряд|уряду|урядом|тепер)(?!\p{L})/iu,
+    foreign: otherLanguage("ru"),
     numbers: {
       decimalComma: true,
       months: ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"],

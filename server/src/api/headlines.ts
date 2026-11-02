@@ -19,7 +19,7 @@ export async function countryHeadlines(env: Env, country: string, now = new Date
     .flatMap((o) =>
       parseHeadlines(o.headlines)
         .filter((h) => h.publishedAt >= cutoff)
-        .map((h) => ({ ...h, outlet: { id: o.id, name: o.name, site: o.site } })),
+        .map((h) => ({ title: h.title, url: h.url, publishedAt: h.publishedAt, outlet: { id: o.id, name: o.name, site: o.site } })),
     )
     .sort((a, b) => b.publishedAt.localeCompare(a.publishedAt) || a.outlet.id.localeCompare(b.outlet.id))
     .slice(0, HEADLINES_PER_REPLY);
