@@ -26,6 +26,7 @@ import '../chat/chat_history_screen.dart';
 import '../chat/chat_screen.dart';
 import '../detail/detail_screen.dart';
 import '../settings/settings_screen.dart';
+import '../story/story_screen.dart';
 import 'feed_controller.dart';
 import 'feed_filters.dart';
 import 'feed_look.dart';
@@ -323,6 +324,22 @@ class _FeedScreenState extends State<FeedScreen> {
     );
   }
 
+  /// A story's page (#230), sliding in as iOS's pages do, in the look's
+  /// colours.
+  void _openStory(Story story, {required String country}) {
+    Haptics.light();
+    Navigator.of(context).push(
+      CupertinoPageRoute<void>(
+        settings: const RouteSettings(name: StoryScreen.routeName),
+        builder: (_) => StoryScreen(
+          story: story,
+          country: country,
+          look: lookFor(feedDesign.value),
+        ),
+      ),
+    );
+  }
+
   void _chatChanged() {
     if (mounted) setState(() {});
   }
@@ -609,6 +626,7 @@ class _FeedScreenState extends State<FeedScreen> {
             ),
             stories: stories,
             country: forYou,
+            openStory: (i) => _openStory(stories[i], country: forYou!),
           ),
         ),
       );

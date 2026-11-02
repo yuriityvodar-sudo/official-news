@@ -9,6 +9,7 @@ import 'package:official_news/core/theme.dart';
 import 'package:official_news/features/feed/feed_controller.dart';
 import 'package:official_news/features/feed/feed_look.dart';
 import 'package:official_news/features/feed/feed_screen.dart';
+import 'package:official_news/features/story/story_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'test_app.dart';
@@ -135,6 +136,20 @@ void main() {
     expect(find.text('outlets'), findsNWidgets(5));
     expect(find.text('SZ'), findsNWidgets(5));
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a story opens its page, and back', (tester) async {
+    await pumpFeed(tester);
+    await tester.tap(find.text('Story 3'));
+    await tester.pumpAndSettle();
+    expect(find.byType(StoryScreen), findsOneWidget);
+    expect(find.text('CZECHIA · STORY'), findsOneWidget);
+    expect(find.text('ČT24: headline 0'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Back'));
+    await tester.pumpAndSettle();
+    expect(find.byType(StoryScreen), findsNothing);
+    expect(find.text('Story 3'), findsOneWidget);
   });
 
   testWidgets('the whole world\'s feed has no stories', (tester) async {
