@@ -17,6 +17,12 @@ export async function runCleanup(env: Env, now = new Date()): Promise<number> {
   const chat = await env.DB.prepare("DELETE FROM chat_usage WHERE day < ?").bind(weekAgo).run();
   // Readers' messages (#220): conversations closed or quiet for 90 days.
   const supportThreadsRemoved = await cleanupSupport(env, now);
-  console.log(JSON.stringify({ message: "cleanup run", cleared, chatDaysRemoved: chat.meta.changes ?? 0, supportThreadsRemoved }));
+  // Stories' headlines (#230): a story id lasts a day at most, while its first headline is in the window.
+  const titles = await env.DB.prepare("DELETE FROM story_titles WHERE updated_at < ?")
+    .bind(toStoredTime(new Date(now.getTime() - 3 * 86_400_000)))
+    .run();
+  console.log(
+    JSON.stringify({ message: "cleanup run", cleared, chatDaysRemoved: chat.meta.changes ?? 0, supportThreadsRemoved, storyTitlesRemoved: titles.meta.changes ?? 0 }),
+  );
   return cleared;
 }

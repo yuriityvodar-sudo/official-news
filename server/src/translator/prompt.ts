@@ -186,7 +186,7 @@ const plain = (text: string) => text.toLowerCase().replace(/\s+/g, " ").trim().r
  * the other language has more function words in it, and a field is not when
  * it is the English unchanged.
  */
-function inLanguage(text: string, english: string, language: Language): boolean {
+export function inLanguage(text: string, english: string, language: Language): boolean {
   if (language.foreign?.test(text)) return false;
   if (language.own && count(text, language.letters) >= OWN_LETTERS_FROM && !language.own.test(text)) return false;
   const parts = text.split("\n").filter((paragraph) => paragraph.trim());

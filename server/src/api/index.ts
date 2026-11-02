@@ -2,7 +2,7 @@ import { receiveNotification } from "../appstore";
 import { answerChat, chatStatus, creditChatPack } from "../chat";
 import type { Env } from "../env";
 import { REAL_SOURCE, health } from "../health";
-import { countryStories } from "../stories";
+import { countryStories, homeStories } from "../stories";
 import { postSupportMessage, supportThread } from "../support";
 import type { Topic } from "../summarizer/schema";
 import { LANGS, type Lang, SHOWN, isLang, queueStatus, releaseStatus } from "../translator";
@@ -691,6 +691,8 @@ async function forYouPage(
       items: pick(ids.slice(offset, offset + limit)),
       nextCursor,
       top: offset === 0 ? pick(ranking.top) : [],
+      // The reader's country's first stories (#230 step 3), on the first page of For you without a topic.
+      stories: offset === 0 && topic === null ? await homeStories(env, home, lang ?? "en", new Date(now)) : [],
       ...(lang ? { translationsDelayed: delayed?.results[0]?.delayed !== 0 } : {}),
     },
     200,
@@ -965,7 +967,9 @@ async function route(request: Request, env: Env): Promise<Response> {
   if (url.pathname === "/stories") {
     const country = url.searchParams.get("country") ?? "";
     if (!/^[A-Z]{2}$/.test(country)) return badRequest("country must be a 2-letter code in capitals, such as CZ, EU or WW");
-    return json({ country, ...(await countryStories(env, country)) }, 200, LIST_CACHE);
+    const lang = readLang(url.searchParams);
+    if (lang === undefined) return badRequest(LANG_ERROR);
+    return json({ country, ...(await countryStories(env, country, lang ?? "en")) }, 200, LIST_CACHE);
   }
 
   const match = url.pathname.match(/^\/articles\/([^/]+)$/);

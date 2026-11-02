@@ -6,6 +6,7 @@
 import type { Env } from "../env";
 import { type OutletHeadline, parseHeadlines } from "../fetcher/types";
 import { type Story, clusterHeadlines, storyScore } from "./cluster";
+import { TITLES, type TitleLang, type Titles, type WriteTitles, storyTitles } from "./titles";
 
 export const BUILD = {
   /** Stories are made of the last day's headlines: a story's weight halves every 6 hours, so older ones barely count. */
@@ -28,10 +29,15 @@ export const BUILD = {
   failedMinutes: 30,
 } as const;
 
+/** A story as kept: with its headline in every language once the model has written it (titles.ts). */
+export interface StoredStory extends Story {
+  titles?: Titles;
+}
+
 /** What `country_stories.json` holds. */
 export interface CountryStories {
   builtAt: string;
-  stories: Story[];
+  stories: StoredStory[];
 }
 
 const stored = (date: Date) => `${date.toISOString().slice(0, 19)}Z`;
@@ -43,7 +49,7 @@ const newestFirst = (a: string, b: string) => (a < b ? 1 : a > b ? -1 : 0);
  * BUILD.windowHours (the newest BUILD.maxHeadlines) and keeps the weightiest BUILD.perCountry. `version` is
  * the newest headline the run saw, so the next run knows whether anything is new.
  */
-export async function buildCountryStories(env: Env, country: string, version: string, now = new Date()): Promise<number> {
+export async function buildCountryStories(env: Env, country: string, version: string, now = new Date(), write?: WriteTitles): Promise<number> {
   const { results } = await env.DB.prepare("SELECT id, name, site, headlines FROM outlets WHERE country = ? AND status != 'blocked'")
     .bind(country)
     .all<{ id: string; name: string; site: string; headlines: string }>();
@@ -61,7 +67,10 @@ export async function buildCountryStories(env: Env, country: string, version: st
     .sort((a, b) => b.score - a.score)
     .slice(0, BUILD.perCountry)
     .map(({ story }) => story);
-  const json = JSON.stringify({ builtAt: stored(now), stories } satisfies CountryStories);
+  // The first stories' headlines in every language (#230 step 3): stored ones, and the model's for new ones.
+  const titles = await storyTitles(env, country, stories, write, now);
+  const kept: StoredStory[] = stories.map((story) => (titles.has(story.id) ? { ...story, titles: titles.get(story.id) } : story));
+  const json = JSON.stringify({ builtAt: stored(now), stories: kept } satisfies CountryStories);
   await env.DB.prepare(
     `INSERT INTO country_stories (country, json, version, built_at) VALUES (?1, ?2, ?3, ?4)
      ON CONFLICT (country) DO UPDATE SET json = excluded.json, version = excluded.version, built_at = excluded.built_at, failed_at = NULL`,
@@ -131,22 +140,40 @@ export async function storiesStep(env: Env, build?: (country: string, version: s
   }
 }
 
-/** A story as `GET /stories` gives it: its weight now and how many outlets carry it. */
+/**
+ * A story as the API gives it: its weight now, how many outlets carry it, and
+ * its title in the asked language, the model's (`aiTitle`) once written, else
+ * the outlets' own headline nearest its centre.
+ */
 export interface RankedStory extends Story {
   outlets: number;
   score: number;
+  aiTitle: boolean;
 }
 
 /**
- * GET /stories?country=XX: the country's stories, the weightiest now first
- * (storyScore at the time of the request), from its one row.
+ * The country's stories, the weightiest now first (storyScore at the time of
+ * the request), from its one row, titled in `lang`: GET /stories?country=XX,
+ * and For you's `stories`.
  */
-export async function countryStories(env: Env, country: string, now = new Date()): Promise<{ builtAt: string | null; stories: RankedStory[] }> {
+export async function countryStories(env: Env, country: string, lang: TitleLang = "en", now = new Date()): Promise<{ builtAt: string | null; stories: RankedStory[] }> {
   const row = await env.DB.prepare("SELECT json FROM country_stories WHERE country = ?").bind(country).first<{ json: string }>();
   if (!row) return { builtAt: null, stories: [] };
   const saved = JSON.parse(row.json) as CountryStories;
   const stories = saved.stories
-    .map((story) => ({ ...story, outlets: story.items.length, score: Math.round(storyScore(story, now) * 1000) / 1000 }))
+    .map(({ titles, ...story }) => ({
+      ...story,
+      title: titles?.[lang] ?? story.title,
+      aiTitle: titles !== undefined,
+      outlets: story.items.length,
+      score: Math.round(storyScore(story, now) * 1000) / 1000,
+    }))
     .sort((a, b) => b.score - a.score || newestFirst(a.lastSeen, b.lastSeen));
   return { builtAt: saved.builtAt, stories };
+}
+
+/** For you's `stories` (#230 step 3): the reader's country's first stories carried by TITLES.minOutlets outlets, TITLES.perCountry of them. */
+export async function homeStories(env: Env, home: string, lang: TitleLang, now = new Date()): Promise<RankedStory[]> {
+  const { stories } = await countryStories(env, home, lang, now);
+  return stories.filter((s) => s.outlets >= TITLES.minOutlets).slice(0, TITLES.perCountry);
 }
