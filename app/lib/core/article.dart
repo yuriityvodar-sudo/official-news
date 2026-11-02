@@ -1,3 +1,5 @@
+import 'story.dart';
+
 /// The article format from docs/contract.md, as returned by the API.
 class Source {
   const Source({required this.id, required this.name, required this.url});
@@ -229,6 +231,7 @@ class ArticlesPage {
     required this.items,
     required this.nextCursor,
     required this.top,
+    this.stories = const [],
   });
 
   factory ArticlesPage.fromJson(Map<String, dynamic> json) => ArticlesPage(
@@ -242,11 +245,21 @@ class ArticlesPage {
       for (final item in json['top'] as List? ?? const [])
         Article.fromJson(item as Map<String, dynamic>),
     ],
+    // For you's first page (#230, the aggregator): the reader's country's first stories; none from an older server.
+    stories: [
+      for (final story in json['stories'] as List? ?? const [])
+        if (story is Map<String, dynamic> && Story.isValid(story))
+          Story.fromJson(story),
+    ],
   );
 
   final List<Article> items;
   final String? nextCursor;
   final List<Article> top;
+
+  /// The reader's country's first stories, titled in the feed's language by
+  /// the server (For you's first page only, #230).
+  final List<Story> stories;
 
   /// Only the articles in [lang]. A translated feed lists nothing else (#46), but a
   /// server without translations ignores `lang` and sends the English feed: none of
@@ -259,6 +272,7 @@ class ArticlesPage {
       items: items.where(inLang).toList(),
       nextCursor: null,
       top: top.where(inLang).toList(),
+      stories: stories,
     );
   }
 
@@ -266,5 +280,6 @@ class ArticlesPage {
     'items': [for (final a in items) a.toJson()],
     'nextCursor': nextCursor,
     'top': [for (final a in top) a.toJson()],
+    'stories': [for (final s in stories) s.toJson()],
   };
 }

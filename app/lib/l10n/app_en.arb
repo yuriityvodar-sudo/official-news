@@ -588,6 +588,44 @@
       }
     }
   },
+  "storyOutlets": "{count, plural, =1{outlet} other{outlets}}",
+  "@storyOutlets": {
+    "description": "Under the number of outlets on a story's card (#230), in the picture's place: \"4\" then this.",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "4"
+      }
+    }
+  },
+  "storyOutletNames": "{first}, {second} and {count} more",
+  "@storyOutletNames": {
+    "description": "A story's card (#230), after the country: its first two outlets and how many more.",
+    "placeholders": {
+      "first": {
+        "type": "String",
+        "example": "ČT24"
+      },
+      "second": {
+        "type": "String",
+        "example": "Seznam Zprávy"
+      },
+      "count": {
+        "type": "int",
+        "example": "2"
+      }
+    }
+  },
+  "storyOutletsSpoken": "{count, plural, =1{1 outlet} other{{count} outlets}}",
+  "@storyOutletsSpoken": {
+    "description": "What VoiceOver reads for a story's number of outlets (#230).",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "4"
+      }
+    }
+  },
   "readOfficialDecisionOn": "Read the official decision on {site}",
   "@readOfficialDecisionOn": {
     "description": "What VoiceOver says for that card.",

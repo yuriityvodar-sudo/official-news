@@ -11,6 +11,7 @@ import '../../core/feed_store.dart';
 import '../../core/home_country.dart';
 import '../../core/filters.dart';
 import '../../core/push.dart';
+import '../../core/story.dart';
 import '../../core/theme.dart';
 import 'feed_look.dart';
 
@@ -95,6 +96,10 @@ class FeedController extends ChangeNotifier {
 
   /// "Top stories": the API's `top`, only on the first page, best first.
   List<Article> top = const [];
+
+  /// The reader's country's first stories (#230, the aggregator): For you's
+  /// `stories`, only on the first page, shown in the Top stories block.
+  List<Story> stories = const [];
 
   /// The Top stories block above the list (#164, [topStoriesBlock]); empty
   /// when there is none.
@@ -496,6 +501,7 @@ class FeedController extends ChangeNotifier {
     loadMoreFailed = false;
     loadingMore = false;
     top = page?.top ?? const [];
+    stories = page?.stories ?? const [];
     _cursor = page?.nextCursor;
     items = page?.items ?? const [];
   }
