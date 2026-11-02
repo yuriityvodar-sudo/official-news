@@ -152,9 +152,10 @@ Map<String, dynamic> _arb(String code) =>
     jsonDecode(File('lib/l10n/app_$code.arb').readAsStringSync())
         as Map<String, dynamic>;
 
-/// The placeholders a message uses: `{name}`, or `{name, plural, …}`.
+/// The placeholders a message uses: `{name}`, or `{name, plural, …}`; not a
+/// plural's branch of one word, `=1{outlet} other{outlets}`.
 Set<String> _placeholders(String message) => RegExp(
-  r'\{(\w+)\s*[},]',
+  r'(?<![\w=])\{(\w+)\s*[},]',
 ).allMatches(message).map((m) => m.group(1)!).toSet();
 
 /// The feed's former section titles, "Top stories" and "Latest", as each

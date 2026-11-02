@@ -18,6 +18,7 @@ import '../../core/motion.dart';
 import '../../core/news_widgets.dart';
 import '../../core/pictures.dart';
 import '../../core/router.dart';
+import '../../core/story.dart';
 import '../../core/subscription.dart';
 import '../../core/theme.dart';
 import '../../l10n/app_localizations.dart';
@@ -572,6 +573,8 @@ class _FeedScreenState extends State<FeedScreen> {
     final forYou = _feed.where.isForYou && _feed.topic == null
         ? _feed.homeCountry
         : null;
+    // Among them the reader's country's stories (#230, the aggregator).
+    final stories = forYou != null ? _feed.stories : const <Story>[];
     final shown = _feed.feed;
     final slivers = <Widget>[];
 
@@ -581,7 +584,7 @@ class _FeedScreenState extends State<FeedScreen> {
     // Analytics (#60) record each opened article's section ("top" for the
     // block, "feed" for the list) and place in it, and how deep the list was
     // drawn.
-    if (block.isNotEmpty) {
+    if (block.isNotEmpty || stories.isNotEmpty) {
       slivers.add(
         look.topStories(
           context,
@@ -604,6 +607,8 @@ class _FeedScreenState extends State<FeedScreen> {
               arriving: _arriving,
               entering: _entering,
             ),
+            stories: stories,
+            country: forYou,
           ),
         ),
       );

@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -8,6 +10,7 @@ import '../../core/feed_design.dart';
 import '../../core/filters.dart';
 import '../../core/motion.dart';
 import '../../core/read_mark.dart';
+import '../../core/story.dart';
 import '../../core/theme.dart';
 import '../chat/chat_history_screen.dart';
 import 'feed_filters.dart';
@@ -88,6 +91,13 @@ abstract class FeedLook {
   Color cardColor(BuildContext context) => background(context);
   double get cardRadius => 12;
 
+  /// The look's colour for what is fresh or to act on: a story's time, its
+  /// page's "Read on" (#230).
+  Color accent(BuildContext context) => AppColors.accent;
+
+  /// The shadow under the look's cards, if they have one.
+  List<BoxShadow>? cardShadow(BuildContext context) => null;
+
   /// The theme the feed is drawn with: [base] is the app's. Returning another
   /// one changes the shared pieces at once (NewsText styles used by
   /// PublisherLine and the loading, error and empty texts; the divider colour).
@@ -110,15 +120,87 @@ abstract class FeedLook {
 
   /// The Top stories block (#164, Yurii 26 Oct), above the list: its
   /// heading ([topStoriesHeading]), then its 3 decisions in the look's own
-  /// rows ([articles]). One sliver; it scrolls with the feed.
-  Widget topStories(BuildContext context, TopStories block) =>
-      SliverMainAxisGroup(
-        slivers: [
-          SliverToBoxAdapter(child: topStoriesHeading(context, block)),
-          articles(context, block.list),
-          const SliverToBoxAdapter(child: SizedBox(height: 16)),
-        ],
+  /// rows ([articles]). With the reader's country's stories (#230, the
+  /// aggregator), two stories ([storyRows]), then a decision, and again
+  /// (Roman, 1 Nov: variant B of `handoff/stories-app.html`). One sliver; it
+  /// scrolls with the feed.
+  Widget topStories(BuildContext context, TopStories block) {
+    final heading = SliverToBoxAdapter(
+      child: topStoriesHeading(context, block),
+    );
+    const end = SliverToBoxAdapter(child: SizedBox(height: 16));
+    final stories = showsStories ? block.stories.length : 0;
+    if (stories == 0) {
+      return SliverMainAxisGroup(
+        slivers: [heading, articles(context, block.list), end],
       );
+    }
+    final decisions = block.list.length;
+    final slivers = <Widget>[heading];
+    // Where each row stands in the block, for the rows arriving in order.
+    var row = 0;
+    var from = 0;
+    for (var d = 0; d <= decisions; d++) {
+      final to = d == decisions ? stories : math.min(stories, from + 2);
+      if (to > from) {
+        slivers.add(
+          storyRows(
+            context,
+            block,
+            from,
+            to,
+            row: row,
+            beforeDecision: d < decisions,
+          ),
+        );
+        row += to - from;
+      }
+      if (d < decisions) {
+        slivers.add(articles(context, block.list.only(d, place: row++)));
+      }
+      from = to;
+    }
+    slivers.add(end);
+    return SliverMainAxisGroup(slivers: slivers);
+  }
+
+  /// `block.stories` from [from] to [to] ([storyCard]), the first of them the
+  /// block's [row]th row: they arrive and are held as a decision's row is
+  /// ([FeedList.tile]). Spaced as the News looks' [articles] space their
+  /// rows, 12 apart and 4 under the heading; [beforeDecision]: a decision's
+  /// row follows, which starts 4 lower.
+  Widget storyRows(
+    BuildContext context,
+    TopStories block,
+    int from,
+    int to, {
+    required int row,
+    bool beforeDecision = false,
+  }) => SliverPadding(
+    padding: EdgeInsets.fromLTRB(16, from == 0 ? 4 : 0, 16, 0),
+    sliver: SliverList.list(
+      children: [
+        for (var i = from; i < to; i++)
+          Padding(
+            padding: EdgeInsets.only(
+              bottom: beforeDecision && i == to - 1 ? 8 : 12,
+            ),
+            child: block.list.arrive(
+              row + i - from,
+              PressScale(child: storyCard(context, block, i)),
+            ),
+          ),
+      ],
+    ),
+  );
+
+  /// Whether the look shows the reader's country's stories in the Top
+  /// stories block ([storyCard]); the News looks do (#230).
+  bool get showsStories => false;
+
+  /// The card of `block.stories[index]`, for a look that [showsStories].
+  Widget storyCard(BuildContext context, TopStories block, int index) =>
+      throw UnimplementedError('$runtimeType shows no stories');
 
   /// The Top stories title in the masthead's type, with what picked them
   /// under it.
@@ -324,9 +406,15 @@ class FeedList {
     this.arriving = false,
     this.entering = const {},
     this.actions = _nothing,
+    this.place = 0,
   });
 
   final List<Article> articles;
+
+  /// Where the first of [articles] stands among the rows of its block: in
+  /// the Top stories block stories stand between the decisions (#230), and
+  /// the rows arrive in the order they are shown ([tile], [arrive]).
+  final int place;
 
   /// The feed has just loaded (#141): its first rows arrive one after
   /// another ([tile]); rows built later, by scrolling, are there at once.
@@ -383,15 +471,22 @@ class FeedList {
   Widget tile(int index, Widget row) => ZoomSource(
     id: articles[index].id,
     card: row,
-    child: Arrive(
-      animate: arriving && index < arrivingRows,
-      delay: Duration(milliseconds: 45 * index),
-      child: GrowIn(
+    child: arrive(
+      place + index,
+      GrowIn(
         animate: entering.contains(articles[index].id),
-        delay: Duration(milliseconds: 70 * index),
+        delay: Duration(milliseconds: 70 * (place + index)),
         child: PressScale(onLongPress: () => actions(index), child: row),
       ),
     ),
+  );
+
+  /// [row], the [at]th row of the list, arriving just after the feed has
+  /// loaded ([tile]): also a story's row in the Top stories block (#230).
+  Widget arrive(int at, Widget row) => Arrive(
+    animate: arriving && at < arrivingRows,
+    delay: Duration(milliseconds: 45 * at),
+    child: row,
   );
 
   /// The line after the row of `articles[index]`, in a list with lines
@@ -399,11 +494,28 @@ class FeedList {
   /// under it do not jump. `separatorBuilder: (_, i) => list.line(i, line)`.
   Widget line(int index, Widget line) => GrowIn(
     animate: entering.contains(articles[index].id),
-    delay: Duration(milliseconds: 70 * index),
+    delay: Duration(milliseconds: 70 * (place + index)),
     child: line,
   );
 
   bool isRead(Article article) => readIds.contains(article.id);
+
+  /// `articles[index]` alone, the block's [place]th row, where stories stand
+  /// between the decisions (#230): its row opens, is held and is counted as
+  /// `index`.
+  FeedList only(int index, {required int place}) => FeedList(
+    articles: [articles[index]],
+    readIds: readIds,
+    open: (_) => open(index),
+    shown: (_) => shown(index),
+    readStyle: readStyle,
+    topic: topic,
+    maxTopics: maxTopics,
+    arriving: arriving,
+    entering: entering,
+    actions: (_) => actions(index),
+    place: place,
+  );
 
   /// What the row of [article] shows of it being read: faded (Dim), or the
   /// unread dot in place of the official-source tick (Blue, Red).
@@ -424,7 +536,22 @@ class TopStories {
     required this.title,
     required this.caption,
     required this.list,
+    this.stories = const [],
+    this.country,
+    this.openStory = _noStory,
   });
+
+  static void _noStory(int _) {}
+
+  /// The reader's country's first stories (#230, the aggregator): two of
+  /// them before each decision ([FeedLook.topStories]).
+  final List<Story> stories;
+
+  /// Their country, "CZ", which their cards name first.
+  final String? country;
+
+  /// Opens `stories[index]`.
+  final ValueChanged<int> openStory;
 
   /// "Top stories", in the reader's language.
   final String title;

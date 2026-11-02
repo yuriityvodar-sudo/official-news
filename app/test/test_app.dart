@@ -77,3 +77,26 @@ Map<String, dynamic>? fakePage(Map<String, dynamic>? page, Map<String, String> q
         'items': fakeFiltered((page['items'] as List).cast<Map<String, dynamic>>(), q),
         'top': fakeFiltered((page['top'] as List? ?? const []).cast<Map<String, dynamic>>(), q),
       };
+
+/// A story as For you sends it (#230, the aggregator): one headline per
+/// outlet, the most recent first.
+Map<String, dynamic> fakeStory({
+  String id = 's1',
+  String title = 'Babiš names his government',
+  bool aiTitle = true,
+  List<String> outlets = const ['ČT24', 'Seznam Zprávy', 'iROZHLAS', 'Deník N'],
+}) => {
+  'id': id,
+  'title': title,
+  'aiTitle': aiTitle,
+  'lastSeen': '2026-11-02T09:30:00Z',
+  'items': [
+    for (final (i, outlet) in outlets.indexed)
+      {
+        'title': '$outlet: headline $i',
+        'url': 'https://example.test/$i',
+        'publishedAt': '2026-11-02T0${9 - i}:30:00Z',
+        'outlet': {'id': 'cz-$i', 'name': outlet},
+      },
+  ],
+};

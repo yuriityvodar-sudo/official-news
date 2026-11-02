@@ -12,8 +12,10 @@ import '../../core/countries.dart';
 import '../../core/motion.dart';
 import '../../core/news_widgets.dart';
 import '../../core/read_mark.dart';
+import '../../core/story.dart';
 import '../../core/theme.dart';
 import '../../l10n/app_localizations.dart';
+import '../story/outlet_mark.dart';
 import 'feed_look.dart';
 import 'feed_look_now.dart';
 import 'feed_pills.dart';
@@ -76,6 +78,25 @@ class NewsLook extends FeedLook {
 
   @override
   double get cardRadius => _NewsStyle.radius;
+
+  @override
+  Color accent(BuildContext context) => _NewsStyle.of(context, palette).accent;
+
+  @override
+  List<BoxShadow> cardShadow(BuildContext context) =>
+      _NewsStyle.of(context, palette).cardShadow;
+
+  @override
+  bool get showsStories => true;
+
+  @override
+  Widget storyCard(BuildContext context, TopStories block, int index) =>
+      _StoryCard(
+        palette: palette,
+        story: block.stories[index],
+        country: block.country,
+        onTap: () => block.openStory(index),
+      );
 
   /// The Top stories title in the look's colour, as the chosen pill (#164).
   @override
@@ -804,6 +825,165 @@ class _Card extends StatelessWidget {
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A story's card (#230, the aggregator; Roman, 1 Nov: variant B of
+/// `handoff/stories-app.html`, "as Apple News"): a decision's card, with the
+/// country and the outlets where a decision has its country and institution
+/// and no seal, and in its picture's place how many outlets carry the story
+/// ([_Outlets]). No topic tags: a story has none.
+class _StoryCard extends StatelessWidget {
+  const _StoryCard({
+    required this.palette,
+    required this.story,
+    required this.country,
+    required this.onTap,
+  });
+
+  final NewsPalette palette;
+  final Story story;
+
+  /// The reader's country, whose outlets these are.
+  final String? country;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = _NewsStyle.of(context, palette);
+    final l10n = AppLocalizations.of(context);
+    final time = timeAgo(story.lastSeen, l10n);
+    final meta = TextStyle(fontSize: 14, color: style.muted);
+    // Fresh as a decision is (isFresh): its latest headline in the last hour.
+    final age = DateTime.now().difference(story.lastSeen);
+    final fresh = !age.isNegative && age < const Duration(hours: 1);
+    return Semantics(
+      container: true,
+      button: true,
+      label: storySpoken(story, country, l10n),
+      onTap: onTap,
+      excludeSemantics: true,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: style.card,
+            borderRadius: BorderRadius.circular(_NewsStyle.radius),
+            boxShadow: style.cardShadow,
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(18, 14, 16, 14),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        storyMeta(story, country, l10n),
+                        style: style.source,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 5),
+                      Text(story.title, style: style.headline(context)),
+                      const SizedBox(height: 8),
+                      if (fresh)
+                        FreshTime(
+                          time,
+                          articleId: 'story ${story.id}',
+                          style: meta.copyWith(fontWeight: FontWeight.w600),
+                          color: style.accent,
+                        )
+                      else
+                        Text(time, style: meta),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                _Outlets(style: style, story: story),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Where a decision's card has its picture, on a story's: how many outlets
+/// carry it, large in the look's gradient, and the first four's marks.
+class _Outlets extends StatelessWidget {
+  const _Outlets({required this.style, required this.story});
+
+  final _NewsStyle style;
+  final Story story;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final count = story.items.length;
+    final tile = Color.alphaBlend(
+      style.accent.withValues(alpha: style.dark ? 0.16 : 0.08),
+      style.card,
+    );
+    final marks = story.items.take(4).toList();
+    return Container(
+      width: 92,
+      height: 92,
+      padding: const EdgeInsets.all(6),
+      decoration: BoxDecoration(
+        color: tile,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      // Larger text makes it smaller rather than spill out of the tile.
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ShaderMask(
+              blendMode: BlendMode.srcIn,
+              shaderCallback: style.gradient.createShader,
+              child: Text(
+                '$count',
+                style: TextStyle(
+                  fontSize: 34,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -1,
+                  height: 1,
+                  color: style.ink,
+                ),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              l10n.storyOutlets(count),
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: style.muted,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final (i, item) in marks.indexed)
+                  // Each over the one before it, by a quarter.
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    widthFactor: i == marks.length - 1 ? 1 : 0.75,
+                    child: OutletMark(item.outlet, size: 16, border: tile),
+                  ),
+              ],
+            ),
+          ],
         ),
       ),
     );
