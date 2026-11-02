@@ -14,9 +14,9 @@ export const BUILD = {
   /**
    * At most this many of them, the newest. A build's call starts cold, its code not yet warmed up: on
    * Workers, 2 Nov (Yurii's check of #282), 40 ms of CPU for Germany's 300 headlines and 12 for South
-   * Africa's 31, against the 10 ms a call has. With the words kept by the fetcher, only the weightiest
-   * stories made and the headlines' check without Unicode regexes, a cold build takes about 40% of that
-   * for the biggest countries and a quarter for the others (laptop, docs/decisions/2026-11-02-stories-cold-cpu.md).
+   * Africa's 31, against the 10 ms a call has. With the words kept by the fetcher, the grouping's loops
+   * in WebAssembly and the headlines' check without Unicode regexes, a cold build of 300 takes about
+   * 5 ms (laptop, docs/decisions/2026-11-02-stories-wasm.md).
    */
   maxHeadlines: 300,
   /** Stories kept per country, the weightiest when built: the app shows the first ones. */
