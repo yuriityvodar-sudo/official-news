@@ -34,7 +34,7 @@ build/
 **/android/local.properties
 
 # Node / Cloudflare Worker
-node_modules/
+node_modules
 .wrangler/
 dist/
 
