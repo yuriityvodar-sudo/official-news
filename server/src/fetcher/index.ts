@@ -4,6 +4,7 @@ import { parseApi } from "./api";
 import { parseFeed } from "./feed";
 import { extractContent, findLink, parsePage } from "./page";
 import { type Robots, isAllowed, robotsFromResponse } from "./robots";
+import { headlineWords } from "../stories/cluster";
 import { decodeBody, getStrings, htmlToText, toStoredTime, ulid } from "./text";
 import { type FilterField, type FoundItem, type Headline, type SourceConfig, type SourceRow, configRegex, parseHeadlines, readConfig } from "./types";
 import { type EventsLang, articleRaw, currentEventsPages, englishPageDay, leadOf, parseCurrentEvents } from "./wikipedia";
@@ -43,6 +44,8 @@ export const LIMITS = {
   /** At most this many headlines are kept per outlet, the newest: two days of the busiest feeds. */
   headlinesPerOutlet: 300,
   headlineLength: 300,
+  /** Headlines whose words a check reads at most (stories/cluster.ts, headlineWords): a feed's new ones are fewer. */
+  wordsPerCheck: 40,
   /** A source whose last check failed is asked again after this long, not at every turn. */
   failedCheckMinutes: 10,
   /** Newest items looked at per check. */
@@ -779,7 +782,7 @@ async function saveHeadlines(
   const row = await run.env.DB.prepare("SELECT headlines FROM outlets WHERE id = ?").bind(source.id).first<{ headlines: string }>();
   const stored = parseHeadlines(row?.headlines);
   const titles = new Map(listed.map((item) => [item.url, item.title.slice(0, LIMITS.headlineLength)]));
-  const known = new Set(stored.map((h) => h.url));
+  const known = new Map(stored.map((h) => [h.url, h.title]));
   const fresh: Headline[] = listed
     .filter((item) => item.publishedAt! >= cutoff && !known.has(item.url))
     .map((item) => ({ title: titles.get(item.url)!, url: item.url, publishedAt: item.publishedAt! }));
@@ -787,6 +790,15 @@ async function saveHeadlines(
   const kept = [...fresh, ...stored.filter((h) => h.publishedAt >= cutoff).map((h) => ({ ...h, title: titles.get(h.url) ?? h.title }))]
     .sort((a, b) => b.publishedAt.localeCompare(a.publishedAt))
     .slice(0, LIMITS.headlinesPerOutlet);
+  // Each headline's words, read here once for the stories' builds (#230), and again when its title
+  // changes; at most LIMITS.wordsPerCheck a check, so the first checks after this change stay small.
+  let reading = LIMITS.wordsPerCheck;
+  for (let i = 0; i < kept.length && reading > 0; i++) {
+    const h = kept[i];
+    if (Array.isArray(h.words) && known.get(h.url) === h.title) continue;
+    kept[i] = { ...h, words: headlineWords(h.title) };
+    reading--;
+  }
   const headlines = JSON.stringify(kept);
   const etag = config.conditionalGet ? list.etag : null;
   const lastModified = config.conditionalGet ? list.lastModified : null;

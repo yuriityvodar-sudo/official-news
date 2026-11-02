@@ -424,7 +424,8 @@ describe("GET /headlines (#230, the aggregator)", () => {
     const budget = headline("Budget passed", 30);
     const snow = headline("Snow in the mountains", 3);
     await env.DB.batch([
-      insert("xx-a", "XX", "active", [floods, budget, headline("Last week", 49)]),
+      // The words the fetcher keeps for the stories are not in the reply.
+      insert("xx-a", "XX", "active", [{ ...floods, words: ["flood", "close", "roads"] }, budget, headline("Last week", 49)]),
       insert("xx-b", "XX", "stale", [snow]),
       insert("xx-gone", "XX", "blocked", [headline("Taken out", 2)]),
       insert("yy-a", "YY", "active", [headline("Elsewhere", 1)]),

@@ -4,17 +4,19 @@
 // (`StoryBuilder` in src/index.ts) with its own 10 ms of CPU, when the
 // country's outlets have new headlines.
 import type { Env } from "../env";
-import { type OutletHeadline, parseHeadlines } from "../fetcher/types";
-import { type Story, clusterHeadlines, storyScore } from "./cluster";
+import { parseHeadlines } from "../fetcher/types";
+import { type Story, type StoryHeadline, storyScore, topStories } from "./cluster";
 import { TITLES, type TitleLang, type Titles, type WriteTitles, storyTitles } from "./titles";
 
 export const BUILD = {
   /** Stories are made of the last day's headlines: a story's weight halves every 6 hours, so older ones barely count. */
   windowHours: 24,
   /**
-   * At most this many of them, the newest. On Workers a build of 1 Nov took 38 ms of CPU for India's
-   * 450 headlines and 15 to 30 for most countries, against the 10 ms a call has (Yurii's check of #281):
-   * with fewer headlines, the faster grouping and a smaller row, India's takes about a third.
+   * At most this many of them, the newest. A build's call starts cold, its code not yet warmed up: on
+   * Workers, 2 Nov (Yurii's check of #282), 40 ms of CPU for Germany's 300 headlines and 12 for South
+   * Africa's 31, against the 10 ms a call has. With the words kept by the fetcher, only the weightiest
+   * stories made and the headlines' check without Unicode regexes, a cold build takes about 40% of that
+   * for the biggest countries and a quarter for the others (laptop, docs/decisions/2026-11-02-stories-cold-cpu.md).
    */
   maxHeadlines: 300,
   /** Stories kept per country, the weightiest when built: the app shows the first ones. */
@@ -54,7 +56,7 @@ export async function buildCountryStories(env: Env, country: string, version: st
     .bind(country)
     .all<{ id: string; name: string; site: string; headlines: string }>();
   const cutoff = stored(new Date(now.getTime() - BUILD.windowHours * 3_600_000));
-  const headlines: OutletHeadline[] = results
+  const headlines: StoryHeadline[] = results
     .flatMap((o) =>
       parseHeadlines(o.headlines)
         .filter((h) => h.publishedAt >= cutoff)
@@ -62,11 +64,7 @@ export async function buildCountryStories(env: Env, country: string, version: st
     )
     .sort((a, b) => newestFirst(a.publishedAt, b.publishedAt))
     .slice(0, BUILD.maxHeadlines);
-  const stories = clusterHeadlines(headlines)
-    .map((story) => ({ story, score: storyScore(story, now) }))
-    .sort((a, b) => b.score - a.score)
-    .slice(0, BUILD.perCountry)
-    .map(({ story }) => story);
+  const stories = topStories(headlines, now, BUILD.perCountry);
   // The first stories' headlines in every language (#230 step 3): stored ones, and the model's for new ones.
   const titles = await storyTitles(env, country, stories, write, now);
   const kept: StoredStory[] = stories.map((story) => (titles.has(story.id) ? { ...story, titles: titles.get(story.id) } : story));

@@ -1060,3 +1060,14 @@ describe("GET /articles with lang", () => {
     },
   );
 });
+
+describe("Ukrainian's and Russian's check for the other language (#46)", () => {
+  it("is the regex it was, now made from the lists the stories' headlines check reads too (#230)", () => {
+    expect(LANGUAGES.uk.foreign).toEqual(
+      /[ыэъё]|(?<!\p{L})(?:и|что|его|как|также|будет|будут|котор\p{L}*|или|из|она|они|был|была|было|были|правительств\p{L}*)(?!\p{L})/iu,
+    );
+    expect(LANGUAGES.ru.foreign).toEqual(
+      /[іїєґ]|(?<!\p{L})(?:що|це|щодо|також|буде|будуть|й|який|яка|яке|якого|яких|якому|або|але|його|вона|вони|був|була|було|були|цей|ця|цього|уряд|уряду|урядом|тепер)(?!\p{L})/iu,
+    );
+  });
+});

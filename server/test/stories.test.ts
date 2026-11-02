@@ -5,7 +5,7 @@ import type { OutletHeadline } from "../src/fetcher/types";
 import worker, { CRONS } from "../src/index";
 import { runCleanup } from "../src/health/cleanup";
 import { BUILD, buildCountryStories, dueCountries, storiesStep } from "../src/stories";
-import { STORIES, type Story, clusterHeadlines, storyScore, terms } from "../src/stories/cluster";
+import { STORIES, type Story, clusterHeadlines, headlineWords, storyScore, terms, topStories } from "../src/stories/cluster";
 import { TITLES, type WriteTitles, storyTitles, toTitles } from "../src/stories/titles";
 import { HEADLINES_2026_11_01 } from "./fixtures/headlines-2026-11-01";
 import { chat, fakeAi } from "./helpers";
@@ -50,6 +50,13 @@ describe("terms (#230, stories)", () => {
   });
 });
 
+describe("headlineWords (#230, stories)", () => {
+  it("gives a headline's words as the fetcher keeps them, a name's with ^ first", () => {
+    expect(headlineWords("Zemřel textař Pavel Žák, bylo mu 85 let")).toEqual(["zemře", "texta", "^pavel", "^žák", "bylo", "85", "let"]);
+    expect(headlineWords("Zemřel textař Pavel Žák, bylo mu 85 let").map((w) => w.replace("^", ""))).toEqual(terms("Zemřel textař Pavel Žák, bylo mu 85 let"));
+  });
+});
+
 describe("clusterHeadlines on the headlines of 1 Nov (#230, stories)", () => {
   it("groups a country's headlines on the same event, whatever their wording", () => {
     const stories = clusterHeadlines(real("CZ"));
@@ -78,6 +85,29 @@ describe("clusterHeadlines on the headlines of 1 Nov (#230, stories)", () => {
   it("gives a story an id from its first headline's link, the same whatever the order of the headlines", () => {
     const ids = (stories: Story[]) => stories.map((s) => s.id).sort();
     expect(ids(clusterHeadlines([...real("CZ")].reverse()))).toEqual(ids(clusterHeadlines(real("CZ"))));
+  });
+});
+
+describe("the stories of a build that starts cold (#230: Yurii's check of #282, 2 Nov)", () => {
+  const withWords = (headlines: OutletHeadline[]) => headlines.map((h) => ({ ...h, words: headlineWords(h.title) }));
+
+  it("are the same from the words the fetcher kept as from the headlines, and list none of the words", () => {
+    for (const country of ["CZ", "US"]) {
+      const stories = clusterHeadlines(withWords(real(country)));
+      expect(stories).toEqual(clusterHeadlines(real(country)));
+      expect(stories.flatMap((s) => s.items).some((i) => "words" in i)).toBe(false);
+    }
+  });
+
+  it("topStories: the weightiest stories of clusterHeadlines, in their order, made only for those", () => {
+    for (const country of ["CZ", "US"]) {
+      const ranked = clusterHeadlines(real(country))
+        .map((story) => ({ story, score: storyScore(story, NOW) }))
+        .sort((a, b) => b.score - a.score)
+        .map(({ story }) => story);
+      expect(topStories(withWords(real(country)), NOW, 10)).toEqual(ranked.slice(0, 10));
+      expect(topStories(real(country), NOW, 1000)).toEqual(ranked);
+    }
   });
 });
 
@@ -217,6 +247,10 @@ describe("story titles (#230 step 3)", () => {
     // The trial's slip (1 Nov): one English word in a Ukrainian headline, which inLanguage alone lets through.
     expect(problems({ ...TITLES_OK, uk: "Фінансування суспільного медіа sharply розділяє виборців уряду та опозиції" })).toEqual(["uk has a word in Latin letters"]);
     expect(problems({ ...TITLES_OK, ru: "Помер композитор Павел Жак, йому було 85 років" })).toEqual(["ru is not in its language"]);
+    // Russian without a letter Ukrainian lacks, by its words; English in the Spanish field; Spanish in the German one.
+    expect(problems({ ...TITLES_OK, uk: "Правительство и парламент договорились о бюджете" })).toEqual(["uk is not in its language"]);
+    expect(problems({ ...TITLES_OK, es: TITLES_OK.en })).toEqual(["es is not in its language"]);
+    expect(problems({ ...TITLES_OK, de: "El Gobierno y el Parlamento acordaron el presupuesto" })).toEqual(["de is not in its language"]);
   });
 
   const czStories = () => clusterHeadlines(real("CZ")).sort((a, b) => storyScore(b, NOW) - storyScore(a, NOW));
