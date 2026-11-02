@@ -99,6 +99,18 @@ describe("the stories of a build that starts cold (#230: Yurii's check of #282, 
     }
   });
 
+  it("in WebAssembly, whose memory an isolate keeps: builds one after another are as each alone, larger or smaller", () => {
+    const cz = clusterHeadlines(real("CZ"));
+    const us = clusterHeadlines(real("US"));
+    const both = clusterHeadlines([...real("CZ"), ...real("US")]);
+    expect(clusterHeadlines(real("US"))).toEqual(us);
+    expect(clusterHeadlines(real("CZ"))).toEqual(cz);
+    expect(clusterHeadlines([...real("CZ"), ...real("US")])).toEqual(both);
+    expect(clusterHeadlines(real("CZ").slice(0, 5))).toEqual(clusterHeadlines(real("CZ").slice(0, 5)));
+    expect(clusterHeadlines([])).toEqual([]);
+    expect(topStories([], NOW, 10)).toEqual([]);
+  });
+
   it("topStories: the weightiest stories of clusterHeadlines, in their order, made only for those", () => {
     for (const country of ["CZ", "US"]) {
       const ranked = clusterHeadlines(real(country))

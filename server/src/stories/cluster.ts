@@ -3,6 +3,7 @@
 // of the country's outlets carry the story and how fresh it is. The same rule for
 // every country and language: no word lists, no language of its own.
 import type { OutletHeadline } from "../fetcher/types";
+import groupWasm from "./group.wasm";
 
 /** A story: one headline per outlet that carries it, the most recent first. */
 export interface Story {
@@ -137,281 +138,167 @@ function hash(text: string): string {
 /** Text in the order of its UTF-16 code units: what the times and links need, cheaper than localeCompare. */
 const byText = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 
-/** A headline's words as numbers (this call's), in increasing order, with their weights. */
-interface Member {
-  headline: StoryHeadline;
-  /** Its rarest words that other headlines have too: the stories it is compared with share one. */
-  leads: number[];
-  ids: number[];
-  weights: number[];
-  norm: number;
-  /** Its vector of length 1 (weights over norm), and that one's squared length as a group's centre sums it. */
-  unit: Float64Array;
-  unitSquared: number;
+/**
+ * The grouping's WebAssembly (`assembly/stories.ts`, built into group.wasm): a
+ * call's JavaScript starts cold, and its loops took most of the call's 10 ms
+ * of CPU (2 Nov, India's 300 headlines about 12 ms after #287's speed-ups).
+ * One instance per isolate, its memory kept for the next call.
+ */
+interface Grouping {
+  memory: WebAssembly.Memory;
+  heap(): number;
+  group(base: number): number;
 }
+let grouping: Grouping | undefined;
+const wasm = (): Grouping => (grouping ??= new WebAssembly.Instance(groupWasm, {}).exports as unknown as Grouping);
 
-interface Group {
-  members: Member[];
-  /**
-   * The sum of its headlines' vectors, each of length 1, by word (dense: a call has a few thousand
-   * words), from its second headline on; a group of one is its headline's `unit`. And the sum's
-   * squared length.
-   */
-  centre: Float64Array | null;
-  centreSquared: number;
+/** The slots of the grouping's header: where its arrays are (assembly/stories.ts). */
+const SLOT = {
+  n: 0, terms: 1, leads: 2, wordStart: 3, ids: 4, names: 5, idf: 6, rank: 7, sorted: 8, weights: 9, units: 10, norm: 11,
+  unitSquared: 12, lead: 13, leadCount: 14, df: 15, probe: 16, seen: 17, count: 18, head: 19, tail: 20, next: 21,
+  squared: 22, centre: 23, postHead: 24, postTail: 25, postGroup: 26, postNext: 27, centres: 28, outStart: 29,
+  outMembers: 30, outTypical: 31, common: 32, joinAt: 34, nameWeight: 36,
+} as const;
+const HEADER_BYTES = 152;
+
+/** The grouping's answer: each group's headlines (indices of the sorted headlines) in time order, and its most typical. */
+interface Groups {
+  groups: number;
+  count: Int32Array;
+  start: Int32Array;
+  members: Int32Array;
+  typical: Int32Array;
 }
 
 /**
- * How alike a headline and a group's centre are (cosine). The centre of a group of one is read
- * through `probe`, which holds the headline's weights by word: the same sum, in the same order
- * of words, as reading the centre by the headline's words, without a lookup each.
+ * Groups one country's headlines, sorted oldest first. Each word weighs by
+ * how rare it is among these headlines (inverse document frequency), so names,
+ * places and numbers decide and words every headline has do not. Oldest first,
+ * a headline joins the group whose centre it is most like, from `joinAt` up,
+ * or starts one; it is compared only with the groups that share one of its
+ * rarest words. Then each headline left alone looks again, now that the groups
+ * have grown: a long headline that came second, to a group of one short
+ * headline, joins the group it is like, as long as it is like one of its
+ * headlines too. Here the words become numbers, read once by the fetcher (a
+ * headline kept before is read here); the loops run in WebAssembly.
  */
-function toCentre(member: Member, group: Group, probe: Float64Array): number {
-  const centreNorm = Math.sqrt(group.centreSquared);
-  if (!member.norm || !centreNorm) return 0;
-  let dot = 0;
-  const centre = group.centre;
-  if (centre) {
-    const { ids, weights } = member;
-    for (let k = 0; k < ids.length; k++) dot += weights[k] * centre[ids[k]];
-  } else {
-    const { ids, unit } = group.members[0];
-    for (let k = 0; k < ids.length; k++) dot += probe[ids[k]] * unit[k];
-  }
-  return dot / (member.norm * centreNorm);
-}
-
-function toMember(a: Member, b: Member): number {
-  if (!a.norm || !b.norm) return 0;
-  let dot = 0;
-  for (let i = 0, j = 0; i < a.ids.length && j < b.ids.length; ) {
-    if (a.ids[i] === b.ids[j]) dot += a.weights[i++] * b.weights[j++];
-    else if (a.ids[i] < b.ids[j]) i++;
-    else j++;
-  }
-  return dot / (a.norm * b.norm);
-}
-
-/**
- * Groups one country's headlines. Each word weighs by how rare it is among
- * these headlines (inverse document frequency), so names, places and numbers
- * decide and words every headline has do not. Oldest first, a headline joins
- * the group whose centre it is most like, from `joinAt` up, or starts one; it
- * is compared only with the groups that share one of its rarest words. Then
- * each headline left alone looks again, now that the groups have grown: a long
- * headline that came second, to a group of one short headline, joins the group
- * it is like, as long as it is like one of its headlines too.
- *
- * Written for a call that starts cold (2 Nov: Yurii's check of #282 on
- * Workers, 12 to 40 ms where a warmed-up laptop took 3): words are numbers
- * within the call, read once by the fetcher, and a headline's are sorted and
- * picked in plain loops, without the arrays and callbacks that cost most before
- * the code has warmed up.
- */
-function groupHeadlines(headlines: StoryHeadline[]): Group[] {
-  const sorted = headlines.slice().sort((a, b) => byText(a.publishedAt, b.publishedAt) || byText(a.url, b.url));
-  const total = sorted.length;
+function groupHeadlines(sorted: StoryHeadline[]): Groups {
+  const n = sorted.length;
   const termIds = new Map<string, number>();
-  const idsOf: number[][] = new Array(total);
-  const namesOf: boolean[][] = new Array(total);
+  const ids: number[] = [];
+  const names: number[] = [];
+  const wordStart: number[] = [0];
   const number = (term: string): number => {
     let id = termIds.get(term);
     if (id === undefined) termIds.set(term, (id = termIds.size));
     return id;
   };
-  for (let i = 0; i < total; i++) {
-    const ids: number[] = [];
-    const names: boolean[] = [];
+  for (let i = 0; i < n; i++) {
     const words = sorted[i].words;
     if (Array.isArray(words)) {
       for (let k = 0; k < words.length; k++) {
         const word = words[k];
         const name = word.charCodeAt(0) === 94; // "^"
         ids.push(number(name ? word.slice(1) : word));
-        names.push(name);
+        names.push(name ? 1 : 0);
       }
     } else {
       for (const [term, name] of readTermsOnce(sorted[i].title)) {
         ids.push(number(term));
-        names.push(name);
+        names.push(name ? 1 : 0);
       }
     }
-    idsOf[i] = ids;
-    namesOf[i] = names;
+    wordStart.push(ids.length);
   }
-  const df = new Int32Array(termIds.size);
-  for (let i = 0; i < total; i++) for (const id of idsOf[i]) df[id]++;
-  const common = Math.max(STORIES.commonFloor, total * STORIES.commonShare);
-  const corpus = Math.max(total, STORIES.idfHeadlines);
-  // A word's weight by the number of headlines it is in: one log each, not one a word.
-  const idf = new Float64Array(total + 1);
-  for (let n = 1; n <= total; n++) idf[n] = Math.log(corpus / n);
+  const terms = termIds.size;
+  const words = ids.length;
 
-  const groups: Group[] = [];
-  const index: number[][] = new Array(termIds.size);
-  for (let t = 0; t < index.length; t++) index[t] = [];
-  const seen = new Int32Array(Math.max(1, total)).fill(-1);
-  const probe = new Float64Array(termIds.size);
-  let looked = 0;
-  /** The group `member` is most like, from joinAt up, or -1; with `alone`, another group of 2 or more. */
-  const best = (member: Member, alone: number): number => {
-    looked++;
-    let found = -1;
-    let top = 0;
-    const { ids, weights, leads } = member;
-    for (let k = 0; k < ids.length; k++) probe[ids[k]] = weights[k];
-    for (let l = 0; l < leads.length; l++) {
-      const list = index[leads[l]];
-      for (let x = 0; x < list.length; x++) {
-        const g = list[x];
-        if (seen[g] === looked || (alone >= 0 && (g === alone || groups[g].members.length < 2))) continue;
-        seen[g] = looked;
-        const s = toCentre(member, groups[g], probe);
-        if (s > top) {
-          found = g;
-          top = s;
-        }
-      }
-    }
-    for (let k = 0; k < ids.length; k++) probe[ids[k]] = 0;
-    return top >= STORIES.joinAt ? found : -1;
+  // The arrays, one after another, each at a multiple of 8.
+  const { memory, heap, group } = wasm();
+  const base = heap();
+  let end = base + HEADER_BYTES;
+  const take = (bytes: number) => {
+    const at = (end + 7) & ~7;
+    end = at + bytes;
+    return at;
   };
-  const join = (g: number, member: Member) => {
-    const group = groups[g];
-    group.members.push(member);
-    if (group.members.length === 1) {
-      // A group of one is its headline: its centre is the headline's vector of length 1.
-      group.centreSquared = member.unitSquared;
-      for (const id of member.ids) index[id].push(g);
-      return;
-    }
-    let centre = group.centre;
-    if (!centre) {
-      centre = group.centre = new Float64Array(termIds.size);
-      const first = group.members[0];
-      for (let k = 0; k < first.ids.length; k++) centre[first.ids[k]] = first.unit[k];
-    }
-    const { ids, unit } = member;
-    for (let k = 0; k < ids.length; k++) {
-      const id = ids[k];
-      const before = centre[id];
-      const after = before + unit[k];
-      centre[id] = after;
-      group.centreSquared += after * after - before * before;
-      if (before === 0) index[id].push(g);
-    }
+  const at: Record<string, number> = {
+    wordStart: take(4 * (n + 1)), ids: take(4 * words), names: take(4 * words), idf: take(8 * (n + 1)), rank: take(4 * n),
+    sorted: take(4 * words), weights: take(8 * words), units: take(8 * words), norm: take(8 * n), unitSquared: take(8 * n),
+    lead: take(4 * n * STORIES.leadTerms), leadCount: take(4 * n), df: take(4 * terms), probe: take(8 * terms), seen: take(4 * n),
+    count: take(4 * n), head: take(4 * n), tail: take(4 * n), next: take(4 * n), squared: take(8 * n), centre: take(4 * n),
+    postHead: take(4 * terms), postTail: take(4 * terms), postGroup: take(4 * (2 * words + 1)), postNext: take(4 * (2 * words + 1)),
+    outStart: take(4 * n), outMembers: take(4 * n), outTypical: take(4 * n),
+    // A centre for each group of two or more: at most half the headlines.
+    centres: take(8 * Math.floor(n / 2) * terms),
   };
-
-  for (let i = 0; i < total; i++) {
-    const unordered = idsOf[i];
-    const names = namesOf[i];
-    const m = unordered.length;
-    // Its words in increasing order with their weights, by insertion: a headline has a dozen.
-    const ids: number[] = new Array(m);
-    const weights: number[] = new Array(m);
-    for (let k = 0; k < m; k++) {
-      const id = unordered[k];
-      const weight = idf[df[id]] * (names[k] ? STORIES.nameWeight : 1);
-      let j = k;
-      for (; j > 0 && ids[j - 1] > id; j--) {
-        ids[j] = ids[j - 1];
-        weights[j] = weights[j - 1];
-      }
-      ids[j] = id;
-      weights[j] = weight;
-    }
-    let squared = 0;
-    for (let k = 0; k < m; k++) squared += weights[k] * weights[k];
-    const norm = Math.sqrt(squared);
-    const unit = new Float64Array(m);
-    let unitSquared = 0;
-    for (let k = 0; k < m; k++) {
-      unit[k] = norm ? weights[k] / norm : 0;
-      unitSquared += unit[k] * unit[k];
-    }
-    // Its rarest words that another headline has too, rarest first, the earlier of two alike first:
-    // a word no other headline has leads nowhere.
-    const leads: number[] = [];
-    for (let k = 0; k < m; k++) {
-      const id = unordered[k];
-      const n = df[id];
-      if (n <= 1 || n > common) continue;
-      let at = leads.length;
-      while (at > 0 && df[leads[at - 1]] > n) at--;
-      if (at >= STORIES.leadTerms) continue;
-      if (leads.length < STORIES.leadTerms) leads.push(id);
-      for (let j = leads.length - 1; j > at; j--) leads[j] = leads[j - 1];
-      leads[at] = id;
-    }
-    const member: Member = { headline: sorted[i], leads, ids, weights, norm, unit, unitSquared };
-    const found = best(member, -1);
-    join(found >= 0 ? found : groups.push({ members: [], centre: null, centreSquared: 0 }) - 1, member);
+  if (end > memory.buffer.byteLength) memory.grow(Math.ceil((end - memory.buffer.byteLength) / 65_536));
+  const i32 = new Int32Array(memory.buffer);
+  const f64 = new Float64Array(memory.buffer);
+  for (const [slot, offset] of Object.entries(at)) i32[(base >> 2) + SLOT[slot as keyof typeof SLOT]] = offset;
+  i32[(base >> 2) + SLOT.n] = n;
+  i32[(base >> 2) + SLOT.terms] = terms;
+  i32[(base >> 2) + SLOT.leads] = STORIES.leadTerms;
+  f64[(base + 4 * SLOT.common) >> 3] = Math.max(STORIES.commonFloor, n * STORIES.commonShare);
+  f64[(base + 4 * SLOT.joinAt) >> 3] = STORIES.joinAt;
+  f64[(base + 4 * SLOT.nameWeight) >> 3] = STORIES.nameWeight;
+  i32.set(wordStart, at.wordStart >> 2);
+  i32.set(ids, at.ids >> 2);
+  i32.set(names, at.names >> 2);
+  // A word's weight by the number of headlines it is in: the log of this many headlines, or of the
+  // country's when it has more, over them.
+  const corpus = Math.max(n, STORIES.idfHeadlines);
+  for (let k = 1; k <= n; k++) f64[(at.idf >> 3) + k] = Math.log(corpus / k);
+  // Each headline's time as a rank: its group's headlines are ordered by time, two alike as they joined.
+  for (let i = 0, rank = 0; i < n; i++) {
+    if (i > 0 && sorted[i].publishedAt !== sorted[i - 1].publishedAt) rank++;
+    i32[(at.rank >> 2) + i] = rank;
   }
-
-  for (let g = 0; g < groups.length; g++) {
-    const group = groups[g];
-    if (group.members.length !== 1) continue;
-    const alone = group.members[0];
-    if (!alone.leads.length) continue;
-    const found = best(alone, g);
-    if (found < 0) continue;
-    // Like the group's centre and like one of its headlines: a centre made of a few headlines of
-    // the same kind (two shootings: "dead", "injured") draws a third of that kind.
-    const members = groups[found].members;
-    let like = false;
-    for (let k = 0; k < members.length && !like; k++) like = toMember(alone, members[k]) >= STORIES.joinAt;
-    if (!like) continue;
-    join(found, alone);
-    group.members = [];
-  }
-  return groups;
+  const groups = group(base);
+  const view = (offset: number) => new Int32Array(memory.buffer, offset, n);
+  return { groups, count: view(at.count), start: view(at.outStart), members: view(at.outMembers), typical: view(at.outTypical) };
 }
+
+/** Headlines oldest first, two of the same time by link: the order they are grouped in. */
+const oldestFirst = (headlines: StoryHeadline[]) => headlines.slice().sort((a, b) => byText(a.publishedAt, b.publishedAt) || byText(a.url, b.url));
 
 /** A headline as a story lists it: its words, link, time and outlet, and nothing the fetcher keeps for the build. */
 const item = (h: StoryHeadline): OutletHeadline => ({ title: h.title, url: h.url, publishedAt: h.publishedAt, outlet: h.outlet });
 
-/** A group's items: one headline per outlet, its latest on the story, the most recent first; and its members by time. */
-function itemsOf(group: Group): { byTime: Member[]; items: OutletHeadline[] } {
-  if (group.members.length === 1) return { byTime: group.members, items: [item(group.members[0].headline)] };
-  const byTime = group.members.slice().sort((a, b) => byText(a.headline.publishedAt, b.headline.publishedAt));
-  const latest = new Map<string, StoryHeadline>();
-  for (const { headline } of byTime) latest.set(headline.outlet.id, headline);
-  const items = [...latest.values()].sort((a, b) => byText(b.publishedAt, a.publishedAt)).map(item);
-  return { byTime, items };
+/** Group g's headlines, in time order. */
+function byTimeOf(sorted: StoryHeadline[], groups: Groups, g: number): StoryHeadline[] {
+  const byTime: StoryHeadline[] = [];
+  for (let x = 0, start = groups.start[g]; x < groups.count[g]; x++) byTime.push(sorted[groups.members[start + x]]);
+  return byTime;
 }
 
-/** No probe: a group of two or more reads its own centre. */
-const NO_PROBE = new Float64Array(0);
+/** A story's items: one headline per outlet, its latest on the story, the most recent first. */
+function itemsOf(byTime: StoryHeadline[]): OutletHeadline[] {
+  if (byTime.length === 1) return [item(byTime[0])];
+  const latest = new Map<string, StoryHeadline>();
+  for (const headline of byTime) latest.set(headline.outlet.id, headline);
+  return [...latest.values()].sort((a, b) => byText(b.publishedAt, a.publishedAt)).map(item);
+}
 
-function toStory(group: Group, byTime: Member[], items: OutletHeadline[]): Story {
-  // The headline nearest the centre; a group of one has only its own.
-  let typical = byTime[0];
-  if (byTime.length > 1) {
-    let closest = toCentre(typical, group, NO_PROBE);
-    for (let k = 1; k < byTime.length; k++) {
-      const s = toCentre(byTime[k], group, NO_PROBE);
-      if (s > closest) {
-        typical = byTime[k];
-        closest = s;
-      }
-    }
-  }
+function toStory(byTime: StoryHeadline[], typical: StoryHeadline, items: OutletHeadline[]): Story {
   return {
-    id: hash(byTime[0].headline.url),
-    title: typical.headline.title,
+    id: hash(byTime[0].url),
+    title: typical.title,
     items,
-    firstSeen: byTime[0].headline.publishedAt,
+    firstSeen: byTime[0].publishedAt,
     lastSeen: items[0].publishedAt,
   };
 }
 
 /** One country's headlines grouped into stories, in the order they were found ([groupHeadlines]). */
 export function clusterHeadlines(headlines: StoryHeadline[]): Story[] {
+  const sorted = oldestFirst(headlines);
+  const groups = groupHeadlines(sorted);
   const stories: Story[] = [];
-  for (const group of groupHeadlines(headlines)) {
-    if (!group.members.length) continue;
-    const { byTime, items } = itemsOf(group);
-    stories.push(toStory(group, byTime, items));
+  for (let g = 0; g < groups.groups; g++) {
+    if (!groups.count[g]) continue;
+    const byTime = byTimeOf(sorted, groups, g);
+    stories.push(toStory(byTime, sorted[groups.typical[g]], itemsOf(byTime)));
   }
   return stories;
 }
@@ -422,22 +309,23 @@ export function clusterHeadlines(headlines: StoryHeadline[]): Story[] {
  * into stories, of the 250 or so groups a big country has.
  */
 export function topStories(headlines: StoryHeadline[], now: Date, count: number): Story[] {
-  const groups = groupHeadlines(headlines);
+  const sorted = oldestFirst(headlines);
+  const groups = groupHeadlines(sorted);
   const kept: number[] = [];
   const scores: number[] = [];
-  const parts: ({ byTime: Member[]; items: OutletHeadline[] } | null)[] = [];
-  for (let g = 0; g < groups.length; g++) {
-    const members = groups[g].members;
-    if (!members.length) continue;
+  const items: (OutletHeadline[] | null)[] = [];
+  for (let g = 0; g < groups.groups; g++) {
+    const size = groups.count[g];
+    if (!size) continue;
     kept.push(g);
     // A group of one: its one item's weight, as weight() sums it, and its items only if it is kept.
-    if (members.length === 1) {
-      scores.push(0 + itemWeight(members[0].headline.publishedAt, now));
-      parts.push(null);
+    if (size === 1) {
+      scores.push(0 + itemWeight(sorted[groups.members[groups.start[g]]].publishedAt, now));
+      items.push(null);
     } else {
-      const part = itemsOf(groups[g]);
-      scores.push(weight(part.items, now));
-      parts.push(part);
+      const list = itemsOf(byTimeOf(sorted, groups, g));
+      scores.push(weight(list, now));
+      items.push(list);
     }
   }
   // Weightiest first; of two alike, the one found first (a stable sort).
@@ -446,9 +334,9 @@ export function topStories(headlines: StoryHeadline[], now: Date, count: number)
   order.sort((a, b) => scores[b] - scores[a] || a - b);
   const stories: Story[] = [];
   for (let k = 0; k < order.length && k < count; k++) {
-    const group = groups[kept[order[k]]];
-    const part = parts[order[k]] ?? itemsOf(group);
-    stories.push(toStory(group, part.byTime, part.items));
+    const g = kept[order[k]];
+    const byTime = byTimeOf(sorted, groups, g);
+    stories.push(toStory(byTime, sorted[groups.typical[g]], items[order[k]] ?? itemsOf(byTime)));
   }
   return stories;
 }
