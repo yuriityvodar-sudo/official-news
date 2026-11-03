@@ -340,6 +340,7 @@ describe("story titles (#230 step 3)", () => {
     };
     await storyTitles(env, "CZ", stories, failing, NOW);
     expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM story_titles").first()).toEqual({ n: 0 });
+    expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM ai_calls").first()).toEqual({ n: 0 });
     expect(JSON.parse(String(error.mock.calls[0][0]))).toMatchObject({ message: "story titles error", country: "CZ", failed: 1 });
 
     const unusable: WriteTitles = async () => {
@@ -350,7 +351,58 @@ describe("story titles (#230 step 3)", () => {
     for (let i = 0; i < TITLES.maxAttempts + 2; i++) await storyTitles(env, "CZ", stories, unusable, NOW);
     expect(calls).toBe(TITLES.maxAttempts);
     expect(await env.DB.prepare("SELECT titles, attempts FROM story_titles").first()).toEqual({ titles: null, attempts: TITLES.maxAttempts });
+    // An unusable answer took neurons too.
+    expect(await env.DB.prepare("SELECT titles FROM ai_calls").first()).toEqual({ titles: TITLES.maxAttempts });
     expect(JSON.parse(String(warn.mock.calls[0][0]))).toMatchObject({ message: "story titles unusable", problems: ["uk is missing"] });
+  });
+
+  it("asks at most TITLES.perHour times in an hour of the clock, all countries together", async () => {
+    const stories = czStories();
+    const hour = NOW.toISOString().slice(0, 13);
+    await env.DB.prepare("INSERT INTO ai_calls (hour, titles) VALUES (?, ?)").bind(hour, TITLES.perHour - 1).run();
+    let calls = 0;
+    const counting: WriteTitles = async () => {
+      calls++;
+      return JSON.stringify(TITLES_OK);
+    };
+    await storyTitles(env, "CZ", stories, counting, NOW);
+    expect(calls).toBe(1);
+    expect(await env.DB.prepare("SELECT titles FROM ai_calls WHERE hour = ?").bind(hour).first("titles")).toBe(TITLES.perHour);
+    await storyTitles(env, "US", clusterHeadlines(real("US")), counting, NOW);
+    expect(calls).toBe(1);
+    // The next hour, the next ones.
+    const later = await storyTitles(env, "CZ", stories, counting, new Date(NOW.getTime() + 3_600_000));
+    expect(calls).toBe(1 + TITLES.perBuild);
+    expect(later.size).toBe(1 + TITLES.perBuild);
+  });
+
+  it("keeps a story's headline, without a call, when it comes under a new id with at least half of its outlets' headlines", async () => {
+    const [story] = czStories().filter((s) => s.items.length >= 3);
+    await storyTitles(env, "CZ", [story], writeOk, NOW);
+    let calls = 0;
+    const other = { ...TITLES_OK, en: "Another story" };
+    const counting: WriteTitles = async () => {
+      calls++;
+      return JSON.stringify(other);
+    };
+    // Its first headline has left the window: a new id, the other outlets' headlines the same.
+    const again: Story = { ...story, id: "again", items: story.items.slice(1) };
+    expect((await storyTitles(env, "CZ", [again], counting, NOW)).get("again")).toEqual(TITLES_OK);
+    expect(calls).toBe(0);
+    // Kept under its new id, so the next build finds it at once.
+    expect(JSON.parse(String(await env.DB.prepare("SELECT titles FROM story_titles WHERE story_id = 'again'").first("titles")))).toEqual(TITLES_OK);
+    // Fewer than half of them: another story, asked.
+    const fresh = (n: number): OutletHeadline => ({
+      title: `Fresh headline ${n}`,
+      url: `https://fresh.test/${n}`,
+      publishedAt: "2026-11-01T13:50:00Z",
+      outlet: { id: `cz-fresh-${n}`, name: `Fresh ${n}`, site: "https://fresh.test" },
+    });
+    const mixed: Story = { ...story, id: "mixed", items: [story.items[0], fresh(1), fresh(2)] };
+    expect((await storyTitles(env, "CZ", [mixed], counting, NOW)).get("mixed")).toEqual(other);
+    expect(calls).toBe(1);
+    // The same headlines in another country's story are another country's.
+    expect((await storyTitles(env, "SK", [{ ...again, id: "sk" }], counting, NOW)).get("sk")).toEqual(other);
   });
 
   it("gives the headline in the asked language, in GET /stories and in For you's stories, and the outlets' own until one is written", async () => {
@@ -406,13 +458,15 @@ describe("a failed build waits (#230, Yurii's review of #281)", () => {
     expect(await exports.default.fetch("https://api.test/stories?country=CZ").then((r) => r.json())).toEqual({ country: "CZ", builtAt: null, stories: [] });
   });
 
-  it("drops stories' headlines older than 3 days in the daily cleanup", async () => {
+  it("drops stories' headlines older than 3 days, and their calls an hour older than 2, in the daily cleanup", async () => {
     const day = (days: number) => `${new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 19)}Z`;
     await env.DB.prepare("INSERT INTO story_titles (story_id, country, titles, attempts, updated_at) VALUES ('old', 'CZ', NULL, 1, ?), ('new', 'CZ', NULL, 1, ?)")
       .bind(day(4), day(1))
       .run();
+    await env.DB.prepare("INSERT INTO ai_calls (hour, titles) VALUES (?, 5), (?, 7)").bind(day(3).slice(0, 13), day(1).slice(0, 13)).run();
     vi.spyOn(console, "log").mockImplementation(() => {});
     await runCleanup(env);
     expect((await env.DB.prepare("SELECT story_id FROM story_titles").all()).results).toEqual([{ story_id: "new" }]);
+    expect((await env.DB.prepare("SELECT titles FROM ai_calls").all()).results).toEqual([{ titles: 7 }]);
   });
 });

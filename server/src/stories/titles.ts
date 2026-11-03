@@ -1,14 +1,17 @@
 // A story's headline in the reader's language (#230, the aggregator step 3):
 // one Workers AI call writes it in English and every language of LANGS at
 // once, from the outlets' own headlines, for the stories the app shows first.
-// Kept per story (`story_titles`, migration 0030), so a story is written once.
-// Tried on 19 stories of 1 Nov: 6.7 neurons a call, so about 2,300 a day for
-// the 350 or so stories that reach a country's first places.
+// Kept per story (`story_titles`, migration 0031), so a story is written once.
+// Tried on 19 stories of 1 Nov: 6.7 neurons a call. Live, on 2 and 3 Nov, the
+// first stories changed far more often than that trial counted: about 1,000
+// calls a day, and the day's free neurons ran out at 08:30 UTC on 3 Nov, so new
+// decisions waited for their summaries. Hence a limit an hour, and a story told
+// again under a new id keeps its headline.
 import type { Env } from "../env";
 import { MODEL } from "../summarizer";
 import { LANGS, LANGUAGES, type Lang, OTHER_LETTERS, OTHER_WORDS } from "../translator/languages";
 import { NAME_PARTICLES } from "../translator/words";
-import type { Story } from "./cluster";
+import { type Story, hash } from "./cluster";
 
 export const TITLES = {
   /** A country's weightiest stories carried by this many outlets or more get a headline... */
@@ -17,6 +20,12 @@ export const TITLES = {
   perCountry: 6,
   /** Calls a country's build makes at most: a few seconds each. */
   perBuild: 2,
+  /**
+   * Calls all countries' builds make at most in an hour of the clock (UTC), counted in `ai_calls`
+   * (migration 0032): about 4,000 neurons a day, so the summaries, about 2,000 a day, always have
+   * room in Workers AI's free 10,000.
+   */
+  perHour: 24,
   /** A story is asked at most this many times; then it keeps its outlets' headline. */
   maxAttempts: 3,
   /** A headline is at most this long in any language (the prompt asks for 90). */
@@ -214,28 +223,82 @@ export function workersAiTitles(env: Env): WriteTitles {
 }
 
 /**
+ * A headline's key in `story_titles`: a story's titles are kept under its id
+ * and under each of its outlets' headlines, by the country and the link. A
+ * story's id is its first headline's link (cluster.ts), so it changes when
+ * that headline leaves the build's window, the day or a big country's newest
+ * 300: of 929 headlines written on 2 and 3 Nov, 158 told a story of the same
+ * country again.
+ */
+const headlineKey = (country: string, url: string) => `${country}:${hash(url)}`;
+
+/** A placeholder for each value of a list. */
+const marks = (values: unknown[]) => values.map(() => "?").join(", ");
+
+/**
  * The headlines of `stories` (a country's, weightiest first): those stored,
  * and for at most TITLES.perBuild of the first TITLES.perCountry with
  * TITLES.minOutlets outlets that have none yet, the model's, stored at once.
- * An unusable answer counts an attempt; an error of Workers AI itself (its
- * free allocation used up, an outage) counts none and asks no more this time.
+ * A story without one under its id takes the titles that at least half of its
+ * outlets' headlines hold, without a call. Calls stop at TITLES.perHour an
+ * hour, all countries together. An unusable answer counts an attempt; an
+ * error of Workers AI itself (its free allocation used up, an outage) counts
+ * none and asks no more this time.
  */
 export async function storyTitles(env: Env, country: string, stories: Story[], write: WriteTitles = workersAiTitles(env), now = new Date()): Promise<Map<string, Titles>> {
   const wanted = stories.filter((s) => s.items.length >= TITLES.minOutlets).slice(0, TITLES.perCountry);
   const titles = new Map<string, Titles>();
   if (!wanted.length) return titles;
-  const { results } = await env.DB.prepare(
-    `SELECT story_id, titles, attempts FROM story_titles WHERE story_id IN (${wanted.map(() => "?").join(", ")})`,
-  )
-    .bind(...wanted.map((s) => s.id))
-    .all<{ story_id: string; titles: string | null; attempts: number }>();
-  const stored = new Map(results.map((r) => [r.story_id, r]));
-  for (const r of results) if (r.titles) titles.set(r.story_id, JSON.parse(r.titles) as Titles);
+  const hour = now.toISOString().slice(0, 13);
+  const [byId, calls] = await env.DB.batch<Record<string, string | number | null>>([
+    env.DB.prepare(`SELECT story_id, titles, attempts FROM story_titles WHERE story_id IN (${marks(wanted)})`).bind(...wanted.map((s) => s.id)),
+    env.DB.prepare("SELECT titles FROM ai_calls WHERE hour = ?").bind(hour),
+  ]);
+  const stored = new Map(byId.results.map((r) => [r.story_id as string, r]));
+  for (const r of byId.results) if (r.titles) titles.set(r.story_id as string, JSON.parse(r.titles as string) as Titles);
 
-  const due = wanted.filter((s) => !titles.has(s.id) && (stored.get(s.id)?.attempts ?? 0) < TITLES.maxAttempts).slice(0, TITLES.perBuild);
-  const answers = await Promise.allSettled(due.map((story) => write(country, story)));
   const at = `${now.toISOString().slice(0, 19)}Z`;
   const writes: D1PreparedStatement[] = [];
+  const keysOf = (story: Story) => story.items.map((i) => headlineKey(country, i.url));
+  // Titles kept under these keys, except those that hold them already.
+  const keep = (keys: string[], json: string, held?: Map<string, string>) => {
+    for (const key of keys) {
+      if (held?.get(key) === json) continue;
+      writes.push(
+        env.DB.prepare(
+          `INSERT INTO story_titles (story_id, country, titles, attempts, updated_at) VALUES (?1, ?2, ?3, 0, ?4)
+           ON CONFLICT (story_id) DO UPDATE SET titles = excluded.titles, updated_at = excluded.updated_at`,
+        ).bind(key, country, json, at),
+      );
+    }
+  };
+
+  // A story told again under a new id: the titles its headlines hold.
+  const missing = wanted.filter((s) => !titles.has(s.id));
+  if (missing.length) {
+    const keys = [...new Set(missing.flatMap(keysOf))];
+    const { results } = await env.DB.prepare(`SELECT story_id, titles FROM story_titles WHERE titles IS NOT NULL AND story_id IN (${marks(keys)})`)
+      .bind(...keys)
+      .all<{ story_id: string; titles: string }>();
+    const held = new Map(results.map((r) => [r.story_id, r.titles]));
+    for (const story of missing) {
+      const votes = new Map<string, number>();
+      for (const key of keysOf(story)) {
+        const json = held.get(key);
+        if (json) votes.set(json, (votes.get(json) ?? 0) + 1);
+      }
+      const [json, count] = [...votes].sort((a, b) => b[1] - a[1])[0] ?? ["", 0];
+      if (2 * count < story.items.length) continue;
+      titles.set(story.id, JSON.parse(json) as Titles);
+      keep([story.id, ...keysOf(story)], json, held);
+    }
+  }
+
+  const room = Math.max(0, TITLES.perHour - Number(calls.results[0]?.titles ?? 0));
+  const due = wanted
+    .filter((s) => !titles.has(s.id) && Number(stored.get(s.id)?.attempts ?? 0) < TITLES.maxAttempts)
+    .slice(0, Math.min(TITLES.perBuild, room));
+  const answers = await Promise.allSettled(due.map((story) => write(country, story)));
   answers.forEach((answer, i) => {
     // Workers AI's own error: nobody's fault, nothing counted.
     if (answer.status === "rejected") return;
@@ -249,7 +312,15 @@ export async function storyTitles(env: Env, country: string, stories: Story[], w
          ON CONFLICT (story_id) DO UPDATE SET titles = excluded.titles, attempts = story_titles.attempts + 1, updated_at = excluded.updated_at`,
       ).bind(story.id, country, "problems" in checked ? null : JSON.stringify(checked), at),
     );
+    if (!("problems" in checked)) keep(keysOf(story), JSON.stringify(checked));
   });
+  // Every answer counts in the hour's calls, a usable one or not: both took neurons.
+  const answered = answers.filter((a) => a.status === "fulfilled").length;
+  if (answered) {
+    writes.push(
+      env.DB.prepare("INSERT INTO ai_calls (hour, titles) VALUES (?1, ?2) ON CONFLICT (hour) DO UPDATE SET titles = ai_calls.titles + excluded.titles").bind(hour, answered),
+    );
+  }
   if (writes.length) await env.DB.batch(writes);
   const failed = answers.filter((a) => a.status === "rejected").length;
   if (failed) console.error(JSON.stringify({ message: "story titles error", country, failed, error: String((answers.find((a) => a.status === "rejected") as PromiseRejectedResult).reason) }));
