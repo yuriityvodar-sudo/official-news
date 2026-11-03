@@ -129,6 +129,24 @@
       }
     }
   },
+  "minutesShort": "{minutes}m",
+  "@minutesShort": {
+    "description": "A tick's time before its headline in the feed (#230), shortest: 1 to 59 minutes ago, without \"ago\".",
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "hoursShort": "{hours}h",
+  "@hoursShort": {
+    "description": "A tick's time before its headline in the feed (#230), shortest: hours ago, without \"ago\".",
+    "placeholders": {
+      "hours": {
+        "type": "int"
+      }
+    }
+  },
 
   "filterTopicChip": "Topic: {name}",
   "@filterTopicChip": {
@@ -1194,6 +1212,18 @@
   "chatSuggestWhatToDo": "What should I do?",
   "@chatSuggestWhatToDo": {
     "description": "A suggested first question in the AI chat."
+  },
+  "chatSuggestWhatIsKnown": "What is known?",
+  "@chatSuggestWhatIsKnown": {
+    "description": "A suggested first question in the AI chat about a tick, an event known from news outlets' headlines (#230)."
+  },
+  "chatSuggestWhyItMatters": "Why does it matter?",
+  "@chatSuggestWhyItMatters": {
+    "description": "A suggested first question in the AI chat about a tick (#230)."
+  },
+  "chatSuggestWhatNext": "What happens next?",
+  "@chatSuggestWhatNext": {
+    "description": "A suggested first question in the AI chat about a tick (#230)."
   },
   "paywallTitle": "Continue the conversation with the AI agent",
   "@paywallTitle": {

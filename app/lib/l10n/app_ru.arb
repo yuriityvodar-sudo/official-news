@@ -28,6 +28,8 @@
   "minutesAgo": "{minutes} мин назад",
   "hoursAgo": "{hours} ч назад",
   "daysAgo": "{days, plural, one{{days} день назад} few{{days} дня назад} many{{days} дней назад} other{{days} дня назад}}",
+  "minutesShort": "{minutes} мин",
+  "hoursShort": "{hours} ч",
 
   "filterTopicChip": "Тема: {name}",
   "filterEmpty": "За последние 7 дней здесь нет решений.",
@@ -259,6 +261,9 @@
   "chatSuggestConcernsMe": "Касается ли это меня?",
   "chatSuggestWhatChanges": "Что меняется и когда?",
   "chatSuggestWhatToDo": "Что мне делать?",
+  "chatSuggestWhatIsKnown": "Что известно?",
+  "chatSuggestWhyItMatters": "Почему это важно?",
+  "chatSuggestWhatNext": "Что будет дальше?",
   "paywallTitle": "Продолжите разговор с ИИ-агентом",
   "paywallPoints": "На основе официального текста · ссылка на источник · переписка только на вашем телефоне",
   "paywallPrice": "{price} в месяц",

@@ -28,6 +28,8 @@
   "minutesAgo": "{minutes} хв тому",
   "hoursAgo": "{hours} год тому",
   "daysAgo": "{days, plural, one{{days} день тому} few{{days} дні тому} many{{days} днів тому} other{{days} дня тому}}",
+  "minutesShort": "{minutes} хв",
+  "hoursShort": "{hours} год",
 
   "filterTopicChip": "Тема: {name}",
   "filterEmpty": "За останні 7 днів тут немає рішень.",
@@ -259,6 +261,9 @@
   "chatSuggestConcernsMe": "Чи стосується це мене?",
   "chatSuggestWhatChanges": "Що змінюється і коли?",
   "chatSuggestWhatToDo": "Що мені робити?",
+  "chatSuggestWhatIsKnown": "Що відомо?",
+  "chatSuggestWhyItMatters": "Чому це важливо?",
+  "chatSuggestWhatNext": "Що буде далі?",
   "paywallTitle": "Продовжте розмову з ШІ-агентом",
   "paywallPoints": "На основі офіційного тексту · посилання на джерело · листування лише на вашому телефоні",
   "paywallPrice": "{price} на місяць",

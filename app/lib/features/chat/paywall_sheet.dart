@@ -13,6 +13,7 @@ import '../../core/subscription.dart';
 import '../../core/theme.dart';
 import '../../l10n/app_localizations.dart';
 import '../settings/info_pages.dart';
+import 'chat_questions.dart';
 import 'chat_style.dart';
 
 /// The AI chat's paywall (#146), variant B of Roman's mockup, like a news
@@ -202,8 +203,11 @@ class _PaywallSheetState extends State<PaywallSheet> {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
+            // A tick is no official decision: the world's, not a seal (#230).
             Icon(
-              CupertinoIcons.checkmark_seal_fill,
+              article.isTick
+                  ? CupertinoIcons.globe
+                  : CupertinoIcons.checkmark_seal_fill,
               size: 15,
               color: style.ink,
             ),
@@ -239,7 +243,7 @@ class _PaywallSheetState extends State<PaywallSheet> {
           ),
         ),
         child: Text(
-          l10n.chatSuggestConcernsMe,
+          firstQuestionOf(article, l10n),
           style: const TextStyle(fontSize: 15, color: Color(0xFFFFFFFF)),
         ),
       ),

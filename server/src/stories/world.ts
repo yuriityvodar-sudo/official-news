@@ -22,6 +22,8 @@ export const WORLD = {
   items: 20,
   /** Built again at most this often, after a country's stories were built. */
   minMinutes: 5,
+  /** For you's first page gives at most this many as ticks: two, one and two before its decisions (handoff/tick-strip.html). */
+  forYou: 5,
 } as const;
 
 /**
@@ -216,6 +218,17 @@ export interface Tick extends Omit<WorldStory, "titles"> {
   title: string;
   countries: string[];
   score: number;
+}
+
+/**
+ * For you's `ticks` (#230 step 4): the world's stories, the weightiest now
+ * first, but those with a story of the reader's country among the `stories`
+ * For you shows them with, WORLD.forYou of them.
+ */
+export async function homeTicks(env: Env, home: string, shown: { id: string }[], lang: TitleLang, now = new Date()): Promise<Tick[]> {
+  const ids = new Set(shown.map((story) => story.id));
+  const { ticks } = await worldTicks(env, lang, now);
+  return ticks.filter((tick) => !tick.stories.some((s) => s.country === home && ids.has(s.id))).slice(0, WORLD.forYou);
 }
 
 /** The world's stories, the weightiest now first, titled in `lang`: GET /ticks. */

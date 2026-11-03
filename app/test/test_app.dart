@@ -35,14 +35,17 @@ AppLocalizations l10nFor([FeedLanguage language = FeedLanguage.en]) =>
 /// answers itself. Without this, the feed reads an articles page as the
 /// topics, gives up and offers none.
 http.Response? fakeMenus(http.Request request) {
-  final lang = FeedLanguage.fromCode(request.url.queryParameters['lang'] ?? 'en');
+  final lang = FeedLanguage.fromCode(
+    request.url.queryParameters['lang'] ?? 'en',
+  );
   final l10n = l10nFor(lang);
   return switch (request.url.path) {
     // Where the phone is (#170): not known here.
     '/locate' => fakeJson({'country': null}),
     '/topics' => fakeJson({
       'topics': [
-        for (final id in topicIds) {'id': id, 'name': topicLabel(id, l10n) ?? id},
+        for (final id in topicIds)
+          {'id': id, 'name': topicLabel(id, l10n) ?? id},
       ],
     }),
     _ => null,
@@ -69,14 +72,54 @@ List<Map<String, dynamic>> fakeFiltered(
 }
 
 /// A page's `items` and `top` narrowed by [q] ([fakeFiltered]); null stays null.
-Map<String, dynamic>? fakePage(Map<String, dynamic>? page, Map<String, String> q) =>
-    page == null
+Map<String, dynamic>? fakePage(
+  Map<String, dynamic>? page,
+  Map<String, String> q,
+) => page == null
     ? null
     : {
         ...page,
-        'items': fakeFiltered((page['items'] as List).cast<Map<String, dynamic>>(), q),
-        'top': fakeFiltered((page['top'] as List? ?? const []).cast<Map<String, dynamic>>(), q),
+        'items': fakeFiltered(
+          (page['items'] as List).cast<Map<String, dynamic>>(),
+          q,
+        ),
+        'top': fakeFiltered(
+          (page['top'] as List? ?? const []).cast<Map<String, dynamic>>(),
+          q,
+        ),
       };
+
+/// A tick as For you sends it (#230, the world's stories): the model's
+/// headline, its countries, how many outlets in all, and its latest
+/// outlets' headlines, the most recent first.
+Map<String, dynamic> fakeTick({
+  String id = 'w1',
+  String title = "US strikes Iran's Qeshm Island",
+  List<String> outlets = const ['ABC News', 'BBC World'],
+  int count = 3,
+  String lastSeen = '2026-11-03T10:00:00Z',
+}) => {
+  'id': id,
+  'title': title,
+  'countries': ['US', 'WW'],
+  'stories': [
+    {'country': 'US', 'id': 's-us', 'lastSeen': lastSeen},
+  ],
+  'outlets': count,
+  'score': 1.5,
+  'firstSeen': '2026-11-03T04:00:00Z',
+  'lastSeen': lastSeen,
+  'items': [
+    for (final (i, outlet) in outlets.indexed)
+      {
+        'title': '$outlet: headline $i',
+        'url': 'https://example.test/t$i',
+        'publishedAt': lastSeen,
+        'outlet': {'id': 'o-$i', 'name': outlet},
+        'country': i == 0 ? 'US' : 'WW',
+      },
+  ],
+};
 
 /// A story as For you sends it (#230, the aggregator): one headline per
 /// outlet, the most recent first.

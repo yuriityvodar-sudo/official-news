@@ -1,4 +1,5 @@
 import 'story.dart';
+import 'tick.dart';
 
 /// The article format from docs/contract.md, as returned by the API.
 class Source {
@@ -132,6 +133,13 @@ class Article {
   /// events or a news outlet ([isStory]); no official-source seal.
   bool get isEvent => decisionType == 'event';
 
+  /// The [decisionType] of a tick taken as an article ([Tick.asArticle]).
+  static const tickType = 'tick';
+
+  /// A tick, the world's story (#230): what the chat is about when opened
+  /// from one, asked as `tickId` (docs/contract.md); no official page.
+  bool get isTick => decisionType == tickType;
+
   /// A news story (#230: Global Voices): an event whose link is not
   /// Wikipedia's, so its outlet is named where an event names Wikipedia.
   bool get isStory {
@@ -232,6 +240,7 @@ class ArticlesPage {
     required this.nextCursor,
     required this.top,
     this.stories = const [],
+    this.ticks = const [],
   });
 
   factory ArticlesPage.fromJson(Map<String, dynamic> json) => ArticlesPage(
@@ -251,6 +260,12 @@ class ArticlesPage {
         if (story is Map<String, dynamic> && Story.isValid(story))
           Story.fromJson(story),
     ],
+    // And the world's as ticks (#230 step 4); none from an older server.
+    ticks: [
+      for (final tick in json['ticks'] as List? ?? const [])
+        if (tick is Map<String, dynamic> && Tick.isValid(tick))
+          Tick.fromJson(tick),
+    ],
   );
 
   final List<Article> items;
@@ -260,6 +275,10 @@ class ArticlesPage {
   /// The reader's country's first stories, titled in the feed's language by
   /// the server (For you's first page only, #230).
   final List<Story> stories;
+
+  /// The world's stories as ticks, titled in the feed's language, without
+  /// those [stories] already show (For you's first page only, #230).
+  final List<Tick> ticks;
 
   /// Only the articles in [lang]. A translated feed lists nothing else (#46), but a
   /// server without translations ignores `lang` and sends the English feed: none of
@@ -273,6 +292,7 @@ class ArticlesPage {
       nextCursor: null,
       top: top.where(inLang).toList(),
       stories: stories,
+      ticks: ticks,
     );
   }
 
@@ -281,5 +301,6 @@ class ArticlesPage {
     'nextCursor': nextCursor,
     'top': [for (final a in top) a.toJson()],
     'stories': [for (final s in stories) s.toJson()],
+    'ticks': [for (final t in ticks) t.toJson()],
   };
 }

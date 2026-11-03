@@ -12,6 +12,7 @@ import '../../core/motion.dart';
 import '../../core/read_mark.dart';
 import '../../core/story.dart';
 import '../../core/theme.dart';
+import '../../core/tick.dart';
 import '../chat/chat_history_screen.dart';
 import 'feed_filters.dart';
 import 'feed_look_a.dart';
@@ -20,6 +21,7 @@ import 'feed_look_c.dart';
 import 'feed_look_news.dart';
 import 'feed_look_now.dart';
 import 'feed_topic_tags.dart';
+import 'tick_capsule.dart';
 
 export '../../core/feed_design.dart';
 
@@ -122,15 +124,18 @@ abstract class FeedLook {
   /// heading ([topStoriesHeading]), then its 3 decisions in the look's own
   /// rows ([articles]). With the reader's country's stories (#230, the
   /// aggregator), two stories ([storyRows]), then a decision, and again
-  /// (Roman, 1 Nov: variant B of `handoff/stories-app.html`). One sliver; it
-  /// scrolls with the feed.
+  /// (Roman, 1 Nov: variant B of `handoff/stories-app.html`). With the
+  /// world's ticks (#230 step 4), two, one and two of them open those
+  /// groups ([tickRows]; Roman, 3 Nov: variant 1 of
+  /// `handoff/tick-strip.html`). One sliver; it scrolls with the feed.
   Widget topStories(BuildContext context, TopStories block) {
     final heading = SliverToBoxAdapter(
       child: topStoriesHeading(context, block),
     );
     const end = SliverToBoxAdapter(child: SizedBox(height: 16));
     final stories = showsStories ? block.stories.length : 0;
-    if (stories == 0) {
+    final ticks = showsStories ? block.ticks.length : 0;
+    if (stories == 0 && ticks == 0) {
       return SliverMainAxisGroup(
         slivers: [heading, articles(context, block.list), end],
       );
@@ -140,7 +145,18 @@ abstract class FeedLook {
     // Where each row stands in the block, for the rows arriving in order.
     var row = 0;
     var from = 0;
+    var tickFrom = 0;
     for (var d = 0; d <= decisions; d++) {
+      final tickTo = d == decisions
+          ? ticks
+          : math.min(ticks, tickFrom + (d.isEven ? 2 : 1));
+      if (tickTo > tickFrom) {
+        slivers.add(
+          tickRows(context, block, tickFrom, tickTo, row: row, top: row == 0),
+        );
+        row += tickTo - tickFrom;
+      }
+      tickFrom = tickTo;
       final to = d == decisions ? stories : math.min(stories, from + 2);
       if (to > from) {
         slivers.add(
@@ -151,6 +167,7 @@ abstract class FeedLook {
             to,
             row: row,
             beforeDecision: d < decisions,
+            top: row == 0,
           ),
         );
         row += to - from;
@@ -176,8 +193,9 @@ abstract class FeedLook {
     int to, {
     required int row,
     bool beforeDecision = false,
+    bool top = false,
   }) => SliverPadding(
-    padding: EdgeInsets.fromLTRB(16, from == 0 ? 4 : 0, 16, 0),
+    padding: EdgeInsets.fromLTRB(16, top ? 4 : 0, 16, 0),
     sliver: SliverList.list(
       children: [
         for (var i = from; i < to; i++)
@@ -194,8 +212,40 @@ abstract class FeedLook {
     ),
   );
 
+  /// `block.ticks` from [from] to [to] ([TickCapsule]), the first of them
+  /// the block's [row]th row ([top]: the block's first), arriving as its
+  /// other rows do. Light inserts: 8 apart, 12 above what follows.
+  Widget tickRows(
+    BuildContext context,
+    TopStories block,
+    int from,
+    int to, {
+    required int row,
+    bool top = false,
+  }) => SliverPadding(
+    padding: EdgeInsets.fromLTRB(16, top ? 4 : 0, 16, 0),
+    sliver: SliverList.list(
+      children: [
+        for (var i = from; i < to; i++)
+          Padding(
+            padding: EdgeInsets.only(bottom: i == to - 1 ? 12 : 8),
+            child: block.list.arrive(
+              row + i - from,
+              PressScale(
+                child: TickCapsule(
+                  tick: block.ticks[i],
+                  onTap: () => block.openTick(i),
+                ),
+              ),
+            ),
+          ),
+      ],
+    ),
+  );
+
   /// Whether the look shows the reader's country's stories in the Top
-  /// stories block ([storyCard]); the News looks do (#230).
+  /// stories block ([storyCard]), and the world's ticks among them; the
+  /// News looks do (#230).
   bool get showsStories => false;
 
   /// The card of `block.stories[index]`, for a look that [showsStories].
@@ -539,9 +589,18 @@ class TopStories {
     this.stories = const [],
     this.country,
     this.openStory = _noStory,
+    this.ticks = const [],
+    this.openTick = _noStory,
   });
 
   static void _noStory(int _) {}
+
+  /// The world's stories as ticks (#230 step 4): two, one and two of them
+  /// before the decisions ([FeedLook.topStories]).
+  final List<Tick> ticks;
+
+  /// Opens the AI chat about `ticks[index]`.
+  final ValueChanged<int> openTick;
 
   /// The reader's country's first stories (#230, the aggregator): two of
   /// them before each decision ([FeedLook.topStories]).

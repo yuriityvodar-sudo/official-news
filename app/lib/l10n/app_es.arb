@@ -28,6 +28,8 @@
   "minutesAgo": "hace {minutes} min",
   "hoursAgo": "hace {hours} h",
   "daysAgo": "{days, plural, one{hace {days} día} other{hace {days} días}}",
+  "minutesShort": "{minutes} min",
+  "hoursShort": "{hours} h",
 
   "filterTopicChip": "Tema: {name}",
   "filterEmpty": "No hay decisiones aquí en los últimos 7 días.",
@@ -259,6 +261,9 @@
   "chatSuggestConcernsMe": "¿Me afecta esto?",
   "chatSuggestWhatChanges": "¿Qué cambia y cuándo?",
   "chatSuggestWhatToDo": "¿Qué debo hacer?",
+  "chatSuggestWhatIsKnown": "¿Qué se sabe?",
+  "chatSuggestWhyItMatters": "¿Por qué importa?",
+  "chatSuggestWhatNext": "¿Qué pasará ahora?",
   "paywallTitle": "Continúa la conversación con el agente de IA",
   "paywallPoints": "Basado en el texto oficial · enlace a la fuente · conversaciones solo en tu teléfono",
   "paywallPrice": "{price} al mes",

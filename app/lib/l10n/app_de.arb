@@ -28,6 +28,8 @@
   "minutesAgo": "vor {minutes} Min.",
   "hoursAgo": "vor {hours} Std.",
   "daysAgo": "{days, plural, one{vor {days} Tag} other{vor {days} Tagen}}",
+  "minutesShort": "{minutes} Min.",
+  "hoursShort": "{hours} Std.",
 
   "filterTopicChip": "Thema: {name}",
   "filterEmpty": "In den letzten 7 Tagen gab es hier keine Entscheidungen.",
@@ -259,6 +261,9 @@
   "chatSuggestConcernsMe": "Betrifft mich das?",
   "chatSuggestWhatChanges": "Was ändert sich und wann?",
   "chatSuggestWhatToDo": "Was soll ich tun?",
+  "chatSuggestWhatIsKnown": "Was ist bekannt?",
+  "chatSuggestWhyItMatters": "Warum ist das wichtig?",
+  "chatSuggestWhatNext": "Wie geht es weiter?",
   "paywallTitle": "Setzen Sie das Gespräch mit dem KI-Agenten fort",
   "paywallPoints": "Auf Basis des amtlichen Textes · Link zur Quelle · Gespräche nur auf Ihrem Telefon",
   "paywallPrice": "{price} pro Monat",
