@@ -23,6 +23,7 @@ import { errorPage, notFoundPage } from "./pages/errors";
 import { infoPage } from "./pages/info";
 import { listPage } from "./pages/list";
 import { type CacheKind, type Reply, respond, robotsFor } from "./respond";
+import { appStoreUrl } from "./stores";
 import { SITE_LANGS, type SiteLang, isSiteLang } from "./texts";
 import { ARTICLE_ID, INFO_PAGES, type InfoPage, type Place, articlePath, groupOf, isCountryPage, isTopic, listPath, originOf } from "./urls";
 
@@ -34,7 +35,7 @@ import { ARTICLE_ID, INFO_PAGES, type InfoPage, type Place, articlePath, groupOf
  * account's 100,000 requests a day (about 26 lists a language instead of
  * 13 times as many).
  */
-export const ROBOTS_TXT = "User-agent: *\nDisallow: /*?\n";
+export const ROBOTS_TXT = "User-agent: *\nDisallow: /*?\nDisallow: /go/\n";
 
 const LANG_PATH = new RegExp(`^/(${SITE_LANGS.join("|")})(/.*)?$`);
 const INFO_PATH = new RegExp(`^/(${INFO_PAGES.join("|")})$`);
@@ -141,6 +142,10 @@ async function route(request: Request, env: SiteEnv): Promise<Reply> {
     const lang = visitorLang(request.headers.get("accept-language"), typeof country === "string" ? country : null);
     return { kind: "chooser", status: 302, body: null, location: `${origin}${listPath(lang)}` };
   }
+  // The App Store buttons' redirect (stores.ts): on to the App Store with Apple's
+  // campaign tokens, never stored, so each click reaches Apple's count; no D1 read.
+  const go = /^\/go\/appstore(?:\/([^/]*))?\/?$/.exec(path);
+  if (go) return { kind: "go", status: 302, body: null, location: appStoreUrl(go[1] ?? "web") };
   // robots.txt names the sitemap, so a crawler finds it once indexing is allowed.
   if (path === "/robots.txt") return { kind: "fixed", status: 200, body: `${ROBOTS_TXT}\nSitemap: ${origin}/sitemap.xml\n` };
   // The sitemap: an index (no D1 read), the latest file (the 7 days, from the

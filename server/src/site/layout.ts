@@ -8,10 +8,8 @@ import { type Html, html, raw } from "./html";
 import { consent } from "./consent";
 import { TAB_ICON } from "./icon";
 import { LANGUAGE_NAMES, type SiteLang, publisher, t, text } from "./texts";
+import { APP_STORE_ID, APP_STORE_LIVE, storeChannel, storeLink } from "./stores";
 import { INFO_PAGES, type InfoPage, infoPath, listPath } from "./urls";
-
-/** The App Store app (docs/setup.md); Safari shows its Smart App Banner. */
-export const APP_STORE_ID = "6822820350";
 
 export const SITE_NAME = "Outer News";
 
@@ -112,6 +110,7 @@ body:has(main :focus-visible:not(.filters *),footer :focus-visible) .pick[open] 
 .store{display:inline-flex;flex-direction:column;justify-content:center;min-width:150px;min-height:52px;padding:6px 16px;border-radius:12px;background:var(--fill);color:var(--secondary)}
 .store span{font-size:12px}
 .store .name{color:var(--text);font-size:16px;font-weight:700}
+a.store{text-decoration:none}
 .consent{position:fixed;left:0;right:0;bottom:0;z-index:3;padding:14px 16px calc(14px + env(safe-area-inset-bottom));background:var(--menu);border-top:.5px solid var(--separator);box-shadow:0 -8px 24px var(--shadow)}
 .consent-card{max-width:648px;margin:0 auto}
 .consent[data-wall]{top:0;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(0,0,0,.45);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);border:0;box-shadow:none}
@@ -216,13 +215,21 @@ export interface Page {
  * "Get the app" above the footer: the App Store and Google Play, marked
  * "Coming soon" and not links until the app is in the stores (placeholders,
  * Yurii 28 Oct). Plain words, not the stores' badges, whose rules need the
- * real store links.
+ * real store links. Once the App Store is live (stores.ts), its button links
+ * to our `/go/appstore/<channel>`, which counts as a campaign in Apple's
+ * report, and Google Analytics counts the click (`data-store`, consent.ts).
  */
-const getApp = (lang: SiteLang) => html`<section class="get-app" aria-labelledby="get-app"><div class="wrap">
+export const getApp = (lang: SiteLang, kind: string, live = APP_STORE_LIVE) => {
+  const channel = storeChannel(kind, lang);
+  const appStore = live
+    ? html`<a class="store" href="${storeLink(channel)}" rel="nofollow" data-store="appstore" data-channel="${channel}"><span class="name">App Store</span><span>${t(lang, "getOnAppStore")}</span></a>`
+    : html`<span class="store" aria-disabled="true"><span class="name">App Store</span><span>${t(lang, "comingSoon")}</span></span>`;
+  return html`<section class="get-app" aria-labelledby="get-app"><div class="wrap">
 <h2 id="get-app">${t(lang, "getApp")}</h2>
 <p>${t(lang, "getAppBody")}</p>
-<ul class="stores"><li><span class="store" aria-disabled="true"><span class="name">App Store</span><span>${t(lang, "comingSoon")}</span></span></li><li><span class="store" aria-disabled="true"><span class="name">Google Play</span><span>${t(lang, "comingSoon")}</span></span></li></ul>
+<ul class="stores"><li>${appStore}</li><li><span class="store" aria-disabled="true"><span class="name">Google Play</span><span>${t(lang, "comingSoon")}</span></span></li></ul>
 </div></section>`;
+};
 
 const footer = (lang: SiteLang) => {
   const names: Record<InfoPage, string> = {
@@ -283,7 +290,7 @@ ${page.canonical ? html`<meta property="og:url" content="${page.canonical}">\n` 
 <main id="main"><div class="wrap">
 ${page.body}
 </div></main>
-${getApp(lang)}
+${getApp(lang, page.kind)}
 ${footer(lang)}
 ${consent(lang, !(INFO_PAGES as readonly string[]).includes(page.kind))}
 </body>
