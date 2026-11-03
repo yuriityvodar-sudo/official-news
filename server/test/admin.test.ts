@@ -20,7 +20,7 @@ function memoryKv(): KVNamespace {
   } as unknown as KVNamespace;
 }
 
-const baseEnv = () => ({ DB: workers.DB, GA_PROPERTY: "123", ACCESS_TEAM: TEAM, ACCESS_AUD: "aud-admin", ADMIN_EMAILS: "yurii@example.com, roman@example.com", GA_CLIENT_EMAIL: "reader@x.iam.gserviceaccount.com", ASC_KEY_ID: "K", ASC_ISSUER_ID: "I" });
+const baseEnv = () => ({ DB: workers.DB, GA_PROPERTY: "123", ACCESS_TEAM: TEAM, ACCESS_AUD: "aud-admin", ADMIN_EMAILS: "yurii@example.com, roman@example.com", GA_CLIENT_EMAIL: "reader@x.iam.gserviceaccount.com", ASC_KEY_ID: "K", ASC_ISSUER_ID: "I", CF_ACCOUNT_ID: "acct" });
 const env: AdminEnv = { ...baseEnv(), ADMIN_KV: memoryKv() };
 
 const b64url = (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");

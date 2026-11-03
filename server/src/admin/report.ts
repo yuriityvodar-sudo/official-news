@@ -6,6 +6,7 @@
 // (Google Search) and, once there is a key, App Store Connect (the store).
 import type { AdminEnv } from "./env";
 import { type AppleDay, appleDays, fromWebsite, sumDays, syncApple } from "./appstore";
+import { cloudflareDays, sumCloudflare } from "./cloudflare";
 import { type Request as Report, type Rows, batch, googlePost, realtime, single } from "./ga";
 import { esc } from "./page";
 
@@ -204,10 +205,22 @@ export async function dailyReport(env: AdminEnv, fetcher: typeof fetch = fetch, 
     return { now: a ? pick(a) : 0, before: b ? pick(b) : 0 };
   };
   const haveApple = stored.size > 0;
+  // Every visitor, cookies or not: Cloudflare Web Analytics (UTC days).
+  const cf = await cloudflareDays(env, dates.month.before.start, dates.day.now.end, fetcher).then(
+    (days) => ({ days, error: null as string | null }),
+    (error: unknown) => ({ days: null, error: String(error instanceof Error ? error.message : error) }),
+  );
+  const cfPair = (w: WindowId, i: 0 | 1): Pair => {
+    if (!cf.days) return { now: 0, before: 0 };
+    const now = sumCloudflare(cf.days, dates[w].now.start, dates[w].now.end);
+    const before = sumCloudflare(cf.days, dates[w].before.start, dates[w].before.end);
+    return i === 0 ? { now: now.visits, before: before.visits } : { now: now.pageViews, before: before.pageViews };
+  };
   const clickB = block(ga[2], ga[3], 2);
   // The website's four numbers and its App Store clicks (times) as a fifth.
   const webOnly = block(ga[0], ga[1], 4);
-  const webB = Object.fromEntries(WINDOWS.map((w) => [w.id, [...webOnly[w.id], clickB[w.id][0]]])) as Block;
+  // The website: GA's four numbers, its App Store clicks (times), then Cloudflare's visits and page views of everyone.
+  const webB = Object.fromEntries(WINDOWS.map((w) => [w.id, [...webOnly[w.id], clickB[w.id][0], cfPair(w.id, 0), cfPair(w.id, 1)]])) as Block;
   const appAll = block(appA, appB, 4);
   const storeB2 = storeA || storeB ? block(storeA, storeB, 4) : null;
   const searchB = byDate ? searchBlock(byDate, dates) : null;
@@ -223,6 +236,7 @@ export async function dailyReport(env: AdminEnv, fetcher: typeof fetch = fetch, 
         applePair(w.id, (d) => fromWebsite(d.pageViewsByCampaign) + (d.pageViewsBySource["Web referrer"] ?? 0)),
         applePair(w.id, (d) => fromWebsite(d.downloadsByCampaign) + fromWebsite(d.downloadsByWeb)),
         applePair(w.id, (d) => d.downloads),
+        cfPair(w.id, 0),
       ],
     ]),
   ) as Block;
@@ -256,7 +270,8 @@ ${card("Website sessions today", pick(more?.[0], "today", 2), pick(more?.[0], "y
 <p class="note">Days end yesterday, ${dates.day.now.end}, Kyiv time. Google Analytics counts website visitors who accepted cookies; Search Console is 2–3 days late and counts in Pacific time.</p>
 <div class="stack">
 ${table("Funnel: Google and the website to the app", funnel, [
-    { label: "Website visitors (people)", value: 0 },
+    { label: "Website visits, everyone (Cloudflare, no cookies)", value: 6 },
+    { label: "Website visitors who accepted cookies (people)", value: 0 },
     { label: "Clicked App Store (people)", value: 1 },
     { label: "Clicked, % of visitors", value: (m, s) => ratio(m[1][s], m[0][s]), digits: 1 },
     { label: "App Store page views from the website (Apple)", value: 3 },
@@ -277,7 +292,9 @@ ${table("Website", webB, [
     { label: "Sessions", value: 2 },
     { label: "Page views", value: 3 },
     { label: "App Store clicks (times)", value: 4 },
-  ])}
+    { label: "Visits, everyone (Cloudflare, no cookies)", value: 5 },
+    { label: "Page views, everyone (Cloudflare)", value: 6 },
+  ], cf.error ? `Cloudflare: ${cf.error}` : "Google Analytics counts those who accept cookies; Cloudflare counts every visit without cookies (UTC days).")}
 ${table("App: App Store build", storeB2, appLines("users"), storeB2 ? "Only readers of the App Store build (build = store): the release." : "No App Store build in use yet: it counts from the release.")}
 ${table("App: every build (TestFlight included)", appAll, appLines("users"))}
 </div>

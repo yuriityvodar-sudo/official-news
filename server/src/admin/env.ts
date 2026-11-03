@@ -29,4 +29,8 @@ export interface AdminEnv {
   ASC_ISSUER_ID: string;
   /** Its private key (.p8), a Worker secret Yurii put in himself; Apple's reports wait without it. */
   ASC_PRIVATE_KEY?: string;
+  /** The Outer News Cloudflare account (not a secret): Web Analytics is read from it. */
+  CF_ACCOUNT_ID: string;
+  /** Cloudflare's read-only token "Outer News admin analytics" (Account Analytics: Read), a Worker secret Yurii put in himself. */
+  CF_ANALYTICS_TOKEN?: string;
 }

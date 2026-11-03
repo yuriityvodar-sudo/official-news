@@ -26,7 +26,8 @@
     // The read-only service account whose key this Worker makes (docs/setup.md).
     "GA_CLIENT_EMAIL": "analytics-reader@official-news-48e16.iam.gserviceaccount.com",
     "ASC_KEY_ID": "3Q636A4G36",
-    "ASC_ISSUER_ID": "262d9442-ccf9-43ec-a74d-10bb805b13e0"
+    "ASC_ISSUER_ID": "262d9442-ccf9-43ec-a74d-10bb805b13e0",
+    "CF_ACCOUNT_ID": "8dc93578877d397a693094f3e2b01029"
   },
   // This Worker's own storage, for its Google key only; no other Worker binds it.
   "kv_namespaces": [{ "binding": "ADMIN_KV", "id": "7ae84e6c07104a778fd5da307d7bb927" }],
