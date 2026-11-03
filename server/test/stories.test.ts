@@ -329,7 +329,7 @@ describe("story titles (#230 step 3)", () => {
     expect(second.get(wanted[0].id)).toEqual(TITLES_OK);
   });
 
-  it("counts an unusable answer and stops at TITLES.maxAttempts; an error of Workers AI counts nothing", async () => {
+  it("counts an unusable answer and stops at TITLES.maxAttempts; an error of Workers AI counts no attempt", async () => {
     const stories = czStories().filter((s) => s.items.length >= TITLES.minOutlets).slice(0, 1);
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
@@ -340,7 +340,8 @@ describe("story titles (#230 step 3)", () => {
     };
     await storyTitles(env, "CZ", stories, failing, NOW);
     expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM story_titles").first()).toEqual({ n: 0 });
-    expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM ai_calls").first()).toEqual({ n: 0 });
+    // The hour's call it took counts all the same.
+    expect(await env.DB.prepare("SELECT titles FROM ai_calls").first()).toEqual({ titles: 1 });
     expect(JSON.parse(String(error.mock.calls[0][0]))).toMatchObject({ message: "story titles error", country: "CZ", failed: 1 });
 
     const unusable: WriteTitles = async () => {
@@ -352,7 +353,7 @@ describe("story titles (#230 step 3)", () => {
     expect(calls).toBe(TITLES.maxAttempts);
     expect(await env.DB.prepare("SELECT titles, attempts FROM story_titles").first()).toEqual({ titles: null, attempts: TITLES.maxAttempts });
     // An unusable answer took neurons too.
-    expect(await env.DB.prepare("SELECT titles FROM ai_calls").first()).toEqual({ titles: TITLES.maxAttempts });
+    expect(await env.DB.prepare("SELECT titles FROM ai_calls").first()).toEqual({ titles: 1 + TITLES.maxAttempts });
     expect(JSON.parse(String(warn.mock.calls[0][0]))).toMatchObject({ message: "story titles unusable", problems: ["uk is missing"] });
   });
 
@@ -374,6 +375,46 @@ describe("story titles (#230 step 3)", () => {
     const later = await storyTitles(env, "CZ", stories, counting, new Date(NOW.getTime() + 3_600_000));
     expect(calls).toBe(1 + TITLES.perBuild);
     expect(later.size).toBe(1 + TITLES.perBuild);
+  });
+
+  it("takes the hour's calls one statement each, so builds side by side never take more than TITLES.perHour", async () => {
+    const hour = NOW.toISOString().slice(0, 13);
+    await env.DB.prepare("INSERT INTO ai_calls (hour, titles) VALUES (?, ?)").bind(hour, TITLES.perHour - 3).run();
+    let calls = 0;
+    const counting: WriteTitles = async () => {
+      calls++;
+      return JSON.stringify(TITLES_OK);
+    };
+    // Four builds at once, each wanting TITLES.perBuild.
+    await Promise.all(["CZ", "SK", "PL", "HU"].map((country) => storyTitles(env, country, czStories(), counting, NOW)));
+    expect(calls).toBe(3);
+    expect(await env.DB.prepare("SELECT titles FROM ai_calls WHERE hour = ?").bind(hour).first("titles")).toBe(TITLES.perHour);
+  });
+
+  it("asks nothing while an item of the last day has waited TITLES.summariesWaitMinutes for its summary: the summaries first", async () => {
+    const fetched = (id: string, minutes: number, attempts = 0) =>
+      env.DB.prepare(
+        `INSERT INTO articles (id, source_id, url, original_title, published_at, fetched_at, summary_attempts)
+         VALUES (?1, 'de-federal-government', 'https://example.gov/' || ?1, 'T', ?2, ?2, ?3)`,
+      )
+        .bind(id, `${new Date(NOW.getTime() - minutes * 60_000).toISOString().slice(0, 19)}Z`, attempts)
+        .run();
+    let calls = 0;
+    const counting: WriteTitles = async () => {
+      calls++;
+      return JSON.stringify(TITLES_OK);
+    };
+    await fetched("waiting", TITLES.summariesWaitMinutes + 1);
+    await storyTitles(env, "CZ", czStories(), counting, NOW);
+    expect(calls).toBe(0);
+    expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM ai_calls").first()).toEqual({ n: 0 });
+    // Summarized; one just fetched, one given up, one stuck for over a day: none holds them.
+    await env.DB.prepare("UPDATE articles SET summarized_at = ? WHERE id = 'waiting'").bind("2026-11-01T13:55:00Z").run();
+    await fetched("new", TITLES.summariesWaitMinutes - 1);
+    await fetched("given-up", 60, 3);
+    await fetched("stuck", 25 * 60);
+    await storyTitles(env, "CZ", czStories(), counting, NOW);
+    expect(calls).toBe(TITLES.perBuild);
   });
 
   it("keeps a story's headline, without a call, when it comes under a new id with at least half of its outlets' headlines", async () => {

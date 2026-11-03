@@ -35,4 +35,4 @@
   - **Tried and dropped:** merging the outlets' lists, each kept newest first, instead of sorting a day's thousand headlines. It saved 0.1 ms, since a cold loop is no faster than the sort.
   - **Some calls will still go over 10 ms** on slow machines. Cloudflare tolerates that while it is not consistent: all of 2 Nov's builds were `ok`.
 - **Proposed with it,** for Yurii's check of #286: a tail's median build under 10 ms, and no call stopped (`exceededCpu`). Asking every call to be under 10 ms is not something any build can meet when the same work spreads from 7 to 54 ms.
-- **Status:** Proposed (Roman's Claude, on Roman's word of 3 Nov: «Да, делай»)
+- **Status:** Agreed (Yurii, 3 Nov: his tail after #289's deploy, 08:45 to 08:52 UTC, 33 builds, median 8 ms, none stopped, passed the check agreed on #288)
