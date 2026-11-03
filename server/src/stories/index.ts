@@ -7,6 +7,7 @@ import type { Env } from "../env";
 import { parseHeadlines } from "../fetcher/types";
 import { type Story, type StoryHeadline, storyScore, topStories } from "./cluster";
 import { TITLES, type TitleLang, type Titles, type WriteTitles, storyTitles } from "./titles";
+import { buildWorldStories, englishWords, worldDue, worldFailed } from "./world";
 
 export const BUILD = {
   /** Stories are made of the last day's headlines: a story's weight halves every 6 hours, so older ones barely count. */
@@ -62,11 +63,13 @@ export async function buildCountryStories(env: Env, country: string, version: st
   const titles = await storyTitles(env, country, stories, write, now);
   const kept: StoredStory[] = stories.map((story) => (titles.has(story.id) ? { ...story, titles: titles.get(story.id) } : story));
   const json = JSON.stringify({ builtAt: stored(now), stories: kept } satisfies CountryStories);
+  // The titled ones apart too, with their English headline's words, for the world's stories (world.ts).
+  const top = JSON.stringify(kept.flatMap((story) => (story.titles ? [{ ...story, words: englishWords(story.titles.en) }] : [])));
   await env.DB.prepare(
-    `INSERT INTO country_stories (country, json, version, built_at) VALUES (?1, ?2, ?3, ?4)
-     ON CONFLICT (country) DO UPDATE SET json = excluded.json, version = excluded.version, built_at = excluded.built_at, failed_at = NULL`,
+    `INSERT INTO country_stories (country, json, top, version, built_at) VALUES (?1, ?2, ?3, ?4, ?5)
+     ON CONFLICT (country) DO UPDATE SET json = excluded.json, top = excluded.top, version = excluded.version, built_at = excluded.built_at, failed_at = NULL`,
   )
-    .bind(country, json, version, stored(now))
+    .bind(country, json, top, version, stored(now))
     .run();
   console.log(JSON.stringify({ message: "stories built", country, headlines: headlines.length, stories: stories.length, bytes: json.length }));
   return stories.length;
@@ -129,17 +132,25 @@ export async function dueCountries(env: Env, now = new Date()): Promise<{ countr
     .map(({ country, version }) => ({ country, version }));
 }
 
+/** The builds as calls of their own (StoryBuilder in src/index.ts): a country's stories, and the world's. */
+export interface StoryCalls {
+  build(country: string, version: string): Promise<number>;
+  world(): Promise<number>;
+}
+
 /**
  * The stories step at the end of the summarizer's and the translator's runs:
- * up to BUILD.perRun due countries, each in a call of its own. Without calls
- * of their own (`wrangler dev`, tests of the runs) one country a run, in this
- * one. An error is logged, never thrown: the stories never break those runs.
+ * up to BUILD.perRun due countries, each in a call of its own, then, when one
+ * was built, the world's stories (world.ts) in another. Without calls of their
+ * own (`wrangler dev`, tests of the runs) one country a run, and the world, in
+ * this one. An error is logged, never thrown: the stories never break those runs.
  */
-export async function storiesStep(env: Env, build?: (country: string, version: string) => Promise<number>, now = new Date()): Promise<void> {
+export async function storiesStep(env: Env, own?: StoryCalls, now = new Date()): Promise<void> {
   try {
     const due = await dueCountries(env, now);
-    const calls = build ? due : due.slice(0, 1);
-    const settled = await Promise.allSettled(calls.map(({ country, version }) => (build ?? ((c, v) => buildCountryStories(env, c, v, now)))(country, version)));
+    const calls = own ? due : due.slice(0, 1);
+    const settled = await Promise.allSettled(calls.map(({ country, version }) => (own ? own.build(country, version) : buildCountryStories(env, country, version, now))));
+    if (settled.some((result) => result.status === "fulfilled")) await worldStep(env, own, now);
     const failed = settled.flatMap((result, i) => (result.status === "rejected" ? [{ country: calls[i].country, error: String(result.reason) }] : []));
     if (failed.length) {
       console.error(JSON.stringify({ message: "stories step error", failed }));
@@ -155,6 +166,17 @@ export async function storiesStep(env: Env, build?: (country: string, version: s
     }
   } catch (error) {
     console.error(JSON.stringify({ message: "stories step error", error: error instanceof Error ? error.message : String(error) }));
+  }
+}
+
+/** The world's stories when due (worldDue); one that fails waits, logged, and stops nothing else. */
+async function worldStep(env: Env, own: StoryCalls | undefined, now: Date): Promise<void> {
+  try {
+    if (!(await worldDue(env, now))) return;
+    await (own ? own.world() : buildWorldStories(env, now));
+  } catch (error) {
+    console.error(JSON.stringify({ message: "world stories error", error: error instanceof Error ? error.message : String(error) }));
+    await worldFailed(env, now);
   }
 }
 

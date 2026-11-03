@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { OutletHeadline } from "../src/fetcher/types";
 import worker, { CRONS } from "../src/index";
 import { runCleanup } from "../src/health/cleanup";
-import { BUILD, WARM_UP, buildCountryStories, dueCountries, newestHeadlines, storiesStep, warmUp } from "../src/stories";
+import { BUILD, type StoryCalls, WARM_UP, buildCountryStories, dueCountries, newestHeadlines, storiesStep, warmUp } from "../src/stories";
 import { STORIES, type Story, clusterHeadlines, headlineWords, storyScore, terms, topStories } from "../src/stories/cluster";
 import { TITLES, type WriteTitles, storyTitles, toTitles } from "../src/stories/titles";
 import { HEADLINES_2026_11_01 } from "./fixtures/headlines-2026-11-01";
@@ -233,16 +233,22 @@ describe("the stories step (#230, stories)", () => {
     for (const country of ["AA", "BB", "CC", "DD", "EE", "FF", "GG"]) await addOutlets("CZ", country);
     const built: string[] = [];
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    let worlds = 0;
     await storiesStep(
       env,
-      async (country) => {
-        built.push(country);
-        if (country === "BB") throw new Error("Worker exceeded CPU time limit.");
-        return 1;
+      {
+        build: async (country) => {
+          built.push(country);
+          if (country === "BB") throw new Error("Worker exceeded CPU time limit.");
+          return 1;
+        },
+        world: async () => ++worlds,
       },
       NOW,
     );
     expect(built).toHaveLength(BUILD.perRun);
+    // Then the world's stories, in a call of their own.
+    expect(worlds).toBe(1);
     expect(JSON.parse(String(error.mock.calls[0][0]))).toMatchObject({ message: "stories step error", failed: [{ country: "BB" }] });
   });
 
@@ -470,15 +476,20 @@ describe("story titles (#230 step 3)", () => {
 });
 
 describe("a failed build waits (#230, Yurii's review of #281)", () => {
+  const failingBuilds: StoryCalls = {
+    build: async () => {
+      throw new Error("Worker exceeded CPU time limit.");
+    },
+    world: async () => 0,
+  };
+
   it("lets a country whose build failed wait BUILD.failedMinutes, keeping the stories it has", async () => {
     await addOutlets("CZ");
     await buildCountryStories(env, "CZ", "2026-11-01T13:28:27Z", NOW, writeOk);
     await env.DB.prepare("UPDATE outlets SET last_item_at = '2026-11-01T14:01:00Z' WHERE id = 'cz-ct24'").run();
     const at = (minutes: number) => new Date(NOW.getTime() + minutes * 60_000);
     vi.spyOn(console, "error").mockImplementation(() => {});
-    await storiesStep(env, async () => {
-      throw new Error("Worker exceeded CPU time limit.");
-    }, at(BUILD.minMinutes));
+    await storiesStep(env, failingBuilds, at(BUILD.minMinutes));
     const row = await env.DB.prepare("SELECT failed_at, json FROM country_stories WHERE country = 'CZ'").first<{ failed_at: string; json: string }>();
     expect(row?.failed_at).toBe("2026-11-01T14:05:00Z");
     expect(JSON.parse(row!.json).stories.length).toBeGreaterThan(0);
@@ -492,9 +503,7 @@ describe("a failed build waits (#230, Yurii's review of #281)", () => {
   it("gives a country never built an empty row to wait in", async () => {
     await addOutlets("CZ");
     vi.spyOn(console, "error").mockImplementation(() => {});
-    await storiesStep(env, async () => {
-      throw new Error("Worker exceeded CPU time limit.");
-    }, NOW);
+    await storiesStep(env, failingBuilds, NOW);
     expect(await dueCountries(env, NOW)).toEqual([]);
     expect(await exports.default.fetch("https://api.test/stories?country=CZ").then((r) => r.json())).toEqual({ country: "CZ", builtAt: null, stories: [] });
   });

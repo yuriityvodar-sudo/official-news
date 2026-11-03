@@ -7,7 +7,8 @@ import type { SourceRow } from "./fetcher/types";
 import { runCleanup } from "./health/cleanup";
 import { popularityStep } from "./popularity";
 import { runPush } from "./push";
-import { buildCountryStories, storiesStep } from "./stories";
+import { type StoryCalls, buildCountryStories, storiesStep } from "./stories";
+import { buildWorldStories } from "./stories/world";
 import { runSummarizer } from "./summarizer";
 import { sendReplyPushes } from "./support/cron";
 import { TRANSLATIONS_PER_RUN, releaseReady, runTranslator, translatorRunning } from "./translator";
@@ -27,7 +28,8 @@ import { TRANSLATIONS_PER_RUN, releaseReady, runTranslator, translatorRunning } 
  * Every 4th minute the summarizer's run also checks one item's popularity per
  * country (popularity/index.ts, #230 step 4). Last, both build the stories of up
  * to 6 countries whose news outlets have new headlines (stories/index.ts, #230),
- * each in a call of its own (StoryBuilder).
+ * each in a call of its own (StoryBuilder), and then at most every 5 minutes
+ * the world's stories from theirs (stories/world.ts), in another.
  */
 export const CRONS = {
   fetcher: "* * * * *",
@@ -76,17 +78,24 @@ export class SourceChecker extends WorkerEntrypoint<Env> {
   }
 }
 
-/** One country's stories (#230, src/stories/), as a call of its own: its own 10 ms of CPU for grouping its headlines. Not reachable from the internet. */
+/**
+ * One country's stories, and the world's from the countries' (#230, src/stories/), each as a call of its own:
+ * its own 10 ms of CPU for grouping the headlines. Not reachable from the internet.
+ */
 export class StoryBuilder extends WorkerEntrypoint<Env> {
   build(country: string, version: string): Promise<number> {
     return buildCountryStories(this.env, country, version);
   }
+
+  world(): Promise<number> {
+    return buildWorldStories(this.env);
+  }
 }
 
-/** The stories step with each country in a call of its own, when the run has `ctx.exports` (storiesStep). */
-const storyCalls = (ctx?: ExecutionContext) => {
-  const builder = (ctx?.exports as unknown as { StoryBuilder?: Pick<StoryBuilder, "build"> } | undefined)?.StoryBuilder;
-  return builder ? (country: string, version: string) => builder.build(country, version) : undefined;
+/** The stories step with each build in a call of its own, when the run has `ctx.exports` (storiesStep). */
+const storyCalls = (ctx?: ExecutionContext): StoryCalls | undefined => {
+  const builder = (ctx?.exports as unknown as { StoryBuilder?: Pick<StoryBuilder, "build" | "world"> } | undefined)?.StoryBuilder;
+  return builder ? { build: (country, version) => builder.build(country, version), world: () => builder.world() } : undefined;
 };
 
 export default {
