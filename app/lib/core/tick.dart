@@ -86,10 +86,13 @@ class Tick {
 
   /// The tick as the chat takes what it is about ([Article.isTick]): its
   /// headline; its outlets as its source ("Tagesschau, Sky TG24 and 44
-  /// more"), the chat's header; their headlines as its summary, which the
-  /// paywall shows, and as its media, all the agent has of it (the server's
-  /// prompt). Kept with the conversation, so the Conversations screen opens
-  /// it again as it opens a decision's.
+  /// more"), the chat's header; its headline again as its summary, the
+  /// paywall's sample answer and the demo's (`CHAT_DEMO`), in the reader's
+  /// language: the outlets' own headlines are in theirs, and read there as
+  /// the AI answering in Turkish or German (Roman on the simulator, 3 Nov:
+  /// «ИИ отвечает на языке статьи»). Their headlines are its media, what the
+  /// agent has of it (the server's prompt). Kept with the conversation, so
+  /// the Conversations screen opens it again as it opens a decision's.
   Article asArticle(AppLocalizations l10n, {String? lang}) => Article(
     id: id,
     country: 'WW',
@@ -102,9 +105,7 @@ class Tick {
     dateOnly: false,
     headline: title,
     shortSummary: null,
-    summary: [
-      for (final i in items.take(4)) '${i.outlet}: ${i.title}',
-    ].join('\n'),
+    summary: title,
     decisionType: Article.tickType,
     originalTitle: title,
     originalLanguage: lang ?? 'en',
