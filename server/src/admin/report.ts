@@ -6,7 +6,7 @@
 // (Google Search) and, once there is a key, App Store Connect (the store).
 import type { AdminEnv } from "./env";
 import { type AppleDay, appleDays, fromWebsite, sumDays, syncApple } from "./appstore";
-import { type Request as Report, type Rows, batch, googlePost, single } from "./ga";
+import { type Request as Report, type Rows, batch, googlePost, realtime, single } from "./ga";
 import { esc } from "./page";
 
 /** The three windows, each ending yesterday: its length in days. */
@@ -157,15 +157,41 @@ export async function dailyReport(env: AdminEnv, fetcher: typeof fetch = fetch, 
     limit: 8,
     dimensionFilter: WEB,
   };
+  const today = kyivDate(now);
+  const week = { startDate: dates.week.now.start, endDate: dates.week.now.end };
+  const ranked = (dimension: string, metric: string, range: object, where: object, limit = 8): Report => ({
+    dateRanges: [range],
+    dimensions: [{ name: dimension }],
+    metrics: [{ name: metric }],
+    orderBys: [{ metric: { metricName: metric }, desc: true }],
+    limit,
+    dimensionFilter: where,
+  });
+  // Today so far against the whole of yesterday (LyFi's live strip), and the extras of the day and the week.
+  const todayRanges = [
+    { startDate: today, endDate: today, name: "today" },
+    { startDate: dates.day.now.start, endDate: dates.day.now.end, name: "yesterday" },
+  ];
+  const extras: Report[] = [
+    { dateRanges: todayRanges, metrics: ["totalUsers", "newUsers", "sessions", "screenPageViews"].map((name) => ({ name })), dimensionFilter: WEB },
+    { dateRanges: todayRanges, metrics: ["activeUsers", "newUsers", "sessions"].map((name) => ({ name })), dimensionFilter: APP },
+    { dateRanges: [{ startDate: dates.day.now.start, endDate: dates.day.now.end }], dimensions: [{ name: "hour" }], metrics: [{ name: "totalUsers" }], orderBys: [{ dimension: { dimensionName: "hour" } }], dimensionFilter: WEB },
+    ranked("deviceCategory", "totalUsers", week, WEB),
+    ranked("landingPagePlusQueryString", "sessions", week, WEB, 10),
+  ];
   const search = (body: object) => googlePost(env, SEARCH, body, fetcher).then((r) => ((r as { rows?: SearchRow[] }).rows ?? []) as SearchRow[]);
-  const [ga, storeA, storeB, byDate, queries, pages] = await Promise.all([
+  const [ga, storeA, storeB, byDate, queries, pages, more, live, lastWeekQueries] = await Promise.all([
     batch(env, [web[0], web[1], clicks[0], clicks[1], sources], fetcher),
     // The build is a custom dimension: Google refuses it until it has data, so apart.
     single(env, store[0], fetcher),
     single(env, store[1], fetcher),
     search({ startDate: dates.month.before.start, endDate: dates.day.now.end, dimensions: ["date"], rowLimit: 100 }).catch(() => null),
-    search({ startDate: dates.week.now.start, endDate: dates.week.now.end, dimensions: ["query"], rowLimit: 10 }).catch(() => null),
+    search({ startDate: dates.week.now.start, endDate: dates.week.now.end, dimensions: ["query"], rowLimit: 250 }).catch(() => null),
     search({ startDate: dates.week.now.start, endDate: dates.week.now.end, dimensions: ["page"], rowLimit: 10 }).catch(() => null),
+    batch(env, extras, fetcher).catch(() => null),
+    // Right now: people active in the last 30 minutes, by platform.
+    realtime(env, { dimensions: [{ name: "platform" }], metrics: [{ name: "activeUsers" }] }, fetcher).catch(() => null),
+    search({ startDate: dates.week.before.start, endDate: dates.week.before.end, dimensions: ["query"], rowLimit: 250 }).catch(() => null),
   ]);
   const [appA, appB] = await batch(env, [app[0], app[1]], fetcher);
   // Apple's days (UTC), read from App Store Connect into ADMIN_KV first.
@@ -209,7 +235,25 @@ export async function dailyReport(env: AdminEnv, fetcher: typeof fetch = fetch, 
     { label: "Minutes per active user", value: (m, s) => (m[0][s] ? m[3][s] / m[0][s] / 60 : 0), digits: 1 },
   ];
 
-  return `<p class="note">Days end yesterday, ${dates.day.now.end}, Kyiv time. Google Analytics counts website visitors who accepted cookies; Search Console is 2–3 days late and counts in Pacific time.</p>
+  const pick = (r: Rows | undefined, name: string, i: number) => r?.rows.find((x) => x.key[0] === name)?.values[i] ?? 0;
+  const liveWeb = live?.rows.filter((r) => r.key[0] === "web").reduce((s, r) => s + r.values[0], 0) ?? null;
+  const liveApp = live?.rows.filter((r) => r.key[0] !== "web").reduce((s, r) => s + r.values[0], 0) ?? null;
+  const card = (label: string, value: number | null, yesterday?: number) =>
+    `<div class="card"><p>${label}</p><b>${value === null ? "–" : num(value)}</b>${yesterday === undefined ? "" : `<span class="muted">yesterday ${num(yesterday)}</span>`}</div>`;
+  const strip = `<div class="cards">
+${card("On the website now", liveWeb)}${card("In the app now", liveApp)}
+${card("Visitors today", pick(more?.[0], "today", 0), pick(more?.[0], "yesterday", 0))}${card("New visitors today", pick(more?.[0], "today", 1), pick(more?.[0], "yesterday", 1))}
+${card("Website sessions today", pick(more?.[0], "today", 2), pick(more?.[0], "yesterday", 2))}${card("App users today", pick(more?.[1], "today", 0), pick(more?.[1], "yesterday", 0))}
+</div>`;
+  // Google searches new this week (not in the week before) and lost (in the week before, not this week).
+  const thisWeek = new Map((queries ?? []).map((r) => [r.keys![0], r]));
+  const lastWeek = new Map((lastWeekQueries ?? []).map((r) => [r.keys![0], r]));
+  const gained = [...thisWeek.values()].filter((r) => !lastWeek.has(r.keys![0])).sort((a, b) => b.impressions - a.impressions).slice(0, 10);
+  const lost = [...lastWeek.values()].filter((r) => !thisWeek.has(r.keys![0])).sort((a, b) => b.impressions - a.impressions).slice(0, 10);
+  const hours = more?.[2].rows ?? [];
+  return `${strip}
+<p class="note">"Now" is the last 30 minutes; "today" is Kyiv's day so far, next to the whole of yesterday.</p>
+<p class="note">Days end yesterday, ${dates.day.now.end}, Kyiv time. Google Analytics counts website visitors who accepted cookies; Search Console is 2–3 days late and counts in Pacific time.</p>
 <div class="stack">
 ${table("Funnel: Google and the website to the app", funnel, [
     { label: "Website visitors (people)", value: 0 },
@@ -238,8 +282,13 @@ ${table("App: App Store build", storeB2, appLines("users"), storeB2 ? "Only read
 ${table("App: every build (TestFlight included)", appAll, appLines("users"))}
 </div>
 <div class="grid" style="margin-top:12px">
-${list("Google searches, last 7 days", (queries ?? []).map((r) => ({ label: r.keys![0], values: [r.clicks, r.impressions] })), ["Clicks", "Impressions"])}
+${list("Google searches, last 7 days", (queries ?? []).slice(0, 10).map((r) => ({ label: r.keys![0], values: [r.clicks, r.impressions] })), ["Clicks", "Impressions"])}
 ${list("Pages from Google, last 7 days", (pages ?? []).map((r) => ({ label: r.keys![0].replace(/^https:\/\/outernews\.app/, ""), values: [r.clicks, r.impressions] })), ["Clicks", "Impressions"])}
 ${list("Where new visitors came from, last 7 days", ga[4].rows.map((r) => ({ label: r.key[0], values: r.values })), ["New visitors"])}
+${list("New Google searches this week", gained.map((r) => ({ label: r.keys![0], values: [r.clicks, r.impressions] })), ["Clicks", "Impressions"])}
+${list("Google searches lost since last week", lost.map((r) => ({ label: r.keys![0], values: [r.clicks, r.impressions] })), ["Clicks", "Impressions"])}
+${list("Landing pages, last 7 days", (more?.[4].rows ?? []).map((r) => ({ label: r.key[0], values: r.values })), ["Sessions"])}
+${list("Devices, last 7 days", (more?.[3].rows ?? []).map((r) => ({ label: r.key[0], values: r.values })), ["Visitors"])}
+${list("Visitors by hour yesterday (Analytics' time zone)", hours.map((r) => ({ label: `${r.key[0]}:00`, values: r.values })), ["Visitors"])}
 </div>`;
 }
