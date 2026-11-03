@@ -4,12 +4,15 @@ import { describe, expect, it, vi } from "vitest";
 import worker, { CRONS } from "../src/index";
 import { buildCountryStories, storiesStep } from "../src/stories";
 import { headlineWords } from "../src/stories/cluster";
-import { type Tick, type TitledStory, WORLD, type WorldStories, buildWorldStories, englishWords } from "../src/stories/world";
+import { type Tick, type TitledStory, WORLD, type WorldStories, buildWorldStories, englishWords, worldStories } from "../src/stories/world";
 import { TITLED_STORIES_2026_11_03 } from "./fixtures/titled-stories-2026-11-03";
+import { TITLED_STORIES_2026_11_03_EVENING } from "./fixtures/titled-stories-2026-11-03-evening";
 import { chat, fakeAi } from "./helpers";
 
 /** The fixture's time. */
 const NOW = new Date("2026-11-03T10:00:00Z");
+/** The evening fixture's. */
+const EVENING = new Date("2026-11-03T21:45:00Z");
 const stored = (date: Date) => `${date.toISOString().slice(0, 19)}Z`;
 
 /** The fixture's countries' titled stories as their builds keep them (`country_stories.top`), but `without` some. */
@@ -85,6 +88,18 @@ describe("the world's stories (#230 step 4)", () => {
     expect(countriesOf(again.find((s) => s.id === qeshm.id)!)).toEqual(["BR", "FR", "UA", "US"]);
     expect(new Set(again.map((s) => s.id)).size).toBe(again.length);
     expect(JSON.parse((await worldRow())!.ids)[`US/${qeshm.stories.find((s) => s.country === "US")!.id}`]).toBe(qeshm.id);
+  });
+
+  it("joins one event that the grouping found as two, so For you shows it once (3 Nov, 21:45 UTC: the end of US military aid to Israel)", () => {
+    const tops = new Map<string, TitledStory[]>();
+    for (const { country, story } of TITLED_STORIES_2026_11_03_EVENING) tops.set(country, [...(tops.get(country) ?? []), story]);
+    const { stories } = worldStories([...tops].map(([country, list]) => ({ country, top: JSON.stringify(list) })), {}, EVENING);
+    const aid = stories.filter((s) => s.titles.en.includes("Israel") && s.titles.en.includes("aid"));
+    expect(aid.map(countriesOf)).toEqual([["CZ", "ES", "FR", "HU", "ID", "US", "WW"]]);
+    expect(new Set(aid[0].items.map((i) => i.outlet.id)).size).toBe(aid[0].items.length);
+    // Each event once: no two world stories share a country's story.
+    const parts = stories.flatMap((s) => s.stories.map((p) => `${p.country}/${p.id}`));
+    expect(new Set(parts).size).toBe(parts.length);
   });
 });
 

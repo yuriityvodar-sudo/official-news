@@ -3,7 +3,8 @@ import { creditPack, verifyPack, walletMicros } from "../appstore/packs";
 import { countryName } from "../api/filters";
 import type { Env } from "../env";
 import { toStoredTime } from "../fetcher/text";
-import { type WorldStory, worldStory } from "../stories/world";
+import { countryStory } from "../stories";
+import { type WorldStory, storyEvent, worldStory } from "../stories/world";
 import { SHOWN, isLang } from "../translator";
 import type { Lang } from "../translator/languages";
 import { QUESTION_MICROS, charge, costMicros, questionsLeft, readBudget, reserve, spend, unitsFor, type Usage } from "./usage";
@@ -11,7 +12,7 @@ import { QUESTION_MICROS, charge, costMicros, questionsLeft, readBudget, reserve
 export { DAILY_QUESTIONS, QUESTION_MICROS } from "./usage";
 
 /**
- * The AI chat about one decision, or one tick (a world story, #230), for subscribers only (#146, docs/contract.md):
+ * The AI chat about one decision, one tick (a world story, #230) or one story of a country's outlets, for subscribers only (#146, docs/contract.md):
  * `POST /v1/chat`, with `/v1/chat/status` (what is left) and `/v1/chat/credits`
  * (a pack bought). Paid AI is used only here (CLAUDE.md), one OpenAI call per
  * question, within the limit of `./usage.ts`. Nothing of the conversation is
@@ -43,9 +44,11 @@ interface Message {
 }
 
 interface ChatRequest {
-  /** What the question is about: a decision in the feed, or a tick (a world story, GET /ticks). One of the two. */
+  /** What the question is about: a decision in the feed, a tick (a world story, GET /ticks), or a story of `country`'s outlets (For you's `stories`, GET /stories). One of the three. */
   articleId?: string;
   tickId?: string;
+  storyId?: string;
+  country?: string;
   lang: string;
   messages: Message[];
   transaction: string;
@@ -72,17 +75,22 @@ const error = (status: number, message: string, extra: Record<string, string | n
   body: { error: message, ...extra },
 });
 
-/** What a body is about: its `articleId` or its `tickId`, exactly one of them, or null. */
-function aboutOf(b: { articleId?: unknown; tickId?: unknown }): { articleId: string } | { tickId: string } | null {
-  if (typeof b.articleId === "string" && b.tickId === undefined) return { articleId: b.articleId };
-  if (typeof b.tickId === "string" && b.articleId === undefined) return { tickId: b.tickId };
-  return null;
+/** What a question is about: a decision, a tick, or a story with its outlets' country. */
+type About = { articleId: string } | { tickId: string } | { storyId: string; country: string };
+
+/** What a body is about: its `articleId`, its `tickId` or its `storyId` with that story's `country`, exactly one of them, or null. */
+function aboutOf(b: { articleId?: unknown; tickId?: unknown; storyId?: unknown; country?: unknown }): About | null {
+  const given = [b.articleId, b.tickId, b.storyId].filter((id) => id !== undefined);
+  if (given.length !== 1 || typeof given[0] !== "string") return null;
+  if (typeof b.articleId === "string") return { articleId: b.articleId };
+  if (typeof b.tickId === "string") return { tickId: b.tickId };
+  return typeof b.storyId === "string" && typeof b.country === "string" && /^[A-Z]{2}$/.test(b.country) ? { storyId: b.storyId, country: b.country } : null;
 }
 
 function readRequest(body: unknown): ChatRequest | string {
   const b = body as Partial<ChatRequest> | null;
   if (!b || !aboutOf(b) || typeof b.lang !== "string" || typeof b.transaction !== "string" || !Array.isArray(b.messages)) {
-    return "Expected { articleId or tickId, lang, messages, transaction }";
+    return "Expected { articleId, tickId, or storyId and country; lang, messages, transaction }";
   }
   if (b.lang !== "en" && !isLang(b.lang)) return "lang must be en, uk, ru, es or de";
   const messages = b.messages as unknown[];
@@ -157,16 +165,17 @@ function systemPrompt(article: ChatArticle, lang: string): string {
 
 /**
  * The same analyst about a tick (#230, Roman, 3 Nov: «чат такой же как у нас
- * уже есть»): one news event that outlets of several countries report, the
- * world story behind the tick (GET /ticks). It has their headlines only, never
- * their texts (the fixed principle), so it says what the headlines do not give,
- * and that the event is newer than what it knows; otherwise the decision's rules.
+ * уже есть»): one news event that outlets report, the world story behind the
+ * tick (GET /ticks), or a story of one country's outlets as one (storyEvent).
+ * It has their headlines only, never their texts (the fixed principle), so it
+ * says what the headlines do not give, and that the event is newer than what
+ * it knows; otherwise the decision's rules.
  */
 function tickPrompt(tick: WorldStory, lang: string): string {
   const place = (code: string) => (code === "WW" ? "international outlets" : countryName(code, "en"));
   const when = (time: string) => `${time.slice(0, 16).replace("T", " ")} UTC`;
   return [
-    "You are the AI analyst of Outer News, an app about official government decisions and the news the world is talking about. A reader talks with you about ONE news event, shown below, which news outlets in several countries report: you have their headlines, not their articles.",
+    "You are the AI analyst of Outer News, an app about official government decisions and the news the world is talking about. A reader talks with you about ONE news event, shown below, which news outlets report: you have their headlines, not their articles.",
     "",
     "How you help:",
     "- Give insight, not a retelling: what the event means in practice, who it affects and how, what is likely to happen next, and why it matters.",
@@ -196,21 +205,29 @@ function tickPrompt(tick: WorldStory, lang: string): string {
   ].join("\n");
 }
 
-/** A tick's text for its question's units: its outlets' headlines. */
+/** A tick's or a story's text for its question's units: its outlets' headlines. */
 const tickChars = (tick: WorldStory) => tick.items.reduce((sum, item) => sum + item.title.length, 0);
 
 /** What a question is about, for the model: its prompt, its text's length (the question's units), and its id for the logs. */
 interface Subject {
   prompt: string;
   chars: number;
-  log: { article: string } | { tick: string };
+  log: { article: string } | { tick: string } | { story: string };
 }
 
-/** The decision in the feed (its summary in `lang` once shown) or the tick a question is about, or null: 404. */
-async function subjectOf(about: { articleId: string } | { tickId: string }, lang: string, env: Env): Promise<Subject | null> {
-  if ("tickId" in about) {
-    const tick = await worldStory(env, about.tickId);
-    return tick && { prompt: tickPrompt(tick, lang), chars: tickChars(tick), log: { tick: about.tickId } };
+/** The world story of a tick, or a country's story as one (storyEvent); null when the last build has none of it. */
+async function eventOf(about: { tickId: string } | { storyId: string; country: string }, env: Env): Promise<WorldStory | null> {
+  if ("tickId" in about) return worldStory(env, about.tickId);
+  const story = await countryStory(env, about.country, about.storyId);
+  return story && storyEvent(story, about.country);
+}
+
+/** The decision in the feed (its summary in `lang` once shown), the tick or the story a question is about, or null: 404. */
+async function subjectOf(about: About, lang: string, env: Env): Promise<Subject | null> {
+  if (!("articleId" in about)) {
+    const event = await eventOf(about, env);
+    const log = "tickId" in about ? { tick: about.tickId } : { story: `${about.country}/${about.storyId}` };
+    return event && { prompt: tickPrompt(event, lang), chars: tickChars(event), log };
   }
   const article = await env.DB.prepare(
     `SELECT a.headline, a.summary, a.text, a.original_title, a.published_at, s.name AS source, s.country, t.summary AS translated_summary
@@ -409,16 +426,16 @@ export async function answerChat(body: unknown, env: Env, options: ChatOptions =
  */
 export async function chatStatus(body: unknown, env: Env, options: ChatOptions = {}): Promise<Refusal> {
   const now = options.now ?? new Date();
-  const b = body as { articleId?: unknown; tickId?: unknown; transaction?: unknown } | null;
+  const b = body as { articleId?: unknown; tickId?: unknown; storyId?: unknown; country?: unknown; transaction?: unknown } | null;
   const about = b && aboutOf(b);
-  if (!b || !about || typeof b.transaction !== "string") return error(400, "Expected { articleId or tickId, transaction }");
+  if (!b || !about || typeof b.transaction !== "string") return error(400, "Expected { articleId, tickId, or storyId and country; transaction }");
   const subscription = await activeSubscription(b.transaction, env, options, now);
   if ("status" in subscription) return subscription;
   let chars: number;
-  if ("tickId" in about) {
-    const tick = await worldStory(env, about.tickId);
-    if (!tick) return error(404, "Not found");
-    chars = tickChars(tick);
+  if (!("articleId" in about)) {
+    const event = await eventOf(about, env);
+    if (!event) return error(404, "Not found");
+    chars = tickChars(event);
   } else {
     const article = await env.DB.prepare(`SELECT LENGTH(a.text) AS chars FROM articles a WHERE a.id = ? AND ${IN_FEED}`)
       .bind(about.articleId)
