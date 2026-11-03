@@ -47,6 +47,15 @@ function google(): { fetcher: typeof fetch; asked: string[] } {
       });
       return Response.json({ reports });
     }
+    if (url === "https://api.cloudflare.com/client/v4/graphql") {
+      expect(new Headers(init?.headers).get("authorization")).toBe("Bearer cf-test-token");
+      expect(body.variables.account).toBe("acct");
+      const groups = [];
+      for (let t = Date.parse(body.variables.start); t <= Date.parse(body.variables.end); t += 86_400_000) {
+        groups.push({ count: 20, sum: { visits: 8 }, dimensions: { date: new Date(t).toISOString().slice(0, 10) } });
+      }
+      return Response.json({ data: { viewer: { accounts: [{ rumPageloadEventsAdaptiveGroups: groups }] } }, errors: null });
+    }
     if (url.includes(":runRealtimeReport")) return Response.json({ rows: [row(["web"], [3]), row(["iOS"], [2])] });
     if (url.includes("searchconsole.googleapis.com")) {
       if (body.dimensions[0] === "date") {
@@ -84,6 +93,8 @@ describe("the daily report", () => {
       GA_CLIENT_EMAIL: "r@x.iam.gserviceaccount.com",
       ASC_KEY_ID: "K",
       ASC_ISSUER_ID: "I",
+      CF_ACCOUNT_ID: "acct",
+      CF_ANALYTICS_TOKEN: "cf-test-token",
       GA_SERVICE_ACCOUNT: JSON.stringify({ client_email: "r@x.iam.gserviceaccount.com", private_key: pem, project_id: "x" }),
       ADMIN_KV: { get: async () => null, put: async () => undefined } as unknown as KVNamespace,
     } as AdminEnv;
@@ -91,7 +102,10 @@ describe("the daily report", () => {
     const html = await dailyReport(env, fetcher, new Date("2026-11-03T10:00:00Z"));
     expect(html).toContain("Days end yesterday, 2026-11-02, Kyiv time.");
     // Funnel: 300 visitors, 9 of them clicked App Store (3.0%), 6 new App Store users; +50% against 200.
-    expect(html).toMatch(/Website visitors \(people\)<\/td><td class="n">300<\/td><td class="n"><span class="up">\+50%<\/span>/);
+    expect(html).toMatch(/Website visitors who accepted cookies \(people\)<\/td><td class="n">300<\/td><td class="n"><span class="up">\+50%<\/span>/);
+    // Every visit, cookies or not, from Cloudflare: 8 a day, 56 a week, 240 a month.
+    expect(html).toMatch(/Website visits, everyone \(Cloudflare, no cookies\)<\/td><td class="n">8<\/td><td class="n"><span class="up">\+0%<\/span><\/td><td class="n">56<\/td>/);
+    expect(html).toMatch(/Page views, everyone \(Cloudflare\)<\/td><td class="n">20<\/td>/);
     expect(html).toMatch(/Clicked App Store \(people\)<\/td><td class="n">9<\/td>/);
     expect(html).toMatch(/Clicked, % of visitors<\/td><td class="n">3\.0<\/td>/);
     expect(html).toMatch(/New App Store users \(first opens\)<\/td><td class="n">6<\/td>/);
