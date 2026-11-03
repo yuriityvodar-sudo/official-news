@@ -21,6 +21,10 @@ export async function runCleanup(env: Env, now = new Date()): Promise<number> {
   const titles = await env.DB.prepare("DELETE FROM story_titles WHERE updated_at < ?")
     .bind(toStoredTime(new Date(now.getTime() - 3 * 86_400_000)))
     .run();
+  // Their calls an hour (#230): the hour's own row is all a build reads.
+  await env.DB.prepare("DELETE FROM ai_calls WHERE hour < ?")
+    .bind(toStoredTime(new Date(now.getTime() - 2 * 86_400_000)).slice(0, 13))
+    .run();
   console.log(
     JSON.stringify({ message: "cleanup run", cleared, chatDaysRemoved: chat.meta.changes ?? 0, supportThreadsRemoved, storyTitlesRemoved: titles.meta.changes ?? 0 }),
   );

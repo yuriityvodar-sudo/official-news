@@ -136,7 +136,7 @@ function wordsOf(headline: StoryHeadline): string {
 }
 
 /** 32-bit FNV-1a, in base 36: short ids for links. */
-function hash(text: string): string {
+export function hash(text: string): string {
   let h = 0x811c9dc5;
   for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 0x01000193) >>> 0;
   return h.toString(36);
