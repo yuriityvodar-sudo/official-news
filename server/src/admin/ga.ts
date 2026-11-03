@@ -79,3 +79,19 @@ export async function single(env: AdminEnv, request: Request, fetcher: typeof fe
 export const forgetToken = () => {
   token = undefined;
 };
+
+/**
+ * A POST to another Google API with the same sign-in and scopes: Search
+ * Console's search analytics (webmasters.readonly; analytics-reader is a
+ * Restricted user of the property since 3 Nov, docs/setup.md).
+ */
+export async function googlePost(env: AdminEnv, url: string, payload: unknown, fetcher: typeof fetch = fetch): Promise<unknown> {
+  const response = await fetcher(url, {
+    method: "POST",
+    headers: { authorization: `Bearer ${await accessToken(env, fetcher)}`, "content-type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const body = (await response.json().catch(() => null)) as { error?: { message?: string } } | null;
+  if (!response.ok) throw new Error(`Google: HTTP ${response.status} ${body?.error?.message ?? ""}`.trim());
+  return body;
+}
