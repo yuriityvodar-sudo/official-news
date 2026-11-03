@@ -95,3 +95,15 @@ export async function googlePost(env: AdminEnv, url: string, payload: unknown, f
   if (!response.ok) throw new Error(`Google: HTTP ${response.status} ${body?.error?.message ?? ""}`.trim());
   return body;
 }
+
+/** GA's realtime report (the last 30 minutes): one report's rows. */
+export async function realtime(env: AdminEnv, request: Request, fetcher: typeof fetch = fetch): Promise<Rows> {
+  const response = await fetcher(`${API}/${env.GA_PROPERTY}:runRealtimeReport`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${await accessToken(env, fetcher)}`, "content-type": "application/json" },
+    body: JSON.stringify(request),
+  });
+  const body = (await response.json().catch(() => null)) as (Parameters<typeof rows>[0] & { error?: { message?: string } }) | null;
+  if (!response.ok || !body) throw new Error(`Google Analytics realtime: HTTP ${response.status} ${body?.error?.message ?? ""}`.trim());
+  return rows(body);
+}

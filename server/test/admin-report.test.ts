@@ -32,6 +32,10 @@ function google(): { fetcher: typeof fetch; asked: string[] } {
       const reports = (body.requests as { dateRanges: { name?: string }[]; dimensions?: { name: string }[]; dimensionFilter: unknown }[]).map((r) => {
         const where = JSON.stringify(r.dimensionFilter);
         if (r.dimensions?.[0]?.name === "firstUserSourceMedium") return { rows: [row(["google / organic"], [40])] };
+        if (r.dimensions?.[0]?.name === "hour") return { rows: [row(["09"], [4]), row(["21"], [7])] };
+        if (r.dimensions?.[0]?.name === "deviceCategory") return { rows: [row(["mobile"], [200]), row(["desktop"], [100])] };
+        if (r.dimensions?.[0]?.name === "landingPagePlusQueryString") return { rows: [row(["/uk"], [80])] };
+        if (r.dateRanges[0].name === "today") return { rows: [row(["today"], [25, 11, 30, 70]), row(["yesterday"], [40, 20, 50, 120])] };
         const values = (name: string) => {
           const now = name.endsWith("_now");
           if (where.includes("app_store_click")) return now ? [12, 9] : [6, 5];
@@ -43,6 +47,7 @@ function google(): { fetcher: typeof fetch; asked: string[] } {
       });
       return Response.json({ reports });
     }
+    if (url.includes(":runRealtimeReport")) return Response.json({ rows: [row(["web"], [3]), row(["iOS"], [2])] });
     if (url.includes("searchconsole.googleapis.com")) {
       if (body.dimensions[0] === "date") {
         const rows = [];
@@ -51,7 +56,8 @@ function google(): { fetcher: typeof fetch; asked: string[] } {
         }
         return Response.json({ rows });
       }
-      if (body.dimensions[0] === "query") return Response.json({ rows: [{ keys: ["czech fuel price cap"], clicks: 7, impressions: 90, position: 3 }] });
+      if (body.dimensions[0] === "query" && body.startDate === "2026-10-27") return Response.json({ rows: [{ keys: ["czech fuel price cap"], clicks: 7, impressions: 90, position: 3 }, { keys: ["edenor tariffs"], clicks: 1, impressions: 20, position: 9 }] });
+      if (body.dimensions[0] === "query") return Response.json({ rows: [{ keys: ["edenor tariffs"], clicks: 2, impressions: 30, position: 7 }, { keys: ["mexico water permits"], clicks: 0, impressions: 15, position: 12 }] });
       return Response.json({ rows: [{ keys: ["https://outernews.app/en/cz/01J-fuel"], clicks: 7, impressions: 90, position: 3 }] });
     }
     return new Response("unexpected", { status: 500 });
@@ -100,8 +106,18 @@ describe("the daily report", () => {
     expect(html).toContain("czech fuel price cap");
     expect(html).toContain("/en/cz/01J-fuel");
     expect(html).toContain("google / organic");
-    // Two GA batches, the build's two reports apart, and three Search Console queries.
-    expect(asked.filter((u) => u.includes(":batchRunReports"))).toHaveLength(4);
-    expect(asked.filter((u) => u.includes("searchconsole"))).toHaveLength(3);
+    // The live strip: people now, today so far next to yesterday.
+    expect(html).toContain("<p>On the website now</p><b>3</b>");
+    expect(html).toContain("<p>In the app now</p><b>2</b>");
+    expect(html).toContain('<p>Visitors today</p><b>25</b><span class="muted">yesterday 40</span>');
+    // New and lost Google searches, this week against the week before.
+    expect(html).toMatch(/New Google searches this week[\s\S]*czech fuel price cap[\s\S]*Google searches lost/);
+    expect(html).toMatch(/Google searches lost since last week[\s\S]*mexico water permits/);
+    expect(html).toContain("mobile");
+    expect(html).toContain("21:00");
+    // Three GA batches, the build's two reports apart, realtime, and four Search Console queries.
+    expect(asked.filter((u) => u.includes(":batchRunReports"))).toHaveLength(5);
+    expect(asked.filter((u) => u.includes(":runRealtimeReport"))).toHaveLength(1);
+    expect(asked.filter((u) => u.includes("searchconsole"))).toHaveLength(4);
   });
 });
