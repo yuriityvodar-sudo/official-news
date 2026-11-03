@@ -76,8 +76,10 @@ describe("the daily report", () => {
       ACCESS_AUD: "a",
       ADMIN_EMAILS: "y@example.com",
       GA_CLIENT_EMAIL: "r@x.iam.gserviceaccount.com",
+      ASC_KEY_ID: "K",
+      ASC_ISSUER_ID: "I",
       GA_SERVICE_ACCOUNT: JSON.stringify({ client_email: "r@x.iam.gserviceaccount.com", private_key: pem, project_id: "x" }),
-      ADMIN_KV: {} as KVNamespace,
+      ADMIN_KV: { get: async () => null, put: async () => undefined } as unknown as KVNamespace,
     } as AdminEnv;
     const { fetcher, asked } = google();
     const html = await dailyReport(env, fetcher, new Date("2026-11-03T10:00:00Z"));

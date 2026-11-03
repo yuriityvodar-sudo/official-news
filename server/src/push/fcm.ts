@@ -98,7 +98,7 @@ export function pause(env: Env, account: ServiceAccount, now: Date, why: string,
 }
 
 
-function base64url(bytes: Uint8Array): string {
+export function base64url(bytes: Uint8Array): string {
   let binary = "";
   for (const byte of bytes) binary += String.fromCharCode(byte);
   return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
@@ -106,7 +106,7 @@ function base64url(bytes: Uint8Array): string {
 const base64urlText = (text: string) => base64url(new TextEncoder().encode(text));
 
 /** The DER bytes of a PEM private key ("-----BEGIN PRIVATE KEY-----", PKCS #8, as in Google's key files). */
-function pemToDer(pem: string): ArrayBuffer {
+export function pemToDer(pem: string): ArrayBuffer {
   const body = pem
     .replace(/-----(BEGIN|END) PRIVATE KEY-----/g, "")
     // A key pasted with its newlines still escaped.
