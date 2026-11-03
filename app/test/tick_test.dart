@@ -57,8 +57,8 @@ void main() {
   });
 
   group('a tick as the chat takes it', () {
-    test('its headline, its outlets as its source, their headlines as its '
-        'summary and media, and the world as its place', () {
+    test('its headline, also as its summary, its outlets as its source, '
+        'their headlines as its media, and the world as its place', () {
       final l10n = l10nFor();
       final article = Tick.fromJson(fakeTick()).asArticle(l10n);
       expect(article.isTick, isTrue);
@@ -67,10 +67,8 @@ void main() {
       expect(article.headline, "US strikes Iran's Qeshm Island");
       expect(article.source.name, 'ABC News, BBC World and 1 more');
       expect(article.country, 'WW');
-      expect(
-        article.summary,
-        'ABC News: ABC News: headline 0\nBBC World: BBC World: headline 1',
-      );
+      // In the reader's language, as the paywall and the demo show it.
+      expect(article.summary, "US strikes Iran's Qeshm Island");
       expect(article.media.map((m) => m.outlet), ['ABC News', 'BBC World']);
       // Kept with a conversation and read back as a tick.
       expect(Article.fromJson(article.toJson()).isTick, isTrue);
