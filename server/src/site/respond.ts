@@ -89,7 +89,7 @@ export const ROBOTS_DEFAULT = "noindex";
  * frames, nothing else from elsewhere.
  */
 export const csp = (styleHash: string, scriptHash: string) =>
-  `default-src 'none'; style-src '${styleHash}'; script-src '${scriptHash}' https://*.googletagmanager.com; img-src 'self' data: https://*.google-analytics.com https://*.googletagmanager.com; connect-src https://*.google-analytics.com https://*.analytics.google.com https://*.googletagmanager.com; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`;
+  `default-src 'none'; style-src '${styleHash}'; script-src '${scriptHash}' https://*.googletagmanager.com https://static.cloudflareinsights.com; img-src 'self' data: https://*.google-analytics.com https://*.googletagmanager.com; connect-src https://*.google-analytics.com https://*.analytics.google.com https://*.googletagmanager.com https://cloudflareinsights.com; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`;
 
 export interface Reply {
   kind: CacheKind;
