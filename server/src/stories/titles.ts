@@ -67,8 +67,8 @@ export const titlesMessage = (country: string, story: Story): string =>
 // 10 ms; it is the same check, for one sentence.
 const isLatin = (c: number) => (c >= 65 && c <= 90) || (c >= 97 && c <= 122) || (c >= 0xc0 && c <= 0x24f && c !== 0xd7 && c !== 0xf7);
 const isCyrillic = (c: number) => c >= 0x400 && c <= 0x4ff;
-const isLetter = (c: number) => isLatin(c) || isCyrillic(c) || (c >= 0x370 && c <= 0x3ff);
-const isDigit = (c: number) => c >= 48 && c <= 57;
+export const isLetter = (c: number) => isLatin(c) || isCyrillic(c) || (c >= 0x370 && c <= 0x3ff);
+export const isDigit = (c: number) => c >= 48 && c <= 57;
 const isCapital = (word: string) => word[0] !== word[0].toLowerCase();
 const isAcronym = (word: string) => word.length > 1 && word === word.toUpperCase() && word !== word.toLowerCase();
 

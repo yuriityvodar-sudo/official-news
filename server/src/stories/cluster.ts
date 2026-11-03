@@ -347,7 +347,8 @@ export function topStories(headlines: StoryHeadline[], now: Date, count: number)
   return stories;
 }
 
-function itemWeight(publishedAt: string, now: Date): number {
+/** A headline's weight at `now`: 1, halved every `halfLifeHours` since it came. */
+export function itemWeight(publishedAt: string, now: Date): number {
   const hours = Math.max(0, (now.getTime() - Date.parse(publishedAt)) / 3_600_000);
   return 2 ** (-hours / STORIES.halfLifeHours);
 }

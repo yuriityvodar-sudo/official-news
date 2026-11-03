@@ -3,6 +3,7 @@ import { answerChat, chatStatus, creditChatPack } from "../chat";
 import type { Env } from "../env";
 import { REAL_SOURCE, health } from "../health";
 import { countryStories, homeStories } from "../stories";
+import { worldTicks } from "../stories/world";
 import { postSupportMessage, supportThread } from "../support";
 import type { Topic } from "../summarizer/schema";
 import { LANGS, type Lang, SHOWN, isLang, queueStatus, releaseStatus } from "../translator";
@@ -970,6 +971,13 @@ async function route(request: Request, env: Env): Promise<Response> {
     const lang = readLang(url.searchParams);
     if (lang === undefined) return badRequest(LANG_ERROR);
     return json({ country, ...(await countryStories(env, country, lang ?? "en")) }, 200, LIST_CACHE);
+  }
+
+  // The world's stories (#230, step 4): events several countries' outlets carry, the weightiest now first, from one row; the app's ticks.
+  if (url.pathname === "/ticks") {
+    const lang = readLang(url.searchParams);
+    if (lang === undefined) return badRequest(LANG_ERROR);
+    return json(await worldTicks(env, lang ?? "en"), 200, LIST_CACHE);
   }
 
   const match = url.pathname.match(/^\/articles\/([^/]+)$/);
