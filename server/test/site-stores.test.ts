@@ -12,7 +12,7 @@ describe("/go/appstore/<channel>", () => {
     const { status, headers, body } = await site("/go/appstore/web-article-uk");
     expect(status).toBe(302);
     expect(headers.get("location")).toBe(appStoreUrl("web-article-uk"));
-    expect(headers.get("location")).toMatch(new RegExp(`^https://apps\\.apple\\.com/app/id${APP_STORE_ID}\\?(pt=\\d+&)?ct=web-article-uk&mt=8$`));
+    expect(headers.get("location")).toBe(`https://apps.apple.com/app/id${APP_STORE_ID}?pt=129371207&ct=web-article-uk&mt=8`);
     expect(headers.get("cache-control")).toBe("no-store");
     expect(headers.get("x-robots-tag")).toBe("noindex");
     expect(body).toBe("");
