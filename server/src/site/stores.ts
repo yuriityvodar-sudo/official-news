@@ -22,10 +22,11 @@ export const APP_STORE_LIVE = false;
 /**
  * Our provider token in App Store Connect (App Analytics › Campaigns › a
  * generated link's `pt=`): not a secret, it is in every public campaign link.
- * Empty until it is read from App Store Connect; without it Apple attributes
- * nothing, so the release waits for it (docs/decisions/2026-11-03-app-store-funnel.md).
+ * It belongs to the developer account (RS Elite Pro s.r.o.), the same for all
+ * its apps; read on 3 Nov from the campaign link generator. Without it Apple
+ * attributes nothing (docs/decisions/2026-11-03-app-store-funnel.md).
  */
-export const APP_STORE_PROVIDER = "";
+export const APP_STORE_PROVIDER = "129371207";
 
 /** A channel as Apple takes it in `ct`: lower-case letters, digits and hyphens, at most 40 characters. */
 const CHANNEL = /^[a-z0-9-]{1,40}$/;
