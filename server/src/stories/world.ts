@@ -205,6 +205,12 @@ export async function worldFailed(env: Env, now = new Date()): Promise<void> {
     .run();
 }
 
+/** One world story by its id, as kept, for the chat about a tick (src/chat/), or null when the last build has none of it. */
+export async function worldStory(env: Env, id: string): Promise<WorldStory | null> {
+  const row = await env.DB.prepare("SELECT json FROM world_stories WHERE id = 1").first<{ json: string }>();
+  return row ? ((JSON.parse(row.json) as WorldStories).stories.find((story) => story.id === id) ?? null) : null;
+}
+
 /** A world story as the API gives it: its headline in the asked language, its countries, and its weight now. */
 export interface Tick extends Omit<WorldStory, "titles"> {
   title: string;

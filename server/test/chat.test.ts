@@ -288,6 +288,72 @@ describe("POST /v1/chat/status (#146)", () => {
   });
 });
 
+describe("the chat about a tick (#230, the world's stories)", () => {
+  /** A world story as its build keeps it (world_stories), the one behind a tick. */
+  const TICK = {
+    id: "w1",
+    titles: {
+      en: "US strikes Iran's Qeshm Island",
+      uk: "США завдали ударів по іранському острову Кешм",
+      ru: "США нанесли удары по иранскому острову Кешм",
+      es: "Estados Unidos ataca la isla iraní de Qeshm",
+      de: "Die USA greifen die iranische Insel Keschm an",
+    },
+    stories: [
+      { country: "US", id: "s1", lastSeen: "2026-10-27T10:00:00Z" },
+      { country: "WW", id: "s2", lastSeen: "2026-10-27T09:00:00Z" },
+    ],
+    outlets: 3,
+    items: [
+      { title: "US military carries out strikes on Iran's Qeshm Island", url: "https://abc.test/1", publishedAt: "2026-10-27T10:00:00Z", outlet: { id: "us-abc", name: "ABC News", site: "https://abc.test" }, country: "US" },
+      { title: "US strikes Iranian island in the Strait of Hormuz", url: "https://bbc.test/1", publishedAt: "2026-10-27T09:00:00Z", outlet: { id: "ww-bbc", name: "BBC World", site: "https://bbc.test" }, country: "WW" },
+    ],
+    firstSeen: "2026-10-27T08:00:00Z",
+    lastSeen: "2026-10-27T10:00:00Z",
+  };
+  beforeEach(() =>
+    env.DB.prepare("INSERT INTO world_stories (id, json, ids, built_at) VALUES (1, ?, '{}', '2026-10-27T10:05:00Z')")
+      .bind(JSON.stringify({ builtAt: "2026-10-27T10:05:00Z", stories: [TICK] }))
+      .run(),
+  );
+  const aboutTick = (tickId: string) => ({ articleId: undefined, tickId });
+
+  it("answers as the same analyst from its outlets' headlines only, in the reader's language", async () => {
+    const ai = openAi();
+    const result = await ask(aboutTick("w1"), { ai });
+    expect(await answer(result)).toBe("Так, з листопада 2027 року.");
+    expect(result).toMatchObject({ remaining: DAILY_QUESTIONS - 1, units: 1 });
+    const system = ai.requests[0].body.messages[0];
+    expect(system.role).toBe("system");
+    expect(system.content).toContain("A reader talks with you about ONE news event, shown below, which news outlets in several countries report: you have their headlines, not their articles.");
+    expect(system.content).toContain("Event: US strikes Iran's Qeshm Island");
+    expect(system.content).toContain("As the app shows it in Ukrainian: США завдали ударів по іранському острову Кешм");
+    expect(system.content).toContain("Reported by outlets in: United States, international outlets; first 2026-10-27 08:00 UTC, latest 2026-10-27 10:00 UTC");
+    expect(system.content).toContain("- ABC News (United States), 2026-10-27 10:00 UTC: US military carries out strikes on Iran's Qeshm Island");
+    expect(system.content).toContain("- BBC World (international outlets), 2026-10-27 09:00 UTC: US strikes Iranian island in the Strait of Hormuz");
+    expect(system.content).toContain("(2 of the 3 outlets)");
+    // The decision's rules: the answer first, no labelled sections, no closing menu, no links.
+    expect(system.content).toContain("Answer the question in your first one or two sentences");
+    expect(system.content).toContain("Never end with offers or a menu of what else you could explain");
+    expect(system.content).toContain("Write no links: the app shows the outlets above your answers.");
+    expect(system.content).not.toContain("Official text");
+    expect(await usage()).toEqual({ questions: 1, spent: COST });
+  });
+
+  it("refuses a tick the last build has none of (404), and a body about both or neither (400)", async () => {
+    expect(await ask(aboutTick("nope"))).toMatchObject({ status: 404 });
+    expect(await ask({ tickId: "w1" })).toMatchObject({ status: 400, body: { error: "Expected { articleId or tickId, lang, messages, transaction }" } });
+    expect(await ask({ articleId: undefined })).toMatchObject({ status: 400 });
+  });
+
+  it("says in /v1/chat/status how much one question about it takes", async () => {
+    const status = async (tickId: string) => chatStatus({ tickId, transaction: await store.sign(transaction()) }, env, trusted());
+    expect(await status("w1")).toEqual({ status: 200, body: { questionsLeft: 20, boughtQuestions: 0, units: 1, resetsAt: "2026-10-28T00:00:00Z" } });
+    expect(await status("nope")).toMatchObject({ status: 404 });
+    expect(await chatStatus({ articleId: "c1", tickId: "w1", transaction: await store.sign(transaction()) }, env, trusted())).toMatchObject({ status: 400 });
+  });
+});
+
 describe("packs of questions (#146)", () => {
   const notify = async (type: string, changes: object) =>
     receiveNotification(
