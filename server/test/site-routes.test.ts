@@ -131,8 +131,8 @@ describe("every route", () => {
     }
   });
 
-  it("serves robots.txt that keeps crawlers from every address with a query", async () => {
-    expect((await site("/robots.txt")).body).toBe("User-agent: *\nDisallow: /*?\n\nSitemap: https://site.test/sitemap.xml\n");
+  it("serves robots.txt that keeps crawlers from every address with a query and from the App Store redirect", async () => {
+    expect((await site("/robots.txt")).body).toBe("User-agent: *\nDisallow: /*?\nDisallow: /go/\n\nSitemap: https://site.test/sitemap.xml\n");
   });
 
   const PAGES = ROUTES.filter(([p, s]) => (s < 300 || s >= 400) && !p.endsWith(".txt") && !p.endsWith(".ico") && !p.endsWith(".png") && !p.endsWith(".xml"));
@@ -146,7 +146,7 @@ describe("every route", () => {
   });
 
   it("indexes only pages robots.txt lets crawlers read (a crawler never reads the value of the others)", async () => {
-    expect(ROBOTS_TXT).toBe("User-agent: *\nDisallow: /*?\n");
+    expect(ROBOTS_TXT).toBe("User-agent: *\nDisallow: /*?\nDisallow: /go/\n");
     for (const [path] of PAGES) {
       const { headers, body } = await site(path);
       const indexed = headers.get("x-robots-tag") === "index, follow";

@@ -58,6 +58,8 @@ export const CACHE = {
    * reaches crawlers within the hour through /sitemap-latest.xml anyway.
    */
   sitemapCurrentMonth: { browser: "public, max-age=21600", edge: "max-age=21600, stale-if-error=604800" },
+  /** `/go/appstore/<channel>`, the App Store buttons' redirect (stores.ts): never stored, so every click reaches the App Store with its campaign. */
+  go: { browser: "no-store", edge: "no-store" },
   /** `/`, sent to the visitor's own language: per visitor, so never stored anywhere. */
   chooser: { browser: "private, no-store", edge: "no-store" },
   /** 405 and 500: never stored, so an outage is never cached as a page. */

@@ -41,6 +41,8 @@ interface SiteTexts {
   getApp: string;
   getAppBody: string;
   comingSoon: string;
+  /** Under "App Store" on the live button. */
+  getOnAppStore: string;
   /** The cookie notice (consent.ts; Yurii, 30 Oct: a general message, Details is the privacy policy): nothing from Google loads before Accept. */
   consentTitle: string;
   consentText: string;
@@ -117,6 +119,7 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     getApp: "Get the app",
     getAppBody: "Official decisions from around the world, in a few calm sentences, on your phone.",
     comingSoon: "Coming soon",
+    getOnAppStore: "Download",
     consentTitle: "Cookies",
     consentText: "We use cookies to give you a better experience on Outer News.",
     consentYes: "OK",
@@ -169,6 +172,7 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     getApp: "Завантажте застосунок",
     getAppBody: "Офіційні рішення з усього світу кількома спокійними реченнями у вашому телефоні.",
     comingSoon: "Незабаром",
+    getOnAppStore: "Завантажити",
     consentTitle: "Файли cookie",
     consentText: "Ми використовуємо файли cookie, щоб зробити Outer News зручнішим для вас.",
     consentYes: "OK",
@@ -221,6 +225,7 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     getApp: "Скачайте приложение",
     getAppBody: "Официальные решения со всего мира в нескольких спокойных предложениях в вашем телефоне.",
     comingSoon: "Скоро",
+    getOnAppStore: "Скачать",
     consentTitle: "Файлы cookie",
     consentText: "Мы используем файлы cookie, чтобы сделать Outer News удобнее для вас.",
     consentYes: "OK",
@@ -273,6 +278,7 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     getApp: "Descarga la app",
     getAppBody: "Decisiones oficiales de todo el mundo, en pocas frases serenas, en tu móvil.",
     comingSoon: "Próximamente",
+    getOnAppStore: "Descargar",
     consentTitle: "Cookies",
     consentText: "Usamos cookies para ofrecerte una mejor experiencia en Outer News.",
     consentYes: "OK",
@@ -325,6 +331,7 @@ const SITE_TEXTS: Record<SiteLang, SiteTexts> = {
     getApp: "Laden Sie die App",
     getAppBody: "Offizielle Entscheidungen aus aller Welt, in wenigen ruhigen Sätzen, auf Ihrem Handy.",
     comingSoon: "Demnächst",
+    getOnAppStore: "Laden",
     consentTitle: "Cookies",
     consentText: "Wir verwenden Cookies, um Ihnen ein besseres Erlebnis auf Outer News zu bieten.",
     consentYes: "OK",
