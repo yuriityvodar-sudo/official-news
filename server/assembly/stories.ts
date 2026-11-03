@@ -1,9 +1,10 @@
 // The stories' grouping (#230, the aggregator) in WebAssembly: the loops of
 // src/stories/cluster.ts's grouping, which a call that starts cold ran too
 // slowly as JavaScript (2 Nov: India's 300 headlines took about 12 ms of a
-// call's 10). WebAssembly runs fast from the call's start. The same steps in
-// the same order, with the same sums, so the same stories: cluster.ts says
-// what each step is for and why.
+// call's 10), and the words' numbers (3 Nov: about 1 ms of Germany's build).
+// WebAssembly runs fast from the call's start. The same steps in the same
+// order, with the same sums, so the same stories: cluster.ts says what each
+// step is for and why.
 //
 // Built into src/stories/group.wasm by `npm run build:wasm` (AssemblyScript);
 // `npm test` checks that the committed file is this source's build. All
@@ -46,6 +47,15 @@ const OUT_TYPICAL = 31; // i32[n]: each group's headline nearest its centre
 const COMMON = 32; // f64 (two slots): a word in more headlines leads to no group
 const JOIN_AT = 34; // f64: how alike a headline must be to join
 const NAME_WEIGHT = 36; // f64: a name's weight over a word's
+// The words' numbers (number), laid out first: the arrays above are sized by them.
+const TEXT = 38; // u8[textLength]: the headlines' words as UTF-8, a line each
+const TEXT_LENGTH = 39;
+const TABLE = 40; // i32[tableMask + 1]: the words' numbers by their hash, -1 for none
+const TABLE_MASK = 41; // the table's size less one: a power of two less one
+const TERM_START = 42; // i32[terms]: where a word is first in TEXT...
+const TERM_LENGTH = 43; // ...its bytes...
+const TERM_HASH = 44; // ...and its hash
+const WORDS = 45; // out: the headlines' words in all
 
 let header: usize = 0;
 let terms: i32 = 0;
@@ -85,6 +95,75 @@ let postings: i32 = 0;
 /** Where the arrays may start: past this module's own data. */
 export function heap(): usize {
   return (__heap_base + 7) & ~7;
+}
+
+/**
+ * The headlines' words as numbers (groupHeadlines): TEXT holds them as the
+ * fetcher keeps them (headlineWords), a line a headline, separated by spaces,
+ * a name's with "^" first. A word gets the next number when it is first
+ * found, in the text's order, as a Map numbered them before: its bytes are
+ * looked up by their hash (32-bit FNV-1a). Fills WORD_START, IDS and NAMES,
+ * and the header's TERMS and WORDS; returns the distinct words.
+ */
+export function number(base: usize): i32 {
+  header = base;
+  const n = load<i32>(header + (<usize>N << 2));
+  const end = at(TEXT) + <usize>load<i32>(header + (<usize>TEXT_LENGTH << 2));
+  const table = at(TABLE);
+  const mask = <u32>load<i32>(header + (<usize>TABLE_MASK << 2));
+  memory.fill(table, 0xff, (<usize>mask + 1) << 2);
+  let p = at(TEXT);
+  let words = 0;
+  let count = 0;
+  for (let i = 0; i < n; i++) {
+    setI32(WORD_START, i, words);
+    while (p < end) {
+      let c = load<u8>(p);
+      // "\n": the next headline's words.
+      if (c == 0x0a) {
+        p++;
+        break;
+      }
+      if (c == 0x20) {
+        p++;
+        continue;
+      }
+      const name = c == 0x5e; // "^"
+      if (name) p++;
+      const start = p;
+      let hash: u32 = 0x811c9dc5;
+      while (p < end) {
+        c = load<u8>(p);
+        if (c == 0x20 || c == 0x0a) break;
+        hash = (hash ^ <u32>c) * 0x01000193;
+        p++;
+      }
+      const length = <i32>(p - start);
+      let slot = hash & mask;
+      let id = load<i32>(table + (<usize>slot << 2));
+      while (
+        id >= 0 &&
+        !(<u32>i32At(TERM_HASH, id) == hash && i32At(TERM_LENGTH, id) == length && memory.compare(<usize>i32At(TERM_START, id), start, <usize>length) == 0)
+      ) {
+        slot = (slot + 1) & mask;
+        id = load<i32>(table + (<usize>slot << 2));
+      }
+      if (id < 0) {
+        id = count++;
+        store<i32>(table + (<usize>slot << 2), id);
+        setI32(TERM_START, id, <i32>start);
+        setI32(TERM_LENGTH, id, length);
+        setI32(TERM_HASH, id, <i32>hash);
+      }
+      setI32(IDS, words, id);
+      setI32(NAMES, words, name ? 1 : 0);
+      words++;
+    }
+  }
+  setI32(WORD_START, n, words);
+  store<i32>(header + (<usize>TERMS << 2), count);
+  store<i32>(header + (<usize>WORDS << 2), words);
+  return count;
 }
 
 /** A word's group added to the groups it is in, last. */

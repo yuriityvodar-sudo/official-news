@@ -28,8 +28,11 @@ export interface Headline {
   title: string;
   url: string;
   publishedAt: string;
-  /** Its words as the stories compare them, read once when it is kept (stories/cluster.ts, headlineWords). */
-  words?: string[];
+  /**
+   * Its words as the stories compare them, read once when it is kept (stories/cluster.ts,
+   * headlineWords), separated by spaces; a list in a headline kept before 3 Nov, until it is saved again.
+   */
+  words?: string | string[];
 }
 
 /** A headline with the outlet that published it (GET /headlines, the stories). */

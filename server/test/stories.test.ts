@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { OutletHeadline } from "../src/fetcher/types";
 import worker, { CRONS } from "../src/index";
 import { runCleanup } from "../src/health/cleanup";
-import { BUILD, buildCountryStories, dueCountries, storiesStep } from "../src/stories";
+import { BUILD, WARM_UP, buildCountryStories, dueCountries, newestHeadlines, storiesStep, warmUp } from "../src/stories";
 import { STORIES, type Story, clusterHeadlines, headlineWords, storyScore, terms, topStories } from "../src/stories/cluster";
 import { TITLES, type WriteTitles, storyTitles, toTitles } from "../src/stories/titles";
 import { HEADLINES_2026_11_01 } from "./fixtures/headlines-2026-11-01";
@@ -51,9 +51,10 @@ describe("terms (#230, stories)", () => {
 });
 
 describe("headlineWords (#230, stories)", () => {
-  it("gives a headline's words as the fetcher keeps them, a name's with ^ first", () => {
-    expect(headlineWords("Zemřel textař Pavel Žák, bylo mu 85 let")).toEqual(["zemře", "texta", "^pavel", "^žák", "bylo", "85", "let"]);
-    expect(headlineWords("Zemřel textař Pavel Žák, bylo mu 85 let").map((w) => w.replace("^", ""))).toEqual(terms("Zemřel textař Pavel Žák, bylo mu 85 let"));
+  it("gives a headline's words as the fetcher keeps them, separated by spaces, a name's with ^ first", () => {
+    expect(headlineWords("Zemřel textař Pavel Žák, bylo mu 85 let")).toBe("zemře texta ^pavel ^žák bylo 85 let");
+    expect(headlineWords("Zemřel textař Pavel Žák, bylo mu 85 let").replaceAll("^", "").split(" ")).toEqual(terms("Zemřel textař Pavel Žák, bylo mu 85 let"));
+    expect(headlineWords("A to je")).toBe("");
   });
 });
 
@@ -97,6 +98,34 @@ describe("the stories of a build that starts cold (#230: Yurii's check of #282, 
       expect(stories).toEqual(clusterHeadlines(real(country)));
       expect(stories.flatMap((s) => s.items).some((i) => "words" in i)).toBe(false);
     }
+  });
+
+  it("are the same from words kept as a list (before 3 Nov), until the fetcher saves them again", () => {
+    for (const country of ["CZ", "US"]) {
+      const lists = real(country).map((h) => ({ ...h, words: headlineWords(h.title).split(" ").filter(Boolean) }));
+      expect(topStories(lists, NOW, 50)).toEqual(topStories(withWords(real(country)), NOW, 50));
+    }
+  });
+
+  it("number the words of any alphabet by their bytes in WebAssembly: a word in two headlines is the same word", () => {
+    const at = (minutes: number) => `${new Date(NOW.getTime() - minutes * 60_000).toISOString().slice(0, 19)}Z`;
+    const headline = (title: string, outlet: string, minutes: number): OutletHeadline => ({
+      title, url: `https://${outlet}.test/${minutes}`, publishedAt: at(minutes), outlet: { id: outlet, name: outlet, site: `https://${outlet}.test` },
+    });
+    const stories = clusterHeadlines(withWords([
+      headline("Зеленський зустрівся з Макроном у Парижі", "a", 10),
+      headline("Зеленський і Макрон у Парижі", "b", 20),
+      headline("海に転落した漁船", "c", 30),
+      headline("漁船が海に転落", "d", 40),
+      headline("A to je", "e", 50),
+    ]));
+    expect(stories.map((s) => s.items.map((i) => i.outlet.id).sort())).toEqual([["e"], ["c", "d"], ["a", "b"]]);
+  });
+
+  it("warm the build's code up at the Worker's start, with a story of two outlets and one of one", () => {
+    expect(warmUp().map((s) => s.items.map((i) => i.outlet.id))).toEqual([["a", "b"], ["a"]]);
+    // Its words are the fetcher's.
+    for (const h of WARM_UP.flatMap((o) => JSON.parse(o.headlines))) expect(h.words).toBe(headlineWords(h.title));
   });
 
   it("in WebAssembly, whose memory an isolate keeps: builds one after another are as each alone, larger or smaller", () => {
@@ -156,6 +185,20 @@ const storiesRow = (country: string) =>
   env.DB.prepare("SELECT json, version, built_at FROM country_stories WHERE country = ?").bind(country).first<{ json: string; version: string; built_at: string }>();
 
 describe("the stories step (#230, stories)", () => {
+  it("takes the newest of the outlets' headlines of the last day, each with its outlet, two of the same time in the outlets' order", () => {
+    const row = (id: string, headlines: object[]) => ({ id, name: id.toUpperCase(), site: `https://${id}.test`, headlines: JSON.stringify(headlines) });
+    const h = (url: string, publishedAt: string) => ({ title: url, url, publishedAt, words: url });
+    const outlets = [
+      row("a", [h("a3", "2026-11-01T13:00:00Z"), h("a2", "2026-11-01T12:00:00Z"), h("a1", "2026-10-31T12:00:00Z")]),
+      row("b", [h("b2", "2026-11-01T12:00:00Z"), h("b3", "2026-11-01T13:30:00Z")]),
+      row("c", "not a list" as unknown as object[]),
+    ];
+    const newest = newestHeadlines(outlets, "2026-10-31T14:00:00Z", 3);
+    expect(newest.map((x) => x.url)).toEqual(["b3", "a3", "a2"]);
+    expect(newest[0]).toEqual({ ...h("b3", "2026-11-01T13:30:00Z"), outlet: { id: "b", name: "B", site: "https://b.test" } });
+    expect(newestHeadlines(outlets, "2026-10-31T14:00:00Z", 10).map((x) => x.url)).toEqual(["b3", "a3", "a2", "b2"]);
+  });
+
   it("builds a country's stories from its outlets' headlines of the last day, the weightiest first, in one row", async () => {
     await addOutlets("CZ");
     const count = await buildCountryStories(env, "CZ", "2026-11-01T13:28:27Z", NOW, writeOk);

@@ -94,39 +94,46 @@ function readTerms(title: string): Map<string, boolean> {
   return found;
 }
 
-/**
- * Headlines already read, by title: a country's stories are built every few
- * minutes from mostly the same headlines, and a call's isolate sometimes
- * serves the next one. Emptied when it holds this many.
- */
-const READ = new Map<string, Map<string, boolean>>();
-const READ_MAX = 20_000;
-function readTermsOnce(title: string): Map<string, boolean> {
-  let found = READ.get(title);
-  if (!found) {
-    if (READ.size >= READ_MAX) READ.clear();
-    found = readTerms(title);
-    READ.set(title, found);
-  }
-  return found;
-}
-
 /** A headline's words as they are compared: stems, numbers, or pairs of characters. */
 export const terms = (title: string): string[] => [...readTerms(title).keys()];
 
 /**
  * A headline's words as the fetcher keeps them with it (`words`), so a build
- * does not read them again: [terms], a name's with "^" first ("^babiš"). If
- * readTerms changes, rename the field, so headlines kept before are read anew.
+ * does not read them again: [terms] separated by spaces, a name's with "^"
+ * first ("zemře texta ^pavel ^žák"). One string rather than a list: fewer
+ * strings for a build to parse (3 Nov). If readTerms changes, rename the
+ * field, so headlines kept before are read anew.
  */
-export function headlineWords(title: string): string[] {
+export function headlineWords(title: string): string {
   const words: string[] = [];
   for (const [term, name] of readTerms(title)) words.push(name ? `^${term}` : term);
-  return words;
+  return words.join(" ");
 }
 
 /** A headline to group, with its words when the fetcher kept them (headlineWords). */
-export type StoryHeadline = OutletHeadline & { words?: string[] };
+export type StoryHeadline = OutletHeadline;
+
+/**
+ * Headlines already read, by title: a country's stories are built every few
+ * minutes from mostly the same headlines, and a call's isolate sometimes
+ * serves the next one. Emptied when it holds this many.
+ */
+const READ = new Map<string, string>();
+const READ_MAX = 20_000;
+
+/** A headline's words (headlineWords): as the fetcher kept them, as a list kept before 3 Nov, or read here. */
+function wordsOf(headline: StoryHeadline): string {
+  const words = headline.words;
+  if (typeof words === "string") return words;
+  if (Array.isArray(words)) return words.join(" ");
+  let found = READ.get(headline.title);
+  if (found === undefined) {
+    if (READ.size >= READ_MAX) READ.clear();
+    found = headlineWords(headline.title);
+    READ.set(headline.title, found);
+  }
+  return found;
+}
 
 /** 32-bit FNV-1a, in base 36: short ids for links. */
 function hash(text: string): string {
@@ -147,19 +154,22 @@ const byText = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 interface Grouping {
   memory: WebAssembly.Memory;
   heap(): number;
+  number(base: number): number;
   group(base: number): number;
 }
 let grouping: Grouping | undefined;
 const wasm = (): Grouping => (grouping ??= new WebAssembly.Instance(groupWasm, {}).exports as unknown as Grouping);
+const UTF8 = new TextEncoder();
 
 /** The slots of the grouping's header: where its arrays are (assembly/stories.ts). */
 const SLOT = {
   n: 0, terms: 1, leads: 2, wordStart: 3, ids: 4, names: 5, idf: 6, rank: 7, sorted: 8, weights: 9, units: 10, norm: 11,
   unitSquared: 12, lead: 13, leadCount: 14, df: 15, probe: 16, seen: 17, count: 18, head: 19, tail: 20, next: 21,
   squared: 22, centre: 23, postHead: 24, postTail: 25, postGroup: 26, postNext: 27, centres: 28, outStart: 29,
-  outMembers: 30, outTypical: 31, common: 32, joinAt: 34, nameWeight: 36,
+  outMembers: 30, outTypical: 31, common: 32, joinAt: 34, nameWeight: 36, text: 38, textLength: 39, table: 40,
+  tableMask: 41, termStart: 42, termLength: 43, termHash: 44, words: 45,
 } as const;
-const HEADER_BYTES = 152;
+const HEADER_BYTES = 184;
 
 /** The grouping's answer: each group's headlines (indices of the sorted headlines) in time order, and its most typical. */
 interface Groups {
@@ -179,42 +189,17 @@ interface Groups {
  * rarest words. Then each headline left alone looks again, now that the groups
  * have grown: a long headline that came second, to a group of one short
  * headline, joins the group it is like, as long as it is like one of its
- * headlines too. Here the words become numbers, read once by the fetcher (a
- * headline kept before is read here); the loops run in WebAssembly.
+ * headlines too. Here the words, read once by the fetcher (a headline kept
+ * before is read here), become numbers; that and the loops run in WebAssembly.
  */
 function groupHeadlines(sorted: StoryHeadline[]): Groups {
   const n = sorted.length;
-  const termIds = new Map<string, number>();
-  const ids: number[] = [];
-  const names: number[] = [];
-  const wordStart: number[] = [0];
-  const number = (term: string): number => {
-    let id = termIds.get(term);
-    if (id === undefined) termIds.set(term, (id = termIds.size));
-    return id;
-  };
-  for (let i = 0; i < n; i++) {
-    const words = sorted[i].words;
-    if (Array.isArray(words)) {
-      for (let k = 0; k < words.length; k++) {
-        const word = words[k];
-        const name = word.charCodeAt(0) === 94; // "^"
-        ids.push(number(name ? word.slice(1) : word));
-        names.push(name ? 1 : 0);
-      }
-    } else {
-      for (const [term, name] of readTermsOnce(sorted[i].title)) {
-        ids.push(number(term));
-        names.push(name ? 1 : 0);
-      }
-    }
-    wordStart.push(ids.length);
-  }
-  const terms = termIds.size;
-  const words = ids.length;
+  const lines: string[] = new Array(n);
+  for (let i = 0; i < n; i++) lines[i] = wordsOf(sorted[i]);
+  const text = lines.join("\n");
 
   // The arrays, one after another, each at a multiple of 8.
-  const { memory, heap, group } = wasm();
+  const { memory, heap, number, group } = wasm();
   const base = heap();
   let end = base + HEADER_BYTES;
   const take = (bytes: number) => {
@@ -222,8 +207,35 @@ function groupHeadlines(sorted: StoryHeadline[]): Groups {
     end = at + bytes;
     return at;
   };
+  const room = () => {
+    if (end > memory.buffer.byteLength) memory.grow(Math.ceil((end - memory.buffer.byteLength) / 65_536));
+  };
+  const slots = (arrays: Record<string, number>) => {
+    const i32 = new Int32Array(memory.buffer);
+    for (const [slot, offset] of Object.entries(arrays)) i32[(base >> 2) + SLOT[slot as keyof typeof SLOT]] = offset;
+    return i32;
+  };
+  // First the words as numbers: their text a line a headline, as UTF-8 (at most 3 bytes a UTF-16
+  // unit). A word takes 2 bytes at least with the space after it, and their table stays half empty.
+  const textAt = take(3 * text.length);
+  room();
+  const bytes = UTF8.encodeInto(text, new Uint8Array(memory.buffer, textAt, 3 * text.length)).written;
+  const most = (bytes >> 1) + 1;
+  const tableSize = 2 ** (32 - Math.clz32(2 * most - 1));
+  const numbering: Record<string, number> = {
+    text: textAt, wordStart: take(4 * (n + 1)), ids: take(4 * most), names: take(4 * most), table: take(4 * tableSize),
+    termStart: take(4 * most), termLength: take(4 * most), termHash: take(4 * most),
+  };
+  room();
+  const header = slots(numbering);
+  header[(base >> 2) + SLOT.n] = n;
+  header[(base >> 2) + SLOT.textLength] = bytes;
+  header[(base >> 2) + SLOT.tableMask] = tableSize - 1;
+  const terms = number(base);
+  const words = header[(base >> 2) + SLOT.words];
+
   const at: Record<string, number> = {
-    wordStart: take(4 * (n + 1)), ids: take(4 * words), names: take(4 * words), idf: take(8 * (n + 1)), rank: take(4 * n),
+    idf: take(8 * (n + 1)), rank: take(4 * n),
     sorted: take(4 * words), weights: take(8 * words), units: take(8 * words), norm: take(8 * n), unitSquared: take(8 * n),
     lead: take(4 * n * STORIES.leadTerms), leadCount: take(4 * n), df: take(4 * terms), probe: take(8 * terms), seen: take(4 * n),
     count: take(4 * n), head: take(4 * n), tail: take(4 * n), next: take(4 * n), squared: take(8 * n), centre: take(4 * n),
@@ -232,19 +244,13 @@ function groupHeadlines(sorted: StoryHeadline[]): Groups {
     // A centre for each group of two or more: at most half the headlines.
     centres: take(8 * Math.floor(n / 2) * terms),
   };
-  if (end > memory.buffer.byteLength) memory.grow(Math.ceil((end - memory.buffer.byteLength) / 65_536));
-  const i32 = new Int32Array(memory.buffer);
+  room();
+  const i32 = slots(at);
   const f64 = new Float64Array(memory.buffer);
-  for (const [slot, offset] of Object.entries(at)) i32[(base >> 2) + SLOT[slot as keyof typeof SLOT]] = offset;
-  i32[(base >> 2) + SLOT.n] = n;
-  i32[(base >> 2) + SLOT.terms] = terms;
   i32[(base >> 2) + SLOT.leads] = STORIES.leadTerms;
   f64[(base + 4 * SLOT.common) >> 3] = Math.max(STORIES.commonFloor, n * STORIES.commonShare);
   f64[(base + 4 * SLOT.joinAt) >> 3] = STORIES.joinAt;
   f64[(base + 4 * SLOT.nameWeight) >> 3] = STORIES.nameWeight;
-  i32.set(wordStart, at.wordStart >> 2);
-  i32.set(ids, at.ids >> 2);
-  i32.set(names, at.names >> 2);
   // A word's weight by the number of headlines it is in: the log of this many headlines, or of the
   // country's when it has more, over them.
   const corpus = Math.max(n, STORIES.idfHeadlines);

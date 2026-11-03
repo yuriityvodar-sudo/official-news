@@ -1,4 +1,5 @@
 import type { Env } from "../env";
+import { LIMITS } from "../fetcher";
 import { type OutletHeadline, parseHeadlines } from "../fetcher/types";
 
 /** Headlines a reply gives at most (GET /headlines). */
@@ -6,15 +7,16 @@ export const HEADLINES_PER_REPLY = 200;
 
 /**
  * GET /headlines?country=XX (#230, the aggregator): the newest headlines of
- * XX's news outlets (`WW` the world's, `EU` the Union's) from the last 48
- * hours, newest first, each with its outlet and its link: their headlines and
- * links only, never their text. Reads one row per outlet of the country.
+ * XX's news outlets (`WW` the world's, `EU` the Union's) from the last day
+ * (LIMITS.headlineHours, as they are kept), newest first, each with its outlet
+ * and its link: their headlines and links only, never their text. Reads one
+ * row per outlet of the country.
  */
 export async function countryHeadlines(env: Env, country: string, now = new Date()): Promise<OutletHeadline[]> {
   const { results } = await env.DB.prepare("SELECT id, name, site, headlines FROM outlets WHERE country = ? AND status != 'blocked'")
     .bind(country)
     .all<{ id: string; name: string; site: string; headlines: string }>();
-  const cutoff = `${new Date(now.getTime() - 48 * 3_600_000).toISOString().slice(0, 19)}Z`;
+  const cutoff = `${new Date(now.getTime() - LIMITS.headlineHours * 3_600_000).toISOString().slice(0, 19)}Z`;
   return results
     .flatMap((o) =>
       parseHeadlines(o.headlines)
