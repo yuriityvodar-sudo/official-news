@@ -8,7 +8,7 @@
 // decisions waited for their summaries. Hence a limit an hour, and a story told
 // again under a new id keeps its headline.
 import type { Env } from "../env";
-import { MODEL } from "../summarizer";
+import { MAX_ATTEMPTS, MODEL } from "../summarizer";
 import { LANGS, LANGUAGES, type Lang, OTHER_LETTERS, OTHER_WORDS } from "../translator/languages";
 import { NAME_PARTICLES } from "../translator/words";
 import { type Story, hash } from "./cluster";
@@ -26,6 +26,8 @@ export const TITLES = {
    * room in Workers AI's free 10,000.
    */
   perHour: 24,
+  /** No call while an item has waited this long for its summary: the summaries come first. */
+  summariesWaitMinutes: 10,
   /** A story is asked at most this many times; then it keeps its outlets' headline. */
   maxAttempts: 3,
   /** A headline is at most this long in any language (the prompt asks for 90). */
@@ -236,12 +238,49 @@ const headlineKey = (country: string, url: string) => `${country}:${hash(url)}`;
 const marks = (values: unknown[]) => values.map(() => "?").join(", ");
 
 /**
+ * Takes one of the hour's TITLES.perHour calls, or says none is left: one
+ * statement, so builds side by side never take more (Yurii's review of #290:
+ * reading the count first let a run of 6 builds pass it). A call taken counts
+ * whatever its answer, an error of Workers AI too: one that failed late may
+ * have cost neurons, and while Workers AI refuses, an hour's calls end after
+ * TITLES.perHour tries.
+ */
+async function takeCall(env: Env, hour: string): Promise<boolean> {
+  const taken = await env.DB.prepare(
+    `INSERT INTO ai_calls (hour, titles) VALUES (?1, 1)
+     ON CONFLICT (hour) DO UPDATE SET titles = ai_calls.titles + 1 WHERE ai_calls.titles < ?2
+     RETURNING titles`,
+  )
+    .bind(hour, TITLES.perHour)
+    .first<{ titles: number }>();
+  return taken !== null;
+}
+
+/**
+ * Whether an item of the last day has waited TITLES.summariesWaitMinutes for
+ * its summary: then the summaries come first and the stories' headlines wait
+ * (Yurii's review of #290), so a busy news day never leaves decisions without
+ * summaries, whatever the hour's limit. The unsummarized items by their index
+ * (articles_unsummarized), a few rows.
+ */
+async function summariesWaiting(env: Env, now: Date): Promise<boolean> {
+  const ago = (minutes: number) => `${new Date(now.getTime() - minutes * 60_000).toISOString().slice(0, 19)}Z`;
+  const row = await env.DB.prepare(
+    "SELECT 1 AS waiting FROM articles WHERE summarized_at IS NULL AND summary_attempts < ?1 AND fetched_at < ?2 AND fetched_at > ?3 LIMIT 1",
+  )
+    .bind(MAX_ATTEMPTS, ago(TITLES.summariesWaitMinutes), ago(24 * 60))
+    .first();
+  return row !== null;
+}
+
+/**
  * The headlines of `stories` (a country's, weightiest first): those stored,
  * and for at most TITLES.perBuild of the first TITLES.perCountry with
  * TITLES.minOutlets outlets that have none yet, the model's, stored at once.
  * A story without one under its id takes the titles that at least half of its
  * outlets' headlines hold, without a call. Calls stop at TITLES.perHour an
- * hour, all countries together. An unusable answer counts an attempt; an
+ * hour, all countries together (takeCall), and wait while an item waits for
+ * its summary (summariesWaiting). An unusable answer counts an attempt; an
  * error of Workers AI itself (its free allocation used up, an outage) counts
  * none and asks no more this time.
  */
@@ -249,13 +288,11 @@ export async function storyTitles(env: Env, country: string, stories: Story[], w
   const wanted = stories.filter((s) => s.items.length >= TITLES.minOutlets).slice(0, TITLES.perCountry);
   const titles = new Map<string, Titles>();
   if (!wanted.length) return titles;
-  const hour = now.toISOString().slice(0, 13);
-  const [byId, calls] = await env.DB.batch<Record<string, string | number | null>>([
-    env.DB.prepare(`SELECT story_id, titles, attempts FROM story_titles WHERE story_id IN (${marks(wanted)})`).bind(...wanted.map((s) => s.id)),
-    env.DB.prepare("SELECT titles FROM ai_calls WHERE hour = ?").bind(hour),
-  ]);
-  const stored = new Map(byId.results.map((r) => [r.story_id as string, r]));
-  for (const r of byId.results) if (r.titles) titles.set(r.story_id as string, JSON.parse(r.titles as string) as Titles);
+  const { results: byId } = await env.DB.prepare(`SELECT story_id, titles, attempts FROM story_titles WHERE story_id IN (${marks(wanted)})`)
+    .bind(...wanted.map((s) => s.id))
+    .all<{ story_id: string; titles: string | null; attempts: number }>();
+  const stored = new Map(byId.map((r) => [r.story_id, r]));
+  for (const r of byId) if (r.titles) titles.set(r.story_id, JSON.parse(r.titles) as Titles);
 
   const at = `${now.toISOString().slice(0, 19)}Z`;
   const writes: D1PreparedStatement[] = [];
@@ -294,13 +331,18 @@ export async function storyTitles(env: Env, country: string, stories: Story[], w
     }
   }
 
-  const room = Math.max(0, TITLES.perHour - Number(calls.results[0]?.titles ?? 0));
-  const due = wanted
-    .filter((s) => !titles.has(s.id) && Number(stored.get(s.id)?.attempts ?? 0) < TITLES.maxAttempts)
-    .slice(0, Math.min(TITLES.perBuild, room));
+  const due: Story[] = [];
+  const unwritten = wanted.filter((s) => !titles.has(s.id) && (stored.get(s.id)?.attempts ?? 0) < TITLES.maxAttempts).slice(0, TITLES.perBuild);
+  if (unwritten.length && !(await summariesWaiting(env, now))) {
+    const hour = now.toISOString().slice(0, 13);
+    for (const story of unwritten) {
+      if (!(await takeCall(env, hour))) break;
+      due.push(story);
+    }
+  }
   const answers = await Promise.allSettled(due.map((story) => write(country, story)));
   answers.forEach((answer, i) => {
-    // Workers AI's own error: nobody's fault, nothing counted.
+    // Workers AI's own error: nobody's fault, no attempt counted.
     if (answer.status === "rejected") return;
     const checked = toTitles(answer.value);
     const story = due[i];
@@ -314,13 +356,6 @@ export async function storyTitles(env: Env, country: string, stories: Story[], w
     );
     if (!("problems" in checked)) keep(keysOf(story), JSON.stringify(checked));
   });
-  // Every answer counts in the hour's calls, a usable one or not: both took neurons.
-  const answered = answers.filter((a) => a.status === "fulfilled").length;
-  if (answered) {
-    writes.push(
-      env.DB.prepare("INSERT INTO ai_calls (hour, titles) VALUES (?1, ?2) ON CONFLICT (hour) DO UPDATE SET titles = ai_calls.titles + excluded.titles").bind(hour, answered),
-    );
-  }
   if (writes.length) await env.DB.batch(writes);
   const failed = answers.filter((a) => a.status === "rejected").length;
   if (failed) console.error(JSON.stringify({ message: "story titles error", country, failed, error: String((answers.find((a) => a.status === "rejected") as PromiseRejectedResult).reason) }));
