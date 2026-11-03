@@ -6,6 +6,7 @@ import { signedInEmail } from "./access";
 import type { AdminEnv } from "./env";
 import { KEY_NAME, type Request as Report, account, batch, forgetToken, single } from "./ga";
 import { messagePost, messagesTab } from "./messages";
+import { dailyReport } from "./report";
 import { makeSelfKey, type SelfKey } from "./selfkey";
 import { PERIODS, type Tab, TABS, eventLabel, page, table, totals } from "./page";
 
@@ -114,7 +115,7 @@ async function connect(env: AdminEnv): Promise<Response> {
     await env.ADMIN_KV.put(KEY_NAME, JSON.stringify(await makeSelfKey("Outer News admin")));
     forgetToken();
   }
-  return new Response(null, { status: 303, headers: { location: "/?tab=website", "cache-control": "no-store" } });
+  return new Response(null, { status: 303, headers: { location: "/?tab=daily", "cache-control": "no-store" } });
 }
 
 /**
@@ -143,7 +144,7 @@ export async function handleAdmin(request: Request, env: AdminEnv, fetcher: type
     if (error) return message(400, "Not sent", error);
     return new Response(null, { status: 303, headers: { location: "/?tab=messages", "cache-control": "no-store" } });
   }
-  const tab: Tab = TABS.some((t) => t.id === url.searchParams.get("tab")) ? (url.searchParams.get("tab") as Tab) : "website";
+  const tab: Tab = TABS.some((t) => t.id === url.searchParams.get("tab")) ? (url.searchParams.get("tab") as Tab) : "daily";
   const asked = Number(url.searchParams.get("days"));
   const days = (PERIODS as readonly number[]).includes(asked) ? asked : 28;
   if (tab === "messages") return new Response(request.method === "HEAD" ? null : page(tab, days, email, await messagesTab(env)), { headers: HEADERS });
@@ -152,7 +153,8 @@ export async function handleAdmin(request: Request, env: AdminEnv, fetcher: type
   }
   let sections: string;
   try {
-    sections = tab === "website" ? await website(env, days, fetcher) : tab === "app" ? await app(env, days, fetcher) : downloads();
+    sections =
+      tab === "daily" ? await dailyReport(env, fetcher) : tab === "website" ? await website(env, days, fetcher) : tab === "app" ? await app(env, days, fetcher) : downloads();
   } catch (error) {
     // The reason only (Google's message or a missing field), never a key.
     const why = String(error instanceof Error ? error.message : error).replace(/[<>&]/g, "");

@@ -1,11 +1,12 @@
 // The admin page's HTML (#60, Yurii 28 Oct): one place for analytics, by
-// tab: the website, the app, downloads once the app is in the store, and
-// readers' messages (#220).
+// tab: the daily report (#60, 3 Nov), the website, the app, downloads once the
+// app is in the store, and readers' messages (#220).
 // Server-rendered, no script; the numbers come from Google Analytics (ga.ts).
 import type { Rows } from "./ga";
 
-export type Tab = "website" | "app" | "downloads" | "messages";
+export type Tab = "daily" | "website" | "app" | "downloads" | "messages";
 export const TABS: { id: Tab; label: string }[] = [
+  { id: "daily", label: "Daily" },
   { id: "website", label: "Website" },
   { id: "app", label: "App" },
   { id: "downloads", label: "Downloads" },
@@ -106,6 +107,7 @@ nav.periods a{padding:5px 11px;font-size:13px;font-weight:500}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px}section{background:var(--card);border-radius:14px;padding:14px 16px}
 h2{margin:0 0 8px;font:700 17px/1.3 Georgia,"Times New Roman",serif}table{width:100%;border-collapse:collapse;font-size:14px}th{color:var(--muted);font-weight:500;text-align:right;padding:4px 0 6px 8px}th:first-child{text-align:left}
 td{padding:6px 0;border-top:.5px solid var(--line);overflow-wrap:anywhere}td.n{text-align:right;padding-left:8px;font-variant-numeric:tabular-nums}.muted{color:var(--muted)}.note{margin:16px 0 0;color:var(--muted);font-size:13px}
+.stack{display:grid;gap:12px;margin-top:12px}section.wide{overflow-x:auto}section.wide table{min-width:620px}
 .thread{margin-top:12px}.msg{margin:8px 0;padding:8px 12px;border-radius:12px;background:var(--bg)}.msg.team{margin-left:24px}.msg p{margin:0;white-space:pre-wrap;overflow-wrap:anywhere}.msg small{color:var(--muted)}
 .thread form{display:inline-block;margin:8px 8px 0 0}.thread form.reply{display:block}.thread textarea{width:100%;font:15px/1.4 -apple-system,sans-serif;background:var(--bg);color:var(--text);border:.5px solid var(--line);border-radius:10px;padding:8px}
 .thread button{min-height:36px;padding:0 16px;border:0;border-radius:18px;background:var(--accent);color:#fff;font:600 14px -apple-system,sans-serif;cursor:pointer;margin-top:6px}.thread button.plain{background:var(--line);color:var(--text)}
@@ -113,7 +115,7 @@ td{padding:6px 0;border-top:.5px solid var(--line);overflow-wrap:anywhere}td.n{t
 <body><div class="wrap">
 <header><h1>Outer News · Admin</h1><span class="who">${esc(email)}</span></header>
 <nav aria-label="Tabs">${tabs}</nav>
-${tab === "messages" ? "" : `<nav class="periods" aria-label="Period">${periods}</nav>`}
+${tab === "messages" || tab === "daily" ? "" : `<nav class="periods" aria-label="Period">${periods}</nav>`}
 ${sections}
 </div></body></html>`;
 }
