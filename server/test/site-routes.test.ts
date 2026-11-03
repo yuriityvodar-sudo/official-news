@@ -85,7 +85,9 @@ describe("every route", () => {
         expect(headers.get("x-robots-tag")).toBe(INDEXED.has(path) ? "index, follow" : "noindex");
         expect(headers.get("x-content-type-options")).toBe("nosniff");
         expect(headers.get("strict-transport-security")).toBe("max-age=31536000");
-        expect(headers.get("content-security-policy")).toMatch(/^default-src 'none'; style-src 'sha256-[A-Za-z0-9+/]+=*'; script-src 'sha256-[A-Za-z0-9+/]+=*' https:\/\/\*\.googletagmanager\.com; img-src 'self' data: /);
+        expect(headers.get("content-security-policy")).toMatch(/^default-src 'none'; style-src 'sha256-[A-Za-z0-9+/]+=*'; script-src 'sha256-[A-Za-z0-9+/]+=*' https:\/\/\*\.googletagmanager\.com https:\/\/static\.cloudflareinsights\.com; img-src 'self' data: /);
+        // Cloudflare Web Analytics' beacon (cookieless; injected by Cloudflare's automatic setup) may load and report (#60).
+        expect(headers.get("content-security-policy")).toContain(" https://cloudflareinsights.com;");
         expect(headers.get("content-language")).toBe(lang);
         expect(headers.get("set-cookie")).toBeNull();
         expect(headers.get("vary")).toBeNull();
