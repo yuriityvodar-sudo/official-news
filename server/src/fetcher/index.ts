@@ -39,9 +39,12 @@ export const LIMITS = {
    * left out goes at its next turn, or the next minute when it is due to be read in full.
    */
   callsPerRun: 30,
-  /** An outlet's headlines are kept this long (#230): its stories are ranked on the last two days. */
-  headlineHours: 48,
-  /** At most this many headlines are kept per outlet, the newest: two days of the busiest feeds. */
+  /**
+   * An outlet's headlines are kept this long (#230): the stories are made of the last day's
+   * (BUILD.windowHours), and a build reads its country's rows whole. Two days until 3 Nov.
+   */
+  headlineHours: 24,
+  /** At most this many headlines are kept per outlet, the newest: a day of the busiest feeds. */
   headlinesPerOutlet: 300,
   headlineLength: 300,
   /** Headlines whose words a check reads at most (stories/cluster.ts, headlineWords): a feed's new ones are fewer. */
@@ -787,17 +790,24 @@ async function saveHeadlines(
     .filter((item) => item.publishedAt! >= cutoff && !known.has(item.url))
     .map((item) => ({ title: titles.get(item.url)!, url: item.url, publishedAt: item.publishedAt! }));
   check.headlines = fresh.length;
+  // Newest first, by the stored times' text (all toStoredTime's): localeCompare's order, at less cost.
   const kept = [...fresh, ...stored.filter((h) => h.publishedAt >= cutoff).map((h) => ({ ...h, title: titles.get(h.url) ?? h.title }))]
-    .sort((a, b) => b.publishedAt.localeCompare(a.publishedAt))
+    .sort((a, b) => (a.publishedAt < b.publishedAt ? 1 : a.publishedAt > b.publishedAt ? -1 : 0))
     .slice(0, LIMITS.headlinesPerOutlet);
   // Each headline's words, read here once for the stories' builds (#230), and again when its title
-  // changes; at most LIMITS.wordsPerCheck a check, so the first checks after this change stay small.
+  // changes; at most LIMITS.wordsPerCheck a check, so the first checks after a change stay small. A
+  // headline beyond them waits for the next check without words, which the build then reads itself.
+  // Words kept as a list before 3 Nov become one string as they are.
   let reading = LIMITS.wordsPerCheck;
-  for (let i = 0; i < kept.length && reading > 0; i++) {
+  for (let i = 0; i < kept.length; i++) {
     const h = kept[i];
-    if (Array.isArray(h.words) && known.get(h.url) === h.title) continue;
-    kept[i] = { ...h, words: headlineWords(h.title) };
-    reading--;
+    const same = known.get(h.url) === h.title;
+    if (same && typeof h.words === "string") continue;
+    if (same && Array.isArray(h.words)) kept[i] = { ...h, words: h.words.join(" ") };
+    else if (reading > 0) {
+      kept[i] = { ...h, words: headlineWords(h.title) };
+      reading--;
+    } else if (h.words !== undefined) kept[i] = { title: h.title, url: h.url, publishedAt: h.publishedAt };
   }
   const headlines = JSON.stringify(kept);
   const etag = config.conditionalGet ? list.etag : null;

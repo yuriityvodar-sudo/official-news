@@ -1109,14 +1109,14 @@ describe("runFetcher: news outlets' headlines (#230, the aggregator)", () => {
     [FEED]: { body: rss(items), type: "application/rss+xml" },
   });
 
-  it("keeps the headlines and links on the outlet's site from the last 48 hours, newest first, and never an article", async () => {
+  it("keeps the headlines and links on the outlet's site from the last day, newest first, and never an article", async () => {
     await addOutlet("xx-outlet");
     const { fetch, requests } = fakeFetch(
       outletSite([
         { title: "Floods close the main road", link: "https://www.outlet.test/news/floods", date: hoursAgo(2) },
         { title: "Advertisement", link: "https://ads.elsewhere.test/promo", date: hoursAgo(1) },
         { title: "Cup final tonight", link: "http://sport.outlet.test/final", date: hoursAgo(5) },
-        { title: "Last week's budget vote", link: "https://www.outlet.test/news/budget", date: hoursAgo(49) },
+        { title: "Yesterday's budget vote", link: "https://www.outlet.test/news/budget", date: hoursAgo(25) },
       ]),
     );
     expect(await runFetcher(env, inCalls({ fetch, now: NOW }))).toMatchObject([{ sourceId: "xx-outlet", ok: true, full: true, found: 3, offSite: 1, headlines: 2, saved: 0 }]);
@@ -1131,14 +1131,14 @@ describe("runFetcher: news outlets' headlines (#230, the aggregator)", () => {
     expect(await outlet()).toMatchObject({ last_item_at: stored(2), last_checked_at: "2026-10-14T15:00:00Z", status: "active", failed_checks: 0 });
   });
 
-  it("keeps the stored headlines its list no longer shows, under the title the list gives now, until they are 48 hours old", async () => {
+  it("keeps the stored headlines its list no longer shows, under the title the list gives now, until they are a day old", async () => {
     await addOutlet(
       "xx-outlet",
       { everyMinutes: 1 },
       JSON.stringify([
         { title: "Minister resigns", url: "https://www.outlet.test/news/minister", publishedAt: stored(10) },
-        { title: "Storm warning", url: "https://www.outlet.test/news/storm", publishedAt: stored(30) },
-        { title: "Old news", url: "https://www.outlet.test/news/old", publishedAt: stored(47.9) },
+        { title: "Storm warning", url: "https://www.outlet.test/news/storm", publishedAt: stored(20) },
+        { title: "Old news", url: "https://www.outlet.test/news/old", publishedAt: stored(23.9) },
       ]),
     );
     const { fetch } = fakeFetch(
@@ -1154,47 +1154,52 @@ describe("runFetcher: news outlets' headlines (#230, the aggregator)", () => {
       "Storm warning",
       "Old news",
     ]);
-    // An hour on, the oldest is past 48 hours and goes.
+    // An hour on, the oldest is past a day and goes.
     const { fetch: later } = fakeFetch(outletSite([{ title: "Election called for March", link: "https://www.outlet.test/news/election", date: hoursAgo(1) }]));
     await runFetcher(env, inCalls({ fetch: later, now: at(60) }));
     expect((await headlinesOf()).map((h: { title: string }) => h.title)).toEqual(["Election called for March", "Minister resigns after the vote", "Storm warning"]);
   });
 
   it("reads each headline's words once for the stories, again when its title changes, at most LIMITS.wordsPerCheck a check", async () => {
-    const kept = (title: string, path: string, hours: number, words?: string[]) => ({ title, url: `https://www.outlet.test/news/${path}`, publishedAt: stored(hours), ...(words && { words }) });
+    const kept = (title: string, path: string, hours: number, words?: string | string[]) => ({ title, url: `https://www.outlet.test/news/${path}`, publishedAt: stored(hours), ...(words && { words }) });
     await addOutlet(
       "xx-outlet",
       { everyMinutes: 1 },
       JSON.stringify([
-        // Kept with words that are not its own: an unchanged title keeps them.
-        kept("Minister resigns", "minister", 10, ["kept"]),
-        kept("Storm warning", "storm", 30, ["kept"]),
+        // Kept with words that are not its own: an unchanged title keeps them, a list (kept before 3 Nov) as one string.
+        kept("Minister resigns", "minister", 10, ["kept", "words"]),
+        kept("Storm warning", "storm", 11, "kept"),
         // Kept before words were: read now.
-        ...Array.from({ length: LIMITS.wordsPerCheck + 5 }, (_, i) => kept(`Old story ${i}`, `old-${i}`, 31 + i / 10)),
+        ...Array.from({ length: LIMITS.wordsPerCheck + 5 }, (_, i) => kept(`Old story ${i}`, `old-${i}`, 12 + i / 10)),
+        // Retitled once this check has read LIMITS.wordsPerCheck: its old words go, and a later check reads it.
+        kept("Ferry strike", "ferry", 20, "ferry strik"),
       ]),
     );
     const { fetch } = fakeFetch(
       outletSite([
         { title: "Minister resigns", link: "https://www.outlet.test/news/minister", date: hoursAgo(10) },
-        { title: "Storm warning for the coast", link: "https://www.outlet.test/news/storm", date: hoursAgo(30) },
+        { title: "Storm warning for the coast", link: "https://www.outlet.test/news/storm", date: hoursAgo(11) },
+        { title: "Ferry strike ends", link: "https://www.outlet.test/news/ferry", date: hoursAgo(20) },
       ]),
     );
     await runFetcher(env, inCalls({ fetch, now: NOW }));
     const first = await headlinesOf();
-    expect(first[0].words).toEqual(["kept"]);
-    expect(first[1].words).toEqual(headlineWords("Storm warning for the coast"));
+    expect(first[0].words).toBe("kept words");
+    expect(first[1].words).toBe(headlineWords("Storm warning for the coast"));
     // The retitled one and the first old ones, LIMITS.wordsPerCheck in all; the rest when the list changes next.
-    expect(first.filter((h: { words?: string[] }) => h.words && h.words[0] !== "kept")).toHaveLength(LIMITS.wordsPerCheck);
+    expect(first.filter((h: { words?: string }) => h.words && h.words !== "kept words")).toHaveLength(LIMITS.wordsPerCheck);
+    expect(first.at(-1)).toEqual({ title: "Ferry strike ends", url: "https://www.outlet.test/news/ferry", publishedAt: stored(20) });
     const { fetch: later } = fakeFetch(
       outletSite([
         { title: "Election called for March", link: "https://www.outlet.test/news/election", date: hoursAgo(1) },
         { title: "Minister resigns", link: "https://www.outlet.test/news/minister", date: hoursAgo(10) },
-        { title: "Storm warning for the coast", link: "https://www.outlet.test/news/storm", date: hoursAgo(30) },
+        { title: "Storm warning for the coast", link: "https://www.outlet.test/news/storm", date: hoursAgo(11) },
       ]),
     );
     await runFetcher(env, inCalls({ fetch: later, now: at(1) }));
     const second = await headlinesOf();
-    expect(second.every((h: { title: string; words?: string[] }) => h.title === "Minister resigns" || JSON.stringify(h.words) === JSON.stringify(headlineWords(h.title)))).toBe(true);
+    expect(second).toHaveLength(LIMITS.wordsPerCheck + 9);
+    expect(second.every((h: { title: string; words?: string }) => h.title === "Minister resigns" || h.words === headlineWords(h.title))).toBe(true);
   });
 
   it("reads an unchanged feed with one request and writes nothing", async () => {

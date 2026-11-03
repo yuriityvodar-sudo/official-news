@@ -414,18 +414,18 @@ describe("other requests", () => {
 describe("GET /headlines (#230, the aggregator)", () => {
   const headline = (title: string, hours: number) => ({ title, url: `https://www.${title.split(" ")[0].toLowerCase()}.test/${hours}`, publishedAt: hoursAgo(hours) });
 
-  it("gives a country's outlets' headlines of the last 48 hours, newest first, each with its outlet and link", async () => {
+  it("gives a country's outlets' headlines of the last day, newest first, each with its outlet and link", async () => {
     const insert = (id: string, country: string, status: string, items: object[]) =>
       env.DB.prepare(
         "INSERT INTO outlets (id, country, name, url, site, language, status, headlines) VALUES (?, ?, ?, ?, ?, 'cs', ?, ?)",
       ).bind(id, country, `Outlet ${id}`, `https://feeds.${id}.test/rss`, `https://www.${id}.test`, status, JSON.stringify(items));
     // Made once, so their times are the same in the rows and in what is expected, whenever the clock ticks.
     const floods = headline("Floods close roads", 1);
-    const budget = headline("Budget passed", 30);
+    const budget = headline("Budget passed", 20);
     const snow = headline("Snow in the mountains", 3);
     await env.DB.batch([
       // The words the fetcher keeps for the stories are not in the reply.
-      insert("xx-a", "XX", "active", [{ ...floods, words: ["flood", "close", "roads"] }, budget, headline("Last week", 49)]),
+      insert("xx-a", "XX", "active", [{ ...floods, words: "flood close roads" }, budget, headline("Yesterday", 25)]),
       insert("xx-b", "XX", "stale", [snow]),
       insert("xx-gone", "XX", "blocked", [headline("Taken out", 2)]),
       insert("yy-a", "YY", "active", [headline("Elsewhere", 1)]),

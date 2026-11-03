@@ -14,9 +14,10 @@ export const BUILD = {
   /**
    * At most this many of them, the newest. A build's call starts cold, its code not yet warmed up: on
    * Workers, 2 Nov (Yurii's check of #282), 40 ms of CPU for Germany's 300 headlines and 12 for South
-   * Africa's 31, against the 10 ms a call has. With the words kept by the fetcher, the grouping's loops
-   * in WebAssembly and the headlines' check without Unicode regexes, a cold build of 300 takes about
-   * 5 ms (laptop, docs/decisions/2026-11-02-stories-wasm.md).
+   * Africa's 31, against the 10 ms a call has. With a day of words kept by the fetcher as one string,
+   * their numbers and the grouping's loops in WebAssembly, the code warmed up by the Worker's start and
+   * the headlines' check without Unicode regexes, Germany's cold build of 300 takes about 4 ms (laptop,
+   * docs/decisions/2026-11-03-stories-lighter.md).
    */
   maxHeadlines: 300,
   /** Stories kept per country, the weightiest when built: the app shows the first ones. */
@@ -54,16 +55,8 @@ const newestFirst = (a: string, b: string) => (a < b ? 1 : a > b ? -1 : 0);
 export async function buildCountryStories(env: Env, country: string, version: string, now = new Date(), write?: WriteTitles): Promise<number> {
   const { results } = await env.DB.prepare("SELECT id, name, site, headlines FROM outlets WHERE country = ? AND status != 'blocked'")
     .bind(country)
-    .all<{ id: string; name: string; site: string; headlines: string }>();
-  const cutoff = stored(new Date(now.getTime() - BUILD.windowHours * 3_600_000));
-  const headlines: StoryHeadline[] = results
-    .flatMap((o) =>
-      parseHeadlines(o.headlines)
-        .filter((h) => h.publishedAt >= cutoff)
-        .map((h) => ({ ...h, outlet: { id: o.id, name: o.name, site: o.site } })),
-    )
-    .sort((a, b) => newestFirst(a.publishedAt, b.publishedAt))
-    .slice(0, BUILD.maxHeadlines);
+    .all<OutletRow>();
+  const headlines = newestHeadlines(results, stored(new Date(now.getTime() - BUILD.windowHours * 3_600_000)), BUILD.maxHeadlines);
   const stories = topStories(headlines, now, BUILD.perCountry);
   // The first stories' headlines in every language (#230 step 3): stored ones, and the model's for new ones.
   const titles = await storyTitles(env, country, stories, write, now);
@@ -77,6 +70,33 @@ export async function buildCountryStories(env: Env, country: string, version: st
     .run();
   console.log(JSON.stringify({ message: "stories built", country, headlines: headlines.length, stories: stories.length, bytes: json.length }));
   return stories.length;
+}
+
+/** An outlet's row as a build reads it. */
+export interface OutletRow {
+  id: string;
+  name: string;
+  site: string;
+  headlines: string;
+}
+
+/**
+ * The newest `count` of the outlets' headlines from `cutoff` on, newest first,
+ * each with its outlet, two of the same time in the outlets' order. The parsed
+ * headlines get their outlet, one object an outlet: copying each of a big
+ * country's thousand headlines of the day took a cold call 0.2 ms (3 Nov).
+ */
+export function newestHeadlines(outlets: OutletRow[], cutoff: string, count: number): StoryHeadline[] {
+  const day: StoryHeadline[] = [];
+  for (const { id, name, site, headlines } of outlets) {
+    const outlet = { id, name, site };
+    for (const headline of parseHeadlines(headlines) as StoryHeadline[]) {
+      if (headline.publishedAt < cutoff) continue;
+      headline.outlet = outlet;
+      day.push(headline);
+    }
+  }
+  return day.sort((a, b) => newestFirst(a.publishedAt, b.publishedAt)).slice(0, count);
 }
 
 /**
@@ -174,4 +194,39 @@ export async function countryStories(env: Env, country: string, lang: TitleLang 
 export async function homeStories(env: Env, home: string, lang: TitleLang, now = new Date()): Promise<RankedStory[]> {
   const { stories } = await countryStories(env, home, lang, now);
   return stories.filter((s) => s.outlets >= TITLES.minOutlets).slice(0, TITLES.perCountry);
+}
+
+/**
+ * A build's call starts cold (#230, 3 Nov): its code runs for the first time
+ * in the isolate, compiled as it goes and slow until it has seen its objects.
+ * The Worker's start, which no call's CPU counts (a test Worker, 2 Nov), builds
+ * the stories of a few made-up headlines once, so that a build's call finds
+ * its code ready: Germany's cold build took 3.9 ms instead of 5.2 (laptop),
+ * and the start 1.8 ms longer. Two outlets' headlines on one event and one
+ * alone, so the build goes through all of its steps; their words written out,
+ * as reading them would compile the Unicode regexes at every start.
+ */
+export const WARM_UP: OutletRow[] = [
+  {
+    id: "a",
+    name: "A",
+    site: "https://a.test",
+    headlines: JSON.stringify([
+      { title: "Minister Novák resigns over the budget", url: "https://a.test/1", publishedAt: "2026-11-03T07:00:00Z", words: "minis ^novák resig over the budge" },
+      { title: "Storm warning for the coast", url: "https://a.test/2", publishedAt: "2026-11-03T06:00:00Z", words: "storm warni for the coast" },
+    ]),
+  },
+  {
+    id: "b",
+    name: "B",
+    site: "https://b.test",
+    headlines: JSON.stringify([{ title: "Novák quits as minister over the budget", url: "https://b.test/1", publishedAt: "2026-11-03T06:30:00Z", words: "novák quits minis over the budge" }]),
+  },
+];
+export const warmUp = (): Story[] =>
+  topStories(newestHeadlines(WARM_UP, "2026-11-02T08:00:00Z", BUILD.maxHeadlines), new Date("2026-11-03T08:00:00Z"), BUILD.perCountry);
+try {
+  warmUp();
+} catch (error) {
+  console.error(JSON.stringify({ message: "stories warm-up error", error: error instanceof Error ? error.message : String(error) }));
 }
