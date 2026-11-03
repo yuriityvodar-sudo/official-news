@@ -24,4 +24,9 @@ export interface AdminEnv {
    * instead of the self-made key when set. Not needed (#60, 29 Oct).
    */
   GA_SERVICE_ACCOUNT?: string;
+  /** App Store Connect's key "Outer News Reports" (#60, 3 Nov): its id and our issuer, not secrets. */
+  ASC_KEY_ID: string;
+  ASC_ISSUER_ID: string;
+  /** Its private key (.p8), a Worker secret Yurii put in himself; Apple's reports wait without it. */
+  ASC_PRIVATE_KEY?: string;
 }

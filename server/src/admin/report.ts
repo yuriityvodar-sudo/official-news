@@ -5,6 +5,7 @@
 // Google Analytics (the website and the app, one property), Search Console
 // (Google Search) and, once there is a key, App Store Connect (the store).
 import type { AdminEnv } from "./env";
+import { type AppleDay, appleDays, fromWebsite, sumDays, syncApple } from "./appstore";
 import { type Request as Report, type Rows, batch, googlePost, single } from "./ga";
 import { esc } from "./page";
 
@@ -167,6 +168,16 @@ export async function dailyReport(env: AdminEnv, fetcher: typeof fetch = fetch, 
     search({ startDate: dates.week.now.start, endDate: dates.week.now.end, dimensions: ["page"], rowLimit: 10 }).catch(() => null),
   ]);
   const [appA, appB] = await batch(env, [app[0], app[1]], fetcher);
+  // Apple's days (UTC), read from App Store Connect into ADMIN_KV first.
+  const apple = await syncApple(env, fetcher, now);
+  const stored = await appleDays(env, dates.month.before.start, dates.day.now.end);
+  const appleWindow = (w: WindowId, side: "now" | "before") => sumDays(stored, dates[w][side].start, dates[w][side].end);
+  const applePair = (w: WindowId, pick: (d: AppleDay) => number): Pair => {
+    const a = appleWindow(w, "now");
+    const b = appleWindow(w, "before");
+    return { now: a ? pick(a) : 0, before: b ? pick(b) : 0 };
+  };
+  const haveApple = stored.size > 0;
   const clickB = block(ga[2], ga[3], 2);
   // The website's four numbers and its App Store clicks (times) as a fifth.
   const webOnly = block(ga[0], ga[1], 4);
@@ -177,7 +188,17 @@ export async function dailyReport(env: AdminEnv, fetcher: typeof fetch = fetch, 
 
   // The funnel: visitors → App Store clicks → (Apple: page views, downloads) → new App Store users.
   const funnel: Block = Object.fromEntries(
-    WINDOWS.map((w) => [w.id, [webB[w.id][0], clickB[w.id][1], storeB2 ? storeB2[w.id][1] : { now: 0, before: 0 }]]),
+    WINDOWS.map((w) => [
+      w.id,
+      [
+        webB[w.id][0],
+        clickB[w.id][1],
+        storeB2 ? storeB2[w.id][1] : { now: 0, before: 0 },
+        applePair(w.id, (d) => fromWebsite(d.pageViewsByCampaign) + (d.pageViewsBySource["Web referrer"] ?? 0)),
+        applePair(w.id, (d) => fromWebsite(d.downloadsByCampaign) + fromWebsite(d.downloadsByWeb)),
+        applePair(w.id, (d) => d.downloads),
+      ],
+    ]),
   ) as Block;
 
   const appLines = (label: string): Line[] => [
@@ -194,8 +215,12 @@ ${table("Funnel: Google and the website to the app", funnel, [
     { label: "Website visitors (people)", value: 0 },
     { label: "Clicked App Store (people)", value: 1 },
     { label: "Clicked, % of visitors", value: (m, s) => ratio(m[1][s], m[0][s]), digits: 1 },
+    { label: "App Store page views from the website (Apple)", value: 3 },
+    { label: "Downloads from the website (Apple)", value: 4 },
+    { label: "Downloaded, % of App Store clicks", value: (m, s) => ratio(m[4][s], m[1][s]), digits: 1 },
+    { label: "All first-time downloads (Apple)", value: 5 },
     { label: "New App Store users (first opens)", value: 2 },
-  ], "App Store page views and downloads per website button come from App Store Connect's Campaigns once its key is added; Apple shows a campaign from 5 downloads, a day or two late, and never who.")}
+  ], `${haveApple ? "Apple's numbers count UTC days, a day or two late, and never say who." : `Apple's numbers: ${apple.error ?? "no day reported yet; Apple's first reports come a day or two after the request, and the app's numbers start at its release."}`}`)}
 ${table("Google Search", searchB, [
     { label: "Clicks to the site", value: 0 },
     { label: "Impressions in results", value: 1 },

@@ -3,6 +3,7 @@
 // app from Google Analytics, by tab. Its own Worker, so the public website
 // keeps holding no key at all (docs/decisions.md).
 import { signedInEmail } from "./access";
+import { downloadsTab } from "./appstore";
 import type { AdminEnv } from "./env";
 import { KEY_NAME, type Request as Report, account, batch, forgetToken, single } from "./ga";
 import { messagePost, messagesTab } from "./messages";
@@ -91,9 +92,6 @@ ${table("Build (testflight = the team)", build, ["Users"])}
 </div>`;
 }
 
-const downloads = () =>
-  `<section style="margin-top:20px"><h2>Downloads</h2><p class="muted">Downloads and store page views come from App Store Connect once the app is released. They need an App Store Connect key with the Sales role, added as a Worker secret like the Google one.</p></section>`;
-
 const message = (status: number, title: string, text: string) =>
   new Response(`<!doctype html><meta charset="utf-8"><meta name="robots" content="noindex"><title>${title}</title><body style="font:16px -apple-system,sans-serif;padding:40px;max-width:560px"><h1 style="font-family:Georgia,serif">${title}</h1><p>${text}</p></body>`, { status, headers: HEADERS });
 
@@ -154,7 +152,7 @@ export async function handleAdmin(request: Request, env: AdminEnv, fetcher: type
   let sections: string;
   try {
     sections =
-      tab === "daily" ? await dailyReport(env, fetcher) : tab === "website" ? await website(env, days, fetcher) : tab === "app" ? await app(env, days, fetcher) : downloads();
+      tab === "daily" ? await dailyReport(env, fetcher) : tab === "website" ? await website(env, days, fetcher) : tab === "app" ? await app(env, days, fetcher) : await downloadsTab(env, fetcher);
   } catch (error) {
     // The reason only (Google's message or a missing field), never a key.
     const why = String(error instanceof Error ? error.message : error).replace(/[<>&]/g, "");
