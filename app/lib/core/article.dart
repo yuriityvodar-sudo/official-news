@@ -140,6 +140,19 @@ class Article {
   /// from one, asked as `tickId` (docs/contract.md); no official page.
   bool get isTick => decisionType == tickType;
 
+  /// The [decisionType] of a story of a country's outlets taken as an
+  /// article ([Story.asArticle]).
+  static const mediaStoryType = 'media-story';
+
+  /// A story of a country's outlets (#230, For you's `stories`): what the
+  /// chat is about when opened from its card, asked as `storyId` with its
+  /// [country] (docs/contract.md); no official page.
+  bool get isMediaStory => decisionType == mediaStoryType;
+
+  /// The media's news, a tick or a story of a country's outlets: the chat
+  /// knows it by its outlets' headlines alone.
+  bool get isMedia => isTick || isMediaStory;
+
   /// A news story (#230: Global Voices): an event whose link is not
   /// Wikipedia's, so its outlet is named where an event names Wikipedia.
   bool get isStory {

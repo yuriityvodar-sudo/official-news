@@ -1,4 +1,5 @@
 import '../l10n/app_localizations.dart';
+import 'article.dart';
 import 'countries.dart';
 import 'news_widgets.dart';
 
@@ -58,6 +59,42 @@ class Story {
     'lastSeen': lastSeen.toUtc().toIso8601String(),
     'items': [for (final i in items) i.toJson()],
   };
+
+  /// The story as the chat takes what it is about ([Article.isMediaStory]),
+  /// as a tick's ([Tick.asArticle]; Roman, 3 Nov: a story's card opens the
+  /// chat, as a tick's): its headline, also as its summary; its outlets as
+  /// its source; their headlines as its media; and [country], whose outlets
+  /// these are, as its place, which a question sends with its id. Kept with
+  /// the conversation, so the Conversations screen opens it again.
+  Article asArticle(AppLocalizations l10n, String country, {String? lang}) =>
+      Article(
+        id: id,
+        country: country,
+        source: Source(
+          id: Article.mediaStoryType,
+          name: _outletNames(this, l10n),
+          url: '',
+        ),
+        publishedAt: lastSeen,
+        dateOnly: false,
+        headline: title,
+        shortSummary: null,
+        summary: title,
+        decisionType: Article.mediaStoryType,
+        originalTitle: title,
+        originalLanguage: lang ?? 'en',
+        topics: const [],
+        tags: const [],
+        importance: null,
+        imageUrl: null,
+        originalUrl: items.first.url,
+        lang: lang,
+        countries: [country],
+        media: [
+          for (final i in items)
+            MediaLink(title: i.title, outlet: i.outlet, url: i.url),
+        ],
+      );
 }
 
 /// One outlet's headline on a story, and its link.

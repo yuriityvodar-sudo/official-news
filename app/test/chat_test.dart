@@ -13,6 +13,7 @@ import 'package:official_news/core/api_client.dart';
 import 'package:official_news/core/article.dart';
 import 'package:official_news/core/chat_history.dart';
 import 'package:official_news/core/glass.dart';
+import 'package:official_news/core/story.dart';
 import 'package:official_news/core/subscription.dart';
 import 'package:official_news/core/tick.dart';
 import 'package:official_news/features/chat/chat_consent.dart';
@@ -255,6 +256,9 @@ void main() {
   group('the chat', () {
     late List<Map<String, dynamic>> asked;
 
+    /// What `/v1/chat/status` was asked about.
+    late List<Map<String, dynamic>> statusAsked;
+
     test(
       'stays closed in builds without the demo or a Sandbox key, such as the App Store\'s',
       () => expect(ChatScreen.opened, isFalse),
@@ -277,6 +281,7 @@ void main() {
         client: MockClient.streaming((request, bodyStream) async {
           final sent = await bodyStream.bytesToString();
           if (request.url.path == '/v1/chat/status') {
+            statusAsked.add(jsonDecode(sent) as Map<String, dynamic>);
             final now = left[math.min(statuses++, left.length - 1)];
             return http.StreamedResponse(
               Stream.value(
@@ -321,6 +326,7 @@ void main() {
       Article? article,
     }) async {
       asked = [];
+      statusAsked = [];
       // Bought before the chat opens, and done with (outside the test's fake time).
       await tester.runAsync(() async {
         store.report(
@@ -432,6 +438,33 @@ void main() {
         expect(
           events.lastWhere((e) => e.$1 == 'chat_question').$2['decision_type'],
           'tick',
+        );
+      },
+    );
+
+    testWidgets(
+      'asks about a story of a country\'s outlets as `storyId` with its '
+      'country, as about a tick (#230)',
+      (tester) async {
+        final story = Story.fromJson(fakeStory()).asArticle(l10nFor(), 'CZ');
+        await openChat(tester, server(remaining: 2), article: story);
+        expect(find.text('Babiš names his government'), findsOneWidget);
+        expect(find.text('ČT24, Seznam Zprávy and 2 more'), findsOneWidget);
+        expect(find.text('Does this concern me?'), findsNothing);
+        expect(statusAsked.last, containsPair('storyId', 's1'));
+        expect(statusAsked.last, containsPair('country', 'CZ'));
+        await tester.tap(find.text('What is known?'));
+        await tester.pumpAndSettle();
+        expect(find.text('Yes, from November 2027.'), findsOneWidget);
+        expect(asked.single['storyId'], 's1');
+        expect(asked.single['country'], 'CZ');
+        expect(asked.single.containsKey('articleId'), isFalse);
+        expect(asked.single.containsKey('tickId'), isFalse);
+        expect(find.textContaining('Read the official decision'), findsNothing);
+        expect(find.textContaining('Read on'), findsNothing);
+        expect(
+          events.lastWhere((e) => e.$1 == 'chat_question').$2['decision_type'],
+          'media-story',
         );
       },
     );

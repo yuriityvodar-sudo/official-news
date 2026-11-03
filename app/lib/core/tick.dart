@@ -1,14 +1,16 @@
 import '../l10n/app_localizations.dart';
 import 'article.dart';
+import 'news_widgets.dart';
 import 'story.dart';
 
 /// A tick (#230, the world's stories): an event that the news outlets of
 /// several countries report, with the model's headline in the feed's
 /// language, from For you's `ticks` (docs/contract.md). The feed shows it as
-/// a light capsule among the Top stories block's rows, and a tap opens the AI
-/// chat about it, the same chat as a decision's (Roman, 3 Nov: variant 1 of
-/// `handoff/tick-strip.html`; «чат такой же как у нас уже есть»). Only the
-/// outlets' own headlines and links, never their text.
+/// a card like a decision's among the Top stories block's rows, as the
+/// country's stories, and a tap opens the AI chat about it, the same chat as
+/// a decision's (Roman, 3 Nov: «пусть будет просто в ленте как часть ленты»;
+/// «чат такой же как у нас уже есть»). Only the outlets' own headlines and
+/// links, never their text.
 class Tick {
   const Tick({
     required this.id,
@@ -121,4 +123,24 @@ class Tick {
         MediaLink(title: i.title, outlet: i.outlet, url: i.url),
     ],
   );
+}
+
+/// A tick card's first line, where a decision's has its country and
+/// institution: "World · 5 countries", the world's own outlets counted as
+/// one, as the server counts them.
+String tickMeta(Tick tick, AppLocalizations l10n) => [
+  l10n.countryWW,
+  if (tick.countries.isNotEmpty) l10n.tickCountries(tick.countries.length),
+].join(' · ');
+
+/// What VoiceOver reads for a tick's card, once: its headline, where it
+/// comes from and when.
+String tickSpoken(Tick tick, AppLocalizations l10n) {
+  // One sentence each; a text that already ends in a full stop keeps one.
+  String sentence(String s) => RegExp(r'[.!?…]$').hasMatch(s) ? s : '$s.';
+  return [
+    tick.title,
+    tickMeta(tick, l10n).replaceAll(' · ', ', '),
+    timeAgo(tick.lastSeen, l10n),
+  ].map(sentence).join(' ');
 }

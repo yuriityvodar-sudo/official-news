@@ -189,6 +189,10 @@ class _ChatScreenState extends State<ChatScreen> {
 
   ChatSubscription get _subscription => widget.subscription ?? chatSubscription;
 
+  /// A story's country, sent with its id (#230); null for anything else.
+  String? get _storyCountry =>
+      widget.article.isMediaStory ? widget.article.country : null;
+
   ChatHistory get _history => widget.history ?? chatHistory;
 
   @override
@@ -259,6 +263,7 @@ class _ChatScreenState extends State<ChatScreen> {
         articleId: widget.article.id,
         transaction: transaction,
         tick: widget.article.isTick,
+        storyCountry: _storyCountry,
       );
       if (!mounted) return;
       setState(() {
@@ -320,6 +325,7 @@ class _ChatScreenState extends State<ChatScreen> {
           : await _api.askChat(
               articleId: widget.article.id,
               tick: widget.article.isTick,
+              storyCountry: _storyCountry,
               lang: Localizations.localeOf(context).languageCode,
               messages: _recent([
                 for (final t in _turns)
@@ -696,8 +702,8 @@ class _ChatScreenState extends State<ChatScreen> {
                                       color: muted,
                                     ),
                                   ),
-                                // A tick has no official page: its outlets are in the header.
-                                if (turn.done && !article.isTick)
+                                // The media's news has no official page: its outlets are in the header.
+                                if (turn.done && !article.isMedia)
                                   CupertinoButton(
                                     padding: EdgeInsets.zero,
                                     minimumSize: const Size(44, 44),

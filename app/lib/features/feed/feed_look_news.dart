@@ -14,8 +14,8 @@ import '../../core/news_widgets.dart';
 import '../../core/read_mark.dart';
 import '../../core/story.dart';
 import '../../core/theme.dart';
+import '../../core/tick.dart';
 import '../../l10n/app_localizations.dart';
-import '../story/outlet_mark.dart';
 import 'feed_look.dart';
 import 'feed_look_now.dart';
 import 'feed_pills.dart';
@@ -90,13 +90,31 @@ class NewsLook extends FeedLook {
   bool get showsStories => true;
 
   @override
-  Widget storyCard(BuildContext context, TopStories block, int index) =>
-      _StoryCard(
+  Widget mediaCard(BuildContext context, TopStories block, MediaNews news) {
+    final l10n = AppLocalizations.of(context);
+    if (news.isTick) {
+      final tick = block.ticks[news.index];
+      return _MediaCard(
         palette: palette,
-        story: block.stories[index],
-        country: block.country,
-        onTap: () => block.openStory(index),
+        meta: tickMeta(tick, l10n),
+        title: tick.title,
+        lastSeen: tick.lastSeen,
+        freshId: 'tick ${tick.id}',
+        spoken: tickSpoken(tick, l10n),
+        onTap: () => block.openTick(news.index),
       );
+    }
+    final story = block.stories[news.index];
+    return _MediaCard(
+      palette: palette,
+      meta: storyMeta(story, block.country, l10n),
+      title: story.title,
+      lastSeen: story.lastSeen,
+      freshId: 'story ${story.id}',
+      spoken: storySpoken(story, block.country, l10n),
+      onTap: () => block.openStory(news.index),
+    );
+  }
 
   /// The Top stories title in the look's colour, as the chosen pill (#164).
   @override
@@ -831,39 +849,54 @@ class _Card extends StatelessWidget {
   }
 }
 
-/// A story's card (#230, the aggregator; Roman, 1 Nov: variant B of
-/// `handoff/stories-app.html`, "as Apple News"): a decision's card, with the
-/// country and the outlets where a decision has its country and institution
-/// and no seal, and in its picture's place how many outlets carry the story
-/// ([_Outlets]). No topic tags: a story has none.
-class _StoryCard extends StatelessWidget {
-  const _StoryCard({
+/// A card of the media's news (#230; Roman, 3 Nov: «пусть будет просто в
+/// ленте как часть ленты»): a world's tick or a story of the reader's
+/// country's outlets as a decision's card, with the place and the outlets
+/// where a decision has its seal and institution, and on the time's line, at
+/// the right, a small "Discuss with AI" (his pick 1 of
+/// `handoff/ask-ai-button.html`), as App Store's «Загрузить» in its lists.
+/// It does what the card does, open the AI chat about it, so the card keeps
+/// one action. No picture and no topics: the media's news has neither.
+class _MediaCard extends StatelessWidget {
+  const _MediaCard({
     required this.palette,
-    required this.story,
-    required this.country,
+    required this.meta,
+    required this.title,
+    required this.lastSeen,
+    required this.freshId,
+    required this.spoken,
     required this.onTap,
   });
 
   final NewsPalette palette;
-  final Story story;
 
-  /// The reader's country, whose outlets these are.
-  final String? country;
+  /// "Czechia · ČT24, Seznam Zprávy and 2 more", "World · 5 countries".
+  final String meta;
+  final String title;
+
+  /// Its latest outlet's headline.
+  final DateTime lastSeen;
+
+  /// What [FreshTime] knows it by.
+  final String freshId;
+
+  /// What VoiceOver reads before "Discuss with AI".
+  final String spoken;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final style = _NewsStyle.of(context, palette);
     final l10n = AppLocalizations.of(context);
-    final time = timeAgo(story.lastSeen, l10n);
-    final meta = TextStyle(fontSize: 14, color: style.muted);
+    final time = timeAgo(lastSeen, l10n);
+    final timeStyle = TextStyle(fontSize: 14, color: style.muted);
     // Fresh as a decision is (isFresh): its latest headline in the last hour.
-    final age = DateTime.now().difference(story.lastSeen);
+    final age = DateTime.now().difference(lastSeen);
     final fresh = !age.isNegative && age < const Duration(hours: 1);
     return Semantics(
       container: true,
       button: true,
-      label: storySpoken(story, country, l10n),
+      label: '$spoken ${l10n.discussWithAi}.',
       onTap: onTap,
       excludeSemantics: true,
       child: GestureDetector(
@@ -877,36 +910,39 @@ class _StoryCard extends StatelessWidget {
           ),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(18, 14, 16, 14),
-            child: Row(
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        storyMeta(story, country, l10n),
-                        style: style.source,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 5),
-                      Text(story.title, style: style.headline(context)),
-                      const SizedBox(height: 8),
-                      if (fresh)
-                        FreshTime(
-                          time,
-                          articleId: 'story ${story.id}',
-                          style: meta.copyWith(fontWeight: FontWeight.w600),
-                          color: style.accent,
-                        )
-                      else
-                        Text(time, style: meta),
-                    ],
-                  ),
+                Text(
+                  meta,
+                  style: style.source,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                const SizedBox(width: 12),
-                _Outlets(style: style, story: story),
+                const SizedBox(height: 5),
+                Text(title, style: style.headline(context)),
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Align(
+                        alignment: AlignmentDirectional.centerStart,
+                        child: fresh
+                            ? FreshTime(
+                                time,
+                                articleId: freshId,
+                                style: timeStyle.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                color: style.accent,
+                              )
+                            : Text(time, style: timeStyle),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    _DiscussWithAi(style: style, onPressed: onTap),
+                  ],
+                ),
               ],
             ),
           ),
@@ -916,78 +952,43 @@ class _StoryCard extends StatelessWidget {
   }
 }
 
-/// Where a decision's card has its picture, on a story's: how many outlets
-/// carry it, large in the look's gradient, and the first four's marks.
-class _Outlets extends StatelessWidget {
-  const _Outlets({required this.style, required this.story});
+/// The media card's "Discuss with AI": small, at the right of its time, in
+/// the look's colour on iOS's fill, as App Store's «Загрузить».
+class _DiscussWithAi extends StatelessWidget {
+  const _DiscussWithAi({required this.style, required this.onPressed});
 
   final _NewsStyle style;
-  final Story story;
+  final VoidCallback onPressed;
 
   @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final count = story.items.length;
-    final tile = Color.alphaBlend(
-      style.accent.withValues(alpha: style.dark ? 0.16 : 0.08),
-      style.card,
-    );
-    final marks = story.items.take(4).toList();
-    return Container(
-      width: 92,
-      height: 92,
-      padding: const EdgeInsets.all(6),
+  Widget build(BuildContext context) => CupertinoButton(
+    padding: EdgeInsets.zero,
+    minimumSize: Size.zero,
+    onPressed: onPressed,
+    child: Container(
+      constraints: const BoxConstraints(minHeight: 30),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
       decoration: BoxDecoration(
-        color: tile,
-        borderRadius: BorderRadius.circular(14),
+        color: CupertinoColors.tertiarySystemFill.resolveFrom(context),
+        borderRadius: BorderRadius.circular(15),
       ),
-      // Larger text makes it smaller rather than spill out of the tile.
-      child: FittedBox(
-        fit: BoxFit.scaleDown,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ShaderMask(
-              blendMode: BlendMode.srcIn,
-              shaderCallback: style.gradient.createShader,
-              child: Text(
-                '$count',
-                style: TextStyle(
-                  fontSize: 34,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -1,
-                  height: 1,
-                  color: style.ink,
-                ),
-              ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(CupertinoIcons.sparkles, size: 13, color: style.accent),
+          const SizedBox(width: 5),
+          Text(
+            AppLocalizations.of(context).discussWithAi,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: style.accent,
             ),
-            const SizedBox(height: 4),
-            Text(
-              l10n.storyOutlets(count),
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: style.muted,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                for (final (i, item) in marks.indexed)
-                  // Each over the one before it, by a quarter.
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    widthFactor: i == marks.length - 1 ? 1 : 0.75,
-                    child: OutletMark(item.outlet, size: 16, border: tile),
-                  ),
-              ],
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
-    );
-  }
+    ),
+  );
 }
 
 /// What VoiceOver reads for a card, once: the headline first, then where it

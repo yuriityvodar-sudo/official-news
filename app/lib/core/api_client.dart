@@ -198,18 +198,21 @@ class ApiClient {
   /// [ApiException] with the server's status: 402 not paid, 404 not in the
   /// feed, 429 today's questions used up ([ChatLimit] with when they come
   /// back), 503 the agent not available. About a tick (#230) when [tick]:
-  /// [articleId] is then the tick's id, sent as `tickId`.
+  /// [articleId] is then the tick's id, sent as `tickId`; about a story of
+  /// [storyCountry]'s outlets when that is given: the story's id, sent as
+  /// `storyId` with `country`.
   Future<ChatAnswer> askChat({
     required String articleId,
     required String lang,
     required List<(bool, String)> messages,
     required String transaction,
     bool tick = false,
+    String? storyCountry,
   }) async {
     final request = http.Request('POST', Uri.parse('$_baseUrl/v1/chat'))
       ..headers.addAll(_chatHeaders)
       ..body = jsonEncode({
-        tick ? 'tickId' : 'articleId': articleId,
+        ..._about(articleId, tick: tick, storyCountry: storyCountry),
         'lang': lang,
         'messages': [
           for (final (reader, text) in messages)
@@ -236,16 +239,28 @@ class ApiClient {
     );
   }
 
+  /// What a chat's request is about (docs/contract.md): a decision's
+  /// `articleId`, a tick's `tickId`, or a story's `storyId` with its
+  /// `country`.
+  static Map<String, String> _about(
+    String id, {
+    required bool tick,
+    String? storyCountry,
+  }) => storyCountry != null
+      ? {'storyId': id, 'country': storyCountry}
+      : {tick ? 'tickId' : 'articleId': id};
+
   /// `POST /v1/chat/status` (#146): what is left for questions about
-  /// [articleId] before asking, or about a tick's when [tick]. Throws an
-  /// [ApiException] (402 not paid).
+  /// [articleId] before asking, or about a tick's when [tick], or a story's
+  /// of [storyCountry]. Throws an [ApiException] (402 not paid).
   Future<ChatStatus> chatStatus({
     required String articleId,
     required String transaction,
     bool tick = false,
+    String? storyCountry,
   }) async => ChatStatus.fromJson(
     await _postJson('/v1/chat/status', {
-      tick ? 'tickId' : 'articleId': articleId,
+      ..._about(articleId, tick: tick, storyCountry: storyCountry),
       'transaction': transaction,
     }),
   );

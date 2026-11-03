@@ -203,9 +203,9 @@ class _PaywallSheetState extends State<PaywallSheet> {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // A tick is no official decision: the world's, not a seal (#230).
+            // The media's news is no official decision: a globe, not a seal (#230).
             Icon(
-              article.isTick
+              article.isMedia
                   ? CupertinoIcons.globe
                   : CupertinoIcons.checkmark_seal_fill,
               size: 15,

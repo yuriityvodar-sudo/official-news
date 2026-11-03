@@ -1,4 +1,3 @@
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/testing.dart';
@@ -11,7 +10,6 @@ import 'package:official_news/features/chat/chat_screen.dart';
 import 'package:official_news/features/feed/feed_controller.dart';
 import 'package:official_news/features/feed/feed_look.dart';
 import 'package:official_news/features/feed/feed_screen.dart';
-import 'package:official_news/features/feed/tick_capsule.dart';
 import 'package:official_news/features/story/story_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -41,10 +39,12 @@ Map<String, dynamic> _decision(String id, int feedSeq) => {
   'originalUrl': 'https://vlada.gov.cz/$id',
 };
 
-/// The world's ticks in For you's Top stories block (#230 step 4; Roman's
-/// variant 1 of `handoff/tick-strip.html`, 3 Nov): two, one and two of them
-/// open the groups before the decisions, a light capsule each, and a tap
-/// opens the AI chat about one.
+/// The media's news in For you's Top stories block (#230; Roman, 3 Nov:
+/// «пусть будет просто в ленте как часть ленты», then pick 1 of
+/// `handoff/ask-ai-button.html`): the world's ticks and the country's stories
+/// in turn, two before each decision and the rest after the last, each a card
+/// like a decision's with "Discuss with AI" beside its time; the card and
+/// the button open the AI chat about it.
 void main() {
   late Future<String?> Function() region;
   setUp(() {
@@ -59,9 +59,14 @@ void main() {
     ChatScreen.debugAvailable = null;
   });
 
-  /// For you in Czechia: three top decisions, five stories and five ticks;
-  /// the whole world's feed has none of them, as the server sends them.
-  Future<FeedController> pumpFeed(WidgetTester tester, {int ticks = 5}) async {
+  /// For you in Czechia: three top decisions, [stories] stories and [ticks]
+  /// ticks; the whole world's feed has none of them, as the server sends
+  /// them.
+  Future<FeedController> pumpFeed(
+    WidgetTester tester, {
+    int ticks = 5,
+    int stories = 5,
+  }) async {
     final top = [_decision('t1', 9), _decision('t2', 8), _decision('t3', 7)];
     final page = {
       'items': [...top, for (var i = 6; i > 0; i--) _decision('a$i', i)],
@@ -78,7 +83,7 @@ void main() {
             ? fakeJson({
                 ...page,
                 'stories': [
-                  for (var i = 0; i < 5; i++)
+                  for (var i = 0; i < stories; i++)
                     fakeStory(id: 's$i', title: 'Story $i'),
                 ],
                 'ticks': [
@@ -114,74 +119,91 @@ void main() {
   double top(WidgetTester tester, String text) =>
       tester.getTopLeft(find.textContaining(text).first).dy;
 
-  testWidgets('two, one and two ticks open the groups before the decisions, '
-      'the stories after them', (tester) async {
+  testWidgets('a tick and a story in turn, two before each decision, the '
+      'rest after the last', (tester) async {
     final feed = await pumpFeed(tester);
     expect(feed.ticks, hasLength(5));
     final order = [
       'Tick 0',
-      'Tick 1',
       'Story 0',
-      'Story 1',
       'Decision t1',
+      'Tick 1',
+      'Story 1',
+      'Decision t2',
       'Tick 2',
       'Story 2',
-      'Story 3',
-      'Decision t2',
+      'Decision t3',
       'Tick 3',
+      'Story 3',
       'Tick 4',
       'Story 4',
-      'Decision t3',
     ];
     final ys = [for (final t in order) top(tester, t)];
     expect(ys, [...ys]..sort(), reason: 'in that order, top to bottom');
-    expect(find.byType(TickCapsule), findsNWidgets(5));
+    expect(find.text('Discuss with AI'), findsNWidgets(10));
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('a tick: its headline and the AI\'s mark, nothing else: no '
-      'time, no outlets, no caption', (tester) async {
-    await pumpFeed(tester, ticks: 1);
-    final capsule = find.byType(TickCapsule);
-    final texts = tester.widgetList<Text>(
-      find.descendant(of: capsule, matching: find.byType(Text)),
-    );
-    expect([for (final t in texts) t.data], ['Tick 0']);
+  testWidgets('a card: where it comes from, its headline, and "Discuss with '
+      'AI" on its time\'s line at the right, read as one', (tester) async {
+    await pumpFeed(tester, ticks: 1, stories: 1);
+    expect(find.text('World · 2 countries'), findsOneWidget);
     expect(
-      find.descendant(
-        of: capsule,
-        matching: find.byIcon(CupertinoIcons.sparkles),
-      ),
+      find.text('Czechia · ČT24, Seznam Zprávy and 2 more'),
       findsOneWidget,
     );
-    expect(tester.getSize(capsule).height, TickCapsule.height);
+    for (final (headline, button) in [
+      ('Tick 0', find.text('Discuss with AI').first),
+      ('Story 0', find.text('Discuss with AI').last),
+    ]) {
+      final title = find.text(headline);
+      expect(
+        tester.getTopLeft(button).dy,
+        greaterThan(tester.getBottomLeft(title).dy),
+      );
+      expect(tester.getTopRight(button).dx, greaterThan(393 / 2));
+      // The card's last row: nothing under it but the card's edge.
+      expect(
+        tester.getBottomLeft(button).dy - tester.getBottomLeft(title).dy,
+        lessThan(48),
+      );
+    }
+    final label = tester.getSemantics(find.text('Tick 0')).label;
+    expect(label, startsWith('Tick 0. World, 2 countries.'));
+    expect(label, endsWith('Discuss with AI.'));
     expect(
-      tester.getSemantics(capsule),
-      matchesSemantics(
-        label: 'Tick 0. Discuss with AI',
-        isButton: true,
-        hasTapAction: true,
-      ),
+      tester.getSemantics(find.text('Story 0')).label,
+      endsWith('Discuss with AI.'),
     );
+    // No outlets' tile: a card like a decision's.
+    expect(find.text('4'), findsNothing);
+    expect(tester.takeException(), isNull);
   });
 
-  testWidgets('where the chat is not open yet, a tick opens the page of its '
-      'outlets\' headlines', (tester) async {
+  testWidgets('where the chat is not open yet, the card or its button opens '
+      'the page of its outlets\' headlines', (tester) async {
     ChatScreen.debugAvailable = false;
-    await pumpFeed(tester, ticks: 1);
-    await tester.tap(find.byType(TickCapsule));
+    await pumpFeed(tester, ticks: 1, stories: 1);
+    await tester.tap(find.text('Tick 0'));
     await tester.pumpAndSettle();
     expect(find.byType(StoryScreen), findsOneWidget);
     expect(find.text('ABC News: headline 0'), findsOneWidget);
     expect(find.text('BBC World: headline 1'), findsOneWidget);
+    Navigator.of(tester.element(find.byType(StoryScreen))).pop();
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Discuss with AI').last);
+    await tester.pumpAndSettle();
+    expect(find.byType(StoryScreen), findsOneWidget);
+    expect(find.text('ČT24: headline 0'), findsOneWidget);
   });
 
-  testWidgets('the whole world\'s feed has no ticks', (tester) async {
+  testWidgets('the whole world\'s feed has none of them', (tester) async {
     final feed = await pumpFeed(tester);
     await feed.setFeed(FeedWhere.all);
     await tester.pump();
     await tester.pump();
-    expect(find.byType(TickCapsule), findsNothing);
+    expect(find.text('Discuss with AI'), findsNothing);
+    expect(find.text('Tick 0'), findsNothing);
     expect(find.text('Decision t1'), findsOneWidget);
   });
 }

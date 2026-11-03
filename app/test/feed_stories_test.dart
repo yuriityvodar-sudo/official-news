@@ -126,19 +126,25 @@ void main() {
   });
 
   testWidgets('a story\'s card: its country and outlets, its headline, and '
-      'how many outlets carry it, with no topics', (tester) async {
+      '"Discuss with AI" by its time; no outlets\' tile, no topics', (
+    tester,
+  ) async {
     await pumpFeed(tester);
     expect(
       find.text('Czechia · ČT24, Seznam Zprávy and 2 more'),
       findsNWidgets(5),
     );
-    expect(find.text('4'), findsNWidgets(5));
-    expect(find.text('outlets'), findsNWidgets(5));
-    expect(find.text('SZ'), findsNWidgets(5));
+    expect(find.text('Discuss with AI'), findsNWidgets(5));
+    // Not the count of outlets and their marks in the picture's place any
+    // more (Roman, 3 Nov: a card like ours).
+    expect(find.text('4'), findsNothing);
+    expect(find.text('outlets'), findsNothing);
+    expect(find.text('SZ'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('a story opens its page, and back', (tester) async {
+  testWidgets('where the chat is not open, as in tests, a story opens its '
+      'page, and back', (tester) async {
     await pumpFeed(tester);
     await tester.tap(find.text('Story 3'));
     await tester.pumpAndSettle();
