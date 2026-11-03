@@ -126,6 +126,9 @@ void main() {
         );
         expect(find.text('What is known?'), findsOneWidget);
         expect(find.text('Does this concern me?'), findsNothing);
+        // The sample answer in the reader's language, never the outlets' own.
+        expect(find.text("US strikes Iran's Qeshm Island"), findsWidgets);
+        expect(find.textContaining('headline 0'), findsNothing);
         expect(find.byIcon(CupertinoIcons.globe), findsOneWidget);
         expect(find.byIcon(CupertinoIcons.checkmark_seal_fill), findsNothing);
       },
