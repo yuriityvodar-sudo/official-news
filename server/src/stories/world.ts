@@ -11,7 +11,7 @@ import type { Env } from "../env";
 import type { OutletHeadline } from "../fetcher/types";
 import { STORIES, type StoryHeadline, hash, itemWeight, topStories } from "./cluster";
 import type { StoredStory } from "./index";
-import { type TitleLang, type Titles, isDigit, isLetter } from "./titles";
+import { TITLE_LANGS, type TitleLang, type Titles, isDigit, isLetter } from "./titles";
 
 export const WORLD = {
   /** An event in this many countries' first stories or more is the world's; the world's own outlets (WW) count as a country. */
@@ -116,6 +116,34 @@ export function worldScore(story: WorldStory, now: Date): number {
   return sum;
 }
 
+/** A country's titled story, and a group of them on one event with the headline of the one nearest its centre. */
+type Part = { country: string; story: TitledStory };
+type Event = { parts: Part[]; titles: Titles };
+
+/**
+ * One event can come out of the grouping as two, each near a centre of its
+ * own: on 3 Nov at 21:45 UTC, "Trump says US will stop $4B in military aid to
+ * Israel by the end of 2026" (Indonesia, the world's outlets, the US, Czechia)
+ * and "Donald Trump to stop 4 billion dollars of annual military aid to Israel
+ * by year end" (Hungary, France, Spain), so For you showed the second beside
+ * Czechia's own story on it. The events' headlines, grouped once more as one
+ * headline each, join them, with the headline nearest the joined centre.
+ */
+function sameEvents(events: Event[], now: Date): Event[] {
+  if (events.length < 2) return events;
+  const headlines: StoryHeadline[] = events.map(({ parts, titles }, i) => ({
+    title: titles.en,
+    url: String(i),
+    publishedAt: parts.reduce((last, p) => (p.story.lastSeen > last ? p.story.lastSeen : last), ""),
+    outlet: { id: String(i), name: "", site: "" },
+    words: englishWords(titles.en),
+  }));
+  return topStories(headlines, now, headlines.length).map((group) => {
+    const joined = group.items.map((item) => events[Number(item.url)]);
+    return { parts: joined.flatMap((e) => e.parts), titles: (joined.find((e) => e.titles.en === group.title) ?? joined[0]).titles };
+  });
+}
+
 /**
  * The world's stories from the countries' titled stories (`country_stories.top`):
  * their English headlines grouped as one country's headlines are, each story a
@@ -135,11 +163,15 @@ export function worldStories(countries: { country: string; top: string }[], befo
       headlines.push({ title: story.titles.en, url: key, publishedAt: story.lastSeen, outlet: { id: key, name: country, site: "" }, words: story.words ?? englishWords(story.titles.en) });
     }
   }
-  const taken = new Set<string>();
-  const world: WorldStory[] = [];
+  const events: Event[] = [];
   for (const group of topStories(headlines, now, headlines.length)) {
     const parts = group.items.map((item) => titled.get(item.url)!);
     if (new Set(parts.map((p) => p.country)).size < WORLD.minCountries) continue;
+    events.push({ parts, titles: (parts.find((p) => p.story.titles.en === group.title) ?? parts[0]).story.titles });
+  }
+  const taken = new Set<string>();
+  const world: WorldStory[] = [];
+  for (const { parts, titles } of sameEvents(events, now)) {
     // Each outlet's latest headline on it, of any of its countries' stories.
     const latest = new Map<string, WorldItem>();
     for (const { country, story } of parts) {
@@ -157,7 +189,7 @@ export function worldStories(countries: { country: string; top: string }[], befo
     taken.add(id);
     world.push({
       id,
-      titles: (parts.find((p) => p.story.titles.en === group.title) ?? parts[0]).story.titles,
+      titles,
       stories: parts.map(({ country, story }) => ({ country, id: story.id, lastSeen: story.lastSeen })).sort((a, b) => newestFirst(a.lastSeen, b.lastSeen)),
       outlets: items.length,
       items: items.slice(0, WORLD.items),
@@ -211,6 +243,25 @@ export async function worldFailed(env: Env, now = new Date()): Promise<void> {
 export async function worldStory(env: Env, id: string): Promise<WorldStory | null> {
   const row = await env.DB.prepare("SELECT json FROM world_stories WHERE id = 1").first<{ json: string }>();
   return row ? ((JSON.parse(row.json) as WorldStories).stories.find((story) => story.id === id) ?? null) : null;
+}
+
+/**
+ * A country's story as the chat takes a world story (src/chat/; Roman, 3 Nov:
+ * a story's card opens the chat, as a tick's): one country's outlets' latest
+ * headlines on it, the most recent first, and the model's headline, else the
+ * outlets' own nearest its centre in every language.
+ */
+export function storyEvent(story: StoredStory, country: string): WorldStory {
+  const items = story.items.map((item) => ({ ...item, country })).sort((a, b) => newestFirst(a.publishedAt, b.publishedAt));
+  return {
+    id: story.id,
+    titles: story.titles ?? (Object.fromEntries(TITLE_LANGS.map((lang) => [lang, story.title])) as Titles),
+    stories: [{ country, id: story.id, lastSeen: story.lastSeen }],
+    outlets: items.length,
+    items: items.slice(0, WORLD.items),
+    firstSeen: story.firstSeen,
+    lastSeen: story.lastSeen,
+  };
 }
 
 /** A world story as the API gives it: its headline in the asked language, its countries, and its weight now. */

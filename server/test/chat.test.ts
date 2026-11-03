@@ -325,7 +325,7 @@ describe("the chat about a tick (#230, the world's stories)", () => {
     expect(result).toMatchObject({ remaining: DAILY_QUESTIONS - 1, units: 1 });
     const system = ai.requests[0].body.messages[0];
     expect(system.role).toBe("system");
-    expect(system.content).toContain("A reader talks with you about ONE news event, shown below, which news outlets in several countries report: you have their headlines, not their articles.");
+    expect(system.content).toContain("A reader talks with you about ONE news event, shown below, which news outlets report: you have their headlines, not their articles.");
     expect(system.content).toContain("Event: US strikes Iran's Qeshm Island");
     expect(system.content).toContain("As the app shows it in Ukrainian: США завдали ударів по іранському острову Кешм");
     expect(system.content).toContain("Reported by outlets in: United States, international outlets; first 2026-10-27 08:00 UTC, latest 2026-10-27 10:00 UTC");
@@ -342,7 +342,7 @@ describe("the chat about a tick (#230, the world's stories)", () => {
 
   it("refuses a tick the last build has none of (404), and a body about both or neither (400)", async () => {
     expect(await ask(aboutTick("nope"))).toMatchObject({ status: 404 });
-    expect(await ask({ tickId: "w1" })).toMatchObject({ status: 400, body: { error: "Expected { articleId or tickId, lang, messages, transaction }" } });
+    expect(await ask({ tickId: "w1" })).toMatchObject({ status: 400, body: { error: "Expected { articleId, tickId, or storyId and country; lang, messages, transaction }" } });
     expect(await ask({ articleId: undefined })).toMatchObject({ status: 400 });
   });
 
@@ -351,6 +351,76 @@ describe("the chat about a tick (#230, the world's stories)", () => {
     expect(await status("w1")).toEqual({ status: 200, body: { questionsLeft: 20, boughtQuestions: 0, units: 1, resetsAt: "2026-10-28T00:00:00Z" } });
     expect(await status("nope")).toMatchObject({ status: 404 });
     expect(await chatStatus({ articleId: "c1", tickId: "w1", transaction: await store.sign(transaction()) }, env, trusted())).toMatchObject({ status: 400 });
+  });
+});
+
+describe("the chat about a story of a country's outlets (#230; Roman, 3 Nov: a story's card opens the chat, as a tick's)", () => {
+  /** A country's story as its build keeps it (country_stories), with the model's headline. */
+  const STORY = {
+    id: "s9",
+    title: "Trump oznámil konec vojenské pomoci Izraeli",
+    items: [
+      { title: "Trump oznámil konec vojenské pomoci Izraeli", url: "https://seznam.test/1", publishedAt: "2026-10-27T09:00:00Z", outlet: { id: "cz-seznam", name: "Seznam Zprávy", site: "https://seznam.test" } },
+      { title: "USA ukončí vojenskou pomoc Izraeli", url: "https://novinky.test/1", publishedAt: "2026-10-27T10:00:00Z", outlet: { id: "cz-novinky", name: "Novinky.cz", site: "https://novinky.test" } },
+    ],
+    firstSeen: "2026-10-27T08:30:00Z",
+    lastSeen: "2026-10-27T10:00:00Z",
+    titles: {
+      en: "Trump announced that the USA will stop providing military aid to Israel",
+      uk: "Трамп оголосив, що США припинять військову допомогу Ізраїлю",
+      ru: "Трамп объявил, что США прекратят военную помощь Израилю",
+      es: "Trump anunció que EE. UU. dejará de dar ayuda militar a Israel",
+      de: "Trump kündigt das Ende der US-Militärhilfe für Israel an",
+    },
+  };
+  const keep = (story: object) =>
+    env.DB.prepare("INSERT OR REPLACE INTO country_stories (country, json, version, built_at) VALUES ('CZ', ?, 'v', '2026-10-27T10:05:00Z')")
+      .bind(JSON.stringify({ builtAt: "2026-10-27T10:05:00Z", stories: [story] }))
+      .run();
+  beforeEach(() => keep(STORY));
+  const aboutStory = (storyId: string, country: unknown = "CZ") => ({ articleId: undefined, storyId, country });
+
+  it("answers as the same analyst from the country's outlets' headlines, the most recent first", async () => {
+    const ai = openAi();
+    const result = await ask(aboutStory("s9"), { ai });
+    expect(await answer(result)).toBe("Так, з листопада 2027 року.");
+    expect(result).toMatchObject({ remaining: DAILY_QUESTIONS - 1, units: 1 });
+    const system = ai.requests[0].body.messages[0].content as string;
+    expect(system).toContain("Event: Trump announced that the USA will stop providing military aid to Israel");
+    expect(system).toContain("As the app shows it in Ukrainian: Трамп оголосив, що США припинять військову допомогу Ізраїлю");
+    expect(system).toContain("Reported by outlets in: Czechia; first 2026-10-27 08:30 UTC, latest 2026-10-27 10:00 UTC");
+    expect(system).toContain("(2 of the 2 outlets)");
+    const novinky = system.indexOf("- Novinky.cz (Czechia), 2026-10-27 10:00 UTC: USA ukončí vojenskou pomoc Izraeli");
+    expect(novinky).toBeGreaterThan(0);
+    expect(novinky).toBeLessThan(system.indexOf("- Seznam Zprávy (Czechia), 2026-10-27 09:00 UTC: Trump oznámil konec vojenské pomoci Izraeli"));
+    expect(await usage()).toEqual({ questions: 1, spent: COST });
+  });
+
+  it("takes the outlets' own headline before the model has written one", async () => {
+    const { titles: _, ...untitled } = STORY;
+    await keep(untitled);
+    const ai = openAi();
+    await answer(await ask(aboutStory("s9"), { ai }));
+    const system = ai.requests[0].body.messages[0].content as string;
+    expect(system).toContain("Event: Trump oznámil konec vojenské pomoci Izraeli");
+    expect(system).toContain("As the app shows it in Ukrainian: Trump oznámil konec vojenské pomoci Izraeli");
+  });
+
+  it("refuses a story its country's last build has none of (404), and a body without its country or about two things (400)", async () => {
+    expect(await ask(aboutStory("nope"))).toMatchObject({ status: 404 });
+    expect(await ask(aboutStory("s9", "SK"))).toMatchObject({ status: 404 });
+    expect(await ask(aboutStory("s9", "cz"))).toMatchObject({ status: 400 });
+    expect(await ask({ articleId: undefined, storyId: "s9" })).toMatchObject({ status: 400 });
+    expect(await ask({ storyId: "s9", country: "CZ" })).toMatchObject({ status: 400 });
+    expect(await ask({ articleId: undefined, tickId: "w1", storyId: "s9", country: "CZ" })).toMatchObject({ status: 400 });
+  });
+
+  it("says in /v1/chat/status how much one question about it takes", async () => {
+    const status = async (storyId: string, country = "CZ") => chatStatus({ storyId, country, transaction: await store.sign(transaction()) }, env, trusted());
+    expect(await status("s9")).toEqual({ status: 200, body: { questionsLeft: 20, boughtQuestions: 0, units: 1, resetsAt: "2026-10-28T00:00:00Z" } });
+    expect(await status("nope")).toMatchObject({ status: 404 });
+    expect(await status("s9", "SK")).toMatchObject({ status: 404 });
+    expect(await chatStatus({ storyId: "s9", transaction: await store.sign(transaction()) }, env, trusted())).toMatchObject({ status: 400 });
   });
 });
 

@@ -212,6 +212,12 @@ export async function countryStories(env: Env, country: string, lang: TitleLang 
   return { builtAt: saved.builtAt, stories };
 }
 
+/** One of a country's stories by its id, as kept, for the chat about it (src/chat/), or null when its last build has none of it. */
+export async function countryStory(env: Env, country: string, id: string): Promise<StoredStory | null> {
+  const row = await env.DB.prepare("SELECT json FROM country_stories WHERE country = ?").bind(country).first<{ json: string }>();
+  return row ? ((JSON.parse(row.json) as CountryStories).stories.find((story) => story.id === id) ?? null) : null;
+}
+
 /** For you's `stories` (#230 step 3): the reader's country's first stories carried by TITLES.minOutlets outlets, TITLES.perCountry of them. */
 export async function homeStories(env: Env, home: string, lang: TitleLang, now = new Date()): Promise<RankedStory[]> {
   const { stories } = await countryStories(env, home, lang, now);
