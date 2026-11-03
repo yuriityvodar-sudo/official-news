@@ -21,6 +21,7 @@ import '../../core/router.dart';
 import '../../core/story.dart';
 import '../../core/subscription.dart';
 import '../../core/theme.dart';
+import '../../core/tick.dart';
 import '../../l10n/app_localizations.dart';
 import '../chat/chat_history_screen.dart';
 import '../chat/chat_screen.dart';
@@ -340,6 +341,25 @@ class _FeedScreenState extends State<FeedScreen> {
     );
   }
 
+  /// A tick's AI chat (#230 step 4), opened as a decision's "Discuss with
+  /// AI" opens it; where the chat is not open yet (Android, a build before
+  /// its release), the page of its outlets' headlines instead.
+  void _openTick(Tick tick) {
+    Haptics.light();
+    if (!ChatScreen.available) {
+      _openStory(tick.asStory(), country: 'WW');
+      return;
+    }
+    final l10n = AppLocalizations.of(context);
+    final lang = _feed.language.code;
+    unawaited(
+      ChatScreen.open(
+        context,
+        tick.asArticle(l10n, lang: lang == 'en' ? null : lang),
+      ),
+    );
+  }
+
   void _chatChanged() {
     if (mounted) setState(() {});
   }
@@ -590,8 +610,9 @@ class _FeedScreenState extends State<FeedScreen> {
     final forYou = _feed.where.isForYou && _feed.topic == null
         ? _feed.homeCountry
         : null;
-    // Among them the reader's country's stories (#230, the aggregator).
+    // Among them the reader's country's stories (#230, the aggregator), and the world's ticks (step 4).
     final stories = forYou != null ? _feed.stories : const <Story>[];
+    final ticks = forYou != null ? _feed.ticks : const <Tick>[];
     final shown = _feed.feed;
     final slivers = <Widget>[];
 
@@ -601,7 +622,7 @@ class _FeedScreenState extends State<FeedScreen> {
     // Analytics (#60) record each opened article's section ("top" for the
     // block, "feed" for the list) and place in it, and how deep the list was
     // drawn.
-    if (block.isNotEmpty || stories.isNotEmpty) {
+    if (block.isNotEmpty || stories.isNotEmpty || ticks.isNotEmpty) {
       slivers.add(
         look.topStories(
           context,
@@ -627,6 +648,8 @@ class _FeedScreenState extends State<FeedScreen> {
             stories: stories,
             country: forYou,
             openStory: (i) => _openStory(stories[i], country: forYou!),
+            ticks: ticks,
+            openTick: (i) => _openTick(ticks[i]),
           ),
         ),
       );

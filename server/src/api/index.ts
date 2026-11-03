@@ -3,7 +3,7 @@ import { answerChat, chatStatus, creditChatPack } from "../chat";
 import type { Env } from "../env";
 import { REAL_SOURCE, health } from "../health";
 import { countryStories, homeStories } from "../stories";
-import { worldTicks } from "../stories/world";
+import { homeTicks, worldTicks } from "../stories/world";
 import { postSupportMessage, supportThread } from "../support";
 import type { Topic } from "../summarizer/schema";
 import { LANGS, type Lang, SHOWN, isLang, queueStatus, releaseStatus } from "../translator";
@@ -687,13 +687,16 @@ async function forYouPage(
   const pick = (ids: string[]) => ids.map((id) => found.get(id)).filter((row): row is TranslatedRow => row !== undefined).map(shape);
   const { at, seq, ids } = ranking;
   const nextCursor = offset + limit < ids.length ? encodeForYouCursor({ at, seq, offset: offset + limit }) : null;
+  // The reader's country's first stories (#230 step 3), and the world's as ticks without them (step 4), on the first page of For you without a topic.
+  const first = offset === 0 && topic === null;
+  const stories = first ? await homeStories(env, home, lang ?? "en", new Date(now)) : [];
   return json(
     {
       items: pick(ids.slice(offset, offset + limit)),
       nextCursor,
       top: offset === 0 ? pick(ranking.top) : [],
-      // The reader's country's first stories (#230 step 3), on the first page of For you without a topic.
-      stories: offset === 0 && topic === null ? await homeStories(env, home, lang ?? "en", new Date(now)) : [],
+      stories,
+      ticks: first ? await homeTicks(env, home, stories, lang ?? "en", new Date(now)) : [],
       ...(lang ? { translationsDelayed: delayed?.results[0]?.delayed !== 0 } : {}),
     },
     200,

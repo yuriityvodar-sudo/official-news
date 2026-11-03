@@ -116,6 +116,29 @@ describe("GET /ticks (#230 step 4)", () => {
   });
 });
 
+describe("For you's ticks (#230 step 4)", () => {
+  it("gives the world's stories on For you's first page, but those it shows as the reader's country's stories, WORLD.forYou at most", async () => {
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    await addCountries();
+    // The US row as its build keeps it: its titled stories are its first ones.
+    const us = TITLED_STORIES_2026_11_03.filter((s) => s.country === "US").map((s) => s.story);
+    await env.DB.prepare("UPDATE country_stories SET json = ? WHERE country = 'US'").bind(JSON.stringify({ builtAt: stored(NOW), stories: us })).run();
+    await buildWorldStories(env, new Date());
+    const get = async (path: string) => (await exports.default.fetch(`https://api.test${path}`)).json() as Promise<{ stories: { id: string }[]; ticks: Tick[] }>;
+
+    const forUs = await get("/articles?for=US&lang=ru");
+    const shown = new Set(forUs.stories.map((s) => s.id));
+    expect(shown.size).toBe(us.length);
+    // Qeshm, the measles death and California's ballots are the US's own stories here.
+    expect(forUs.ticks.map((t) => t.countries.sort().join()).sort()).toEqual(["AR,DE", "AR,ES,IT", "BR,PL"]);
+    expect(forUs.ticks.every((t) => !t.stories.some((s) => s.country === "US" && shown.has(s.id)))).toBe(true);
+    expect(forUs.ticks[0].title).toMatch(/[а-яА-Я]/);
+
+    expect((await get("/articles?for=CZ")).ticks).toHaveLength(WORLD.forYou);
+    expect((await get("/articles?for=CZ&topic=economy")).ticks).toEqual([]);
+  });
+});
+
 describe("the world's build in the stories step (#230 step 4)", () => {
   const SK_OUTLET = "INSERT INTO outlets (id, country, name, url, site, language, headlines, last_item_at) VALUES ('sk-a', 'SK', 'A', 'https://a.test/rss', 'https://a.test', 'sk', '[]', '2026-11-03T09:59:00Z')";
 

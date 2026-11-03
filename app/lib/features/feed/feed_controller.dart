@@ -12,6 +12,7 @@ import '../../core/home_country.dart';
 import '../../core/filters.dart';
 import '../../core/push.dart';
 import '../../core/story.dart';
+import '../../core/tick.dart';
 import '../../core/theme.dart';
 import 'feed_look.dart';
 
@@ -100,6 +101,10 @@ class FeedController extends ChangeNotifier {
   /// The reader's country's first stories (#230, the aggregator): For you's
   /// `stories`, only on the first page, shown in the Top stories block.
   List<Story> stories = const [];
+
+  /// The world's stories as ticks (#230 step 4): For you's `ticks`, only on
+  /// the first page, shown among the Top stories block's rows.
+  List<Tick> ticks = const [];
 
   /// The Top stories block above the list (#164, [topStoriesBlock]); empty
   /// when there is none.
@@ -502,6 +507,7 @@ class FeedController extends ChangeNotifier {
     loadingMore = false;
     top = page?.top ?? const [];
     stories = page?.stories ?? const [];
+    ticks = page?.ticks ?? const [];
     _cursor = page?.nextCursor;
     items = page?.items ?? const [];
   }

@@ -65,11 +65,17 @@ class GlassCapsule extends StatelessWidget {
     required this.child,
     this.height = 48,
     this.padding = const EdgeInsets.symmetric(horizontal: 20),
+    this.shadow = true,
   });
 
   final Widget child;
   final double height;
   final EdgeInsets padding;
+
+  /// Whether iOS's glass casts its shadow: not among the feed's rows (a
+  /// tick, #230), where its room ([glassShadowRoom]) would reach over the
+  /// cards beside it.
+  final bool shadow;
 
   @override
   Widget build(BuildContext context) => SizedBox(
@@ -78,6 +84,7 @@ class GlassCapsule extends StatelessWidget {
       children: [
         Positioned.fill(
           child: _Glass(
+            shadow: shadow,
             plain: DecoratedBox(
               decoration: ShapeDecoration(
                 color: Theme.of(context).colorScheme.surfaceContainerHighest,

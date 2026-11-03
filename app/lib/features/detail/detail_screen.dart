@@ -18,12 +18,9 @@ import '../../core/news_widgets.dart';
 import '../../core/card_zoom.dart';
 import '../../core/pictures.dart';
 import '../../core/push.dart';
-import '../../core/subscription.dart';
 import '../../core/theme.dart';
 import '../../l10n/app_localizations.dart';
-import '../chat/chat_consent.dart';
 import '../chat/chat_screen.dart';
-import '../chat/paywall_sheet.dart';
 import 'ai_chat_note.dart';
 import 'picture_viewer.dart';
 
@@ -381,18 +378,7 @@ class _DiscussWithAi extends StatelessWidget {
 
   final Article article;
 
-  Future<void> _open(BuildContext context) async {
-    if (!ChatScreen.available) return AiChatNote.show(context);
-    final l10n = AppLocalizations.of(context);
-    String? first;
-    if (!chatSubscription.active) {
-      if (!await PaywallSheet.show(context, article)) return;
-      first = l10n.chatSuggestConcernsMe;
-    }
-    if (!context.mounted || !await ChatConsent.ask(context)) return;
-    if (!context.mounted) return;
-    await ChatScreen.show(context, article, firstQuestion: first);
-  }
+  Future<void> _open(BuildContext context) => ChatScreen.open(context, article);
 
   @override
   Widget build(BuildContext context) {

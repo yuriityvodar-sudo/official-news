@@ -1195,6 +1195,18 @@
   "@chatSuggestWhatToDo": {
     "description": "A suggested first question in the AI chat."
   },
+  "chatSuggestWhatIsKnown": "What is known?",
+  "@chatSuggestWhatIsKnown": {
+    "description": "A suggested first question in the AI chat about a tick, an event known from news outlets' headlines (#230)."
+  },
+  "chatSuggestWhyItMatters": "Why does it matter?",
+  "@chatSuggestWhyItMatters": {
+    "description": "A suggested first question in the AI chat about a tick (#230)."
+  },
+  "chatSuggestWhatNext": "What happens next?",
+  "@chatSuggestWhatNext": {
+    "description": "A suggested first question in the AI chat about a tick (#230)."
+  },
   "paywallTitle": "Continue the conversation with the AI agent",
   "@paywallTitle": {
     "description": "The paywall's title, under the sample answer that fades out."

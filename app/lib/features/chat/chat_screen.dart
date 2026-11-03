@@ -19,7 +19,10 @@ import '../../core/sheet.dart';
 import '../../core/subscription.dart';
 import '../../core/theme.dart';
 import '../../l10n/app_localizations.dart';
+import '../detail/ai_chat_note.dart';
 import '../detail/detail_screen.dart' show openOfficialPage;
+import 'chat_consent.dart';
+import 'chat_questions.dart';
 import 'chat_style.dart';
 import 'paywall_sheet.dart';
 import 'topup_sheet.dart';
@@ -88,6 +91,25 @@ class ChatScreen extends StatefulWidget {
       history: history,
     ),
   );
+
+  /// The chat about [article] as "Discuss with AI" opens it: behind its
+  /// paywall (a subscriber goes straight in), with the consent once, and,
+  /// once just bought, the paywall's sample question asked at once
+  /// ([firstQuestionOf]). Where there is no App Store purchase yet
+  /// (Android), the note about the chat ([AiChatNote]). A tick's opens the
+  /// same way (#230).
+  static Future<void> open(BuildContext context, Article article) async {
+    if (!available) return AiChatNote.show(context);
+    final l10n = AppLocalizations.of(context);
+    String? first;
+    if (!chatSubscription.active) {
+      if (!await PaywallSheet.show(context, article)) return;
+      first = firstQuestionOf(article, l10n);
+    }
+    if (!context.mounted || !await ChatConsent.ask(context)) return;
+    if (!context.mounted) return;
+    await show(context, article, firstQuestion: first);
+  }
 
   final Article article;
 
@@ -236,6 +258,7 @@ class _ChatScreenState extends State<ChatScreen> {
       final status = await _api.chatStatus(
         articleId: widget.article.id,
         transaction: transaction,
+        tick: widget.article.isTick,
       );
       if (!mounted) return;
       setState(() {
@@ -296,6 +319,7 @@ class _ChatScreenState extends State<ChatScreen> {
           ? _demoAnswer()
           : await _api.askChat(
               articleId: widget.article.id,
+              tick: widget.article.isTick,
               lang: Localizations.localeOf(context).languageCode,
               messages: _recent([
                 for (final t in _turns)
@@ -578,11 +602,7 @@ class _ChatScreenState extends State<ChatScreen> {
           spacing: 8,
           runSpacing: 8,
           children: [
-            for (final q in [
-              l10n.chatSuggestConcernsMe,
-              l10n.chatSuggestWhatChanges,
-              l10n.chatSuggestWhatToDo,
-            ])
+            for (final q in suggestedQuestions(article, l10n))
               CupertinoButton(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 14,
@@ -676,7 +696,8 @@ class _ChatScreenState extends State<ChatScreen> {
                                       color: muted,
                                     ),
                                   ),
-                                if (turn.done)
+                                // A tick has no official page: its outlets are in the header.
+                                if (turn.done && !article.isTick)
                                   CupertinoButton(
                                     padding: EdgeInsets.zero,
                                     minimumSize: const Size(44, 44),

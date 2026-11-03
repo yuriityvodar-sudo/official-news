@@ -14,6 +14,7 @@ import 'package:official_news/core/article.dart';
 import 'package:official_news/core/chat_history.dart';
 import 'package:official_news/core/glass.dart';
 import 'package:official_news/core/subscription.dart';
+import 'package:official_news/core/tick.dart';
 import 'package:official_news/features/chat/chat_consent.dart';
 import 'package:official_news/features/chat/chat_screen.dart';
 import 'package:official_news/features/chat/paywall_sheet.dart';
@@ -85,7 +86,10 @@ void main() {
   List<String> sent() => [for (final e in events) e.$1];
 
   group('the paywall', () {
-    Future<Future<bool>> showPaywall(WidgetTester tester) async {
+    Future<Future<bool>> showPaywall(
+      WidgetTester tester, {
+      Article? article,
+    }) async {
       // An iPhone's screen, as the sheet shows on one.
       tester.view.physicalSize = const Size(393, 852) * 3;
       tester.view.devicePixelRatio = 3;
@@ -98,7 +102,7 @@ void main() {
               onPressed: () => closed = showCupertinoSheet<bool>(
                 context: context,
                 scrollableBuilder: (_, scroll) => PaywallSheet(
-                  article: _article,
+                  article: article ?? _article,
                   subscription: subscription,
                   scroll: scroll,
                 ),
@@ -112,6 +116,20 @@ void main() {
       await tester.pumpAndSettle();
       return closed;
     }
+
+    testWidgets(
+      'about a tick: the world\'s mark, not an official seal, and a tick\'s first question (#230)',
+      (tester) async {
+        await showPaywall(
+          tester,
+          article: Tick.fromJson(fakeTick()).asArticle(l10nFor()),
+        );
+        expect(find.text('What is known?'), findsOneWidget);
+        expect(find.text('Does this concern me?'), findsNothing);
+        expect(find.byIcon(CupertinoIcons.globe), findsOneWidget);
+        expect(find.byIcon(CupertinoIcons.checkmark_seal_fill), findsNothing);
+      },
+    );
 
     testWidgets(
       'shows the sample about this decision, the price and what Apple asks for, and closes once bought',
@@ -297,6 +315,7 @@ void main() {
       List<Uri>? opened,
       ChatHistory? history,
       bool settle = true,
+      Article? article,
     }) async {
       asked = [];
       // Bought before the chat opens, and done with (outside the test's fake time).
@@ -311,7 +330,7 @@ void main() {
         testApp(
           home: ChatScreen(
             key: UniqueKey(),
-            article: _article,
+            article: article ?? _article,
             api: api,
             subscription: subscription,
             // Each chat its own, so no test goes on with another's conversation.
@@ -382,6 +401,35 @@ void main() {
           {'role': 'assistant', 'text': 'Yes, from November 2027.'},
           {'role': 'user', 'text': 'What should I do?'},
         ]);
+      },
+    );
+
+    testWidgets(
+      'asks about a tick as `tickId`, with its own questions, its outlets in '
+      'the header and no official link (#230)',
+      (tester) async {
+        final opened = <Uri>[];
+        final tick = Tick.fromJson(fakeTick()).asArticle(l10nFor());
+        await openChat(
+          tester,
+          server(remaining: 2),
+          opened: opened,
+          article: tick,
+        );
+        expect(find.text("US strikes Iran's Qeshm Island"), findsOneWidget);
+        expect(find.text('ABC News, BBC World and 1 more'), findsOneWidget);
+        expect(find.text('Does this concern me?'), findsNothing);
+        await tester.tap(find.text('What is known?'));
+        await tester.pumpAndSettle();
+        expect(find.text('Yes, from November 2027.'), findsOneWidget);
+        expect(asked.single['tickId'], 'w1');
+        expect(asked.single.containsKey('articleId'), isFalse);
+        expect(find.textContaining('Read the official decision'), findsNothing);
+        expect(find.textContaining('Read on'), findsNothing);
+        expect(
+          events.lastWhere((e) => e.$1 == 'chat_question').$2['decision_type'],
+          'tick',
+        );
       },
     );
 

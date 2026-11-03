@@ -124,12 +124,18 @@ String outletInitials(String name) {
 
 /// A story's outlets, the first two and how many more ("ČT24, Seznam Zprávy
 /// and 2 more").
-String _outletNames(Story story, AppLocalizations l10n) {
-  final names = [for (final i in story.items) i.outlet];
-  return names.length > 2
-      ? l10n.storyOutletNames(names[0], names[1], names.length - 2)
-      : names.join(', ');
-}
+String _outletNames(Story story, AppLocalizations l10n) => outletNames(
+  [for (final i in story.items) i.outlet],
+  story.items.length,
+  l10n,
+);
+
+/// The first two of [names] and how many more of [count] in all: a story's
+/// outlets, or a tick's, which lists only its latest 20.
+String outletNames(List<String> names, int count, AppLocalizations l10n) =>
+    names.length > 1 && count > 2
+    ? l10n.storyOutletNames(names[0], names[1], count - 2)
+    : names.take(2).join(', ');
 
 /// A story card's first line, where a decision's has its country and
 /// institution: "Czechia · ČT24, Seznam Zprávy and 2 more".
