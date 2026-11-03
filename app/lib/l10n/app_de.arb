@@ -141,6 +141,7 @@
   "storyOutletNames": "{first}, {second} und {count} weitere",
   "storyHeadlineByAi": "Überschrift von KI",
   "storyOutletsSpoken": "{count, plural, =1{1 Medium} other{{count} Medien}}",
+  "tickCountries": "{count, plural, =1{1 Land} other{{count} Länder}}",
   "readOfficialDecisionOn": "Offizielle Entscheidung auf {site} lesen",
   "imageCredit": "Bild: {site}",
   "share": "Teilen",

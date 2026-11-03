@@ -141,6 +141,7 @@
   "storyOutletNames": "{first}, {second} y {count} más",
   "storyHeadlineByAi": "Titular de la IA",
   "storyOutletsSpoken": "{count, plural, =1{1 medio} other{{count} medios}}",
+  "tickCountries": "{count, plural, =1{1 país} other{{count} países}}",
   "readOfficialDecisionOn": "Leer la decisión oficial en {site}",
   "imageCredit": "Imagen: {site}",
   "share": "Compartir",

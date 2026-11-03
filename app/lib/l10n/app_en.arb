@@ -634,6 +634,16 @@
       }
     }
   },
+  "tickCountries": "{count, plural, =1{1 country} other{{count} countries}}",
+  "@tickCountries": {
+    "description": "A tick card's first line after \"World ·\": how many countries' outlets carry the event, the world's own outlets counted as one (#230).",
+    "placeholders": {
+      "count": {
+        "type": "int",
+        "example": "5"
+      }
+    }
+  },
   "readOfficialDecisionOn": "Read the official decision on {site}",
   "@readOfficialDecisionOn": {
     "description": "What VoiceOver says for that card.",

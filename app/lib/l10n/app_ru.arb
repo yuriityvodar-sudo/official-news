@@ -141,6 +141,7 @@
   "storyOutletNames": "{first}, {second} и ещё {count}",
   "storyHeadlineByAi": "Заголовок от ИИ",
   "storyOutletsSpoken": "{count, plural, other{{count} СМИ}}",
+  "tickCountries": "{count, plural, one{{count} страна} few{{count} страны} many{{count} стран} other{{count} страны}}",
   "readOfficialDecisionOn": "Читать официальное решение на {site}",
   "imageCredit": "Изображение: {site}",
   "share": "Поделиться",

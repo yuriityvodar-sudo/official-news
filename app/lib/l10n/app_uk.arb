@@ -141,6 +141,7 @@
   "storyOutletNames": "{first}, {second} та ще {count}",
   "storyHeadlineByAi": "Заголовок від ШІ",
   "storyOutletsSpoken": "{count, plural, other{{count} ЗМІ}}",
+  "tickCountries": "{count, plural, one{{count} країна} few{{count} країни} many{{count} країн} other{{count} країни}}",
   "readOfficialDecisionOn": "Читати офіційне рішення на {site}",
   "imageCredit": "Зображення: {site}",
   "share": "Поширити",

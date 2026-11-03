@@ -21,7 +21,6 @@ import 'feed_look_c.dart';
 import 'feed_look_news.dart';
 import 'feed_look_now.dart';
 import 'feed_topic_tags.dart';
-import 'tick_capsule.dart';
 
 export '../../core/feed_design.dart';
 
@@ -122,20 +121,19 @@ abstract class FeedLook {
 
   /// The Top stories block (#164, Yurii 26 Oct), above the list: its
   /// heading ([topStoriesHeading]), then its 3 decisions in the look's own
-  /// rows ([articles]). With the reader's country's stories (#230, the
-  /// aggregator), two stories ([storyRows]), then a decision, and again
-  /// (Roman, 1 Nov: variant B of `handoff/stories-app.html`). With the
-  /// world's ticks (#230 step 4), two, one and two of them open those
-  /// groups ([tickRows]; Roman, 3 Nov: variant 1 of
-  /// `handoff/tick-strip.html`). One sliver; it scrolls with the feed.
+  /// rows ([articles]). With the media's news (#230, the aggregator: the
+  /// reader's country's stories and the world's ticks, one kind of card),
+  /// two of them before each decision and the rest after the last (Roman,
+  /// 1 Nov: variant B of `handoff/stories-app.html`; 3 Nov: «пусть будет
+  /// просто в ленте как часть ленты»), a world's and a country's in turn
+  /// ([TopStories.media]). One sliver; it scrolls with the feed.
   Widget topStories(BuildContext context, TopStories block) {
     final heading = SliverToBoxAdapter(
       child: topStoriesHeading(context, block),
     );
     const end = SliverToBoxAdapter(child: SizedBox(height: 16));
-    final stories = showsStories ? block.stories.length : 0;
-    final ticks = showsStories ? block.ticks.length : 0;
-    if (stories == 0 && ticks == 0) {
+    final media = showsStories ? block.media : const <MediaNews>[];
+    if (media.isEmpty) {
       return SliverMainAxisGroup(
         slivers: [heading, articles(context, block.list), end],
       );
@@ -145,26 +143,16 @@ abstract class FeedLook {
     // Where each row stands in the block, for the rows arriving in order.
     var row = 0;
     var from = 0;
-    var tickFrom = 0;
     for (var d = 0; d <= decisions; d++) {
-      final tickTo = d == decisions
-          ? ticks
-          : math.min(ticks, tickFrom + (d.isEven ? 2 : 1));
-      if (tickTo > tickFrom) {
-        slivers.add(
-          tickRows(context, block, tickFrom, tickTo, row: row, top: row == 0),
-        );
-        row += tickTo - tickFrom;
-      }
-      tickFrom = tickTo;
-      final to = d == decisions ? stories : math.min(stories, from + 2);
+      final to = d == decisions
+          ? media.length
+          : math.min(media.length, from + 2);
       if (to > from) {
         slivers.add(
-          storyRows(
+          mediaRows(
             context,
             block,
-            from,
-            to,
+            media.sublist(from, to),
             row: row,
             beforeDecision: d < decisions,
             top: row == 0,
@@ -181,16 +169,15 @@ abstract class FeedLook {
     return SliverMainAxisGroup(slivers: slivers);
   }
 
-  /// `block.stories` from [from] to [to] ([storyCard]), the first of them the
-  /// block's [row]th row: they arrive and are held as a decision's row is
-  /// ([FeedList.tile]). Spaced as the News looks' [articles] space their
-  /// rows, 12 apart and 4 under the heading; [beforeDecision]: a decision's
-  /// row follows, which starts 4 lower.
-  Widget storyRows(
+  /// [news] ([mediaCard]), the first of them the block's [row]th row: they
+  /// arrive and are held as a decision's row is ([FeedList.tile]). Spaced as
+  /// the News looks' [articles] space their rows, 12 apart and 4 under the
+  /// heading; [beforeDecision]: a decision's row follows, which starts 4
+  /// lower.
+  Widget mediaRows(
     BuildContext context,
     TopStories block,
-    int from,
-    int to, {
+    List<MediaNews> news, {
     required int row,
     bool beforeDecision = false,
     bool top = false,
@@ -198,58 +185,26 @@ abstract class FeedLook {
     padding: EdgeInsets.fromLTRB(16, top ? 4 : 0, 16, 0),
     sliver: SliverList.list(
       children: [
-        for (var i = from; i < to; i++)
+        for (final (i, one) in news.indexed)
           Padding(
             padding: EdgeInsets.only(
-              bottom: beforeDecision && i == to - 1 ? 8 : 12,
+              bottom: beforeDecision && i == news.length - 1 ? 8 : 12,
             ),
             child: block.list.arrive(
-              row + i - from,
-              PressScale(child: storyCard(context, block, i)),
+              row + i,
+              PressScale(child: mediaCard(context, block, one)),
             ),
           ),
       ],
     ),
   );
 
-  /// `block.ticks` from [from] to [to] ([TickCapsule]), the first of them
-  /// the block's [row]th row ([top]: the block's first), arriving as its
-  /// other rows do. Light inserts: 8 apart, 12 above what follows.
-  Widget tickRows(
-    BuildContext context,
-    TopStories block,
-    int from,
-    int to, {
-    required int row,
-    bool top = false,
-  }) => SliverPadding(
-    padding: EdgeInsets.fromLTRB(16, top ? 4 : 0, 16, 0),
-    sliver: SliverList.list(
-      children: [
-        for (var i = from; i < to; i++)
-          Padding(
-            padding: EdgeInsets.only(bottom: i == to - 1 ? 12 : 8),
-            child: block.list.arrive(
-              row + i - from,
-              PressScale(
-                child: TickCapsule(
-                  tick: block.ticks[i],
-                  onTap: () => block.openTick(i),
-                ),
-              ),
-            ),
-          ),
-      ],
-    ),
-  );
-
-  /// Whether the look shows the reader's country's stories in the Top
-  /// stories block ([storyCard]), and the world's ticks among them; the
-  /// News looks do (#230).
+  /// Whether the look shows the media's news in the Top stories block
+  /// ([mediaCard]); the News looks do (#230).
   bool get showsStories => false;
 
-  /// The card of `block.stories[index]`, for a look that [showsStories].
-  Widget storyCard(BuildContext context, TopStories block, int index) =>
+  /// The card of one of the media's news, for a look that [showsStories].
+  Widget mediaCard(BuildContext context, TopStories block, MediaNews news) =>
       throw UnimplementedError('$runtimeType shows no stories');
 
   /// The Top stories title in the masthead's type, with what picked them
@@ -595,22 +550,32 @@ class TopStories {
 
   static void _noStory(int _) {}
 
-  /// The world's stories as ticks (#230 step 4): two, one and two of them
-  /// before the decisions ([FeedLook.topStories]).
+  /// The world's stories as ticks (#230 step 4), among the media's news
+  /// ([media]).
   final List<Tick> ticks;
 
   /// Opens the AI chat about `ticks[index]`.
   final ValueChanged<int> openTick;
 
-  /// The reader's country's first stories (#230, the aggregator): two of
-  /// them before each decision ([FeedLook.topStories]).
+  /// The reader's country's first stories (#230, the aggregator), among the
+  /// media's news ([media]).
   final List<Story> stories;
 
   /// Their country, "CZ", which their cards name first.
   final String? country;
 
-  /// Opens `stories[index]`.
+  /// Opens the AI chat about `stories[index]`.
   final ValueChanged<int> openStory;
+
+  /// The media's news in the block's order ([FeedLook.topStories]): a
+  /// world's tick and a story of the reader's country in turn, the world's
+  /// first, while either has more.
+  List<MediaNews> get media => [
+    for (var i = 0; i < math.max(ticks.length, stories.length); i++) ...[
+      if (i < ticks.length) MediaNews.tick(i),
+      if (i < stories.length) MediaNews.story(i),
+    ],
+  ];
 
   /// "Top stories", in the reader's language.
   final String title;
@@ -620,6 +585,17 @@ class TopStories {
 
   /// Its decisions and what a row does, as in the list.
   final FeedList list;
+}
+
+/// One of the media's news in the Top stories block (#230): a world's tick or
+/// a story of the reader's country's outlets, by its place in
+/// [TopStories.ticks] or [TopStories.stories].
+class MediaNews {
+  const MediaNews.tick(this.index) : isTick = true;
+  const MediaNews.story(this.index) : isTick = false;
+
+  final bool isTick;
+  final int index;
 }
 
 /// What the bottom of the feed shows for [FeedLook.feedEnd].

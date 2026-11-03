@@ -341,15 +341,33 @@ class _FeedScreenState extends State<FeedScreen> {
     );
   }
 
-  /// A tick's AI chat (#230 step 4), opened as a decision's "Discuss with
-  /// AI" opens it; where the chat is not open yet (Android, a build before
-  /// its release), the page of its outlets' headlines instead.
-  void _openTick(Tick tick) {
+  /// A story's AI chat (#230; Roman, 3 Nov: a story's card opens the chat, as
+  /// a tick's), opened as a decision's "Discuss with AI" opens it, behind its
+  /// paywall; where the chat is not open yet (Android, a build before its
+  /// release), its page of its outlets' headlines instead.
+  void _openStoryChat(Story story, {required String country}) {
+    if (!ChatScreen.available) {
+      _openStory(story, country: country);
+      return;
+    }
     Haptics.light();
+    final l10n = AppLocalizations.of(context);
+    final lang = _feed.language.code;
+    unawaited(
+      ChatScreen.open(
+        context,
+        story.asArticle(l10n, country, lang: lang == 'en' ? null : lang),
+      ),
+    );
+  }
+
+  /// A tick's AI chat (#230 step 4), as a story's ([_openStoryChat]).
+  void _openTick(Tick tick) {
     if (!ChatScreen.available) {
       _openStory(tick.asStory(), country: 'WW');
       return;
     }
+    Haptics.light();
     final l10n = AppLocalizations.of(context);
     final lang = _feed.language.code;
     unawaited(
@@ -647,7 +665,7 @@ class _FeedScreenState extends State<FeedScreen> {
             ),
             stories: stories,
             country: forYou,
-            openStory: (i) => _openStory(stories[i], country: forYou!),
+            openStory: (i) => _openStoryChat(stories[i], country: forYou!),
             ticks: ticks,
             openTick: (i) => _openTick(ticks[i]),
           ),
