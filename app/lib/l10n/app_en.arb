@@ -129,24 +129,6 @@
       }
     }
   },
-  "minutesShort": "{minutes}m",
-  "@minutesShort": {
-    "description": "A tick's time before its headline in the feed (#230), shortest: 1 to 59 minutes ago, without \"ago\".",
-    "placeholders": {
-      "minutes": {
-        "type": "int"
-      }
-    }
-  },
-  "hoursShort": "{hours}h",
-  "@hoursShort": {
-    "description": "A tick's time before its headline in the feed (#230), shortest: hours ago, without \"ago\".",
-    "placeholders": {
-      "hours": {
-        "type": "int"
-      }
-    }
-  },
 
   "filterTopicChip": "Topic: {name}",
   "@filterTopicChip": {

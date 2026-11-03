@@ -139,14 +139,14 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('a tick: the time first, its headline, the AI\'s mark, and '
-      'nothing else: no outlets, no caption', (tester) async {
+  testWidgets('a tick: its headline and the AI\'s mark, nothing else: no '
+      'time, no outlets, no caption', (tester) async {
     await pumpFeed(tester, ticks: 1);
     final capsule = find.byType(TickCapsule);
-    final line = tester.widget<Text>(
-      find.descendant(of: capsule, matching: find.byType(Text)).first,
+    final texts = tester.widgetList<Text>(
+      find.descendant(of: capsule, matching: find.byType(Text)),
     );
-    expect(line.textSpan!.toPlainText(), matches(RegExp(r'^\d+[mh]  Tick 0$')));
+    expect([for (final t in texts) t.data], ['Tick 0']);
     expect(
       find.descendant(
         of: capsule,
@@ -154,11 +154,15 @@ void main() {
       ),
       findsOneWidget,
     );
-    expect(
-      find.descendant(of: capsule, matching: find.textContaining('ABC News')),
-      findsNothing,
-    );
     expect(tester.getSize(capsule).height, TickCapsule.height);
+    expect(
+      tester.getSemantics(capsule),
+      matchesSemantics(
+        label: 'Tick 0. Discuss with AI',
+        isButton: true,
+        hasTapAction: true,
+      ),
+    );
   });
 
   testWidgets('where the chat is not open yet, a tick opens the page of its '

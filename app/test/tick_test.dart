@@ -3,7 +3,6 @@ import 'package:official_news/core/article.dart';
 import 'package:official_news/core/feed_language.dart';
 import 'package:official_news/core/tick.dart';
 import 'package:official_news/features/chat/chat_questions.dart';
-import 'package:official_news/features/feed/tick_capsule.dart';
 
 import 'test_app.dart';
 
@@ -95,16 +94,5 @@ void main() {
         'BBC World: headline 1',
       ]);
     });
-  });
-
-  test('a tick\'s time, short, as it stands before its headline', () {
-    final now = DateTime.utc(2026, 11, 3, 12);
-    String at(Duration ago, FeedLanguage lang) =>
-        tickTime(now.subtract(ago), l10nFor(lang), now: now);
-    expect(at(const Duration(minutes: 11), FeedLanguage.en), '11m');
-    expect(at(const Duration(hours: 2), FeedLanguage.en), '2h');
-    expect(at(const Duration(minutes: 11), FeedLanguage.ru), '11 мин');
-    expect(at(const Duration(hours: 2), FeedLanguage.uk), '2 год');
-    expect(at(const Duration(seconds: 5), FeedLanguage.de), '1 Min.');
   });
 }

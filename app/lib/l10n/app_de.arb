@@ -28,8 +28,6 @@
   "minutesAgo": "vor {minutes} Min.",
   "hoursAgo": "vor {hours} Std.",
   "daysAgo": "{days, plural, one{vor {days} Tag} other{vor {days} Tagen}}",
-  "minutesShort": "{minutes} Min.",
-  "hoursShort": "{hours} Std.",
 
   "filterTopicChip": "Thema: {name}",
   "filterEmpty": "In den letzten 7 Tagen gab es hier keine Entscheidungen.",

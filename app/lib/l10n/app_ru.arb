@@ -28,8 +28,6 @@
   "minutesAgo": "{minutes} мин назад",
   "hoursAgo": "{hours} ч назад",
   "daysAgo": "{days, plural, one{{days} день назад} few{{days} дня назад} many{{days} дней назад} other{{days} дня назад}}",
-  "minutesShort": "{minutes} мин",
-  "hoursShort": "{hours} ч",
 
   "filterTopicChip": "Тема: {name}",
   "filterEmpty": "За последние 7 дней здесь нет решений.",

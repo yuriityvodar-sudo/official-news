@@ -28,8 +28,6 @@
   "minutesAgo": "{minutes} хв тому",
   "hoursAgo": "{hours} год тому",
   "daysAgo": "{days, plural, one{{days} день тому} few{{days} дні тому} many{{days} днів тому} other{{days} дня тому}}",
-  "minutesShort": "{minutes} хв",
-  "hoursShort": "{hours} год",
 
   "filterTopicChip": "Тема: {name}",
   "filterEmpty": "За останні 7 днів тут немає рішень.",
