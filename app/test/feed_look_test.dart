@@ -14,6 +14,7 @@ import 'package:official_news/core/feed_store.dart';
 import 'package:official_news/core/filters.dart';
 import 'package:official_news/core/glass.dart';
 import 'package:official_news/core/router.dart';
+import 'package:official_news/core/splash_logo.dart';
 import 'package:official_news/core/theme.dart';
 import 'package:official_news/core/topics.dart';
 import 'package:official_news/features/chat/chat_style.dart';
@@ -594,6 +595,11 @@ void main() {
         expect(
           tester.getCenter(logo).dx,
           lessThan(tester.getTopLeft(find.text('Outer News')).dx),
+        );
+        // Where the splash's N lands at start (#141, Roman, 4 Nov).
+        expect(
+          find.ancestor(of: logo, matching: find.byType(SplashLogoTarget)),
+          findsOneWidget,
         );
         // What the feed shows as pills under the date, not the other looks'
         // menu (#170).
