@@ -30,9 +30,9 @@ import 'feed_touches.dart';
 /// shows as pills of Liquid Glass that stay at the top while the rows pass
 /// under them (For you, the whole world, the topics: [FeedPills]), and every
 /// decision on a white card with a soft shadow of the colour, its picture on
-/// the right. Pulled down to refresh, the title
-/// and the date grow from the left edge as iOS's large title does, and plain
-/// grey words in the gap say what is happening, then how it went
+/// the right. Pulled down to refresh, the masthead stays at the top while
+/// its title and date grow as iOS's large title does, and plain grey words
+/// in the gap under it say what is happening, then how it went
 /// ([_PullHint], Roman's pick 1 of `handoff/refresh-patterns.html`, 27 Oct).
 /// Liquid Glass for the "N new" pill too. A card grows into its article when
 /// opened (#141). Every card alike, as in every look (Yurii, 16 Oct): no
@@ -68,10 +68,14 @@ class NewsLook extends FeedLook {
   @override
   bool get fadesTopEdge => false;
 
-  /// Under the pills and the status bar, iOS's soft edge blurs them
-  /// ([_NewsHeader]).
+  /// Under the status bar, iOS's soft edge blurs them ([_NewsHeader]).
   @override
   bool get drawsUnderStatusBar => true;
+
+  /// The masthead stays at the top while the feed is pulled down
+  /// ([_NewsHeader]).
+  @override
+  bool get refreshUnderMasthead => true;
 
   @override
   Widget refreshIndicator(BuildContext context, FeedPull pull) =>
@@ -161,46 +165,37 @@ class NewsLook extends FeedLook {
   Widget masthead(BuildContext context, FeedMasthead masthead) {
     final style = _NewsStyle.of(context, palette);
     final scaler = MediaQuery.textScalerOf(context);
-    // The title and the date as tall as their letters: the title shrinks
-    // into the bar as the feed scrolls, the date goes, the pills stay.
-    final nameHeight = scaler.scale(32) * 1.08;
-    final titleHeight = 10 + nameHeight + scaler.scale(26) * 1.08 + 12;
     return SliverPersistentHeader(
       pinned: true,
       delegate: _NewsHeader(
-        titleHeight: titleHeight,
-        nameHeight: nameHeight,
+        // The title and the date as tall as their letters.
+        titleHeight: scaler.scale(32) * 1.08 + scaler.scale(26) * 1.08,
         pillsHeight: FeedPills.heightFor(scaler),
         topInset: masthead.topInset,
         page: style.page,
-        name: _Stretch(
-          pull: masthead.pull,
-          child: Row(
-            children: [
-              const _Logo(),
-              const SizedBox(width: 8),
-              Flexible(
-                child: Text(
-                  masthead.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: style.title,
-                ),
+        pull: masthead.pull,
+        name: Row(
+          children: [
+            const _Logo(),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                masthead.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: style.title,
               ),
-            ],
-          ),
-        ),
-        date: _Stretch(
-          pull: masthead.pull,
-          child: FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
-            child: Text(
-              masthead.date,
-              key: const ValueKey('masthead-date'),
-              maxLines: 1,
-              style: style.title.copyWith(fontSize: 26, color: style.muted),
             ),
+          ],
+        ),
+        date: FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(
+            masthead.date,
+            key: const ValueKey('masthead-date'),
+            maxLines: 1,
+            style: style.title.copyWith(fontSize: 26, color: style.muted),
           ),
         ),
         buttons: masthead.buttonList,
@@ -328,23 +323,27 @@ class NewsLook extends FeedLook {
   }
 }
 
-/// [NewsLook]'s masthead, pinned. As the feed scrolls, it folds in one
-/// motion that eases in and out, exactly with the scroll: the title shrinks
-/// into a bar under the status bar, the date rides up with the page under
-/// the title's foot and fades, and the buttons shrink away (Roman, 4 Nov,
-/// «плавно как в NYT, кнопки тоже уходят», `handoff/header-smooth.html`);
-/// the pills stay at the top under the bar, so the rows pass under the
-/// glass. The tint behind it all is the look's backdrop, one piece with the
-/// status bar's. Right after the fold, while the rows pass under the pills
-/// to the bar, iOS's soft edge ([GlassEdge]) grows in to blur them there
-/// and under the status bar, fading out just below the bar's foot.
+/// [NewsLook]'s masthead, as Apple News has it (Roman, 4 Nov, «просто
+/// обычное стандартный уход header в стиле apple news»,
+/// `handoff/header-news-sticky.html`). The title, the date and the buttons
+/// are the top of the page and go up with it, under iOS's soft edge over the
+/// status bar ([GlassEdge]): the one blur there is, as tall as the safe area
+/// («оставь только одну полосу как шторку блур высотой safearea»). The
+/// pills ride up with the page until they meet that edge, then stay there,
+/// glass over the rows passing under them («чтобы ряд пилюль в нее
+/// упирался»). Pinned and the feed's first sliver, it stays at the top while
+/// the feed is pulled down, the gap opening under it
+/// ([FeedLook.refreshUnderMasthead]); the title and the date grow from their
+/// top left meanwhile, and the pills make room for them («еффект sticky and
+/// scale»). The tint behind it all is the look's backdrop, one piece with the
+/// status bar's.
 class _NewsHeader extends SliverPersistentHeaderDelegate {
   _NewsHeader({
     required this.titleHeight,
-    required this.nameHeight,
     required this.pillsHeight,
     required this.topInset,
     required this.page,
+    required this.pull,
     required this.name,
     required this.date,
     required this.buttons,
@@ -352,16 +351,18 @@ class _NewsHeader extends SliverPersistentHeaderDelegate {
   });
 
   /// As tall as their words at the reader's text size: the title and the
-  /// date, and the title alone.
+  /// date together, and the pills.
   final double titleHeight;
-  final double nameHeight;
   final double pillsHeight;
 
-  /// The status bar's height, above the header, which the edge covers too.
+  /// The status bar's height, above the header, which the edge covers.
   final double topInset;
 
   /// The page's colour, for the edge where iOS's blur is not used.
   final Color page;
+
+  /// The pull to refresh, which the title and the date grow with.
+  final ValueListenable<FeedPull?> pull;
 
   /// The logo and the app's name, today's date, and the buttons beside them.
   final Widget name;
@@ -369,56 +370,31 @@ class _NewsHeader extends SliverPersistentHeaderDelegate {
   final List<Widget> buttons;
   final Widget pills;
 
-  /// The bar the title shrinks into, as tall as the buttons.
-  static const bar = 44.0;
-
-  /// How much of the title is left in the bar.
-  static const _small = 0.62;
-
-  /// Where the title and the buttons start, below the status bar.
+  /// The room above the title, and between the date and the pills.
   static const _top = 10.0;
+  static const _foot = 12.0;
 
-  /// The edge's foot, below the bar, that fades out.
-  static const edgeFade = 16.0;
+  /// The edge's foot, at the bottom of the status bar, that fades out.
+  static const _edgeFade = 16.0;
 
-  /// Where the date is gone, as a part of the fold.
-  static const _dateGone = 0.9;
+  /// How far the page goes under the status bar before all of the edge is
+  /// there: none of it while nothing is under it.
+  static const _edgeIn = 24.0;
 
-  /// 0 to 1 with a soft start and a soft landing, still where the scroll is:
-  /// a straight line started and stopped dead (Roman, 4 Nov: «резкое
-  /// движение, а не плавное»).
-  static double soft(double x) {
+  /// 0 to 1 with a soft start and a soft landing, still where the scroll is.
+  static double _soft(double x) {
     final t = clampDouble(x, 0, 1);
     return t * t * (3 - 2 * t);
   }
 
   @override
-  double get minExtent => bar + pillsHeight;
+  double get minExtent => pillsHeight;
 
   @override
-  double get maxExtent => math.max(titleHeight, bar) + pillsHeight;
+  double get maxExtent => _top + titleHeight + _foot + pillsHeight;
 
   @override
   Widget build(BuildContext context, double shrinkOffset, bool overlaps) {
-    final travel = maxExtent - minExtent;
-    // How far the masthead has folded, with the scroll: the whole of it in
-    // one motion.
-    final folded = soft(travel == 0 ? 1.0 : shrinkOffset / travel);
-    // Small enough for the bar at any text size.
-    final small = math.min(_small, (bar - 6) / nameHeight);
-    final scale = 1 - (1 - small) * folded;
-    // The middles of the title and the buttons, from their places to the bar's.
-    final rise = (bar / 2 - (_top + nameHeight / 2)) * folded;
-    final buttonsRise = (bar / 2 - (_top + 22)) * folded;
-    // The date rides up with the page and goes under the title's foot.
-    final date = travel == 0
-        ? 0.0
-        : 1 - soft(shrinkOffset / (travel * _dateGone));
-    final titleFoot = _top + nameHeight / 2 + rise + nameHeight / 2 * scale;
-    final dateCut = titleFoot - (_top + nameHeight);
-    // Right after the fold the edge grows in, as the rows pass under the
-    // pills to the bar.
-    final under = soft((shrinkOffset - travel) / pillsHeight);
     // All stays in the tree, so the pills keep their place: the row keeps
     // how far it was swiped, and the buttons' glass is never made again.
     // The chosen pill's glow reaches over the rows under the header, not cut
@@ -427,74 +403,56 @@ class _NewsHeader extends SliverPersistentHeaderDelegate {
       fit: StackFit.expand,
       clipBehavior: Clip.none,
       children: [
-        // From the screen's top to just below the bar, behind it.
-        Positioned(
-          left: 0,
-          right: 0,
-          top: -topInset,
-          height: topInset + bar + edgeFade,
-          child: GlassEdge(color: page, fade: edgeFade, shown: under),
-        ),
+        // The page's top, exactly with the scroll; not drawn once it is all
+        // above the screen.
         Positioned(
           left: 16,
           right: 8,
-          top: _top,
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Transform.translate(
-                      offset: Offset(0, rise),
-                      child: Transform.scale(
-                        scale: scale,
-                        alignment: Alignment.centerLeft,
-                        child: name,
-                      ),
-                    ),
-                    ClipRect(
-                      clipper: _Below(dateCut),
-                      child: Transform.translate(
-                        offset: Offset(0, -shrinkOffset),
-                        child: Opacity(opacity: date, child: this.date),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              // Their glass is iOS's, which an alpha would spoil as it did
-              // the edge's: they shrink away instead, each on its own, take
-              // no tap once half gone, and once gone are not drawn.
-              Transform.translate(
-                offset: Offset(0, buttonsRise),
-                child: IgnorePointer(
-                  ignoring: folded > 0.5,
-                  child: Visibility(
-                    visible: folded < 1,
-                    maintainState: true,
-                    maintainAnimation: true,
-                    maintainSize: true,
-                    child: Row(
+          top: _top - shrinkOffset,
+          child: Visibility(
+            visible: shrinkOffset < maxExtent,
+            maintainState: true,
+            maintainAnimation: true,
+            maintainSize: true,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: _Stretch(
+                    pull: pull,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
-                      children: [
-                        for (final button in buttons)
-                          Transform.scale(scale: 1 - folded, child: button),
-                      ],
+                      children: [name, date],
                     ),
                   ),
                 ),
-              ),
-            ],
+                Row(mainAxisSize: MainAxisSize.min, children: buttons),
+              ],
+            ),
           ),
         ),
+        // At the header's foot: under the date at rest, at the top once the
+        // header has shrunk to them.
         Positioned(
           left: 0,
           right: 0,
           bottom: 0,
           height: pillsHeight,
-          child: pills,
+          child: _Stretch(pull: pull, push: titleHeight, child: pills),
+        ),
+        // Over the status bar, and over the masthead as it goes under there,
+        // so it comes last.
+        Positioned(
+          left: 0,
+          right: 0,
+          top: -topInset,
+          height: topInset,
+          child: GlassEdge(
+            color: page,
+            fade: _edgeFade,
+            shown: _soft(shrinkOffset / _edgeIn),
+          ),
         ),
       ],
     );
@@ -503,37 +461,17 @@ class _NewsHeader extends SliverPersistentHeaderDelegate {
   @override
   bool shouldRebuild(_NewsHeader old) =>
       old.titleHeight != titleHeight ||
-      old.nameHeight != nameHeight ||
       old.pillsHeight != pillsHeight ||
       old.topInset != topInset ||
       old.page != page ||
+      old.pull != pull ||
       old.name != name ||
       old.date != date ||
       !listEquals(old.buttons, buttons) ||
       old.pills != pills;
 }
 
-/// What is under the title's foot, where the date rides up to: [top] is
-/// the cut in the child's own points, above it as the masthead folds. At
-/// rest (0) nothing is cut, since a pull stretches the date past its box.
-class _Below extends CustomClipper<Rect> {
-  const _Below(this.top);
-
-  final double top;
-
-  @override
-  Rect getClip(Size size) => Rect.fromLTRB(
-    -size.width,
-    top < 0 ? top : -4 * size.height,
-    2 * size.width,
-    4 * size.height,
-  );
-
-  @override
-  bool shouldReclip(_Below old) => old.top != top;
-}
-
-/// What shows in the gap the pull opens above the masthead: plain grey
+/// What shows in the gap the pull opens under the masthead: plain grey
 /// words in its middle, across the screen too (Roman, 4 Nov), no spinner
 /// or ring. "Pull to refresh", "Release to
 /// refresh" once the pull has gone far enough, "Refreshing the news…"
@@ -681,29 +619,36 @@ class _PullHintState extends State<_PullHint>
   }
 }
 
-/// [child] grows from the middle of its left edge while the feed is pulled
-/// down past its top, as iOS's large title does, and springs back with the
-/// feed (Roman, 27 Oct): 9% bigger where the pull refreshes, at most 1.4
-/// times that. Let go there, it shrinks back as the feed settles into the
-/// gap held open while it refreshes, and stays its own size meanwhile. It
-/// reads how far below its place the masthead is drawn as it paints, after
-/// the frame's layout, so it follows the finger in the same frame with
-/// nothing rebuilt; [pull] tells it which part of the pull that is.
+/// [child] grows from its top left while the feed is pulled down past its
+/// top, as iOS's large title does, and springs back with the feed (Roman,
+/// 27 Oct; from its top left since the masthead stays at the top, 4 Nov):
+/// 9% bigger where the pull refreshes, at most 1.4 times that. With [push],
+/// it keeps its size and moves down by what a box [push] tall above it
+/// grows: the pills under the title and the date. Let go at the refresh
+/// point, it shrinks back as the feed settles into the gap held open while
+/// it refreshes, and stays its own size meanwhile. It reads how open the gap
+/// under the masthead is as it paints, after the frame's layout, so it
+/// follows the finger in the same frame with nothing rebuilt; [pull] tells
+/// it which part of the pull that is.
 class _Stretch extends SingleChildRenderObjectWidget {
-  const _Stretch({required this.pull, required super.child});
+  const _Stretch({required this.pull, this.push, required super.child});
 
   final ValueListenable<FeedPull?> pull;
+  final double? push;
 
   @override
-  RenderObject createRenderObject(BuildContext context) => _RenderStretch(pull);
+  RenderObject createRenderObject(BuildContext context) =>
+      _RenderStretch(pull, push);
 
   @override
   void updateRenderObject(BuildContext context, _RenderStretch renderObject) =>
-      renderObject.pull = pull;
+      renderObject
+        ..pull = pull
+        ..push = push;
 }
 
 class _RenderStretch extends RenderProxyBox {
-  _RenderStretch(this._pull);
+  _RenderStretch(this._pull, this._push);
 
   ValueListenable<FeedPull?> _pull;
   set pull(ValueListenable<FeedPull?> value) {
@@ -711,6 +656,13 @@ class _RenderStretch extends RenderProxyBox {
     if (attached) _pull.removeListener(markNeedsPaint);
     _pull = value;
     if (attached) _pull.addListener(markNeedsPaint);
+    markNeedsPaint();
+  }
+
+  double? _push;
+  set push(double? value) {
+    if (value == _push) return;
+    _push = value;
     markNeedsPaint();
   }
 
@@ -730,9 +682,10 @@ class _RenderStretch extends RenderProxyBox {
   static const _perPoint = 0.09 / 100;
   static const _most = 0.09 * 1.4;
 
-  /// How far below its place the masthead's sliver is drawn: its outermost
-  /// one, whose place at rest is the top of the feed.
-  double get _below {
+  /// How open the gap under the masthead is: how much shows of the sliver
+  /// after the masthead's, the feed's pull to refresh
+  /// ([FeedLook.refreshUnderMasthead]). Nothing once the feed is scrolled.
+  double get _gap {
     RenderObject? sliver = parent;
     while (sliver != null && sliver is! RenderSliver) {
       sliver = sliver.parent;
@@ -740,34 +693,37 @@ class _RenderStretch extends RenderProxyBox {
     while (sliver?.parent is RenderSliver) {
       sliver = sliver!.parent;
     }
-    if (sliver == null) return 0;
-    final viewport = RenderAbstractViewport.maybeOf(sliver);
-    if (viewport == null) return 0;
-    return MatrixUtils.transformPoint(
-      sliver.getTransformTo(viewport),
-      Offset.zero,
-    ).dy;
+    final viewport = sliver?.parent;
+    if (sliver is! RenderSliver || viewport is! RenderViewport) return 0;
+    return viewport.childAfter(sliver)?.geometry?.paintExtent ?? 0;
   }
 
   /// How much of that is the pull that stretches it: all of it until the
   /// feed refreshes; then none of the gap held open, all of what goes past
   /// the refresh point, and less and less in between, so it never jumps.
   double get _stretch {
-    final below = _below;
+    final gap = _gap;
     final pull = _pull.value;
-    if (below <= 0 || pull == null) return math.max(below, 0);
-    final gap = pull.extent;
+    if (gap <= 0 || pull == null) return math.max(gap, 0);
     final held = switch (pull.mode) {
       RefreshIndicatorMode.inactive || RefreshIndicatorMode.drag => 0.0,
-      _ => gap * (1 - clampDouble((below - gap) / (pull.trigger - gap), 0, 1)),
+      _ =>
+        pull.extent *
+            (1 -
+                clampDouble(
+                  (gap - pull.extent) / (pull.trigger - pull.extent),
+                  0,
+                  1,
+                )),
     };
-    return math.max(0, below - held);
+    return math.max(0, gap - held);
   }
 
   Matrix4 get _transform {
-    final scale = 1 + clampDouble(_stretch * _perPoint, 0, _most);
-    return Matrix4.diagonal3Values(scale, scale, 1)
-      ..setTranslationRaw(0, size.height / 2 * (1 - scale), 0);
+    final grown = clampDouble(_stretch * _perPoint, 0, _most);
+    final push = _push;
+    if (push != null) return Matrix4.translationValues(0, push * grown, 0);
+    return Matrix4.diagonal3Values(1 + grown, 1 + grown, 1);
   }
 
   @override

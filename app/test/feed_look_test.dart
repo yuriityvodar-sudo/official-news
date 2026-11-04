@@ -594,7 +594,11 @@ void main() {
       ) async {
         await pumpFeed(tester, [
           _article('w1', feedSeq: 2),
-          {..._article('w2', feedSeq: 1), 'summary': null, 'shortSummary': null},
+          {
+            ..._article('w2', feedSeq: 1),
+            'summary': null,
+            'shortSummary': null,
+          },
         ], const []);
         final marks = find.byKey(const ValueKey('by-ai'));
         Finder card(String headline) => find
@@ -699,16 +703,19 @@ void main() {
         expect(backdrop.stops, [0, 0.32]);
       });
 
-      testWidgets('pulled down, the title and the date grow from their left '
-          'edge, grey words in the gap say to pull, and no glow rises', (
+      testWidgets('pulled down, the masthead stays at the top and grows from '
+          'its top left, the pills make room, the gap opens under them with '
+          'grey words saying to pull, and no glow rises (Roman, 4 Nov)', (
         tester,
       ) async {
         await pumpFeed(tester, [_article('r0', feedSeq: 1)], const []);
         final title = find.text('Outer News');
+        final pills = find.byType(FeedPills);
+        final row = find.text('Decision r0');
         final rest = tester.getRect(title);
-        final pull = await tester.startGesture(
-          tester.getCenter(find.text('Decision r0')),
-        );
+        final restPills = tester.getRect(pills);
+        final restRow = tester.getTopLeft(row).dy;
+        final pull = await tester.startGesture(tester.getCenter(row));
         await pull.moveBy(const Offset(0, 60));
         await pull.moveBy(const Offset(0, 60));
         await tester.pump();
@@ -722,16 +729,32 @@ void main() {
         final pulled = tester.getRect(title);
         final grown = pulled.width / rest.width;
         expect(grown, greaterThan(1.02));
-        // From the left edge of the masthead's text, 16 points in: the
-        // name, after the seal, moves right only as much as the seal grows.
+        // Sticky: its top where it was. From the top left of the masthead's
+        // text, 16 points in: the name, after the seal, moves right only as
+        // much as the seal grows.
+        expect(pulled.top, moreOrLessEquals(rest.top, epsilon: 0.01));
         expect(
           pulled.left - rest.left,
           moreOrLessEquals((rest.left - 16) * (grown - 1), epsilon: 0.01),
         );
+        // The pills move down by what the title and the date grow.
+        expect(
+          tester.getRect(pills).top - restPills.top,
+          moreOrLessEquals(
+            (32 * 1.08 + 26 * 1.08) * (grown - 1),
+            epsilon: 0.01,
+          ),
+        );
+        // The gap opens under them: the rows come down, the words between.
+        final words = tester.getCenter(find.text('Pull to refresh')).dy;
+        expect(tester.getTopLeft(row).dy, greaterThan(restRow + 40));
+        expect(words, greaterThan(tester.getRect(pills).bottom));
+        expect(words, lessThan(tester.getTopLeft(row).dy));
         await pull.up();
         await tester.pumpAndSettle();
         // Sprung back with the feed.
         expect(tester.getRect(title), rest);
+        expect(tester.getRect(pills), restPills);
         expect(find.text('Pull to refresh'), findsNothing);
       });
 
@@ -815,11 +838,15 @@ void main() {
         expect(find.text('Decision n1'), findsOneWidget);
 
         // Held about a second, then gone with the gap; the title is its own
-        // size again while the gap stays open.
+        // size again, where it was, while the gap under the pills stays open.
         await tester.pump(const Duration(milliseconds: 600));
         expect(find.text('2 new decisions'), findsOneWidget);
         expect(tester.getRect(title).width, moreOrLessEquals(rest.width));
-        expect(tester.getRect(title).top, greaterThan(rest.top + 40));
+        expect(tester.getRect(title).top, moreOrLessEquals(rest.top));
+        expect(
+          tester.getCenter(find.text('2 new decisions')).dy,
+          greaterThan(tester.getRect(find.byType(FeedPills)).bottom),
+        );
         await tester.pump(const Duration(seconds: 1));
         await tester.pumpAndSettle();
         expect(find.text('2 new decisions'), findsNothing);
@@ -1129,13 +1156,18 @@ void main() {
         expect(width('pill-world'), 28 + 19 + 6 + text('The whole world'));
       });
 
-      testWidgets('the pills stay at the top as glass while the rows pass '
-          'under them and on under the status bar, where iOS\'s soft edge '
-          'blurs them (Roman, 4 Nov)', (tester) async {
+      testWidgets('the pills ride up with the page and stop under the status '
+          "bar, glass over the rows passing under them; the one blur is iOS's "
+          'soft edge over the status bar, as tall as the safe area '
+          '(Roman, 4 Nov)', (tester) async {
         tester.view.padding = const FakeViewPadding(top: 62 * 3);
         await pumpFeed(tester, rows, const [], height: 700);
         final row = find.byType(FeedPills);
-        expect(tester.getTopLeft(row).dy, greaterThan(60 + 62));
+        // Under the title and the date at rest.
+        expect(
+          tester.getTopLeft(row).dy,
+          moreOrLessEquals(62 + 10 + 32 * 1.08 + 26 * 1.08 + 12, epsilon: 1e-6),
+        );
         double edge() => tester.widget<GlassEdge>(find.byType(GlassEdge)).shown;
         // Nothing under it yet: no edge.
         expect(edge(), 0);
@@ -1148,39 +1180,35 @@ void main() {
           ),
           findsNothing,
         );
-        // Right after the masthead's fold it grows in, with no still stretch
-        // between: half there once the rows are half way under the pills.
+        // It grows in as the page goes under the status bar: half of it 12
+        // points in.
         final scroll = tester
             .widget<CustomScrollView>(find.byType(CustomScrollView))
             .controller!;
-        const travel = 10 + 32 * 1.08 + 26 * 1.08 + 12 - 44;
-        final pillsHeight = FeedPills.heightFor(TextScaler.noScaling);
-        scroll.jumpTo(travel);
-        await tester.pump();
-        expect(edge(), moreOrLessEquals(0, epsilon: 1e-9));
-        scroll.jumpTo(travel + pillsHeight / 2);
+        scroll.jumpTo(12);
         await tester.pump();
         expect(edge(), moreOrLessEquals(0.5, epsilon: 0.001));
         scroll.jumpTo(0);
         await tester.pumpAndSettle();
         await tester.drag(find.text('Decision r3'), const Offset(0, -500));
         await tester.pumpAndSettle();
-        // Pinned under the title's bar, rows scrolled under it.
-        expect(tester.getTopLeft(row).dy, 62 + 44);
+        // Stopped against the status bar, rows scrolled under them.
+        expect(tester.getTopLeft(row).dy, 62);
         expect(find.text('For you'), findsOneWidget);
         expect(
           find.descendant(of: row, matching: find.byType(BackdropFilter)),
           findsWidgets,
         );
         expect(find.byType(ScrollEdgeFade), findsNothing);
-        // The edge from the screen's top to just below the title's bar,
-        // over rows the list no longer cuts at the safe area, lighter and
-        // lower than first built (Roman, 4 Nov): the pills keep their glass.
+        // One blur only, from the screen's top to the safe area's foot, over
+        // rows the list no longer cuts there («оставь только одну полосу как
+        // шторку блур высотой safearea»).
+        expect(find.byType(GlassEdge), findsOneWidget);
         expect(edge(), 1);
         final glass = tester.getRect(find.byType(GlassEdge));
-        expect(glass.top, 0);
-        expect(glass.bottom, tester.getTopLeft(row).dy + 16);
-        expect(tester.widget<GlassEdge>(find.byType(GlassEdge)).strength, 0.45);
+        expect((glass.top, glass.bottom), (0, 62));
+        final soft = tester.widget<GlassEdge>(find.byType(GlassEdge));
+        expect((soft.fade, soft.strength), (16, 0.45));
         expect(
           tester
               .widget<CustomScrollView>(find.byType(CustomScrollView))
@@ -1251,107 +1279,69 @@ void main() {
         expect(tester.getRect(pill).right, lessThanOrEqualTo(393));
       });
 
-      testWidgets('scrolled, the masthead folds in one soft motion: the title '
-          'shrinks into a bar, the date rides up under it, and the buttons '
-          'shrink away (Roman, 4 Nov)', (tester) async {
+      testWidgets('scrolled, the title, the date and the buttons go up with '
+          'the page, exactly with it, and the pills stop at the top '
+          '(Roman, 4 Nov: as Apple News)', (tester) async {
         await pumpFeed(tester, rows, const [], height: 700);
         await tester.pumpAndSettle();
         final title = find.text('Outer News');
         final date = find.byKey(const ValueKey('masthead-date'));
         final settings = find.byType(NowSettingsButton);
-        final rest = tester.getRect(title);
-        final restSettings = tester.getRect(settings);
-        double dateShown() => tester
-            .widget<Opacity>(
-              find.ancestor(of: date, matching: find.byType(Opacity)).first,
-            )
-            .opacity;
-        expect(dateShown(), 1);
+        final pills = find.byType(FeedPills);
+        final rest = {
+          for (final f in [title, date, settings]) f: tester.getRect(f),
+        };
+        final restPills = tester.getTopLeft(pills).dy;
         final scroll = tester
             .widget<CustomScrollView>(find.byType(CustomScrollView))
             .controller!;
-        // The title and the date, 84.64 points, into a bar of 44.
-        const travel = 10 + 32 * 1.08 + 26 * 1.08 + 12 - 44;
         Future<void> scrollTo(double offset) async {
           scroll.jumpTo(offset);
           await tester.pump();
         }
 
-        // Eased at both ends, never a straight line that starts and stops
-        // dead (Roman, 4 Nov: «резкое движение, а не плавное»).
-        double soft(double x) {
-          final t = x.clamp(0.0, 1.0);
-          return t * t * (3 - 2 * t);
-        }
+        bool buttonsDrawn() => tester
+            .widget<Visibility>(
+              find
+                  .ancestor(of: settings, matching: find.byType(Visibility))
+                  .first,
+            )
+            .visible;
 
-        // A quarter of the way: everything has only begun to move.
-        await scrollTo(travel / 4);
-        final quarter = soft(0.25);
-        expect(
-          tester.getRect(title).width,
-          moreOrLessEquals(rest.width * (1 - 0.38 * quarter), epsilon: 0.5),
-        );
-        expect(
-          dateShown(),
-          moreOrLessEquals(1 - soft(0.25 / 0.9), epsilon: 0.01),
-        );
-        expect(
-          tester.getRect(settings).width,
-          moreOrLessEquals(restSettings.width * (1 - quarter), epsilon: 0.01),
-        );
-        // Halfway: half folded, the buttons half their size, around their
-        // middles, the date mostly gone.
-        await scrollTo(travel / 2);
-        expect(
-          tester.getRect(title).width,
-          moreOrLessEquals(rest.width * (1 - 0.38 / 2), epsilon: 0.5),
-        );
-        expect(
-          dateShown(),
-          moreOrLessEquals(1 - soft(0.5 / 0.9), epsilon: 0.01),
-        );
-        expect(
-          tester.getRect(settings).width,
-          moreOrLessEquals(restSettings.width / 2, epsilon: 0.01),
-        );
-        expect(
-          tester.getCenter(settings).dx,
-          moreOrLessEquals(restSettings.center.dx, epsilon: 0.01),
-        );
-        // The date is gone before the fold ends.
-        await scrollTo(travel * 0.9);
-        expect(dateShown(), 0);
-        // All the way: the title in the middle of the bar, the buttons gone
-        // and not drawn, the pills under the bar.
+        for (final y in [10.0, 40.0, 80.0]) {
+          await scrollTo(y);
+          // No fold, no fade: each where the page has taken it, its own size.
+          for (final MapEntry(key: found, value: was) in rest.entries) {
+            final now = tester.getRect(found);
+            for (final (a, b) in [
+              (now.left, was.left),
+              (now.top, was.top - y),
+              (now.width, was.width),
+              (now.height, was.height),
+            ]) {
+              expect(a, moreOrLessEquals(b, epsilon: 1e-6));
+            }
+          }
+          expect(
+            tester.getTopLeft(pills).dy,
+            moreOrLessEquals(restPills - y, epsilon: 1e-6),
+          );
+          expect(buttonsDrawn(), isTrue);
+        }
+        // The pills stop at the top; above the screen, the rest is not drawn.
         await scrollTo(300);
-        expect(
-          tester.getRect(title).width,
-          moreOrLessEquals(rest.width * 0.62, epsilon: 0.5),
-        );
-        expect(tester.getCenter(title).dy, moreOrLessEquals(22, epsilon: 0.5));
-        // Shrunk towards its left edge, the logo's, 16 points in.
-        expect(
-          tester.getRect(title).left,
-          moreOrLessEquals(16 + (rest.left - 16) * 0.62, epsilon: 0.01),
-        );
-        expect(
-          tester
-              .widget<Visibility>(
-                find
-                    .ancestor(of: settings, matching: find.byType(Visibility))
-                    .first,
-              )
-              .visible,
-          isFalse,
-        );
-        expect(tester.getTopLeft(find.byType(FeedPills)).dy, 44);
-        // And back: the buttons where they were, as large.
+        expect(tester.getTopLeft(pills).dy, 0);
+        expect(buttonsDrawn(), isFalse);
+        // And back: all where it was.
         await scrollTo(0);
-        expect(tester.getRect(settings), restSettings);
+        for (final MapEntry(key: found, value: was) in rest.entries) {
+          expect(tester.getRect(found), was);
+        }
+        expect(buttonsDrawn(), isTrue);
       });
 
       testWidgets('swiped sideways, the pills stay where they are as the '
-          'title shrinks into its bar and back: the same row, not a new one', (
+          'masthead goes up and comes back: the same row, not a new one', (
         tester,
       ) async {
         await pumpFeed(tester, rows, const [], height: 700);
@@ -1365,8 +1355,8 @@ void main() {
 
         await tester.drag(find.text('Decision r3'), const Offset(0, -500));
         await tester.pumpAndSettle();
-        // Under the title's bar.
-        expect(tester.getTopLeft(row).dy, 44);
+        // At the top.
+        expect(tester.getTopLeft(row).dy, 0);
         expect(tester.getTopLeft(forYou).dx, swiped);
 
         await tester.drag(find.text('Decision r5'), const Offset(0, 500));
