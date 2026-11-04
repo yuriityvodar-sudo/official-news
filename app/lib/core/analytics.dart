@@ -5,6 +5,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
+import 'analytics_consent.dart';
 import 'article.dart';
 import 'config.dart' show appBuild;
 import 'feed_design.dart';
@@ -282,10 +283,14 @@ const _appId = String.fromEnvironment('FIREBASE_APP_ID');
 const _senderId = String.fromEnvironment('FIREBASE_SENDER_ID');
 const _projectId = String.fromEnvironment('FIREBASE_PROJECT_ID');
 
-/// Turns analytics on when the build has the Firebase values; otherwise it stays off.
-/// [language] is the feed's ([FeedController.languageChanges]), so the user
-/// property is the language the app is read in, the phone's on a first launch.
-/// True when Firebase started, so push notifications can start too (#62).
+/// Starts Firebase when the build has its values, and turns analytics on
+/// only while the reader allows it ([analyticsConsent]: asked once, changed
+/// in Settings); otherwise it stays off, and Firebase neither collects nor
+/// keeps anything for it (Info.plist: collection and analytics storage off
+/// until then). [language] is the feed's ([FeedController.languageChanges]),
+/// so the user property is the language the app is read in, the phone's on
+/// a first launch. True when Firebase started, so push notifications can
+/// start too (#62).
 Future<bool> startAnalytics({
   required ValueListenable<FeedLanguage> language,
   ValueListenable<FeedDesign>? design,
@@ -310,21 +315,40 @@ Future<bool> startAnalytics({
   }
   try {
     final ga = FirebaseAnalytics.instance;
-    await ga.setAnalyticsCollectionEnabled(true);
-    await useAnalytics(
-      Analytics(
-        (name, parameters) => name == 'screen_view'
-            ? ga.logScreenView(
-                screenName: parameters['screen_name'] as String,
-                screenClass: parameters['screen_class'] as String,
-              )
-            : ga.logEvent(name: name, parameters: parameters),
-        (name, value) => ga.setUserProperty(name: name, value: value),
-      ),
-      language: language,
-      design: design,
-      weight: weight,
-    );
+    await loadAnalyticsConsent();
+    // As the reader allows it, or not: at start, and whenever they change it.
+    Future<void> follow() async {
+      final allowed = analyticsConsent.value == AnalyticsConsent.granted;
+      await ga.setConsent(
+        analyticsStorageConsentGranted: allowed,
+        adStorageConsentGranted: false,
+        adUserDataConsentGranted: false,
+        adPersonalizationSignalsConsentGranted: false,
+      );
+      await ga.setAnalyticsCollectionEnabled(allowed);
+      if (!allowed) {
+        analytics = Analytics();
+      } else if (!analytics.on) {
+        await useAnalytics(
+          Analytics(
+            (name, parameters) => name == 'screen_view'
+                ? ga.logScreenView(
+                    screenName: parameters['screen_name'] as String,
+                    screenClass: parameters['screen_class'] as String,
+                  )
+                : ga.logEvent(name: name, parameters: parameters),
+            (name, value) => ga.setUserProperty(name: name, value: value),
+          ),
+          language: language,
+          design: design,
+          weight: weight,
+        );
+      }
+    }
+
+    await follow();
+    analyticsConsent.addListener(() => unawaited(follow()));
+    analyticsAvailable.value = true;
   } catch (error) {
     debugPrint('analytics: not fully started: $error');
   }
@@ -349,16 +373,22 @@ Future<void> useAnalytics(
   // A user property, so the team's use can be left out of every report.
   await instance._user('build', appBuild);
   await instance.feedLanguage(language.value);
+  // Kept current while [instance] is the app's: not once the reader has
+  // turned analytics off.
   if (design != null) {
     await instance._user('feed_design', design.value.name);
-    design.addListener(
-      () => unawaited(instance._user('feed_design', design.value.name)),
-    );
+    design.addListener(() {
+      if (analytics == instance) {
+        unawaited(instance._user('feed_design', design.value.name));
+      }
+    });
   }
   if (weight != null) {
     await instance._user('headline_weight', weight.value.name);
-    weight.addListener(
-      () => unawaited(instance._user('headline_weight', weight.value.name)),
-    );
+    weight.addListener(() {
+      if (analytics == instance) {
+        unawaited(instance._user('headline_weight', weight.value.name));
+      }
+    });
   }
 }

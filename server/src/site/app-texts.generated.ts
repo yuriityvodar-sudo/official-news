@@ -264,7 +264,7 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "privacyLoadingPictures": "Article pictures are loaded directly from the official website that published them, so that website receives your IP address when a picture loads. Pictures are saved on your phone after the first view.",
     "privacyLoadingPages": "When you open an official page, it opens in an in-app browser and that website's own privacy policy applies.",
     "privacyAnalyticsHeading": "Analytics",
-    "privacyAnalytics": "To understand how the app is used, for example how many people read which kind of decision, the app sends usage events to Google Analytics for Firebase: screens opened, articles opened and read, links tapped, the chosen language, feed filters and your country for For you, and technical details such as the app version, device model, country and an app instance ID. It does not use the advertising identifier and does not track you across other apps.",
+    "privacyAnalytics": "Only if you allow it when the app asks, it sends usage events to Google Analytics for Firebase, to understand how the app is used, for example how many people read which kind of decision: screens opened, articles opened and read, links tapped, the chosen language, feed filters and your country for For you, and technical details such as the app version, device model, country and an app instance ID. You can turn this off at any time in Settings → Usage statistics. It does not use the advertising identifier and does not track you across other apps.",
     "privacyNotificationsHeading": "Notifications",
     "privacyNotifications": "If you turn on notifications, your phone gets a notification token from Apple and Google Firebase so we can send news alerts. You can turn notifications off at any time in your phone settings.",
     "privacyAiHeading": "AI",
@@ -406,7 +406,7 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "privacyLoadingPictures": "Зображення до статей завантажуються безпосередньо з офіційного сайту, який їх опублікував, тож цей сайт отримує вашу IP-адресу під час завантаження зображення. Після першого перегляду зображення зберігаються на вашому телефоні.",
     "privacyLoadingPages": "Офіційна сторінка відкривається у вбудованому браузері, і на ній діє власна політика конфіденційності цього сайту.",
     "privacyAnalyticsHeading": "Аналітика",
-    "privacyAnalytics": "Щоб розуміти, як користуються застосунком (наприклад, скільки людей читають рішення того чи іншого типу), застосунок надсилає події використання до Google Analytics for Firebase: відкриті екрани, відкриті й прочитані статті, натиснуті посилання, вибрану мову, фільтри стрічки й вашу країну для «Для вас», а також технічні дані, як-от версію застосунку, модель пристрою, країну та ідентифікатор екземпляра застосунку. Застосунок не використовує рекламний ідентифікатор і не відстежує вас в інших застосунках.",
+    "privacyAnalytics": "Лише якщо ви дозволите це, коли застосунок запитає, він надсилає події використання до Google Analytics for Firebase, щоб розуміти, як ним користуються (наприклад, скільки людей читають рішення того чи іншого типу): відкриті екрани, відкриті й прочитані статті, натиснуті посилання, вибрану мову, фільтри стрічки й вашу країну для «Для вас», а також технічні дані, як-от версію застосунку, модель пристрою, країну та ідентифікатор екземпляра застосунку. Вимкнути це можна будь-коли в Параметрах → «Статистика використання». Застосунок не використовує рекламний ідентифікатор і не відстежує вас в інших застосунках.",
     "privacyNotificationsHeading": "Сповіщення",
     "privacyNotifications": "Якщо ви ввімкнете сповіщення, ваш телефон отримає токен сповіщень від Apple і Google Firebase, щоб ми могли надсилати сповіщення про новини. Сповіщення можна будь-коли вимкнути в параметрах телефону.",
     "privacyAiHeading": "ШІ",
@@ -548,7 +548,7 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "privacyLoadingPictures": "Изображения к статьям загружаются напрямую с официального сайта, который их опубликовал, поэтому этот сайт получает ваш IP-адрес, когда загружается изображение. После первого просмотра изображения сохраняются на вашем телефоне.",
     "privacyLoadingPages": "Официальные страницы открываются во встроенном браузере, и на них действует собственная политика конфиденциальности соответствующего сайта.",
     "privacyAnalyticsHeading": "Аналитика",
-    "privacyAnalytics": "Чтобы понимать, как используется приложение (например, сколько людей читают решения того или иного типа), приложение отправляет в Google Analytics for Firebase данные об использовании: открытые экраны, открытые и прочитанные статьи, нажатые ссылки, выбранный язык, фильтры ленты и вашу страну для «Для вас», а также технические данные, такие как версия приложения, модель устройства, страна и идентификатор экземпляра приложения. Приложение не использует рекламный идентификатор и не отслеживает ваши действия в других приложениях.",
+    "privacyAnalytics": "Только если вы разрешите это, когда приложение спросит, оно отправляет в Google Analytics for Firebase данные об использовании, чтобы понимать, как им пользуются (например, сколько людей читают решения того или иного типа): открытые экраны, открытые и прочитанные статьи, нажатые ссылки, выбранный язык, фильтры ленты и вашу страну для «Для вас», а также технические данные, такие как версия приложения, модель устройства, страна и идентификатор экземпляра приложения. Выключить это можно в любой момент в Настройках → «Статистика использования». Приложение не использует рекламный идентификатор и не отслеживает ваши действия в других приложениях.",
     "privacyNotificationsHeading": "Уведомления",
     "privacyNotifications": "Если вы включите уведомления, ваш телефон получит токен уведомлений от Apple и Google Firebase, чтобы мы могли присылать уведомления о новостях. Уведомления можно в любой момент отключить в настройках телефона.",
     "privacyAiHeading": "ИИ",
@@ -690,7 +690,7 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "privacyLoadingPictures": "Las imágenes de los artículos se cargan directamente desde el sitio web oficial que las publicó, así que ese sitio recibe tu dirección IP cuando se carga una imagen. Después de verlas por primera vez, las imágenes se guardan en tu teléfono.",
     "privacyLoadingPages": "Cuando abres una página oficial, se abre en un navegador dentro de la app y se aplica la política de privacidad de ese sitio web.",
     "privacyAnalyticsHeading": "Analítica",
-    "privacyAnalytics": "Para entender cómo se usa (por ejemplo, cuántas personas leen cada tipo de decisión), la app envía eventos de uso a Google Analytics for Firebase: pantallas abiertas, artículos abiertos y leídos, enlaces tocados, el idioma y los filtros elegidos, tu país para «Para ti», y datos técnicos como la versión de la app, el modelo del dispositivo, el país y un ID de instancia de la app. No usa el identificador de publicidad ni te rastrea en otras apps.",
+    "privacyAnalytics": "Solo si lo permites cuando la app te lo pregunte, envía eventos de uso a Google Analytics for Firebase para entender cómo se usa (por ejemplo, cuántas personas leen cada tipo de decisión): pantallas abiertas, artículos abiertos y leídos, enlaces tocados, el idioma y los filtros elegidos, tu país para «Para ti», y datos técnicos como la versión de la app, el modelo del dispositivo, el país y un ID de instancia de la app. Puedes desactivarlo cuando quieras en Ajustes → «Estadísticas de uso». No usa el identificador de publicidad ni te rastrea en otras apps.",
     "privacyNotificationsHeading": "Notificaciones",
     "privacyNotifications": "Si activas las notificaciones, tu teléfono recibe un token de notificaciones de Apple y Google Firebase para que podamos enviarte alertas de noticias. Puedes desactivar las notificaciones en cualquier momento en los ajustes de tu teléfono.",
     "privacyAiHeading": "IA",
@@ -832,7 +832,7 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "privacyLoadingPictures": "Bilder zu Artikeln werden direkt von der offiziellen Website geladen, die sie veröffentlicht hat; diese Website erhält daher Ihre IP-Adresse, wenn ein Bild geladen wird. Nach dem ersten Ansehen werden Bilder auf Ihrem Gerät gespeichert.",
     "privacyLoadingPages": "Wenn Sie eine offizielle Seite öffnen, wird sie in einem In-App-Browser geöffnet, und es gilt die Datenschutzerklärung dieser Website.",
     "privacyAnalyticsHeading": "Analyse",
-    "privacyAnalytics": "Um zu verstehen, wie die App genutzt wird, etwa wie viele Menschen welche Art von Entscheidung lesen, sendet die App Nutzungsereignisse an Google Analytics for Firebase: aufgerufene Bildschirme, geöffnete und gelesene Artikel, angetippte Links, die gewählte Sprache, die Feed-Filter, Ihr Land für „Für Sie“ sowie technische Angaben wie App-Version, Gerätemodell, Land und eine App-Instanz-ID. Die App verwendet die Werbe-ID nicht und verfolgt Sie nicht über andere Apps hinweg.",
+    "privacyAnalytics": "Nur wenn Sie es erlauben, wenn die App danach fragt, sendet sie Nutzungsereignisse an Google Analytics for Firebase, um zu verstehen, wie sie genutzt wird, etwa wie viele Menschen welche Art von Entscheidung lesen: aufgerufene Bildschirme, geöffnete und gelesene Artikel, angetippte Links, die gewählte Sprache, die Feed-Filter, Ihr Land für „Für Sie“ sowie technische Angaben wie App-Version, Gerätemodell, Land und eine App-Instanz-ID. Sie können das jederzeit in den Einstellungen unter „Nutzungsstatistik“ ausschalten. Die App verwendet die Werbe-ID nicht und verfolgt Sie nicht über andere Apps hinweg.",
     "privacyNotificationsHeading": "Mitteilungen",
     "privacyNotifications": "Wenn Sie Mitteilungen aktivieren, erhält Ihr Gerät ein Mitteilungs-Token von Apple und Google Firebase, damit wir Ihnen Hinweise auf Nachrichten senden können. Sie können Mitteilungen jederzeit in den Einstellungen Ihres Geräts deaktivieren.",
     "privacyAiHeading": "KI",
@@ -876,7 +876,7 @@ export const PUBLISHER_DETAILS = {
 export const SUPPORT_EMAIL = "support@outernews.app";
 
 /** When the privacy policy and the terms last changed (`policyUpdated` in info_pages.dart). */
-export const POLICY_UPDATED = "2026-10-29";
+export const POLICY_UPDATED = "2026-11-04";
 
 /** Each language's own name and short label (FeedLanguage in feed_language.dart). */
 export const LANGUAGE_NAMES: Record<SiteLang, { nativeName: string; shortLabel: string }> = {

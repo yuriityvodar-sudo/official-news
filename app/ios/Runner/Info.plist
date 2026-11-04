@@ -76,6 +76,14 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<!-- Analytics only once the reader allows it (L1 of the release audit, 4 Nov):
+	     Firebase collects and keeps nothing for it before the app's question;
+	     the app turns it on with the answer (setAnalyticsCollectionEnabled,
+	     setConsent, kept by Firebase across launches). -->
+	<key>FIREBASE_ANALYTICS_COLLECTION_ENABLED</key>
+	<false/>
+	<key>GOOGLE_ANALYTICS_DEFAULT_ALLOW_ANALYTICS_STORAGE</key>
+	<false/>
 	<!-- Analytics (#60): no advertising ID and no ad personalization, so no tracking prompt. -->
 	<key>GOOGLE_ANALYTICS_ADID_COLLECTION_ENABLED</key>
 	<false/>

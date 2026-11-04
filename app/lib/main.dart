@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import 'core/analytics.dart';
+import 'core/analytics_consent.dart';
 import 'core/push.dart';
 import 'core/router.dart';
 import 'core/subscription.dart';
@@ -74,8 +75,14 @@ class OfficialNewsApp extends StatelessWidget {
           initialRoute: Routes.feed,
           // The splash over the feed at start (#66); the feed loads under it.
           // A notification that started the app ends it (#62).
-          builder: (context, app) =>
-              SplashHost(endOn: push.opened, child: app!),
+          builder: (context, app) => SplashHost(
+            endOn: push.opened,
+            // Usage statistics only if the reader allows them (L1, 4 Nov).
+            onGone: () => unawaited(
+              askAnalyticsConsent(() => appNavigator.currentContext!),
+            ),
+            child: app!,
+          ),
         ),
       ),
     );

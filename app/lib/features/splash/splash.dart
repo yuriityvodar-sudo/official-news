@@ -101,6 +101,7 @@ class SplashHost extends StatefulWidget {
     required this.child,
     this.onStart = true,
     this.endOn,
+    this.onGone,
   });
 
   /// The app: the navigator from `MaterialApp.builder`.
@@ -113,6 +114,10 @@ class SplashHost extends StatefulWidget {
   /// `push.opened`, so a notification that started the app shows its
   /// article at once instead of under the splash.
   final Listenable? endOn;
+
+  /// Told each time the splash has gone, and at once without one at start:
+  /// the app may ask the reader something then (usage statistics).
+  final VoidCallback? onGone;
 
   /// Shows the [splashStyle] splash over the app now (Settings → Play).
   static void play(BuildContext context) =>
@@ -147,8 +152,19 @@ class _SplashHostState extends State<SplashHost> {
     _landed.value = !_flies;
   });
 
+  @override
+  void initState() {
+    super.initState();
+    if (!_showing) {
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => widget.onGone?.call(),
+      );
+    }
+  }
+
   void _done() {
     if (!mounted) return;
+    widget.onGone?.call();
     _cover.value = 0;
     _landed.value = true;
     setState(() => _showing = false);
