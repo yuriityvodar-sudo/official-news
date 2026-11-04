@@ -172,7 +172,7 @@
   "privacyPolicy": "Política de privacidad",
   "termsOfUse": "Términos de uso",
   "contactSupport": "Contacto y soporte",
-  "settingsFooter": "App independiente, sin vínculo con ningún gobierno. La IA escribe los resúmenes a partir de fuentes oficiales y cada artículo enlaza al original.",
+  "settingsFooter": "App independiente, sin vínculo con ningún gobierno. La IA escribe los resúmenes y los titulares marcados con ✦ a partir de fuentes oficiales y de titulares de medios, y cada artículo enlaza al original.",
   "version": "Versión {version}",
   "languageFooter": "Las noticias y la app se muestran en este idioma.",
 

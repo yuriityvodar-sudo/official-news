@@ -587,6 +587,34 @@ void main() {
           ? const Color(0xFF0E7A5E)
           : const Color(0xFFC41230);
 
+      testWidgets('a decision whose summary the AI has written carries ✦ by '
+          'its time, and VoiceOver says so; one still waiting for it shows '
+          'the source\'s title without it (L2 of the release audit)', (
+        tester,
+      ) async {
+        await pumpFeed(tester, [
+          _article('w1', feedSeq: 2),
+          {..._article('w2', feedSeq: 1), 'summary': null, 'shortSummary': null},
+        ], const []);
+        final marks = find.byKey(const ValueKey('by-ai'));
+        Finder card(String headline) => find
+            .ancestor(of: find.text(headline), matching: find.byType(Semantics))
+            .first;
+        expect(
+          find.descendant(of: card('Decision w1'), matching: marks),
+          findsOne,
+        );
+        expect(
+          tester.getSemantics(find.text('Decision w1')).label,
+          endsWith('Headline by AI.'),
+        );
+        expect(
+          find.descendant(of: card('Decision w2'), matching: marks),
+          findsNothing,
+        );
+        expect(tester.takeException(), isNull);
+      });
+
       testWidgets('the logo before the app\'s name, the date, '
           'the filters, and every decision on a white card', (tester) async {
         await pumpFeed(tester, _items, _top);
