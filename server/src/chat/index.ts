@@ -66,7 +66,7 @@ export interface Refusal {
 export interface ChatOptions extends VerifyOptions {
   fetch?: typeof fetch;
   now?: Date;
-  /** The request's `X-Chat-Sandbox-Key`, which Roman's local builds and the team's TestFlight builds send (`sandboxOpen`). */
+  /** The request's `X-Chat-Sandbox-Key`, which Roman's local builds and the team's TestFlight builds send (`teamKey`). */
   sandboxKey?: string | null;
 }
 
@@ -286,17 +286,25 @@ function answerText(events: ReadableStream<Uint8Array>, counted: (usage: Usage) 
 /** Midnight UTC after `now`, when the day's questions come back. */
 const nextDay = (now: Date) => toStoredTime(new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1)));
 
-const SANDBOX_CLOSED = "Not open to test purchases";
+/**
+ * Sandbox questions a day, all subscriptions together, past which a Sandbox
+ * purchase without a team key gets no more answers that day. App Review buys
+ * in the Sandbox with the `store` build, which has no key, so a Sandbox
+ * purchase without one is answered (Roman, 4 Nov: «открыть sandbox для
+ * appreview»). Sandbox purchases cost nothing, and without a key App Review's
+ * cannot be told from anyone else's, so this bounds what they cost: about
+ * $0.20 a day.
+ */
+export const SANDBOX_DAILY_QUESTIONS = 100;
 
 /**
- * Sandbox purchases cost nothing (TestFlight, a build run from a Mac), so only
- * the team's builds get the chat with one: they send a Worker secret as
- * `X-Chat-Sandbox-Key`, Roman's local builds CHAT_SANDBOX_KEY (Roman, 28 Oct)
- * and TestFlight builds CHAT_SANDBOX_KEY_TESTFLIGHT (Roman and Yurii, 29 Oct),
- * compared in constant time. Without the secrets, closed to every Sandbox
- * purchase.
+ * Whether a request comes from one of the team's builds: they send a Worker
+ * secret as `X-Chat-Sandbox-Key`, Roman's local builds CHAT_SANDBOX_KEY
+ * (Roman, 28 Oct) and TestFlight builds CHAT_SANDBOX_KEY_TESTFLIGHT (Roman and
+ * Yurii, 29 Oct), compared in constant time. Their Sandbox questions are not
+ * held to SANDBOX_DAILY_QUESTIONS.
  */
-async function sandboxOpen(env: Env, key: string | null | undefined): Promise<boolean> {
+async function teamKey(env: Env, key: string | null | undefined): Promise<boolean> {
   if (!key) return false;
   const digest = (s: string) => crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
   const given = await digest(key);
@@ -306,22 +314,19 @@ async function sandboxOpen(env: Env, key: string | null | undefined): Promise<bo
   return false;
 }
 
-/** The chat's subscription in a signed transaction, checked, or why not: 402 if it is not one, 403 a Sandbox one without a Sandbox key. */
-async function checkedTransaction(jws: string, env: Env, options: ChatOptions): Promise<AppleTransaction | Refusal> {
-  let t: AppleTransaction;
+/** The chat's subscription in a signed transaction, checked, or why not: 402 if it is not one. */
+async function checkedTransaction(jws: string, options: ChatOptions): Promise<AppleTransaction | Refusal> {
   try {
-    t = await verifyTransaction(jws, options);
+    return await verifyTransaction(jws, options);
   } catch (e) {
     if (!(e instanceof JwsError)) throw e;
     return error(402, "Subscription required");
   }
-  if (t.environment === "Sandbox" && !(await sandboxOpen(env, options.sandboxKey))) return error(403, SANDBOX_CLOSED);
-  return t;
 }
 
 /** The subscription a signed transaction belongs to, kept up to date, or the refusal: 402 unless it is paid now. */
 async function activeSubscription(jws: string, env: Env, options: ChatOptions, now: Date): Promise<Subscription | Refusal> {
-  const t = await checkedTransaction(jws, env, options);
+  const t = await checkedTransaction(jws, options);
   if ("status" in t) return t;
   const subscription = await recordTransaction(env, t, { now });
   return isActive(subscription, now) ? subscription : error(402, "Subscription required");
@@ -329,11 +334,24 @@ async function activeSubscription(jws: string, env: Env, options: ChatOptions, n
 
 const today = (now: Date) => toStoredTime(now).slice(0, 10);
 
+/** The day's Sandbox questions, all subscriptions together. */
+async function sandboxQuestions(env: Env, day: string): Promise<number> {
+  const row = await env.DB.prepare(
+    `SELECT COALESCE(SUM(u.questions), 0) AS n FROM chat_usage u
+     JOIN subscriptions s ON s.original_transaction_id = u.original_transaction_id
+     WHERE u.day = ? AND s.environment = 'Sandbox'`,
+  )
+    .bind(day)
+    .first<{ n: number }>();
+  return row?.n ?? 0;
+}
+
 /**
- * `POST /v1/chat`: the subscription first (402 without an active one, 403 a
- * Sandbox one without a Sandbox key), then the article (404 outside the feed) or
- * the tick (404 when the last world build has none of it), what
- * is left of the limit (429), the key (503). The question's share of the limit
+ * `POST /v1/chat`: the subscription first (402 without an active one), then
+ * the article (404 outside the feed) or the tick (404 when the last world
+ * build has none of it), what is left of the limit (429; for a Sandbox one
+ * without a team key, also once the day's Sandbox questions reach
+ * SANDBOX_DAILY_QUESTIONS), the key (503). The question's share of the limit
  * (`units`) is taken before OpenAI is asked, one question of a subscription at
  * a time (`reserve`, #219), and given back when OpenAI does not answer: an
  * answer the reader leaves still counts, and one OpenAI never gave does not.
@@ -352,6 +370,11 @@ export async function answerChat(body: unknown, env: Env, options: ChatOptions =
   const id = subscription.original_transaction_id;
   const day = today(now);
   const units = unitsFor(subject.chars);
+  const capped =
+    subscription.environment === "Sandbox" &&
+    !(await teamKey(env, options.sandboxKey)) &&
+    (await sandboxQuestions(env, day)) >= SANDBOX_DAILY_QUESTIONS;
+  if (capped) return error(429, "No questions left today", { resetsAt: nextDay(now), units });
   const reserved = await reserve(env, id, day, units, now);
   if (reserved === "none") return error(429, "No questions left today", { resetsAt: nextDay(now), units });
   if (reserved === "busy") return error(503, "The AI agent is not available");
@@ -453,9 +476,9 @@ export async function chatStatus(body: unknown, env: Env, options: ChatOptions =
  * subscription it is for: credited to that subscription's wallet once (a
  * second call changes nothing), so the app can send it until this answers
  * and only then finish the purchase. 400 for anything but a pack of this app,
- * 402 without a subscription's transaction to credit it to, 403 a Sandbox pack
- * or subscription without a Sandbox key, or a pack from another store than the
- * subscription (a free pack never goes into a paid wallet), 429 a second free
+ * 402 without a subscription's transaction to credit it to, 403 a pack from
+ * another store than the subscription (a free pack never goes into a paid
+ * wallet), 429 a second free
  * pack the same day (`creditPack`): the app keeps it unfinished, so StoreKit
  * gives it back at the next start, and it is credited on a later day.
  */
@@ -470,9 +493,7 @@ export async function creditChatPack(body: unknown, env: Env, options: ChatOptio
     if (!(e instanceof JwsError)) throw e;
     return error(400, "Not a pack of this app");
   }
-  // A free pack, too, only with a Sandbox key.
-  if (pack.environment === "Sandbox" && !(await sandboxOpen(env, options.sandboxKey))) return error(403, SANDBOX_CLOSED);
-  const t = await checkedTransaction(b.transaction, env, options);
+  const t = await checkedTransaction(b.transaction, options);
   if ("status" in t) return t;
   // Never a free pack into a paid subscription's wallet, nor the other way.
   if (pack.environment !== t.environment) return error(403, "The pack and the subscription come from different stores");

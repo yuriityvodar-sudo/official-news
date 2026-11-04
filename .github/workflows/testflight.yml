@@ -4,10 +4,11 @@ name: TestFlight
 # which build: `testflight` for the team's phones (the default), or `store` for
 # the build we submit to App Review (#137). The choice marks the build
 # (APP_BUILD), so analytics can leave the team's use out of every report.
-# A `testflight` build also opens the AI chat to free Sandbox purchases, with
-# the key CHAT_SANDBOX_KEY_TESTFLIGHT (#146), so it goes up for internal
-# testing only: App Store Connect never lets it reach external testers or the
-# App Store. Never submit one; submit a `store` build.
+# A `testflight` build also has the key CHAT_SANDBOX_KEY_TESTFLIGHT (#146),
+# which frees its Sandbox purchases in the AI chat from the cap a day that
+# Sandbox purchases without a key (App Review's) share, so it goes up for
+# internal testing only: App Store Connect never lets it reach external
+# testers or the App Store. Never submit one; submit a `store` build.
 # Needs these repository secrets (see docs/setup.md). Yurii creates the API key
 # with his Admin role on Roman's App Store Connect team and adds them himself:
 #   APPLE_TEAM_ID      the RS Elite Pro team ID (10 characters)
@@ -119,8 +120,8 @@ jobs:
       - name: Build the iOS app without signing
         # The live API, not the laptop default (app/lib/core/config.dart), the
         # build's mark (testflight or store), and the Firebase values when
-        # there are any. Only a `testflight` build gets the key that opens the
-        # AI chat to Sandbox purchases, from the GitHub secret
+        # there are any. Only a `testflight` build gets the team's key for
+        # Sandbox purchases in the AI chat, from the GitHub secret
         # CHAT_SANDBOX_KEY_TESTFLIGHT (#146, docs/setup.md). Flutter hands
         # every --dart-define to Xcode in base64 (DART_DEFINES), which GitHub
         # does not know to hide, so that form of the key is masked first
@@ -133,7 +134,7 @@ jobs:
           if [ -n "$CHAT_SANDBOX_KEY" ]; then
             echo "::add-mask::$(printf 'CHAT_SANDBOX_KEY=%s' "$CHAT_SANDBOX_KEY" | base64 | tr -d '\n')"
           elif [ "$APP_BUILD" = testflight ]; then
-            echo "::warning::CHAT_SANDBOX_KEY_TESTFLIGHT is not set, so this build keeps the AI chat closed (docs/setup.md)."
+            echo "::warning::CHAT_SANDBOX_KEY_TESTFLIGHT is not set, so this build's Sandbox purchases share App Review's cap a day in the AI chat (docs/setup.md)."
           fi
           flutter build ios --release --no-codesign --build-number=${{ github.run_number }} --dart-define=API_URL=https://api.outernews.app --dart-define=APP_BUILD="$APP_BUILD" --dart-define=CHAT_SANDBOX_KEY="$CHAT_SANDBOX_KEY" --dart-define=BUILD_NUMBER=${{ github.run_number }} $FIREBASE_DEFINES
 
