@@ -13,6 +13,7 @@ import '../../core/glass.dart';
 import '../../core/motion.dart';
 import '../../core/news_widgets.dart';
 import '../../core/read_mark.dart';
+import '../../core/splash_logo.dart';
 import '../../core/story.dart';
 import '../../core/theme.dart';
 import '../../core/tick.dart';
@@ -720,16 +721,19 @@ class _Logo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ExcludeSemantics(
-    child: Image(
-      key: const ValueKey('masthead-logo'),
-      image: AssetImage(
-        Theme.of(context).brightness == Brightness.dark
-            ? 'assets/logo_n_dark.png'
-            : 'assets/logo_n.png',
-      ),
-      width: 30,
-      height: 30,
+    // Where the splash's N lands at start (#141), shown once it has.
+    child: SplashLogoTarget(child: _image(context)),
+  );
+
+  Widget _image(BuildContext context) => Image(
+    key: const ValueKey('masthead-logo'),
+    image: AssetImage(
+      Theme.of(context).brightness == Brightness.dark
+          ? 'assets/logo_n_dark.png'
+          : 'assets/logo_n.png',
     ),
+    width: 30,
+    height: 30,
   );
 }
 
