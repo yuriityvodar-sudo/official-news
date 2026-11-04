@@ -23,9 +23,9 @@ import firebase_messaging
       .registrar(forPlugin: "official_news/glass")?
       .register(GlassViewFactory(), withId: "official_news/glass")
     // iOS's soft edge at the top of the feed, over the rows (#141).
-    engineBridge.pluginRegistry
-      .registrar(forPlugin: "official_news/edge")?
-      .register(EdgeViewFactory(), withId: "official_news/edge")
+    if let edge = engineBridge.pluginRegistry.registrar(forPlugin: "official_news/edge") {
+      edge.register(EdgeViewFactory(messenger: edge.messenger()), withId: "official_news/edge")
+    }
     // iOS's own pull-down menus for the feed's filter chips (#141).
     if let menus = engineBridge.pluginRegistry.registrar(forPlugin: "official_news/menu") {
       menus.register(MenuViewFactory(messenger: menus.messenger()), withId: "official_news/menu")
@@ -155,8 +155,18 @@ class CircleView: UIView {
 /// a blur of what Flutter has under it, the system's thinnest material at
 /// `strength` of its full effect, fading out over its last `fade` points,
 /// so the rows pass softly under the status bar and the title's bar. The
-/// same material from iOS 15 on.
+/// same material from iOS 15 on. How much of it shows, as the rows come
+/// under it, arrives as `shown` on the channel `official_news/edge_<id>`
+/// (`GlassEdge` in glass.dart): the blur grows that much stronger, since a
+/// visual effect view under an alpha below 1 draws wrong or not at all.
 class EdgeViewFactory: NSObject, FlutterPlatformViewFactory {
+  private let messenger: FlutterBinaryMessenger
+
+  init(messenger: FlutterBinaryMessenger) {
+    self.messenger = messenger
+    super.init()
+  }
+
   func createArgsCodec() -> FlutterMessageCodec & NSObjectProtocol {
     FlutterStandardMessageCodec.sharedInstance()
   }
@@ -169,17 +179,31 @@ class EdgeViewFactory: NSObject, FlutterPlatformViewFactory {
     let params = args as? [String: Any]
     let fade = params?["fade"] as? Double ?? 16
     let strength = params?["strength"] as? Double ?? 1
-    return EdgeView(frame: frame, fade: CGFloat(fade), strength: CGFloat(strength))
+    let shown = params?["shown"] as? Double ?? 1
+    return EdgeView(
+      frame: frame, fade: CGFloat(fade), strength: CGFloat(strength), shown: CGFloat(shown),
+      channel: FlutterMethodChannel(
+        name: "official_news/edge_\(viewId)", binaryMessenger: messenger))
   }
 }
 
 class EdgeView: NSObject, FlutterPlatformView {
   private let blur: FadingBlurView
+  private let channel: FlutterMethodChannel
 
-  init(frame: CGRect, fade: CGFloat, strength: CGFloat) {
-    blur = FadingBlurView(frame: frame, fade: fade, strength: strength)
+  init(frame: CGRect, fade: CGFloat, strength: CGFloat, shown: CGFloat, channel: FlutterMethodChannel) {
+    blur = FadingBlurView(frame: frame, fade: fade, strength: strength, shown: shown)
+    self.channel = channel
     super.init()
+    channel.setMethodCallHandler { [weak blur = self.blur] call, result in
+      if call.method == "shown", let shown = call.arguments as? Double {
+        blur?.shown = CGFloat(shown)
+      }
+      result(nil)
+    }
   }
+
+  deinit { channel.setMethodCallHandler(nil) }
 
   func view() -> UIView { blur }
 }
@@ -190,7 +214,8 @@ class EdgeView: NSObject, FlutterPlatformView {
 /// lighter blur of its own; it is made again whenever the view joins a
 /// window, the app comes back, or light and dark mode change, any of which
 /// can end a paused animator. Its mask is laid out again whenever Flutter
-/// sizes the view, as [RoomView]'s glass is.
+/// sizes the view, as [RoomView]'s glass is. The animator stands at
+/// [strength] times [shown], so the blur comes in by growing stronger.
 final class FadingBlurView: UIView {
   private let fade: CGFloat
   private let strength: CGFloat
@@ -200,9 +225,18 @@ final class FadingBlurView: UIView {
   private var animator: UIViewPropertyAnimator?
   private var foreground: NSObjectProtocol?
 
-  init(frame: CGRect, fade: CGFloat, strength: CGFloat) {
+  /// How much of the blur there is, 0 to 1, as the rows come under it.
+  var shown: CGFloat {
+    didSet {
+      shown = min(max(shown, 0), 1)
+      animator?.fractionComplete = strength * shown
+    }
+  }
+
+  init(frame: CGRect, fade: CGFloat, strength: CGFloat, shown: CGFloat) {
     self.fade = fade
     self.strength = min(max(strength, 0), 1)
+    self.shown = min(max(shown, 0), 1)
     super.init(frame: frame)
     backgroundColor = .clear
     // Taps fall through to the rows (PlatformViewHitTestBehavior.transparent).
@@ -237,7 +271,8 @@ final class FadingBlurView: UIView {
     if traitCollection.hasDifferentColorAppearance(comparedTo: previous) { blur() }
   }
 
-  /// The material at [strength]: an animator to it, paused there.
+  /// The material at [strength] of it, as much as [shown]: an animator to
+  /// it, paused there.
   private func blur() {
     animator?.stopAnimation(true)
     effectView.effect = nil
@@ -245,7 +280,7 @@ final class FadingBlurView: UIView {
       effectView.effect = UIBlurEffect(style: .systemUltraThinMaterial)
     }
     next.pausesOnCompletion = true
-    next.fractionComplete = strength
+    next.fractionComplete = strength * shown
     animator = next
   }
 

@@ -203,7 +203,7 @@ class NewsLook extends FeedLook {
             ),
           ),
         ),
-        buttons: masthead.buttons,
+        buttons: masthead.buttonList,
         // What the feed shows stays at the top, glass over the rows.
         pills: FeedPills(
           where: masthead.where,
@@ -328,15 +328,16 @@ class NewsLook extends FeedLook {
   }
 }
 
-/// [NewsLook]'s masthead, pinned. As the feed scrolls, the title shrinks
-/// with it into a bar under the status bar, without a jump, the date goes
-/// first, and the buttons stay on the right, in the bar (Roman, 4 Nov,
-/// B's motion of `handoff/header-motion.html` on our own layout); the
-/// pills stay at the top under the bar, so the rows pass under the glass.
-/// The tint behind it all is the look's backdrop, one piece with the status
-/// bar's. Once the rows come under the bar, iOS's soft edge ([GlassEdge])
-/// blurs them there and under the status bar, fading out just below the
-/// bar's foot.
+/// [NewsLook]'s masthead, pinned. As the feed scrolls, it folds in one
+/// motion that eases in and out, exactly with the scroll: the title shrinks
+/// into a bar under the status bar, the date rides up with the page under
+/// the title's foot and fades, and the buttons shrink away (Roman, 4 Nov,
+/// «плавно как в NYT, кнопки тоже уходят», `handoff/header-smooth.html`);
+/// the pills stay at the top under the bar, so the rows pass under the
+/// glass. The tint behind it all is the look's backdrop, one piece with the
+/// status bar's. Right after the fold, while the rows pass under the pills
+/// to the bar, iOS's soft edge ([GlassEdge]) grows in to blur them there
+/// and under the status bar, fading out just below the bar's foot.
 class _NewsHeader extends SliverPersistentHeaderDelegate {
   _NewsHeader({
     required this.titleHeight,
@@ -365,7 +366,7 @@ class _NewsHeader extends SliverPersistentHeaderDelegate {
   /// The logo and the app's name, today's date, and the buttons beside them.
   final Widget name;
   final Widget date;
-  final Widget buttons;
+  final List<Widget> buttons;
   final Widget pills;
 
   /// The bar the title shrinks into, as tall as the buttons.
@@ -380,8 +381,16 @@ class _NewsHeader extends SliverPersistentHeaderDelegate {
   /// The edge's foot, below the bar, that fades out.
   static const edgeFade = 16.0;
 
-  /// How far the rows have gone under the bar when the edge is all there.
-  static const _edgeIn = 24.0;
+  /// Where the date is gone, as a part of the fold.
+  static const _dateGone = 0.9;
+
+  /// 0 to 1 with a soft start and a soft landing, still where the scroll is:
+  /// a straight line started and stopped dead (Roman, 4 Nov: «резкое
+  /// движение, а не плавное»).
+  static double soft(double x) {
+    final t = clampDouble(x, 0, 1);
+    return t * t * (3 - 2 * t);
+  }
 
   @override
   double get minExtent => bar + pillsHeight;
@@ -392,19 +401,24 @@ class _NewsHeader extends SliverPersistentHeaderDelegate {
   @override
   Widget build(BuildContext context, double shrinkOffset, bool overlaps) {
     final travel = maxExtent - minExtent;
-    // How far the title has gone into the bar, with the scroll.
-    final folded = travel == 0 ? 1.0 : (shrinkOffset / travel).clamp(0.0, 1.0);
+    // How far the masthead has folded, with the scroll: the whole of it in
+    // one motion.
+    final folded = soft(travel == 0 ? 1.0 : shrinkOffset / travel);
     // Small enough for the bar at any text size.
     final small = math.min(_small, (bar - 6) / nameHeight);
     final scale = 1 - (1 - small) * folded;
     // The middles of the title and the buttons, from their places to the bar's.
     final rise = (bar / 2 - (_top + nameHeight / 2)) * folded;
     final buttonsRise = (bar / 2 - (_top + 22)) * folded;
-    // The date first: gone halfway, as it scrolls up.
-    final date = 1 - (folded * 2).clamp(0.0, 1.0);
-    // The rows come under the bar once they have passed under the pills.
-    final under = ((shrinkOffset - travel - pillsHeight + _edgeIn) / _edgeIn)
-        .clamp(0.0, 1.0);
+    // The date rides up with the page and goes under the title's foot.
+    final date = travel == 0
+        ? 0.0
+        : 1 - soft(shrinkOffset / (travel * _dateGone));
+    final titleFoot = _top + nameHeight / 2 + rise + nameHeight / 2 * scale;
+    final dateCut = titleFoot - (_top + nameHeight);
+    // Right after the fold the edge grows in, as the rows pass under the
+    // pills to the bar.
+    final under = soft((shrinkOffset - travel) / pillsHeight);
     // All stays in the tree, so the pills keep their place: the row keeps
     // how far it was swiped, and the buttons' glass is never made again.
     // The chosen pill's glow reaches over the rows under the header, not cut
@@ -419,10 +433,7 @@ class _NewsHeader extends SliverPersistentHeaderDelegate {
           right: 0,
           top: -topInset,
           height: topInset + bar + edgeFade,
-          child: Opacity(
-            opacity: under,
-            child: GlassEdge(color: page, fade: edgeFade),
-          ),
+          child: GlassEdge(color: page, fade: edgeFade, shown: under),
         ),
         Positioned(
           left: 16,
@@ -443,16 +454,37 @@ class _NewsHeader extends SliverPersistentHeaderDelegate {
                         child: name,
                       ),
                     ),
-                    Transform.translate(
-                      offset: Offset(0, -shrinkOffset),
-                      child: Opacity(opacity: date, child: this.date),
+                    ClipRect(
+                      clipper: _Below(dateCut),
+                      child: Transform.translate(
+                        offset: Offset(0, -shrinkOffset),
+                        child: Opacity(opacity: date, child: this.date),
+                      ),
                     ),
                   ],
                 ),
               ),
+              // Their glass is iOS's, which an alpha would spoil as it did
+              // the edge's: they shrink away instead, each on its own, take
+              // no tap once half gone, and once gone are not drawn.
               Transform.translate(
                 offset: Offset(0, buttonsRise),
-                child: buttons,
+                child: IgnorePointer(
+                  ignoring: folded > 0.5,
+                  child: Visibility(
+                    visible: folded < 1,
+                    maintainState: true,
+                    maintainAnimation: true,
+                    maintainSize: true,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        for (final button in buttons)
+                          Transform.scale(scale: 1 - folded, child: button),
+                      ],
+                    ),
+                  ),
+                ),
               ),
             ],
           ),
@@ -477,8 +509,28 @@ class _NewsHeader extends SliverPersistentHeaderDelegate {
       old.page != page ||
       old.name != name ||
       old.date != date ||
-      old.buttons != buttons ||
+      !listEquals(old.buttons, buttons) ||
       old.pills != pills;
+}
+
+/// What is under the title's foot, where the date rides up to: [top] is
+/// the cut in the child's own points, above it as the masthead folds. At
+/// rest (0) nothing is cut, since a pull stretches the date past its box.
+class _Below extends CustomClipper<Rect> {
+  const _Below(this.top);
+
+  final double top;
+
+  @override
+  Rect getClip(Size size) => Rect.fromLTRB(
+    -size.width,
+    top < 0 ? top : -4 * size.height,
+    2 * size.width,
+    4 * size.height,
+  );
+
+  @override
+  bool shouldReclip(_Below old) => old.top != top;
 }
 
 /// What shows in the gap the pull opens above the masthead: plain grey

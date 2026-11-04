@@ -359,14 +359,15 @@ class FeedMasthead {
   /// are any (#146, Roman's pick B, 30 Oct), then the round settings gear,
   /// each in glass with a 44-pt target and its VoiceOver label. A look may
   /// draw its own and call [openConversations] and [openSettings].
-  Widget get buttons => Row(
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      if (openConversations case final open?)
-        ConversationsButton(onPressed: open),
-      NowSettingsButton(onPressed: openSettings),
-    ],
-  );
+  Widget get buttons =>
+      Row(mainAxisSize: MainAxisSize.min, children: buttonList);
+
+  /// [buttons] one by one, for a look that moves each on its own.
+  List<Widget> get buttonList => [
+    if (openConversations case final open?)
+      ConversationsButton(onPressed: open),
+    NowSettingsButton(onPressed: openSettings),
+  ];
 }
 
 /// The pull to refresh for [FeedLook.refreshIndicator]: what

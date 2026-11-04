@@ -1136,18 +1136,33 @@ void main() {
         await pumpFeed(tester, rows, const [], height: 700);
         final row = find.byType(FeedPills);
         expect(tester.getTopLeft(row).dy, greaterThan(60 + 62));
-        double edge() => tester
-            .widget<Opacity>(
-              find
-                  .ancestor(
-                    of: find.byType(GlassEdge),
-                    matching: find.byType(Opacity),
-                  )
-                  .first,
-            )
-            .opacity;
+        double edge() => tester.widget<GlassEdge>(find.byType(GlassEdge)).shown;
         // Nothing under it yet: no edge.
         expect(edge(), 0);
+        // Never under an alpha: iOS draws its blur wrong under one, so the
+        // edge came in with a jump at the end (Roman, 4 Nov).
+        expect(
+          find.ancestor(
+            of: find.byType(GlassEdge),
+            matching: find.byType(Opacity),
+          ),
+          findsNothing,
+        );
+        // Right after the masthead's fold it grows in, with no still stretch
+        // between: half there once the rows are half way under the pills.
+        final scroll = tester
+            .widget<CustomScrollView>(find.byType(CustomScrollView))
+            .controller!;
+        const travel = 10 + 32 * 1.08 + 26 * 1.08 + 12 - 44;
+        final pillsHeight = FeedPills.heightFor(TextScaler.noScaling);
+        scroll.jumpTo(travel);
+        await tester.pump();
+        expect(edge(), moreOrLessEquals(0, epsilon: 1e-9));
+        scroll.jumpTo(travel + pillsHeight / 2);
+        await tester.pump();
+        expect(edge(), moreOrLessEquals(0.5, epsilon: 0.001));
+        scroll.jumpTo(0);
+        await tester.pumpAndSettle();
         await tester.drag(find.text('Decision r3'), const Offset(0, -500));
         await tester.pumpAndSettle();
         // Pinned under the title's bar, rows scrolled under it.
@@ -1236,10 +1251,9 @@ void main() {
         expect(tester.getRect(pill).right, lessThanOrEqualTo(393));
       });
 
-      testWidgets('scrolled, the title shrinks with the feed into a bar, the '
-          'date goes first, and the buttons stay on the right (Roman, 4 Nov)', (
-        tester,
-      ) async {
+      testWidgets('scrolled, the masthead folds in one soft motion: the title '
+          'shrinks into a bar, the date rides up under it, and the buttons '
+          'shrink away (Roman, 4 Nov)', (tester) async {
         await pumpFeed(tester, rows, const [], height: 700);
         await tester.pumpAndSettle();
         final title = find.text('Outer News');
@@ -1263,22 +1277,52 @@ void main() {
           await tester.pump();
         }
 
-        // A quarter of the way: the title a little smaller, the date half gone.
+        // Eased at both ends, never a straight line that starts and stops
+        // dead (Roman, 4 Nov: «резкое движение, а не плавное»).
+        double soft(double x) {
+          final t = x.clamp(0.0, 1.0);
+          return t * t * (3 - 2 * t);
+        }
+
+        // A quarter of the way: everything has only begun to move.
         await scrollTo(travel / 4);
+        final quarter = soft(0.25);
         expect(
           tester.getRect(title).width,
-          moreOrLessEquals(rest.width * (1 - 0.38 / 4), epsilon: 0.5),
+          moreOrLessEquals(rest.width * (1 - 0.38 * quarter), epsilon: 0.5),
         );
-        expect(dateShown(), moreOrLessEquals(0.5, epsilon: 0.01));
-        // Halfway: the date is gone, the title still shrinking.
+        expect(
+          dateShown(),
+          moreOrLessEquals(1 - soft(0.25 / 0.9), epsilon: 0.01),
+        );
+        expect(
+          tester.getRect(settings).width,
+          moreOrLessEquals(restSettings.width * (1 - quarter), epsilon: 0.01),
+        );
+        // Halfway: half folded, the buttons half their size, around their
+        // middles, the date mostly gone.
         await scrollTo(travel / 2);
-        expect(dateShown(), 0);
         expect(
           tester.getRect(title).width,
           moreOrLessEquals(rest.width * (1 - 0.38 / 2), epsilon: 0.5),
         );
-        // All the way: the title in the middle of the bar, the buttons too,
-        // still on the right, the pills under the bar.
+        expect(
+          dateShown(),
+          moreOrLessEquals(1 - soft(0.5 / 0.9), epsilon: 0.01),
+        );
+        expect(
+          tester.getRect(settings).width,
+          moreOrLessEquals(restSettings.width / 2, epsilon: 0.01),
+        );
+        expect(
+          tester.getCenter(settings).dx,
+          moreOrLessEquals(restSettings.center.dx, epsilon: 0.01),
+        );
+        // The date is gone before the fold ends.
+        await scrollTo(travel * 0.9);
+        expect(dateShown(), 0);
+        // All the way: the title in the middle of the bar, the buttons gone
+        // and not drawn, the pills under the bar.
         await scrollTo(300);
         expect(
           tester.getRect(title).width,
@@ -1290,12 +1334,20 @@ void main() {
           tester.getRect(title).left,
           moreOrLessEquals(16 + (rest.left - 16) * 0.62, epsilon: 0.01),
         );
-        expect(tester.getRect(settings).right, restSettings.right);
         expect(
-          tester.getCenter(settings).dy,
-          moreOrLessEquals(22, epsilon: 0.5),
+          tester
+              .widget<Visibility>(
+                find
+                    .ancestor(of: settings, matching: find.byType(Visibility))
+                    .first,
+              )
+              .visible,
+          isFalse,
         );
         expect(tester.getTopLeft(find.byType(FeedPills)).dy, 44);
+        // And back: the buttons where they were, as large.
+        await scrollTo(0);
+        expect(tester.getRect(settings), restSettings);
       });
 
       testWidgets('swiped sideways, the pills stay where they are as the '
