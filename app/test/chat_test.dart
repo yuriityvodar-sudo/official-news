@@ -560,7 +560,7 @@ void main() {
     );
 
     testWidgets(
-      'opens as a sheet from the bottom over the article, and its button closes it',
+      'opens over the whole screen from the bottom, sets the status bar, and its button closes it (Roman, 4 Nov)',
       (tester) async {
         await tester.runAsync(() async {
           store.report(
@@ -583,9 +583,24 @@ void main() {
         await tester.pumpAndSettle();
         final chat = find.byType(ChatScreen);
         expect(chat, findsOneWidget);
+        final route = ModalRoute.of(tester.element(chat));
+        expect(route, isA<CupertinoPageRoute<void>>());
+        expect((route! as CupertinoPageRoute<void>).fullscreenDialog, isTrue);
         expect(
-          ModalRoute.of(tester.element(chat)),
-          isA<CupertinoSheetRoute<void>>(),
+          tester.getRect(chat),
+          Offset.zero & tester.view.physicalSize / tester.view.devicePixelRatio,
+        );
+        final bar = tester.widget<AnnotatedRegion<SystemUiOverlayStyle>>(
+          find.descendant(
+            of: chat,
+            matching: find.byType(AnnotatedRegion<SystemUiOverlayStyle>),
+          ),
+        );
+        expect(
+          bar.value,
+          CupertinoTheme.brightnessOf(tester.element(chat)) == Brightness.dark
+              ? SystemUiOverlayStyle.light
+              : SystemUiOverlayStyle.dark,
         );
         await tester.tap(find.byIcon(CupertinoIcons.xmark));
         await tester.pumpAndSettle();
