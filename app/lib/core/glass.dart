@@ -3,7 +3,7 @@ import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show PlatformViewHitTestBehavior;
-import 'package:flutter/services.dart' show StandardMessageCodec;
+import 'package:flutter/services.dart' show MethodChannel, StandardMessageCodec;
 
 /// A round surface of [size] behind a small control, with [child] centred
 /// on it: Apple's Liquid Glass on iOS (a native view, `GlassView` in the
@@ -230,12 +230,19 @@ class NativeCover extends InheritedWidget {
 /// starts. iOS's own blur on iOS (a native view, `EdgeView` in the Runner),
 /// at [strength] of the material: in full it was too dark (Roman, 4 Nov);
 /// the page's [color] fading out the same way elsewhere. Takes no touches.
-class GlassEdge extends StatelessWidget {
+///
+/// It comes in by [shown], which iOS's blur takes as how strong to be, on
+/// the channel `official_news/edge_<id>`. Never put it under an [Opacity]:
+/// iOS draws a blur under an alpha below 1 wrong or not at all, so behind
+/// one it came in with a jump at the end (Roman, 4 Nov: «резкое движение»),
+/// and at 0 Flutter takes iOS's view out of the screen altogether.
+class GlassEdge extends StatefulWidget {
   const GlassEdge({
     super.key,
     required this.color,
     this.fade = 16,
     this.strength = 0.45,
+    this.shown = 1,
   });
 
   /// The page's colour, where iOS's blur is not used.
@@ -247,8 +254,51 @@ class GlassEdge extends StatelessWidget {
   /// How much of iOS's material: 0 is none, 1 all of it.
   final double strength;
 
+  /// How much of the edge there is, 0 to 1: of [strength], for iOS's blur.
+  final double shown;
+
+  @override
+  State<GlassEdge> createState() => _GlassEdgeState();
+}
+
+class _GlassEdgeState extends State<GlassEdge> {
+  MethodChannel? _channel;
+
+  /// What iOS's blur was last told.
+  double? _sent;
+
+  double get _shown => clampDouble(widget.shown, 0, 1);
+
+  @override
+  void didUpdateWidget(GlassEdge old) {
+    super.didUpdateWidget(old);
+    _send();
+  }
+
+  /// A change of a hundredth or more, or the ends, which must be exact.
+  void _send() {
+    final channel = _channel;
+    final shown = _shown;
+    final sent = _sent;
+    if (channel == null || sent == shown) return;
+    if (sent != null && (shown - sent).abs() < 0.01 && shown > 0 && shown < 1) {
+      return;
+    }
+    _sent = shown;
+    channel.invokeMethod<void>('shown', shown).ignore();
+  }
+
+  void _created(int id) {
+    _channel = MethodChannel('official_news/edge_$id');
+    // Whatever changed while iOS was making the view.
+    _send();
+  }
+
   @override
   Widget build(BuildContext context) {
+    final fade = widget.fade;
+    final strength = widget.strength;
+    final color = widget.color;
     final plain = LayoutBuilder(
       builder: (context, constraints) {
         final height = constraints.maxHeight;
@@ -269,17 +319,24 @@ class GlassEdge extends StatelessWidget {
         );
       },
     );
+    // Flutter's own edge may fade by its alpha.
+    final faded = Opacity(opacity: _shown, child: plain);
     return IgnorePointer(
       child: !GlassCircle.native
-          ? plain
+          ? faded
           : NativeOrPlain(
               native: UiKitView(
                 viewType: 'official_news/edge',
                 hitTestBehavior: PlatformViewHitTestBehavior.transparent,
-                creationParams: {'fade': fade, 'strength': strength},
+                creationParams: {
+                  'fade': fade,
+                  'strength': strength,
+                  'shown': _shown,
+                },
                 creationParamsCodec: const StandardMessageCodec(),
+                onPlatformViewCreated: _created,
               ),
-              plain: plain,
+              plain: faded,
             ),
     );
   }
