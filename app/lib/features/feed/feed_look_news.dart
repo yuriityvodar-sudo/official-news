@@ -156,65 +156,49 @@ class NewsLook extends FeedLook {
   Widget masthead(BuildContext context, FeedMasthead masthead) {
     final style = _NewsStyle.of(context, palette);
     final scaler = MediaQuery.textScalerOf(context);
-    // The title and the date as tall as their letters: they scroll away, the
-    // pills stay.
-    final titleHeight =
-        10 + scaler.scale(32) * 1.08 + scaler.scale(26) * 1.08 + 12;
+    // The title and the date as tall as their letters: the title shrinks
+    // into the bar as the feed scrolls, the date goes, the pills stay.
+    final nameHeight = scaler.scale(32) * 1.08;
+    final titleHeight = 10 + nameHeight + scaler.scale(26) * 1.08 + 12;
     return SliverPersistentHeader(
       pinned: true,
       delegate: _NewsHeader(
         titleHeight: titleHeight,
+        nameHeight: nameHeight,
         pillsHeight: FeedPills.heightFor(scaler),
         topInset: masthead.topInset,
         page: style.page,
-        title: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 10, 8, 0),
+        name: _Stretch(
+          pull: masthead.pull,
           child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _Stretch(
-                      pull: masthead.pull,
-                      child: Row(
-                        children: [
-                          const _Logo(),
-                          const SizedBox(width: 8),
-                          Flexible(
-                            child: Text(
-                              masthead.title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: style.title,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    _Stretch(
-                      pull: masthead.pull,
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          masthead.date,
-                          maxLines: 1,
-                          style: style.title.copyWith(
-                            fontSize: 26,
-                            color: style.muted,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
+              const _Logo(),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  masthead.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: style.title,
                 ),
               ),
-              masthead.buttons,
             ],
           ),
         ),
+        date: _Stretch(
+          pull: masthead.pull,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              masthead.date,
+              key: const ValueKey('masthead-date'),
+              maxLines: 1,
+              style: style.title.copyWith(fontSize: 26, color: style.muted),
+            ),
+          ),
+        ),
+        buttons: masthead.buttons,
         // What the feed shows stays at the top, glass over the rows.
         pills: FeedPills(
           where: masthead.where,
@@ -339,24 +323,32 @@ class NewsLook extends FeedLook {
   }
 }
 
-/// [NewsLook]'s masthead, pinned: the title and the date scroll away and
-/// fade, as an iOS large title does, and the pills stay at the top, so the
-/// rows pass under the glass. The tint behind it all is the look's
-/// backdrop, one piece with the status bar's. Once the rows come under the
-/// pills, iOS's soft edge ([GlassEdge]) blurs them there and under the
-/// status bar, fading out just below the pills (Roman, 4 Nov).
+/// [NewsLook]'s masthead, pinned. As the feed scrolls, the title shrinks
+/// with it into a bar under the status bar, without a jump, the date goes
+/// first, and the buttons stay on the right, in the bar (Roman, 4 Nov,
+/// B's motion of `handoff/header-motion.html` on our own layout); the
+/// pills stay at the top under the bar, so the rows pass under the glass.
+/// The tint behind it all is the look's backdrop, one piece with the status
+/// bar's. Once the rows come under the bar, iOS's soft edge ([GlassEdge])
+/// blurs them there and under the status bar, fading out just below the
+/// bar's foot.
 class _NewsHeader extends SliverPersistentHeaderDelegate {
   _NewsHeader({
     required this.titleHeight,
+    required this.nameHeight,
     required this.pillsHeight,
     required this.topInset,
     required this.page,
-    required this.title,
+    required this.name,
+    required this.date,
+    required this.buttons,
     required this.pills,
   });
 
-  /// As tall as their words at the reader's text size.
+  /// As tall as their words at the reader's text size: the title and the
+  /// date, and the title alone.
   final double titleHeight;
+  final double nameHeight;
   final double pillsHeight;
 
   /// The status bar's height, above the header, which the edge covers too.
@@ -364,58 +356,100 @@ class _NewsHeader extends SliverPersistentHeaderDelegate {
 
   /// The page's colour, for the edge where iOS's blur is not used.
   final Color page;
-  final Widget title;
+
+  /// The logo and the app's name, today's date, and the buttons beside them.
+  final Widget name;
+  final Widget date;
+  final Widget buttons;
   final Widget pills;
 
-  /// The edge's foot, below the pills, that fades out.
-  static const edgeFade = 24.0;
+  /// The bar the title shrinks into, as tall as the buttons.
+  static const bar = 44.0;
 
-  /// How far the rows have gone under the pills when the edge is all there.
+  /// How much of the title is left in the bar.
+  static const _small = 0.62;
+
+  /// Where the title and the buttons start, below the status bar.
+  static const _top = 10.0;
+
+  /// The edge's foot, below the bar, that fades out.
+  static const edgeFade = 16.0;
+
+  /// How far the rows have gone under the bar when the edge is all there.
   static const _edgeIn = 24.0;
 
   @override
-  double get minExtent => pillsHeight;
+  double get minExtent => bar + pillsHeight;
 
   @override
-  double get maxExtent => titleHeight + pillsHeight;
+  double get maxExtent => math.max(titleHeight, bar) + pillsHeight;
 
   @override
   Widget build(BuildContext context, double shrinkOffset, bool overlaps) {
-    final gone = (shrinkOffset / titleHeight).clamp(0.0, 1.0);
-    // The title stays, unseen once gone, so the pills keep their place in
-    // the tree: the row keeps how far it was swiped, and the gear's glass
-    // is not made again as the title comes back.
+    final travel = maxExtent - minExtent;
+    // How far the title has gone into the bar, with the scroll.
+    final folded = travel == 0 ? 1.0 : (shrinkOffset / travel).clamp(0.0, 1.0);
+    // Small enough for the bar at any text size.
+    final small = math.min(_small, (bar - 6) / nameHeight);
+    final scale = 1 - (1 - small) * folded;
+    // The middles of the title and the buttons, from their places to the bar's.
+    final rise = (bar / 2 - (_top + nameHeight / 2)) * folded;
+    final buttonsRise = (bar / 2 - (_top + 22)) * folded;
+    // The date first: gone halfway, as it scrolls up.
+    final date = 1 - (folded * 2).clamp(0.0, 1.0);
+    // The rows come under the bar once they have passed under the pills.
+    final under = ((shrinkOffset - travel - pillsHeight + _edgeIn) / _edgeIn)
+        .clamp(0.0, 1.0);
+    // All stays in the tree, so the pills keep their place: the row keeps
+    // how far it was swiped, and the buttons' glass is never made again.
     // The chosen pill's glow reaches over the rows under the header, not cut
-    // where it ends (Yurii, #210); the title is clipped to its own band.
-    // The rows come under the pills once the title has gone.
-    final under = ((shrinkOffset - titleHeight + _edgeIn) / _edgeIn).clamp(
-      0.0,
-      1.0,
-    );
+    // where it ends (Yurii, #210).
     return Stack(
       fit: StackFit.expand,
       clipBehavior: Clip.none,
       children: [
-        // From the screen's top to just below the pills, behind them.
+        // From the screen's top to just below the bar, behind it.
         Positioned(
           left: 0,
           right: 0,
-          bottom: -edgeFade,
-          height: topInset + pillsHeight + edgeFade,
+          top: -topInset,
+          height: topInset + bar + edgeFade,
           child: Opacity(
             opacity: under,
             child: GlassEdge(color: page, fade: edgeFade),
           ),
         ),
         Positioned(
-          left: 0,
-          right: 0,
-          top: -shrinkOffset,
-          height: titleHeight,
-          // The buttons' glass casts no shadow (GlassCircle.shadow): cut at
-          // the band's foot, it showed as a band under them (Roman, 30 Oct).
-          child: ClipRect(
-            child: Opacity(opacity: 1 - gone, child: title),
+          left: 16,
+          right: 8,
+          top: _top,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Transform.translate(
+                      offset: Offset(0, rise),
+                      child: Transform.scale(
+                        scale: scale,
+                        alignment: Alignment.centerLeft,
+                        child: name,
+                      ),
+                    ),
+                    Transform.translate(
+                      offset: Offset(0, -shrinkOffset),
+                      child: Opacity(opacity: date, child: this.date),
+                    ),
+                  ],
+                ),
+              ),
+              Transform.translate(
+                offset: Offset(0, buttonsRise),
+                child: buttons,
+              ),
+            ],
           ),
         ),
         Positioned(
@@ -432,10 +466,13 @@ class _NewsHeader extends SliverPersistentHeaderDelegate {
   @override
   bool shouldRebuild(_NewsHeader old) =>
       old.titleHeight != titleHeight ||
+      old.nameHeight != nameHeight ||
       old.pillsHeight != pillsHeight ||
       old.topInset != topInset ||
       old.page != page ||
-      old.title != title ||
+      old.name != name ||
+      old.date != date ||
+      old.buttons != buttons ||
       old.pills != pills;
 }
 

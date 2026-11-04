@@ -226,17 +226,26 @@ class NativeCover extends InheritedWidget {
 /// The top of the screen once rows pass under it (#141, Roman, 4 Nov): iOS
 /// 26's soft scroll edge, a blur of what is under it that fades out over
 /// its last [fade] points, so the rows go softly under the status bar and
-/// the pills instead of being cut where the screen's safe area starts.
-/// iOS's own blur on iOS (a native view, `EdgeView` in the Runner); the
-/// page's [color] fading out the same way elsewhere. Takes no touches.
+/// the title's bar instead of being cut where the screen's safe area
+/// starts. iOS's own blur on iOS (a native view, `EdgeView` in the Runner),
+/// at [strength] of the material: in full it was too dark (Roman, 4 Nov);
+/// the page's [color] fading out the same way elsewhere. Takes no touches.
 class GlassEdge extends StatelessWidget {
-  const GlassEdge({super.key, required this.color, this.fade = 24});
+  const GlassEdge({
+    super.key,
+    required this.color,
+    this.fade = 16,
+    this.strength = 0.45,
+  });
 
   /// The page's colour, where iOS's blur is not used.
   final Color color;
 
   /// How tall the foot is that fades out.
   final double fade;
+
+  /// How much of iOS's material: 0 is none, 1 all of it.
+  final double strength;
 
   @override
   Widget build(BuildContext context) {
@@ -251,8 +260,8 @@ class GlassEdge extends StatelessWidget {
               end: Alignment.bottomCenter,
               stops: [0, solid, 1],
               colors: [
-                color.withValues(alpha: 0.94),
-                color.withValues(alpha: 0.94),
+                color.withValues(alpha: 0.8 * strength + 0.2),
+                color.withValues(alpha: 0.8 * strength + 0.2),
                 color.withValues(alpha: 0),
               ],
             ),
@@ -267,7 +276,7 @@ class GlassEdge extends StatelessWidget {
               native: UiKitView(
                 viewType: 'official_news/edge',
                 hitTestBehavior: PlatformViewHitTestBehavior.transparent,
-                creationParams: {'fade': fade},
+                creationParams: {'fade': fade, 'strength': strength},
                 creationParamsCodec: const StandardMessageCodec(),
               ),
               plain: plain,

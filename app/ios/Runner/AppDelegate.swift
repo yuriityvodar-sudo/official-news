@@ -152,9 +152,10 @@ class CircleView: UIView {
 }
 
 /// iOS 26's soft scroll edge at the top of the feed (#141, Roman, 4 Nov):
-/// a blur of what Flutter has under it, the system's thinnest material,
-/// fading out over its last `fade` points, so the rows pass softly under the
-/// status bar and the pills. The same material from iOS 15 on.
+/// a blur of what Flutter has under it, the system's thinnest material at
+/// `strength` of its full effect, fading out over its last `fade` points,
+/// so the rows pass softly under the status bar and the title's bar. The
+/// same material from iOS 15 on.
 class EdgeViewFactory: NSObject, FlutterPlatformViewFactory {
   func createArgsCodec() -> FlutterMessageCodec & NSObjectProtocol {
     FlutterStandardMessageCodec.sharedInstance()
@@ -165,50 +166,97 @@ class EdgeViewFactory: NSObject, FlutterPlatformViewFactory {
     viewIdentifier viewId: Int64,
     arguments args: Any?
   ) -> FlutterPlatformView {
-    let fade = (args as? [String: Any])?["fade"] as? Double ?? 24
-    return EdgeView(frame: frame, fade: CGFloat(fade))
+    let params = args as? [String: Any]
+    let fade = params?["fade"] as? Double ?? 16
+    let strength = params?["strength"] as? Double ?? 1
+    return EdgeView(frame: frame, fade: CGFloat(fade), strength: CGFloat(strength))
   }
 }
 
 class EdgeView: NSObject, FlutterPlatformView {
   private let blur: FadingBlurView
 
-  init(frame: CGRect, fade: CGFloat) {
-    blur = FadingBlurView(frame: frame, fade: fade)
+  init(frame: CGRect, fade: CGFloat, strength: CGFloat) {
+    blur = FadingBlurView(frame: frame, fade: fade, strength: strength)
     super.init()
   }
 
   func view() -> UIView { blur }
 }
 
-/// A blur whose foot fades out. Its mask is laid out again whenever Flutter
+/// A blur whose foot fades out, at a part of the material's strength: the
+/// material in full was too dark over the page (Roman, 4 Nov). The part is
+/// an animator from no effect to the material, paused there, as iOS has no
+/// lighter blur of its own; it is made again whenever the view joins a
+/// window, the app comes back, or light and dark mode change, any of which
+/// can end a paused animator. Its mask is laid out again whenever Flutter
 /// sizes the view, as [RoomView]'s glass is.
-final class FadingBlurView: UIVisualEffectView {
+final class FadingBlurView: UIView {
   private let fade: CGFloat
+  private let strength: CGFloat
+  private let effectView = UIVisualEffectView(effect: nil)
   private let fadeMask = UIView()
   private let gradient = CAGradientLayer()
+  private var animator: UIViewPropertyAnimator?
+  private var foreground: NSObjectProtocol?
 
-  init(frame: CGRect, fade: CGFloat) {
+  init(frame: CGRect, fade: CGFloat, strength: CGFloat) {
     self.fade = fade
-    super.init(effect: UIBlurEffect(style: .systemUltraThinMaterial))
-    self.frame = frame
+    self.strength = min(max(strength, 0), 1)
+    super.init(frame: frame)
+    backgroundColor = .clear
+    // Taps fall through to the rows (PlatformViewHitTestBehavior.transparent).
+    isUserInteractionEnabled = false
+    effectView.frame = bounds
+    effectView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+    addSubview(effectView)
     gradient.colors = [UIColor.black.cgColor, UIColor.black.cgColor, UIColor.clear.cgColor]
     fadeMask.layer.addSublayer(gradient)
     // A visual effect view fades through its own mask view, not a layer mask.
-    mask = fadeMask
-    // Taps fall through to the rows (PlatformViewHitTestBehavior.transparent).
-    isUserInteractionEnabled = false
+    effectView.mask = fadeMask
+    foreground = NotificationCenter.default.addObserver(
+      forName: UIApplication.willEnterForegroundNotification, object: nil, queue: .main
+    ) { [weak self] _ in self?.blur() }
   }
 
   required init?(coder: NSCoder) { fatalError("not used") }
+
+  deinit {
+    // A paused animator must be stopped before it goes.
+    animator?.stopAnimation(true)
+    if let foreground { NotificationCenter.default.removeObserver(foreground) }
+  }
+
+  override func didMoveToWindow() {
+    super.didMoveToWindow()
+    if window != nil { blur() }
+  }
+
+  override func traitCollectionDidChange(_ previous: UITraitCollection?) {
+    super.traitCollectionDidChange(previous)
+    if traitCollection.hasDifferentColorAppearance(comparedTo: previous) { blur() }
+  }
+
+  /// The material at [strength]: an animator to it, paused there.
+  private func blur() {
+    animator?.stopAnimation(true)
+    effectView.effect = nil
+    let next = UIViewPropertyAnimator(duration: 1, curve: .linear) { [effectView] in
+      effectView.effect = UIBlurEffect(style: .systemUltraThinMaterial)
+    }
+    next.pausesOnCompletion = true
+    next.fractionComplete = strength
+    animator = next
+  }
 
   override func layoutSubviews() {
     super.layoutSubviews()
     CATransaction.begin()
     CATransaction.setDisableActions(true)
-    fadeMask.frame = bounds
-    gradient.frame = bounds
-    let solid = bounds.height > fade ? (bounds.height - fade) / bounds.height : 0
+    fadeMask.frame = effectView.bounds
+    gradient.frame = effectView.bounds
+    let height = effectView.bounds.height
+    let solid = height > fade ? (height - fade) / height : 0
     gradient.locations = [0, NSNumber(value: Double(solid)), 1]
     CATransaction.commit()
   }
