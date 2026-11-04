@@ -5,6 +5,12 @@ on:
   push:
     branches: [main]
 
+# The run's GitHub token may read the code and nothing else, and every action is
+# pinned to a commit, its version after the `#`: a tag can be moved to other
+# code, a commit cannot (S3 of the release audit, #137).
+permissions:
+  contents: read
+
 jobs:
   app:
     name: App (Flutter)
@@ -13,8 +19,8 @@ jobs:
       run:
         working-directory: app
     steps:
-      - uses: actions/checkout@v4
-      - uses: subosito/flutter-action@v2
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
           flutter-version: 3.44.6
           channel: stable
@@ -33,7 +39,7 @@ jobs:
       run:
         working-directory: server
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       # A merge committed with its conflict markers still left in (it happened once, 16 Oct) fails here.
       - name: No merge conflict markers
         working-directory: .
@@ -42,7 +48,7 @@ jobs:
             echo "::error::Merge conflict markers are committed in the files above."
             exit 1
           fi
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 24
           cache: npm
