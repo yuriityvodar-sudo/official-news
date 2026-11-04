@@ -259,11 +259,6 @@ void main() {
     /// What `/v1/chat/status` was asked about.
     late List<Map<String, dynamic>> statusAsked;
 
-    test(
-      'stays closed in builds without the demo or a Sandbox key, such as the App Store\'s',
-      () => expect(ChatScreen.opened, isFalse),
-    );
-
     /// The server: answers in pieces, or with [status]; [left] questions
     /// left before asking, at [units] a question.
     ApiClient server({

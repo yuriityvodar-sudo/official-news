@@ -12,7 +12,6 @@ import '../../core/analytics.dart';
 import '../../core/api_client.dart';
 import '../../core/chat_history.dart';
 import '../../core/article.dart';
-import '../../core/config.dart';
 import '../../core/glass.dart';
 import '../../core/motion.dart';
 import '../../core/sheet.dart';
@@ -128,18 +127,10 @@ class ChatScreen extends StatefulWidget {
   final ChatHistory? history;
   final Future<void> Function(Uri) openLink;
 
-  /// Where the chat is: the iOS app (StoreKit), not Android or tests, unless a
-  /// test sets [debugAvailable], and until its release only the builds that
-  /// open it ([opened]).
-  static bool get available =>
-      debugAvailable ?? (!kIsWeb && Platform.isIOS && opened);
-
-  /// Until the chat is released, only the team's builds have it: the demo,
-  /// or a build with a key for Sandbox purchases ([chatSandboxKey]), Roman's
-  /// own (Roman, 28 Oct) and `testflight` ones, whose testers try it for
-  /// free (Roman and Yurii, 29 Oct). A `store` build has neither and keeps
-  /// the note until the chat's release is decided.
-  static const opened = chatDemo || chatSandboxKey != '';
+  /// Where the chat is: the iOS app (StoreKit), every build of it, the
+  /// `store` one App Review gets too (Roman, 4 Nov: «открыть sandbox для
+  /// appreview»), not Android or tests, unless a test sets [debugAvailable].
+  static bool get available => debugAvailable ?? (!kIsWeb && Platform.isIOS);
 
   @visibleForTesting
   static bool? debugAvailable;
