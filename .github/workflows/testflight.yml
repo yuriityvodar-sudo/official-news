@@ -21,7 +21,8 @@ name: TestFlight
 # creates an Apple Development certificate of its own (every run did, until the
 # team hit Apple's limit: #96).
 # The app must already exist in App Store Connect with the bundle ID set in
-# app/ios/Runner.xcodeproj. Builds use the live API at api.officialnews.workers.dev.
+# app/ios/Runner.xcodeproj. Builds use the live API at api.outernews.app (S2 of the
+# release audit, 4 Nov; it was api.officialnews.workers.dev).
 
 on:
   workflow_dispatch:
@@ -128,7 +129,7 @@ jobs:
           elif [ "$APP_BUILD" = testflight ]; then
             echo "::warning::CHAT_SANDBOX_KEY_TESTFLIGHT is not set, so this build keeps the AI chat closed (docs/setup.md)."
           fi
-          flutter build ios --release --no-codesign --build-number=${{ github.run_number }} --dart-define=API_URL=https://api.officialnews.workers.dev --dart-define=APP_BUILD="$APP_BUILD" --dart-define=CHAT_SANDBOX_KEY="$CHAT_SANDBOX_KEY" --dart-define=BUILD_NUMBER=${{ github.run_number }} $FIREBASE_DEFINES
+          flutter build ios --release --no-codesign --build-number=${{ github.run_number }} --dart-define=API_URL=https://api.outernews.app --dart-define=APP_BUILD="$APP_BUILD" --dart-define=CHAT_SANDBOX_KEY="$CHAT_SANDBOX_KEY" --dart-define=BUILD_NUMBER=${{ github.run_number }} $FIREBASE_DEFINES
 
       - name: Archive without signing
         # Nothing is signed here, so this step never talks to the Apple account

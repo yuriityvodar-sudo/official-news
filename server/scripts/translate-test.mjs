@@ -99,7 +99,7 @@ const cell = (r) =>
     ? `<td class="err">${esc(r.error)}</td>`
     : `<td><h3>${esc(r.headline)}</h3><p class="short">${esc(r.shortSummary)}</p>${para(r.summary)}<div class="meta">${(r.ms / 1000).toFixed(1)} s</div></td>`;
 
-const feed = await (await fetch(`https://api.officialnews.workers.dev/articles?limit=${COUNT}`)).json();
+const feed = await (await fetch(`https://api.outernews.app/articles?limit=${COUNT}`)).json();
 const articles = feed.items.filter((a) => a.headline && a.summary).slice(0, COUNT);
 const rows = [];
 const totals = MODELS.map(() => ({ ok: 0, ms: 0, tokensOut: 0, neurons: 0 }));

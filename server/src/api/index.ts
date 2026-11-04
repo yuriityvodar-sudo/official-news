@@ -1013,9 +1013,28 @@ async function route(request: Request, env: Env): Promise<Response> {
   return json({ error: "Not found" }, 404);
 }
 
+/**
+ * Whether [request] is over the rate limit (S2 of the release audit, 4 Nov):
+ * [API_LIMIT] requests a minute from one address in a Cloudflare location,
+ * far above what a reader's app asks. Apple's notifications are never
+ * limited, nor a request without an address (a local run).
+ */
+async function overLimit(request: Request, env: Env): Promise<boolean> {
+  const address = request.headers.get("cf-connecting-ip");
+  if (!env.API_LIMIT || !address || new URL(request.url).pathname === "/v1/appstore/notifications") return false;
+  const { success } = await env.API_LIMIT.limit({ key: address });
+  return !success;
+}
+
+/** The requests a minute from one address that [overLimit] lets through (wrangler.jsonc's `ratelimits`). */
+export const API_LIMIT = 300;
+
 /** The API router. Every response, errors included, is JSON. */
 export async function handleApi(request: Request, env: Env): Promise<Response> {
   try {
+    if (await overLimit(request, env)) {
+      return json({ error: "Too many requests. Try again in a minute." }, 429, { "retry-after": "60", "cache-control": "no-store" });
+    }
     return await route(request, env);
   } catch (error) {
     console.error(

@@ -47,4 +47,12 @@ export interface Env {
    * into both himself. Without it TestFlight builds keep the chat closed.
    */
   CHAT_SANDBOX_KEY_TESTFLIGHT?: string;
+  /**
+   * Cloudflare's rate limiter for the API (S2 of the release audit, 4 Nov):
+   * how many requests one address may make a minute in one Cloudflare
+   * location (`ratelimits` in wrangler.jsonc). A flood is answered 429 before
+   * it reads D1, whose 5 million rows a day the fetcher needs too. Absent in a
+   * local run without it: nothing is limited.
+   */
+  API_LIMIT?: RateLimit;
 }
