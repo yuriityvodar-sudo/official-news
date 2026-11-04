@@ -795,7 +795,7 @@
   "@contactSupport": {
     "description": "The settings row and the page's title."
   },
-  "settingsFooter": "Independent app, not affiliated with any government. Summaries are written by AI from official sources; every article links to the original.",
+  "settingsFooter": "Independent app, not affiliated with any government. The summaries and the headlines marked ✦ are written by AI, from official sources and news outlets' headlines; every article links to the original.",
   "@settingsFooter": {
     "description": "Small grey text at the end of Settings, above the version."
   },

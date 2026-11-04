@@ -66,6 +66,7 @@ void main() {
     WidgetTester tester, {
     int ticks = 5,
     int stories = 5,
+    bool aiTitles = true,
   }) async {
     final top = [_decision('t1', 9), _decision('t2', 8), _decision('t3', 7)];
     final page = {
@@ -84,7 +85,11 @@ void main() {
                 ...page,
                 'stories': [
                   for (var i = 0; i < stories; i++)
-                    fakeStory(id: 's$i', title: 'Story $i'),
+                    fakeStory(
+                      id: 's$i',
+                      title: 'Story $i',
+                      aiTitle: aiTitles,
+                    ),
                 ],
                 'ticks': [
                   for (var i = 0; i < ticks; i++)
@@ -178,6 +183,40 @@ void main() {
     // No outlets' tile: a card like a decision's.
     expect(find.text('4'), findsNothing);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the AI\'s headlines carry ✦ by the time and VoiceOver says '
+      'so; a story with its outlets\' own headline has none (AI Act, art. 50: '
+      'L2 of the release audit, 4 Nov)', (tester) async {
+    await pumpFeed(tester, ticks: 1, stories: 1);
+    final marks = find.byKey(const ValueKey('by-ai'));
+    Finder card(String headline) => find
+        .ancestor(of: find.text(headline), matching: find.byType(Semantics))
+        .first;
+    for (final headline in ['Tick 0', 'Story 0']) {
+      expect(find.descendant(of: card(headline), matching: marks), findsOne);
+      expect(
+        tester.getSemantics(find.text(headline)).label,
+        endsWith('Headline by AI. Discuss with AI.'),
+      );
+    }
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a story with its outlets\' own headline, the model\'s not yet '
+      'written, has no ✦', (tester) async {
+    await pumpFeed(tester, ticks: 0, stories: 1, aiTitles: false);
+    final card = find
+        .ancestor(of: find.text('Story 0'), matching: find.byType(Semantics))
+        .first;
+    expect(
+      find.descendant(of: card, matching: find.byKey(const ValueKey('by-ai'))),
+      findsNothing,
+    );
+    expect(
+      tester.getSemantics(find.text('Story 0')).label,
+      isNot(contains('Headline by AI')),
+    );
   });
 
   testWidgets('where the chat is not open yet, the card or its button opens '

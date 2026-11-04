@@ -107,6 +107,8 @@ class NewsLook extends FeedLook {
         lastSeen: tick.lastSeen,
         freshId: 'tick ${tick.id}',
         spoken: tickSpoken(tick, l10n),
+        // A tick's headline is always the model's.
+        byAi: true,
         onTap: () => block.openTick(news.index),
       );
     }
@@ -118,6 +120,8 @@ class NewsLook extends FeedLook {
       lastSeen: story.lastSeen,
       freshId: 'story ${story.id}',
       spoken: storySpoken(story, block.country, l10n),
+      // The model's headline, or the outlets' own until it has written one.
+      byAi: story.aiTitle,
       onTap: () => block.openStory(news.index),
     );
   }
@@ -767,7 +771,7 @@ class _Card extends StatelessWidget {
     final grey = Theme.of(context).colorScheme.onSurfaceVariant;
     final source = dim(style.source, read);
     final meta = TextStyle(fontSize: 14, color: style.muted);
-    final timeText = !read && isFresh(article)
+    final fresh = !read && isFresh(article)
         ? FreshTime(
             time,
             articleId: article.id,
@@ -775,10 +779,21 @@ class _Card extends StatelessWidget {
             color: style.accent,
           )
         : Text(time, style: meta);
+    // Its headline is the AI's once the summary is written; the source's
+    // own title until then (summaryComing).
+    final byAi = article.summary != null;
+    final timeText = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Flexible(child: fresh),
+        if (byAi) _ByAi(color: style.muted),
+      ],
+    );
+    final spoken = _spoken(context, article, topics);
     return Semantics(
       container: true,
       button: true,
-      label: _spoken(context, article, topics),
+      label: byAi ? '$spoken ${l10n.storyHeadlineByAi}.' : spoken,
       value: mark.unread ? l10n.feedUnread : null,
       onTap: onTap,
       excludeSemantics: true,
@@ -893,6 +908,28 @@ class _Card extends StatelessWidget {
   }
 }
 
+/// The mark of a headline the AI wrote (L2 of the release audit, 4 Nov:
+/// the EU's AI Act, art. 50, in force since 2 Aug 2026, wants news text an
+/// AI wrote shown as such where it is first seen): a small ✦ after the
+/// time, in the time's grey, no words (Roman: no secondary texts); VoiceOver
+/// says "Headline by AI", and Settings' footer says what ✦ means.
+class _ByAi extends StatelessWidget {
+  const _ByAi({required this.color});
+
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsetsDirectional.only(start: 5),
+    child: Icon(
+      CupertinoIcons.sparkles,
+      key: const ValueKey('by-ai'),
+      size: 13,
+      color: color,
+    ),
+  );
+}
+
 /// A card of the media's news (#230; Roman, 3 Nov: «пусть будет просто в
 /// ленте как часть ленты»): a world's tick or a story of the reader's
 /// country's outlets as a decision's card, with the place and the outlets
@@ -909,6 +946,7 @@ class _MediaCard extends StatelessWidget {
     required this.lastSeen,
     required this.freshId,
     required this.spoken,
+    required this.byAi,
     required this.onTap,
   });
 
@@ -926,6 +964,9 @@ class _MediaCard extends StatelessWidget {
 
   /// What VoiceOver reads before "Discuss with AI".
   final String spoken;
+
+  /// Whether the AI wrote its headline ([_ByAi]).
+  final bool byAi;
   final VoidCallback onTap;
 
   @override
@@ -940,7 +981,9 @@ class _MediaCard extends StatelessWidget {
     return Semantics(
       container: true,
       button: true,
-      label: '$spoken ${l10n.discussWithAi}.',
+      label: byAi
+          ? '$spoken ${l10n.storyHeadlineByAi}. ${l10n.discussWithAi}.'
+          : '$spoken ${l10n.discussWithAi}.',
       onTap: onTap,
       excludeSemantics: true,
       child: GestureDetector(
@@ -971,16 +1014,24 @@ class _MediaCard extends StatelessWidget {
                     Expanded(
                       child: Align(
                         alignment: AlignmentDirectional.centerStart,
-                        child: fresh
-                            ? FreshTime(
-                                time,
-                                articleId: freshId,
-                                style: timeStyle.copyWith(
-                                  fontWeight: FontWeight.w600,
-                                ),
-                                color: style.accent,
-                              )
-                            : Text(time, style: timeStyle),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Flexible(
+                              child: fresh
+                                  ? FreshTime(
+                                      time,
+                                      articleId: freshId,
+                                      style: timeStyle.copyWith(
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                      color: style.accent,
+                                    )
+                                  : Text(time, style: timeStyle),
+                            ),
+                            if (byAi) _ByAi(color: style.muted),
+                          ],
+                        ),
                       ),
                     ),
                     const SizedBox(width: 10),
