@@ -4,6 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../../core/analytics_consent.dart';
 import '../../core/api_client.dart';
 import '../../core/countries.dart';
 import '../../core/feed_language.dart';
@@ -151,6 +152,8 @@ class SettingsScreen extends StatelessWidget {
                       push: notifications ?? push,
                       openSettingsApp: openSettingsApp,
                     ),
+                    // Only in a build with analytics (L1, 4 Nov).
+                    if (analyticsAvailable.value) const _UsageStatisticsTile(),
                   ],
                 ),
                 CupertinoListSection.insetGrouped(
@@ -481,6 +484,33 @@ class _NotificationsTile extends StatelessWidget {
             );
         }
       },
+    );
+  }
+}
+
+/// Whether the app may send usage statistics (L1 of the release audit,
+/// 4 Nov): the answer to the question at the first launch, changed here at
+/// any time, on at once or off at once.
+class _UsageStatisticsTile extends StatelessWidget {
+  const _UsageStatisticsTile();
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return ValueListenableBuilder(
+      valueListenable: analyticsConsent,
+      builder: (context, consent, _) => CupertinoListTile(
+        leading: const _Icon(CupertinoIcons.chart_bar),
+        title: Text(l10n.usageStatistics),
+        trailing: CupertinoSwitch(
+          value: consent == AnalyticsConsent.granted,
+          onChanged: (on) => unawaited(
+            setAnalyticsConsent(
+              on ? AnalyticsConsent.granted : AnalyticsConsent.denied,
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

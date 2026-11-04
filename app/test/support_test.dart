@@ -647,8 +647,9 @@ void main() {
       });
     }
 
-    test('the policy is dated 29 October 2026', () {
-      expect(policyUpdated, DateTime(2026, 10, 29));
+    test('the policy is dated 4 November 2026 (usage statistics only if '
+        'allowed, L1)', () {
+      expect(policyUpdated, DateTime(2026, 11, 4));
     });
   });
 }

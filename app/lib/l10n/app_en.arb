@@ -915,9 +915,29 @@
   "@privacyAnalyticsHeading": {
     "description": "Privacy policy, heading."
   },
-  "privacyAnalytics": "To understand how the app is used, for example how many people read which kind of decision, the app sends usage events to Google Analytics for Firebase: screens opened, articles opened and read, links tapped, the chosen language, feed filters and your country for For you, and technical details such as the app version, device model, country and an app instance ID. It does not use the advertising identifier and does not track you across other apps.",
+  "privacyAnalytics": "Only if you allow it when the app asks, it sends usage events to Google Analytics for Firebase, to understand how the app is used, for example how many people read which kind of decision: screens opened, articles opened and read, links tapped, the chosen language, feed filters and your country for For you, and technical details such as the app version, device model, country and an app instance ID. You can turn this off at any time in Settings → Usage statistics. It does not use the advertising identifier and does not track you across other apps.",
   "@privacyAnalytics": {
     "description": "Privacy policy, under privacyAnalyticsHeading. Google Analytics for Firebase is a product's name: never translated."
+  },
+  "analyticsConsentTitle": "Help improve Outer News?",
+  "@analyticsConsentTitle": {
+    "description": "The question at the first launch, after the splash, whether the app may send usage statistics (L1 of the release audit)."
+  },
+  "analyticsConsentBody": "Allow the app to send usage statistics to Google Analytics for Firebase: which screens and news are opened, with a random app ID and never your name. No ads, no tracking across other apps. You can change this in Settings.",
+  "@analyticsConsentBody": {
+    "description": "What the question says: what is sent, to whom, and that Settings changes it."
+  },
+  "analyticsAllow": "Allow",
+  "@analyticsAllow": {
+    "description": "The answer that allows usage statistics, as iOS's own Allow."
+  },
+  "analyticsDontAllow": "Don't Allow",
+  "@analyticsDontAllow": {
+    "description": "The answer that does not, as iOS's own Don't Allow; as easy as Allow."
+  },
+  "usageStatistics": "Usage statistics",
+  "@usageStatistics": {
+    "description": "The Settings row with a switch for usage statistics."
   },
   "privacyNotificationsHeading": "Notifications",
   "@privacyNotificationsHeading": {
