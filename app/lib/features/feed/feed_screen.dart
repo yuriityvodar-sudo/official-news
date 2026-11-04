@@ -481,6 +481,11 @@ class _FeedScreenState extends State<FeedScreen> {
               physics: const AlwaysScrollableScrollPhysics(
                 parent: BouncingScrollPhysics(),
               ),
+              // Rows go on under the status bar, under the look's glass
+              // edge, where the safe area would cut them (Roman, 4 Nov).
+              clipBehavior: look.drawsUnderStatusBar
+                  ? Clip.none
+                  : Clip.hardEdge,
               slivers: [
                 // Pull to refresh works in every state, including error and empty.
                 // It taps back itself as the pull passes the refresh point.
@@ -517,6 +522,7 @@ class _FeedScreenState extends State<FeedScreen> {
                       topics: _feed.topics,
                       onChoose: _chooseFeed,
                       pull: _pull,
+                      topInset: MediaQuery.paddingOf(context).top,
                     ),
                   ),
                 ),

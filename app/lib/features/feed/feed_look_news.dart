@@ -9,6 +9,7 @@ import 'package:flutter/rendering.dart';
 import '../../core/article.dart';
 import '../../core/card_zoom.dart';
 import '../../core/countries.dart';
+import '../../core/glass.dart';
 import '../../core/motion.dart';
 import '../../core/news_widgets.dart';
 import '../../core/read_mark.dart';
@@ -65,6 +66,11 @@ class NewsLook extends FeedLook {
   /// fade or a folded title.
   @override
   bool get fadesTopEdge => false;
+
+  /// Under the pills and the status bar, iOS's soft edge blurs them
+  /// ([_NewsHeader]).
+  @override
+  bool get drawsUnderStatusBar => true;
 
   @override
   Widget refreshIndicator(BuildContext context, FeedPull pull) =>
@@ -159,6 +165,8 @@ class NewsLook extends FeedLook {
       delegate: _NewsHeader(
         titleHeight: titleHeight,
         pillsHeight: FeedPills.heightFor(scaler),
+        topInset: masthead.topInset,
+        page: style.page,
         title: Padding(
           padding: const EdgeInsets.fromLTRB(16, 10, 8, 0),
           child: Row(
@@ -332,13 +340,17 @@ class NewsLook extends FeedLook {
 }
 
 /// [NewsLook]'s masthead, pinned: the title and the date scroll away and
-/// fade, as an iOS large title does, and the pills stay at the top with
-/// nothing behind them, so the rows pass under the glass. The tint behind it
-/// all is the look's backdrop, one piece with the status bar's.
+/// fade, as an iOS large title does, and the pills stay at the top, so the
+/// rows pass under the glass. The tint behind it all is the look's
+/// backdrop, one piece with the status bar's. Once the rows come under the
+/// pills, iOS's soft edge ([GlassEdge]) blurs them there and under the
+/// status bar, fading out just below the pills (Roman, 4 Nov).
 class _NewsHeader extends SliverPersistentHeaderDelegate {
   _NewsHeader({
     required this.titleHeight,
     required this.pillsHeight,
+    required this.topInset,
+    required this.page,
     required this.title,
     required this.pills,
   });
@@ -346,8 +358,20 @@ class _NewsHeader extends SliverPersistentHeaderDelegate {
   /// As tall as their words at the reader's text size.
   final double titleHeight;
   final double pillsHeight;
+
+  /// The status bar's height, above the header, which the edge covers too.
+  final double topInset;
+
+  /// The page's colour, for the edge where iOS's blur is not used.
+  final Color page;
   final Widget title;
   final Widget pills;
+
+  /// The edge's foot, below the pills, that fades out.
+  static const edgeFade = 24.0;
+
+  /// How far the rows have gone under the pills when the edge is all there.
+  static const _edgeIn = 24.0;
 
   @override
   double get minExtent => pillsHeight;
@@ -363,10 +387,26 @@ class _NewsHeader extends SliverPersistentHeaderDelegate {
     // is not made again as the title comes back.
     // The chosen pill's glow reaches over the rows under the header, not cut
     // where it ends (Yurii, #210); the title is clipped to its own band.
+    // The rows come under the pills once the title has gone.
+    final under = ((shrinkOffset - titleHeight + _edgeIn) / _edgeIn).clamp(
+      0.0,
+      1.0,
+    );
     return Stack(
       fit: StackFit.expand,
       clipBehavior: Clip.none,
       children: [
+        // From the screen's top to just below the pills, behind them.
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: -edgeFade,
+          height: topInset + pillsHeight + edgeFade,
+          child: Opacity(
+            opacity: under,
+            child: GlassEdge(color: page, fade: edgeFade),
+          ),
+        ),
         Positioned(
           left: 0,
           right: 0,
@@ -393,12 +433,15 @@ class _NewsHeader extends SliverPersistentHeaderDelegate {
   bool shouldRebuild(_NewsHeader old) =>
       old.titleHeight != titleHeight ||
       old.pillsHeight != pillsHeight ||
+      old.topInset != topInset ||
+      old.page != page ||
       old.title != title ||
       old.pills != pills;
 }
 
 /// What shows in the gap the pull opens above the masthead: plain grey
-/// words in its middle, no spinner or ring. "Pull to refresh", "Release to
+/// words in its middle, across the screen too (Roman, 4 Nov), no spinner
+/// or ring. "Pull to refresh", "Release to
 /// refresh" once the pull has gone far enough, "Refreshing the news…"
 /// pulsing softly while the feed loads (steady with Reduce Motion), then how
 /// it went with a green tick ("3 new decisions", "No new decisions"),
@@ -494,6 +537,7 @@ class _PullHintState extends State<_PullHint>
       // VoiceOver says how it went.
       liveRegion: step == _PullStep.done,
       child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
         mainAxisSize: MainAxisSize.min,
         children: [
           if (step == _PullStep.done) ...[

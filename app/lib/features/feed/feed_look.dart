@@ -250,6 +250,12 @@ abstract class FeedLook {
   /// the rows pass under.
   bool get fadesTopEdge => true;
 
+  /// Whether the rows go on under the status bar as the feed scrolls, not
+  /// cut where the screen's safe area starts (Roman, 4 Nov): for a look
+  /// whose masthead covers the status bar with its own glass edge
+  /// ([FeedMasthead.topInset]). False (the default) for the others.
+  bool get drawsUnderStatusBar => false;
+
   /// What shows above the masthead while the feed is pulled down to refresh
   /// ([CupertinoSliverRefreshControl]'s builder, and how the refresh went
   /// once the feed has loaded: [FeedPull.result]): the platform's spinner, or
@@ -300,6 +306,7 @@ class FeedMasthead {
     required this.topics,
     required this.onChoose,
     required this.pull,
+    this.topInset = 0,
   });
 
   /// "Outer News": the app's name, the same in every language.
@@ -342,6 +349,11 @@ class FeedMasthead {
   /// out, so read it while painting (a render object listening to it), never
   /// in a build.
   final ValueListenable<FeedPull?> pull;
+
+  /// How tall the status bar is, above the masthead: a look whose rows go
+  /// on under it ([FeedLook.drawsUnderStatusBar]) covers it with its glass
+  /// edge as they do.
+  final double topInset;
 
   /// Today's buttons at the end of the masthead: Conversations, when there
   /// are any (#146, Roman's pick B, 30 Oct), then the round settings gear,

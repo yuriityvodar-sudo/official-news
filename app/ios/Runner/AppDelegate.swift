@@ -22,6 +22,10 @@ import firebase_messaging
     engineBridge.pluginRegistry
       .registrar(forPlugin: "official_news/glass")?
       .register(GlassViewFactory(), withId: "official_news/glass")
+    // iOS's soft edge at the top of the feed, over the rows (#141).
+    engineBridge.pluginRegistry
+      .registrar(forPlugin: "official_news/edge")?
+      .register(EdgeViewFactory(), withId: "official_news/edge")
     // iOS's own pull-down menus for the feed's filter chips (#141).
     if let menus = engineBridge.pluginRegistry.registrar(forPlugin: "official_news/menu") {
       menus.register(MenuViewFactory(messenger: menus.messenger()), withId: "official_news/menu")
@@ -144,6 +148,69 @@ class CircleView: UIView {
   override func layoutSubviews() {
     super.layoutSubviews()
     layer.cornerRadius = min(bounds.width, bounds.height) / 2
+  }
+}
+
+/// iOS 26's soft scroll edge at the top of the feed (#141, Roman, 4 Nov):
+/// a blur of what Flutter has under it, the system's thinnest material,
+/// fading out over its last `fade` points, so the rows pass softly under the
+/// status bar and the pills. The same material from iOS 15 on.
+class EdgeViewFactory: NSObject, FlutterPlatformViewFactory {
+  func createArgsCodec() -> FlutterMessageCodec & NSObjectProtocol {
+    FlutterStandardMessageCodec.sharedInstance()
+  }
+
+  func create(
+    withFrame frame: CGRect,
+    viewIdentifier viewId: Int64,
+    arguments args: Any?
+  ) -> FlutterPlatformView {
+    let fade = (args as? [String: Any])?["fade"] as? Double ?? 24
+    return EdgeView(frame: frame, fade: CGFloat(fade))
+  }
+}
+
+class EdgeView: NSObject, FlutterPlatformView {
+  private let blur: FadingBlurView
+
+  init(frame: CGRect, fade: CGFloat) {
+    blur = FadingBlurView(frame: frame, fade: fade)
+    super.init()
+  }
+
+  func view() -> UIView { blur }
+}
+
+/// A blur whose foot fades out. Its mask is laid out again whenever Flutter
+/// sizes the view, as [RoomView]'s glass is.
+final class FadingBlurView: UIVisualEffectView {
+  private let fade: CGFloat
+  private let fadeMask = UIView()
+  private let gradient = CAGradientLayer()
+
+  init(frame: CGRect, fade: CGFloat) {
+    self.fade = fade
+    super.init(effect: UIBlurEffect(style: .systemUltraThinMaterial))
+    self.frame = frame
+    gradient.colors = [UIColor.black.cgColor, UIColor.black.cgColor, UIColor.clear.cgColor]
+    fadeMask.layer.addSublayer(gradient)
+    // A visual effect view fades through its own mask view, not a layer mask.
+    mask = fadeMask
+    // Taps fall through to the rows (PlatformViewHitTestBehavior.transparent).
+    isUserInteractionEnabled = false
+  }
+
+  required init?(coder: NSCoder) { fatalError("not used") }
+
+  override func layoutSubviews() {
+    super.layoutSubviews()
+    CATransaction.begin()
+    CATransaction.setDisableActions(true)
+    fadeMask.frame = bounds
+    gradient.frame = bounds
+    let solid = bounds.height > fade ? (bounds.height - fade) / bounds.height : 0
+    gradient.locations = [0, NSNumber(value: Double(solid)), 1]
+    CATransaction.commit()
   }
 }
 
