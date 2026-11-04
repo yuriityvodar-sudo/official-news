@@ -14,11 +14,14 @@ import 'package:official_news/core/feed_store.dart';
 import 'package:official_news/core/filters.dart';
 import 'package:official_news/core/glass.dart';
 import 'package:official_news/core/router.dart';
+import 'package:official_news/core/splash_logo.dart';
 import 'package:official_news/core/theme.dart';
 import 'package:official_news/core/topics.dart';
 import 'package:official_news/features/chat/chat_style.dart';
 import 'package:official_news/features/feed/feed_controller.dart';
 import 'package:official_news/features/feed/feed_look.dart';
+import 'package:official_news/features/feed/feed_look_now.dart'
+    show NowSettingsButton;
 import 'package:official_news/features/feed/feed_pills.dart';
 import 'package:official_news/features/feed/feed_screen.dart';
 import 'package:official_news/features/feed/feed_touches.dart';
@@ -593,6 +596,11 @@ void main() {
           tester.getCenter(logo).dx,
           lessThan(tester.getTopLeft(find.text('Outer News')).dx),
         );
+        // Where the splash's N lands at start (#141, Roman, 4 Nov).
+        expect(
+          find.ancestor(of: logo, matching: find.byType(SplashLogoTarget)),
+          findsOneWidget,
+        );
         // What the feed shows as pills under the date, not the other looks'
         // menu (#170).
         expect(find.byType(FeedPills), findsOneWidget);
@@ -1114,20 +1122,22 @@ void main() {
         expect(edge(), 0);
         await tester.drag(find.text('Decision r3'), const Offset(0, -500));
         await tester.pumpAndSettle();
-        // Pinned at the top of the safe area, rows scrolled under it.
-        expect(tester.getTopLeft(row).dy, 62);
+        // Pinned under the title's bar, rows scrolled under it.
+        expect(tester.getTopLeft(row).dy, 62 + 44);
         expect(find.text('For you'), findsOneWidget);
         expect(
           find.descendant(of: row, matching: find.byType(BackdropFilter)),
           findsWidgets,
         );
         expect(find.byType(ScrollEdgeFade), findsNothing);
-        // The edge from the screen's top to just below the pills, behind
-        // them, over rows the list no longer cuts at the safe area.
+        // The edge from the screen's top to just below the title's bar,
+        // over rows the list no longer cuts at the safe area, lighter and
+        // lower than first built (Roman, 4 Nov): the pills keep their glass.
         expect(edge(), 1);
         final glass = tester.getRect(find.byType(GlassEdge));
         expect(glass.top, 0);
-        expect(glass.bottom, tester.getBottomLeft(row).dy + 24);
+        expect(glass.bottom, tester.getTopLeft(row).dy + 16);
+        expect(tester.widget<GlassEdge>(find.byType(GlassEdge)).strength, 0.45);
         expect(
           tester
               .widget<CustomScrollView>(find.byType(CustomScrollView))
@@ -1198,8 +1208,70 @@ void main() {
         expect(tester.getRect(pill).right, lessThanOrEqualTo(393));
       });
 
+      testWidgets('scrolled, the title shrinks with the feed into a bar, the '
+          'date goes first, and the buttons stay on the right (Roman, 4 Nov)', (
+        tester,
+      ) async {
+        await pumpFeed(tester, rows, const [], height: 700);
+        await tester.pumpAndSettle();
+        final title = find.text('Outer News');
+        final date = find.byKey(const ValueKey('masthead-date'));
+        final settings = find.byType(NowSettingsButton);
+        final rest = tester.getRect(title);
+        final restSettings = tester.getRect(settings);
+        double dateShown() => tester
+            .widget<Opacity>(
+              find.ancestor(of: date, matching: find.byType(Opacity)).first,
+            )
+            .opacity;
+        expect(dateShown(), 1);
+        final scroll = tester
+            .widget<CustomScrollView>(find.byType(CustomScrollView))
+            .controller!;
+        // The title and the date, 84.64 points, into a bar of 44.
+        const travel = 10 + 32 * 1.08 + 26 * 1.08 + 12 - 44;
+        Future<void> scrollTo(double offset) async {
+          scroll.jumpTo(offset);
+          await tester.pump();
+        }
+
+        // A quarter of the way: the title a little smaller, the date half gone.
+        await scrollTo(travel / 4);
+        expect(
+          tester.getRect(title).width,
+          moreOrLessEquals(rest.width * (1 - 0.38 / 4), epsilon: 0.5),
+        );
+        expect(dateShown(), moreOrLessEquals(0.5, epsilon: 0.01));
+        // Halfway: the date is gone, the title still shrinking.
+        await scrollTo(travel / 2);
+        expect(dateShown(), 0);
+        expect(
+          tester.getRect(title).width,
+          moreOrLessEquals(rest.width * (1 - 0.38 / 2), epsilon: 0.5),
+        );
+        // All the way: the title in the middle of the bar, the buttons too,
+        // still on the right, the pills under the bar.
+        await scrollTo(300);
+        expect(
+          tester.getRect(title).width,
+          moreOrLessEquals(rest.width * 0.62, epsilon: 0.5),
+        );
+        expect(tester.getCenter(title).dy, moreOrLessEquals(22, epsilon: 0.5));
+        // Shrunk towards its left edge, the logo's, 16 points in.
+        expect(
+          tester.getRect(title).left,
+          moreOrLessEquals(16 + (rest.left - 16) * 0.62, epsilon: 0.01),
+        );
+        expect(tester.getRect(settings).right, restSettings.right);
+        expect(
+          tester.getCenter(settings).dy,
+          moreOrLessEquals(22, epsilon: 0.5),
+        );
+        expect(tester.getTopLeft(find.byType(FeedPills)).dy, 44);
+      });
+
       testWidgets('swiped sideways, the pills stay where they are as the '
-          'title scrolls away and back: the same row, not a new one', (
+          'title shrinks into its bar and back: the same row, not a new one', (
         tester,
       ) async {
         await pumpFeed(tester, rows, const [], height: 700);
@@ -1213,7 +1285,8 @@ void main() {
 
         await tester.drag(find.text('Decision r3'), const Offset(0, -500));
         await tester.pumpAndSettle();
-        expect(tester.getTopLeft(row).dy, 0);
+        // Under the title's bar.
+        expect(tester.getTopLeft(row).dy, 44);
         expect(tester.getTopLeft(forYou).dx, swiped);
 
         await tester.drag(find.text('Decision r5'), const Offset(0, 500));

@@ -1,15 +1,20 @@
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../core/glass.dart';
+import '../../core/splash_logo.dart';
 import '../../core/theme.dart';
 
-/// The splash at app start (#66, Yurii, 16 Oct): the app's name stacked on
-/// a white page (black in dark mode), with a wave that moves from the bottom
-/// up. Four styles were compared in the prototype; 1b is the one shown
-/// (Yurii, 20 Oct), the others stay for a build's `--dart-define=SPLASH`.
+/// The splash at app start (#66, Yurii, 16 Oct): on a white page (black in
+/// dark mode) the N lights up and flies to its place in the masthead as the
+/// page gives way to the feed ([SplashStyle.fly], Roman's pick 1 of
+/// `handoff/intro-logo.html`, 4 Nov). Until then it was the app's name
+/// stacked, with a wave that moved from the bottom up (1b, Yurii, 20 Oct);
+/// that and the other styles of the prototype stay for a build's
+/// `--dart-define=SPLASH`.
 ///
 /// Apple wants the native launch screen static, so iOS shows a plain
 /// background (LaunchScreen.storyboard, systemBackground: white, or black in
@@ -38,17 +43,21 @@ enum SplashStyle {
 
   /// Grey letters fill with black from the bottom, behind a wavy edge.
   fill,
+
+  /// The N, no words: it springs in, its red window lights up, and it flies
+  /// to the masthead's N as the page fades into the feed (Roman, 4 Nov).
+  fly,
 }
 
-/// The style shown at start: 1b, "News" first (Yurii's pick, 20 Oct). A build
-/// can start with another one: `--dart-define=SPLASH=sweep` (or `riseup`, `fill`, or `1`,
-/// `1b`, `2`, `3`).
+/// The style shown at start: the N's flight (Roman's pick, 4 Nov). A build
+/// can start with another one: `--dart-define=SPLASH=riseup` (or `rise`,
+/// `sweep`, `fill`, or `1`, `1b`, `2`, `3`).
 final splashStyle = ValueNotifier<SplashStyle>(
   splashNamed(const String.fromEnvironment('SPLASH')),
 );
 
-/// `rise`, `riseup`, `sweep` or `fill` (or `1`, `1b`, `2`, `3`), in any case;
-/// anything else is [SplashStyle.riseUp].
+/// `rise`, `riseup`, `sweep`, `fill` or `fly` (or `1`, `1b`, `2`, `3`), in
+/// any case; anything else is [SplashStyle.fly].
 SplashStyle splashNamed(String name) {
   final key = name.trim().toLowerCase();
   return switch (key) {
@@ -58,7 +67,7 @@ SplashStyle splashNamed(String name) {
     '3' => SplashStyle.fill,
     _ => SplashStyle.values.firstWhere(
       (style) => style.name.toLowerCase() == key,
-      orElse: () => SplashStyle.riseUp,
+      orElse: () => SplashStyle.fly,
     ),
   };
 }
@@ -69,6 +78,8 @@ Duration splashLength(SplashStyle style) => switch (style) {
   SplashStyle.rise || SplashStyle.riseUp => const Duration(milliseconds: 1850),
   SplashStyle.sweep => const Duration(milliseconds: 1950),
   SplashStyle.fill => const Duration(milliseconds: 1850),
+  // Its page is gone by then, and it ends without a fade of its own.
+  SplashStyle.fly => const Duration(milliseconds: 1500),
 };
 
 /// The fade into the app at the end, or after a touch.
@@ -127,10 +138,18 @@ class _SplashHostState extends State<SplashHost> {
   /// A new splash for each play, so Play during one starts it over.
   int _run = 0;
 
+  /// Where the masthead's N stands, and whether the splash's N has landed
+  /// there: the masthead's own N shows only once it has ([SplashLogo]).
+  final _target = ValueNotifier<Rect?>(null);
+  late final _landed = ValueNotifier<bool>(!_flies);
+
+  bool get _flies => _showing && splashStyle.value == SplashStyle.fly;
+
   void _play() => setState(() {
     _showing = true;
     _run++;
     _cover.value = 1;
+    _landed.value = !_flies;
   });
 
   @override
@@ -147,12 +166,15 @@ class _SplashHostState extends State<SplashHost> {
     if (!mounted) return;
     widget.onGone?.call();
     _cover.value = 0;
+    _landed.value = true;
     setState(() => _showing = false);
   }
 
   @override
   void dispose() {
     _cover.dispose();
+    _target.dispose();
+    _landed.dispose();
     super.dispose();
   }
 
@@ -161,9 +183,13 @@ class _SplashHostState extends State<SplashHost> {
     fit: StackFit.expand,
     children: [
       // VoiceOver reads the splash while it shows, then the app.
-      NativeCover(
-        cover: _cover,
-        child: ExcludeSemantics(excluding: _showing, child: widget.child),
+      SplashLogo(
+        target: _target,
+        landed: _landed,
+        child: NativeCover(
+          cover: _cover,
+          child: ExcludeSemantics(excluding: _showing, child: widget.child),
+        ),
       ),
       if (_showing)
         Splash(
@@ -172,6 +198,8 @@ class _SplashHostState extends State<SplashHost> {
           onDone: _done,
           onFade: (page) => _cover.value = page,
           endOn: widget.endOn,
+          target: _target,
+          onLanded: () => _landed.value = true,
         ),
     ],
   );
@@ -187,10 +215,20 @@ class Splash extends StatefulWidget {
     required this.onDone,
     this.onFade,
     this.endOn,
+    this.target,
+    this.onLanded,
   });
 
   final SplashStyle style;
   final VoidCallback onDone;
+
+  /// Where the masthead's N stands, for [SplashStyle.fly] to fly to; it
+  /// stays in the middle without one.
+  final ValueListenable<Rect?>? target;
+
+  /// Told once its N has landed there, or once it fades out early: the
+  /// masthead's own N shows from then.
+  final VoidCallback? onLanded;
 
   /// Told how much of its page is still there as it fades, 1 down to 0.
   final ValueChanged<double>? onFade;
@@ -251,6 +289,11 @@ class _SplashState extends State<Splash> with TickerProviderStateMixin {
     _still =
         MediaQuery.disableAnimationsOf(context) ||
         View.of(context).platformDispatcher.accessibilityFeatures.reduceMotion;
+    if (widget.style == SplashStyle.fly) {
+      precacheImage(AssetImage(_Flight.of(context).asset), context);
+      // Standing still, it never flies: the masthead's N shows under it.
+      if (_still) WidgetsBinding.instance.addPostFrameCallback((_) => _land());
+    }
     _clock.start();
     _life = AppLifecycleListener(onHide: _leave);
     widget.endOn?.addListener(_end);
@@ -268,19 +311,37 @@ class _SplashState extends State<Splash> with TickerProviderStateMixin {
     final step = (elapsed - _last).inMicroseconds / 1000;
     _last = elapsed;
     _ms.value += math.min(step, _maxStep);
+    if (widget.style == SplashStyle.fly && !_still) {
+      // Its page fades within its time, iOS's own views with it.
+      widget.onFade?.call(_Flight.page(_ms.value));
+      if (_ms.value >= _Flight.landAt) _land();
+    }
     if (_ms.value >= _length) _end();
+  }
+
+  bool _landed = false;
+
+  void _land() {
+    if (_landed) return;
+    _landed = true;
+    widget.onLanded?.call();
   }
 
   /// Fades out: at the end, or at once after a touch.
   void _end() {
     if (_fading || !mounted) return;
+    _land();
     setState(() => _fading = true);
     _clock.stop();
     _pageOpacity.addListener(_pageFades);
     _fade.forward().then((_) => _finish());
   }
 
-  void _pageFades() => widget.onFade?.call(_pageOpacity.value);
+  void _pageFades() => widget.onFade?.call(
+    widget.style == SplashStyle.fly && !_still
+        ? math.min(_pageOpacity.value, _Flight.page(_ms.value))
+        : _pageOpacity.value,
+  );
 
   /// The app was left: gone at once, unseen.
   void _leave() {
@@ -292,6 +353,7 @@ class _SplashState extends State<Splash> with TickerProviderStateMixin {
   void _finish() {
     if (_gone) return;
     _gone = true;
+    _land();
     widget.onDone();
   }
 
@@ -351,6 +413,8 @@ class _SplashState extends State<Splash> with TickerProviderStateMixin {
             baseline: baseline,
             empty: dark ? const Color(0xFF2C2C2E) : const Color(0xFFE5E5EA),
           ),
+          // No words: the N alone (_FlightView).
+          SplashStyle.fly => const SizedBox.shrink(),
         };
         // Reduce Motion takes the movement away, not the gentle fade in.
         return _still
@@ -375,29 +439,42 @@ class _SplashState extends State<Splash> with TickerProviderStateMixin {
             label: lines.join(' '),
             container: true,
             child: ExcludeSemantics(
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  FadeTransition(
-                    opacity: _pageOpacity,
-                    child: ColoredBox(color: page),
-                  ),
-                  FadeTransition(
-                    opacity: _wordsOpacity,
-                    child: Align(
-                      // A little above the middle, where the eye puts the centre.
-                      alignment: const Alignment(0, -0.1),
-                      // Drawn like a logo: the reader's text size does not
-                      // grow it past the screen (VoiceOver reads the words).
-                      // On a narrow screen the words are drawn a little
-                      // smaller rather than run past it.
-                      child: MediaQuery.withNoTextScaling(
-                        child: FittedBox(fit: BoxFit.scaleDown, child: words),
-                      ),
+              child: widget.style == SplashStyle.fly
+                  ? _FlightView(
+                      ms: _ms,
+                      still: _still,
+                      page: page,
+                      logo: _Flight.of(context),
+                      logoFade: _wordsOpacity,
+                      pageFade: _pageOpacity,
+                      target: widget.target,
+                    )
+                  : Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        FadeTransition(
+                          opacity: _pageOpacity,
+                          child: ColoredBox(color: page),
+                        ),
+                        FadeTransition(
+                          opacity: _wordsOpacity,
+                          child: Align(
+                            // A little above the middle, where the eye puts the centre.
+                            alignment: const Alignment(0, -0.1),
+                            // Drawn like a logo: the reader's text size does not
+                            // grow it past the screen (VoiceOver reads the words).
+                            // On a narrow screen the words are drawn a little
+                            // smaller rather than run past it.
+                            child: MediaQuery.withNoTextScaling(
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: words,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                ],
-              ),
             ),
           ),
         ),
@@ -448,6 +525,187 @@ double _phase(double ms, double start, double length, [Curve? curve]) {
 /// Every style starts after this many ms of plain page (the launch screen's
 /// look), so the app's first, slower frames are behind it when the words move.
 const _lead = 100.0;
+
+/// The N of [SplashStyle.fly]: its picture on a clear page, how tall it is
+/// for its width, and where its red window is, as parts of its width and
+/// height. The black N on the white page, the red N on the black one, as the
+/// masthead has them.
+class _Flight {
+  const _Flight(this.asset, {required this.aspect, required this.window});
+
+  final String asset;
+  final double aspect;
+  final Rect window;
+
+  static const _light = _Flight(
+    'assets/splash_n.png',
+    aspect: 447 / 450,
+    window: Rect.fromLTWH(0.676, 0.101, 0.240, 0.138),
+  );
+  static const _dark = _Flight(
+    'assets/splash_n_dark.png',
+    aspect: 418 / 450,
+    window: Rect.fromLTWH(0.663, 0.094, 0.266, 0.154),
+  );
+
+  static _Flight of(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.dark ? _dark : _light;
+
+  /// Its moments, in ms: it springs in, its window lights up, it flies as
+  /// the page fades, and lands, giving way to the masthead's N.
+  static const _in = _lead;
+  static const _lamp = 380.0;
+  static const _fly = 720.0;
+  static const _flight = 620.0;
+  static const _pageFrom = 820.0;
+  static const _pageFor = 450.0;
+  static const landAt = 1320.0;
+  static const _outFor = 120.0;
+
+  /// How much of the page is left at [ms].
+  static double page(double ms) =>
+      1 - _phase(ms, _pageFrom, _pageFor, Curves.easeInOut);
+}
+
+/// 5 · fly (Roman's pick 1 of `handoff/intro-logo.html`, 4 Nov): the N on
+/// the page springs in and its red window lights up; then it flies to
+/// [target], the masthead's N, as the page fades into the feed, and gives way
+/// to the masthead's own N where it lands. Without a target it stays in the
+/// middle and fades with the page. Standing still (Reduce Motion), it only
+/// fades in, and fades out with the page. A touch fades it at once
+/// ([logoFade], [pageFade]).
+class _FlightView extends StatelessWidget {
+  const _FlightView({
+    required this.ms,
+    required this.still,
+    required this.page,
+    required this.logo,
+    required this.logoFade,
+    required this.pageFade,
+    this.target,
+  });
+
+  final ValueListenable<double> ms;
+  final bool still;
+  final Color page;
+  final _Flight logo;
+  final Animation<double> logoFade;
+  final Animation<double> pageFade;
+  final ValueListenable<Rect?>? target;
+
+  /// Where it flies, the masthead's N: as wide, in its middle.
+  Rect? _end() {
+    final to = target?.value;
+    if (to == null || to.isEmpty) return null;
+    return Rect.fromCenter(
+      center: to.center,
+      width: to.width,
+      height: to.width * logo.aspect,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final size = constraints.biggest;
+      // Sized by the phone's short side, a little above the middle.
+      final width = math.min(size.shortestSide * 0.36, 150.0);
+      final start = Rect.fromCenter(
+        center: Offset(size.width / 2, size.height * 0.45),
+        width: width,
+        height: width * logo.aspect,
+      );
+      return AnimatedBuilder(
+        animation: Listenable.merge([ms, logoFade, pageFade, ?target]),
+        builder: (context, _) {
+          final now = ms.value;
+          final end = still ? null : _end();
+          final flown = end == null
+              ? 0.0
+              : _phase(
+                  now,
+                  _Flight._fly,
+                  _Flight._flight,
+                  const Cubic(0.55, 0, 0.15, 1),
+                );
+          final spring = still
+              ? 1.0
+              : 0.88 +
+                    0.12 *
+                        Curves.easeOutBack.transform(
+                          _phase(now, _Flight._in, 380),
+                        );
+          final at = Rect.lerp(start, end ?? start, flown)!;
+          final rect = Rect.fromCenter(
+            center: at.center,
+            width: at.width * spring,
+            height: at.height * spring,
+          );
+          final shown = still
+              ? _phase(now, 0, _stillIn, Curves.easeOut)
+              : _phase(now, _Flight._in, 230, Curves.easeOut) *
+                    (1 - _phase(now, _Flight.landAt, _Flight._outFor));
+          // The window lights up, settles, and dims as the N flies.
+          final lamp = still
+              ? 0.0
+              : _phase(now, _Flight._lamp, 200, Curves.easeOut) *
+                    (1 - 0.35 * _phase(now, _Flight._lamp + 200, 200)) *
+                    (1 - flown);
+          final window = Rect.fromLTWH(
+            rect.left + logo.window.left * rect.width,
+            rect.top + logo.window.top * rect.height,
+            logo.window.width * rect.width,
+            logo.window.height * rect.height,
+          );
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              Opacity(
+                opacity: (still ? 1.0 : _Flight.page(now)) * pageFade.value,
+                child: ColoredBox(color: page),
+              ),
+              Positioned.fromRect(
+                rect: rect,
+                child: Opacity(
+                  opacity: shown * logoFade.value,
+                  child: Image.asset(
+                    logo.asset,
+                    key: const ValueKey('splash-logo'),
+                    fit: BoxFit.contain,
+                  ),
+                ),
+              ),
+              if (lamp > 0)
+                Positioned.fromRect(
+                  rect: window,
+                  child: Opacity(
+                    opacity: shown * logoFade.value,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(rect.width * 0.02),
+                        color: const Color(
+                          0xFFFF4040,
+                        ).withValues(alpha: 0.35 * lamp),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(
+                              0xFFFF2020,
+                            ).withValues(alpha: 0.7 * lamp),
+                            blurRadius: rect.width * 0.12,
+                            spreadRadius: rect.width * 0.02,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          );
+        },
+      );
+    },
+  );
+}
 
 /// 1 · rise: each line comes up from below into its place, as if from under
 /// a fold, "Outer" first, then "News", overlapping like a wave.

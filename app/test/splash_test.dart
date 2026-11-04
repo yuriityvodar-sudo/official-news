@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:official_news/core/api_client.dart';
+import 'package:official_news/core/splash_logo.dart';
 import 'package:official_news/core/theme.dart';
 import 'package:official_news/features/feed/feed_controller.dart';
 import 'package:official_news/features/splash/splash.dart';
@@ -78,11 +79,20 @@ Map<String, dynamic> _article(String id, String headline) => {
   'originalUrl': 'https://www.bundesregierung.de/$id',
 };
 
+/// The styles with words: all but the N's flight.
+final _wordStyles = SplashStyle.values.where((s) => s != SplashStyle.fly);
+
 void main() {
-  setUp(() => SharedPreferences.setMockInitialValues({}));
+  // The tests of the words' styles play 1b unless they pick one; the
+  // flight's own tests are at the end.
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+    splashStyle.value = SplashStyle.riseUp;
+  });
   tearDown(() => splashStyle.value = SplashStyle.riseUp);
 
-  test('a build picks the style by name or number; riseUp otherwise', () {
+  test('a build picks the style by name or number; the N\'s flight '
+      'otherwise (Roman, 4 Nov)', () {
     expect(splashNamed('sweep'), SplashStyle.sweep);
     expect(splashNamed(' FILL '), SplashStyle.fill);
     expect(splashNamed('1'), SplashStyle.rise);
@@ -91,8 +101,9 @@ void main() {
     expect(splashNamed('RiseUp'), SplashStyle.riseUp);
     expect(splashNamed('2'), SplashStyle.sweep);
     expect(splashNamed('3'), SplashStyle.fill);
-    expect(splashNamed(''), SplashStyle.riseUp);
-    expect(splashNamed('wave'), SplashStyle.riseUp);
+    expect(splashNamed(' FLY '), SplashStyle.fly);
+    expect(splashNamed(''), SplashStyle.fly);
+    expect(splashNamed('wave'), SplashStyle.fly);
   });
 
   test('the two words, in one place, as written', () {
@@ -156,7 +167,7 @@ void main() {
     },
   );
 
-  for (final style in SplashStyle.values) {
+  for (final style in _wordStyles) {
     testWidgets('${style.name}: starts on the plain page, plays about two '
         'seconds, then fades out by itself', (tester) async {
       splashStyle.value = style;
@@ -385,7 +396,7 @@ void main() {
       const FakeAccessibilityFeatures(disableAnimations: true),
     ),
   ]) {
-    for (final style in SplashStyle.values) {
+    for (final style in _wordStyles) {
       testWidgets('$name, ${style.name}: the words fade in without moving, '
           'stand still about 0.6 s, then fade', (tester) async {
         tester.platformDispatcher.accessibilityFeaturesTestValue = features;
@@ -493,6 +504,171 @@ void main() {
     expect(find.byType(Splash), findsOneWidget);
     await _play(tester, _total(SplashStyle.rise));
     expect(find.byType(Splash), findsNothing);
+  });
+
+  group('fly (Roman, 4 Nov)', () {
+    setUp(() => splashStyle.value = SplashStyle.fly);
+
+    /// An app whose masthead's N is a 30-point box 16 points in, 72 down.
+    Widget masthead() => const Align(
+      alignment: Alignment.topLeft,
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(16, 72, 0, 0),
+        child: SplashLogoTarget(
+          child: SizedBox(key: ValueKey('target'), width: 30, height: 30),
+        ),
+      ),
+    );
+    final logo = find.byKey(const ValueKey('splash-logo'));
+    final target = find.byKey(const ValueKey('target'));
+    double shown(WidgetTester tester, Finder of) => tester
+        .widget<Opacity>(
+          find.ancestor(of: of, matching: find.byType(Opacity)).first,
+        )
+        .opacity;
+    double page(WidgetTester tester) => tester
+        .widget<Opacity>(
+          find
+              .ancestor(
+                of: find.descendant(
+                  of: find.byType(Splash),
+                  matching: find.byType(ColoredBox),
+                ),
+                matching: find.byType(Opacity),
+              )
+              .first,
+        )
+        .opacity;
+
+    testWidgets('the N springs in on the plain page and lights up, flies to '
+        'the masthead\'s N as the page fades, and gives way to it there', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(390, 844) * 3;
+      tester.view.devicePixelRatio = 3;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(_host(app: masthead()));
+      // The first frame is the launch screen's plain page: no N yet.
+      expect(shown(tester, logo), 0);
+      expect(page(tester), 1);
+      // In the middle, a little above it, until it flies; the masthead's N
+      // unseen meanwhile.
+      await _play(tester, seconds(0.6));
+      expect(shown(tester, logo), 1);
+      expect(tester.getCenter(logo).dx, moreOrLessEquals(195, epsilon: 0.5));
+      expect(
+        tester.getCenter(logo).dy,
+        moreOrLessEquals(844 * 0.45, epsilon: 0.5),
+      );
+      expect(tester.getSize(logo).width, moreOrLessEquals(140.4, epsilon: 0.5));
+      expect(shown(tester, target), 0);
+      // On its way, the page going.
+      await _play(tester, seconds(0.45));
+      expect(page(tester), inExclusiveRange(0, 1));
+      expect(tester.getCenter(logo).dy, lessThan(844 * 0.45 - 100));
+      // Landed where the masthead's N is, as wide; the page gone.
+      await _play(tester, seconds(0.29));
+      expect(page(tester), 0);
+      final there = tester.getRect(target);
+      expect((tester.getCenter(logo) - there.center).distance, lessThan(0.5));
+      expect(tester.getSize(logo).width, moreOrLessEquals(30, epsilon: 0.5));
+      expect(shown(tester, target), 1);
+      await _play(tester, _total(SplashStyle.fly));
+      expect(find.byType(Splash), findsNothing);
+      expect(shown(tester, target), 1);
+    });
+
+    testWidgets('it plays in a second and a half, the shortest', (
+      tester,
+    ) async {
+      expect(splashLength(SplashStyle.fly), seconds(1.5));
+      for (final style in _wordStyles) {
+        expect(splashLength(SplashStyle.fly), lessThan(splashLength(style)));
+      }
+      await tester.pumpWidget(_host(app: masthead()));
+      await _play(tester, _total(SplashStyle.fly) + seconds(0.05));
+      expect(find.byType(Splash), findsNothing);
+    });
+
+    testWidgets('without a masthead it stays in the middle and fades with '
+        'the page', (tester) async {
+      await tester.pumpWidget(_host());
+      await _play(tester, seconds(0.6));
+      final middle = tester.getCenter(logo);
+      await _play(tester, seconds(0.6));
+      expect(tester.getCenter(logo), middle);
+      expect(page(tester), lessThan(0.2));
+      await _play(tester, _total(SplashStyle.fly));
+      expect(find.byType(Splash), findsNothing);
+      expect(find.text('the app').hitTestable(), findsOneWidget);
+    });
+
+    testWidgets('in dark mode the page is black and the N red, as the '
+        'masthead\'s', (tester) async {
+      tester.platformDispatcher.platformBrightnessTestValue = Brightness.dark;
+      addTearDown(tester.platformDispatcher.clearPlatformBrightnessTestValue);
+      await tester.pumpWidget(_host(app: masthead()));
+      final colour = tester.widget<ColoredBox>(
+        find.descendant(
+          of: find.byType(Splash),
+          matching: find.byType(ColoredBox),
+        ),
+      );
+      expect(colour.color, Colors.black);
+      expect(
+        (tester.widget<Image>(logo).image as AssetImage).assetName,
+        'assets/splash_n_dark.png',
+      );
+      await _play(tester, _total(SplashStyle.fly));
+    });
+
+    testWidgets('a tap during the flight ends it at once, and the masthead\'s '
+        'N shows', (tester) async {
+      await tester.pumpWidget(_host(app: masthead()));
+      await _play(tester, seconds(0.8));
+      expect(shown(tester, target), 0);
+      await tester.tap(find.byType(Splash));
+      await tester.pump();
+      expect(shown(tester, target), 1);
+      await _play(tester, splashFade + seconds(0.05));
+      expect(find.byType(Splash), findsNothing);
+    });
+
+    for (final (name, features) in [
+      ('Reduce Motion', const FakeAccessibilityFeatures(reduceMotion: true)),
+      (
+        'animations off',
+        const FakeAccessibilityFeatures(disableAnimations: true),
+      ),
+    ]) {
+      testWidgets('$name: the N fades in and out in the middle, never flies; '
+          'the masthead\'s N shows under it', (tester) async {
+        tester.platformDispatcher.accessibilityFeaturesTestValue = features;
+        addTearDown(
+          tester.platformDispatcher.clearAccessibilityFeaturesTestValue,
+        );
+        await tester.pumpWidget(_host(app: masthead()));
+        await tester.pump();
+        expect(shown(tester, target), 1);
+        await _play(tester, seconds(0.25));
+        final middle = tester.getCenter(logo);
+        expect(shown(tester, logo), 1);
+        await _play(tester, splashStill - seconds(0.35));
+        expect(tester.getCenter(logo), middle);
+        expect(find.byType(Splash), findsOneWidget);
+        await _play(tester, seconds(0.1) + splashFade + seconds(0.05));
+        expect(find.byType(Splash), findsNothing);
+      });
+    }
+
+    testWidgets('VoiceOver reads the name while it shows', (tester) async {
+      final semantics = tester.ensureSemantics();
+      await tester.pumpWidget(_host(app: masthead()));
+      expect(find.bySemanticsLabel('Outer News'), findsOneWidget);
+      await _play(tester, _total(SplashStyle.fly));
+      expect(find.bySemanticsLabel('Outer News'), findsNothing);
+      semantics.dispose();
+    });
   });
 }
 
