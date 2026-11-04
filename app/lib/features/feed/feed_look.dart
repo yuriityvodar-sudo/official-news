@@ -256,7 +256,14 @@ abstract class FeedLook {
   /// ([FeedMasthead.topInset]). False (the default) for the others.
   bool get drawsUnderStatusBar => false;
 
-  /// What shows above the masthead while the feed is pulled down to refresh
+  /// Whether the pull to refresh opens its gap under the masthead, which
+  /// then stays at the top of the screen while the feed is pulled down (a
+  /// pinned masthead, the feed's first sliver). False (the default): the
+  /// gap opens above the masthead, which comes down with the feed.
+  bool get refreshUnderMasthead => false;
+
+  /// What shows in the gap the pull opens while the feed is pulled down to
+  /// refresh, above the masthead or under it ([refreshUnderMasthead])
   /// ([CupertinoSliverRefreshControl]'s builder, and how the refresh went
   /// once the feed has loaded: [FeedPull.result]): the platform's spinner, or
   /// a look's own.
@@ -344,7 +351,7 @@ class FeedMasthead {
     onChoose: onChoose,
   );
 
-  /// The pull to refresh as the gap above the masthead last showed it (#166),
+  /// The pull to refresh as the gap it opens last showed it (#166),
   /// for a masthead that follows the pull. It changes while the feed is laid
   /// out, so read it while painting (a render object listening to it), never
   /// in a build.
@@ -384,7 +391,7 @@ class FeedPull {
 
   final RefreshIndicatorMode mode;
 
-  /// How far the feed is pulled down, in points: the gap above the masthead.
+  /// How far the feed is pulled down, in points: the gap the pull opens.
   final double pulled;
 
   /// How far a pull goes before the feed refreshes, and how much of the gap

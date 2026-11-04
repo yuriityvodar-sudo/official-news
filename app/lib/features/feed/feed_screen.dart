@@ -468,6 +468,43 @@ class _FeedScreenState extends State<FeedScreen> {
     // A look's backdrop runs under the status bar and the masthead as one
     // piece, so no seam shows between them.
     final backdrop = look.backdrop(context);
+    // Pull to refresh works in every state, including error and empty.
+    // It taps back itself as the pull passes the refresh point.
+    final refresh = CupertinoSliverRefreshControl(
+      onRefresh: _pullToRefresh,
+      builder: (context, mode, pulled, trigger, extent) {
+        final pull = FeedPull(
+          mode: mode,
+          pulled: pulled,
+          trigger: trigger,
+          extent: extent,
+          result: _refreshed,
+        );
+        // Called while the feed is laid out: only painters listen
+        // (FeedMasthead.pull).
+        _pull.value = pull;
+        return look.refreshIndicator(context, pull);
+      },
+    );
+    final masthead = _MastheadEdge(
+      link: _masthead,
+      sliver: look.masthead(
+        context,
+        FeedMasthead(
+          // The app's name, the same in every language.
+          title: 'Outer News',
+          date: longDay(DateTime.now(), l10n),
+          openSettings: _openSettings,
+          openConversations: _conversations ? _openConversations : null,
+          where: _feed.where,
+          topic: _feed.topic,
+          topics: _feed.topics,
+          onChoose: _chooseFeed,
+          pull: _pull,
+          topInset: MediaQuery.paddingOf(context).top,
+        ),
+      ),
+    );
     final page = Scaffold(
       backgroundColor: backdrop == null
           ? look.background(context)
@@ -487,45 +524,15 @@ class _FeedScreenState extends State<FeedScreen> {
                   ? Clip.none
                   : Clip.hardEdge,
               slivers: [
-                // Pull to refresh works in every state, including error and empty.
-                // It taps back itself as the pull passes the refresh point.
-                CupertinoSliverRefreshControl(
-                  onRefresh: _pullToRefresh,
-                  builder: (context, mode, pulled, trigger, extent) {
-                    final pull = FeedPull(
-                      mode: mode,
-                      pulled: pulled,
-                      trigger: trigger,
-                      extent: extent,
-                      result: _refreshed,
-                    );
-                    // Called while the feed is laid out: only painters
-                    // listen (FeedMasthead.pull).
-                    _pull.value = pull;
-                    return look.refreshIndicator(context, pull);
-                  },
-                ),
-                _MastheadEdge(
-                  link: _masthead,
-                  sliver: look.masthead(
-                    context,
-                    FeedMasthead(
-                      // The app's name, the same in every language.
-                      title: 'Outer News',
-                      date: longDay(DateTime.now(), l10n),
-                      openSettings: _openSettings,
-                      openConversations: _conversations
-                          ? _openConversations
-                          : null,
-                      where: _feed.where,
-                      topic: _feed.topic,
-                      topics: _feed.topics,
-                      onChoose: _chooseFeed,
-                      pull: _pull,
-                      topInset: MediaQuery.paddingOf(context).top,
-                    ),
-                  ),
-                ),
+                // The gap the pull opens: above the masthead, or under one
+                // that stays at the top.
+                if (look.refreshUnderMasthead) ...[
+                  masthead,
+                  refresh,
+                ] else ...[
+                  refresh,
+                  masthead,
+                ],
                 ..._content(context, look),
               ],
             ),
