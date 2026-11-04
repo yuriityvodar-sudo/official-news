@@ -677,6 +677,11 @@ void main() {
         await pull.moveBy(const Offset(0, 60));
         await tester.pump();
         expect(find.text('Pull to refresh'), findsOneWidget);
+        // In the middle across the screen (Roman, 4 Nov).
+        expect(
+          tester.getCenter(find.text('Pull to refresh')).dx,
+          moreOrLessEquals(393 / 2, epsilon: 0.5),
+        );
         expect(find.byType(ImageFiltered), findsNothing);
         final pulled = tester.getRect(title);
         final grown = pulled.width / rest.width;
@@ -1089,20 +1094,46 @@ void main() {
       });
 
       testWidgets('the pills stay at the top as glass while the rows pass '
-          'under them; nothing fades over them', (tester) async {
+          'under them and on under the status bar, where iOS\'s soft edge '
+          'blurs them (Roman, 4 Nov)', (tester) async {
+        tester.view.padding = const FakeViewPadding(top: 62 * 3);
         await pumpFeed(tester, rows, const [], height: 700);
         final row = find.byType(FeedPills);
-        expect(tester.getTopLeft(row).dy, greaterThan(60));
+        expect(tester.getTopLeft(row).dy, greaterThan(60 + 62));
+        double edge() => tester
+            .widget<Opacity>(
+              find
+                  .ancestor(
+                    of: find.byType(GlassEdge),
+                    matching: find.byType(Opacity),
+                  )
+                  .first,
+            )
+            .opacity;
+        // Nothing under it yet: no edge.
+        expect(edge(), 0);
         await tester.drag(find.text('Decision r3'), const Offset(0, -500));
         await tester.pumpAndSettle();
         // Pinned at the top of the safe area, rows scrolled under it.
-        expect(tester.getTopLeft(row).dy, 0);
+        expect(tester.getTopLeft(row).dy, 62);
         expect(find.text('For you'), findsOneWidget);
         expect(
           find.descendant(of: row, matching: find.byType(BackdropFilter)),
           findsWidgets,
         );
         expect(find.byType(ScrollEdgeFade), findsNothing);
+        // The edge from the screen's top to just below the pills, behind
+        // them, over rows the list no longer cuts at the safe area.
+        expect(edge(), 1);
+        final glass = tester.getRect(find.byType(GlassEdge));
+        expect(glass.top, 0);
+        expect(glass.bottom, tester.getBottomLeft(row).dy + 24);
+        expect(
+          tester
+              .widget<CustomScrollView>(find.byType(CustomScrollView))
+              .clipBehavior,
+          Clip.none,
+        );
         // The chosen pill's glow reaches over the rows, not cut where the
         // pinned header ends (Yurii, #210).
         final header = tester.widget<Stack>(

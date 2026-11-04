@@ -223,6 +223,59 @@ class NativeCover extends InheritedWidget {
   bool updateShouldNotify(NativeCover old) => old.cover != cover;
 }
 
+/// The top of the screen once rows pass under it (#141, Roman, 4 Nov): iOS
+/// 26's soft scroll edge, a blur of what is under it that fades out over
+/// its last [fade] points, so the rows go softly under the status bar and
+/// the pills instead of being cut where the screen's safe area starts.
+/// iOS's own blur on iOS (a native view, `EdgeView` in the Runner); the
+/// page's [color] fading out the same way elsewhere. Takes no touches.
+class GlassEdge extends StatelessWidget {
+  const GlassEdge({super.key, required this.color, this.fade = 24});
+
+  /// The page's colour, where iOS's blur is not used.
+  final Color color;
+
+  /// How tall the foot is that fades out.
+  final double fade;
+
+  @override
+  Widget build(BuildContext context) {
+    final plain = LayoutBuilder(
+      builder: (context, constraints) {
+        final height = constraints.maxHeight;
+        final solid = height > fade ? (height - fade) / height : 0.0;
+        return DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              stops: [0, solid, 1],
+              colors: [
+                color.withValues(alpha: 0.94),
+                color.withValues(alpha: 0.94),
+                color.withValues(alpha: 0),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+    return IgnorePointer(
+      child: !GlassCircle.native
+          ? plain
+          : NativeOrPlain(
+              native: UiKitView(
+                viewType: 'official_news/edge',
+                hitTestBehavior: PlatformViewHitTestBehavior.transparent,
+                creationParams: {'fade': fade},
+                creationParamsCodec: const StandardMessageCodec(),
+              ),
+              plain: plain,
+            ),
+    );
+  }
+}
+
 /// The top of a screen whose content scrolls under floating buttons (#141):
 /// the page's [color] fading out downwards, as iOS 26 softens a scroll edge,
 /// so the buttons stay clear over text. Takes no touches.
