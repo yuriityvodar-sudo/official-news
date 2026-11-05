@@ -58,7 +58,9 @@ class GlassCircle extends StatelessWidget {
 
 /// A capsule of Liquid Glass behind [child] (#141): the same native view as
 /// [GlassCircle], as wide as [child] with [padding] (or as wide as it is
-/// given, inside a full-width box), [height] high.
+/// given, inside a full-width box), [height] high, or as tall as [child]
+/// with [padding] without one (the AI chat's field, which grows as it is
+/// written in; past 52 points high its corners stop growing, `GlassView`).
 class GlassCapsule extends StatelessWidget {
   const GlassCapsule({
     super.key,
@@ -69,7 +71,7 @@ class GlassCapsule extends StatelessWidget {
   });
 
   final Widget child;
-  final double height;
+  final double? height;
   final EdgeInsets padding;
 
   /// Whether iOS's glass casts its shadow: not among the feed's rows (a
@@ -95,7 +97,11 @@ class GlassCapsule extends StatelessWidget {
         ),
         Padding(
           padding: padding,
-          child: Center(widthFactor: 1, child: child),
+          child: Center(
+            widthFactor: 1,
+            heightFactor: height == null ? 1 : null,
+            child: child,
+          ),
         ),
       ],
     ),

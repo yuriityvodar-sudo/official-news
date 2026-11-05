@@ -16,6 +16,7 @@ import 'package:official_news/core/chat_history.dart';
 import 'package:official_news/core/glass.dart';
 import 'package:official_news/core/story.dart';
 import 'package:official_news/core/subscription.dart';
+import 'package:official_news/core/theme.dart';
 import 'package:official_news/core/tick.dart';
 import 'package:official_news/features/chat/chat_consent.dart';
 import 'package:official_news/features/chat/chat_screen.dart';
@@ -287,10 +288,8 @@ void main() {
           final sent = await bodyStream.bytesToString();
           if (request.url.path == '/v1/chat/status') {
             statusAsked.add(jsonDecode(sent) as Map<String, dynamic>);
-            final (now, extraNow) = usage[math.min(
-              statuses++,
-              usage.length - 1,
-            )];
+            final (now, extraNow) =
+                usage[math.min(statuses++, usage.length - 1)];
             return http.StreamedResponse(
               Stream.value(
                 utf8.encode(
@@ -379,7 +378,7 @@ void main() {
       );
       await openChat(tester, server(used: 80));
       expect(
-        paintOrder(tester, find.byType(UiKitView)),
+        paintOrder(tester, find.byType(UiKitView).last),
         greaterThan(paintOrder(tester, find.text('Ask about this decision'))),
       );
     });
@@ -432,13 +431,9 @@ void main() {
       (tester) async {
         final opened = <Uri>[];
         final tick = Tick.fromJson(fakeTick()).asArticle(l10nFor());
-        await openChat(
-          tester,
-          server(used: 80),
-          opened: opened,
-          article: tick,
-        );
-        expect(find.text("US strikes Iran's Qeshm Island"), findsOneWidget);
+        await openChat(tester, server(used: 80), opened: opened, article: tick);
+        // The big headline and the bar's title.
+        expect(find.text("US strikes Iran's Qeshm Island"), findsNWidgets(2));
         expect(find.text('ABC News, BBC World and 1 more'), findsOneWidget);
         expect(find.text('Does this concern me?'), findsNothing);
         await tester.tap(find.text('What is known?'));
@@ -461,7 +456,7 @@ void main() {
       (tester) async {
         final story = Story.fromJson(fakeStory()).asArticle(l10nFor(), 'CZ');
         await openChat(tester, server(used: 80), article: story);
-        expect(find.text('Babiš names his government'), findsOneWidget);
+        expect(find.text('Babiš names his government'), findsNWidgets(2));
         expect(find.text('ČT24, Seznam Zprávy and 2 more'), findsOneWidget);
         expect(find.text('Does this concern me?'), findsNothing);
         expect(statusAsked.last, containsPair('storyId', 's1'));
@@ -495,11 +490,32 @@ void main() {
         );
         await tester.tap(find.text('Does this concern me?'));
         await tester.pumpAndSettle();
-        // The card in the field's place, and the question kept for later.
-        expect(find.text("You've reached this week's usage limit."), findsOneWidget);
+        // The card in the field's place, no questions to suggest over it.
+        expect(
+          find.text("You've reached this week's usage limit."),
+          findsOneWidget,
+        );
         expect(find.text('Get more usage'), findsOneWidget);
         expect(find.byType(CupertinoTextField), findsNothing);
-        expect(find.text('Does this concern me?'), findsOneWidget);
+        expect(find.text('Does this concern me?'), findsNothing);
+
+        // The question kept for after a top-up: back in the field.
+        await tester.tap(find.text('Get more usage'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text(r'Buy for $0.99'));
+        await tester.pump();
+        await tester.runAsync(() async {
+          store.reportPack(PurchaseStatus.purchased);
+          await Future<void>.delayed(const Duration(milliseconds: 20));
+        });
+        await tester.pumpAndSettle();
+        expect(
+          tester
+              .widget<CupertinoTextField>(find.byType(CupertinoTextField))
+              .controller!
+              .text,
+          'Does this concern me?',
+        );
 
         await openChat(tester, server(status: 503));
         await tester.tap(find.text('Does this concern me?'));
@@ -517,8 +533,14 @@ void main() {
       'brings the field back',
       (tester) async {
         await openChat(tester, server(usage: [(100, false), (100, true)]));
-        expect(find.text("You've reached this week's usage limit."), findsOneWidget);
-        expect(find.textContaining('It resets on $_resetsDay at '), findsOneWidget);
+        expect(
+          find.text("You've reached this week's usage limit."),
+          findsOneWidget,
+        );
+        expect(
+          find.textContaining('It resets on $_resetsDay at '),
+          findsOneWidget,
+        );
         await tester.tap(find.text('Get more usage'));
         await tester.pumpAndSettle();
         expect(find.text('+1 week of usage'), findsOneWidget);
@@ -545,7 +567,10 @@ void main() {
         expect(credits, hasLength(1));
         expect(find.text('+1 week of usage'), findsNothing);
         expect(find.byType(CupertinoTextField), findsOneWidget);
-        expect(find.text("You've reached this week's usage limit."), findsNothing);
+        expect(
+          find.text("You've reached this week's usage limit."),
+          findsNothing,
+        );
         // The week's usage still used up: the extra usage is being spent.
         expect(find.text('Using extra usage'), findsOneWidget);
         expect(
@@ -611,18 +636,14 @@ void main() {
           tester.getRect(chat),
           Offset.zero & tester.view.physicalSize / tester.view.devicePixelRatio,
         );
+        // White words on the cover, in both themes.
         final bar = tester.widget<AnnotatedRegion<SystemUiOverlayStyle>>(
           find.descendant(
             of: chat,
             matching: find.byType(AnnotatedRegion<SystemUiOverlayStyle>),
           ),
         );
-        expect(
-          bar.value,
-          CupertinoTheme.brightnessOf(tester.element(chat)) == Brightness.dark
-              ? SystemUiOverlayStyle.light
-              : SystemUiOverlayStyle.dark,
-        );
+        expect(bar.value, SystemUiOverlayStyle.light);
         await tester.tap(find.byIcon(CupertinoIcons.xmark));
         await tester.pumpAndSettle();
         expect(chat, findsNothing);
@@ -661,27 +682,42 @@ void main() {
     );
 
     testWidgets(
-      'folds the header into the title once asked, and a dot, not a spinner, '
-      'while the agent thinks',
+      'what the chat is about comes first: the headline as big as the '
+      "article's, the agent's name small (Roman, 5 Nov)",
+      (tester) async {
+        await openChat(tester, server());
+        final context = tester.element(find.byType(ChatScreen));
+        final headline = find.text('New cars must meet Euro 7 from 2027').first;
+        final size = tester.widget<Text>(headline).style!.fontSize!;
+        expect(size, NewsText.from(context).articleHeadline.fontSize);
+        expect(
+          tester.widget<Text>(find.text('AI agent')).style!.fontSize,
+          lessThan(size / 2),
+        );
+        // Over the headline, beside the close button.
+        expect(
+          tester.getBottomLeft(find.text('AI agent')).dy,
+          lessThan(tester.getTopLeft(headline).dy),
+        );
+      },
+    );
+
+    testWidgets(
+      'once asked only the notice and the suggestions go, the headline and '
+      'its source stay, and a dot, not a spinner, while the agent thinks',
       (tester) async {
         final hold = Completer<void>();
         await openChat(tester, server(hold: hold.future));
-        expect(
-          find.text('New cars must meet Euro 7 from 2027'),
-          findsOneWidget,
-        );
         expect(find.text('GOV.UK'), findsOneWidget);
+        expect(find.textContaining('not legal advice'), findsOneWidget);
+        expect(find.text('What should I do?'), findsOneWidget);
 
         await tester.tap(find.text('Does this concern me?'));
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 400));
         expect(find.byType(CupertinoActivityIndicator), findsNothing);
-        // The decision's headline is the title's second line; the rest is gone.
-        expect(
-          find.text('New cars must meet Euro 7 from 2027'),
-          findsOneWidget,
-        );
-        expect(find.text('GOV.UK'), findsNothing);
+        expect(find.text('GOV.UK'), findsOneWidget);
+        expect(find.textContaining('not legal advice'), findsNothing);
         expect(find.text('What should I do?'), findsNothing);
 
         hold.complete();
@@ -690,9 +726,140 @@ void main() {
       },
     );
 
+    /// The band's title, drawn after the big headline.
+    Finder bandTitle() => find.text('New cars must meet Euro 7 from 2027').last;
+
+    /// Where the band ends: 14 points under its title.
+    double bandEnd(WidgetTester tester) =>
+        tester.getBottomLeft(bandTitle()).dy + 14;
+
+    /// [text]'s bubble, around it.
+    Rect bubbleOf(WidgetTester tester, String text) => tester.getRect(
+      find
+          .ancestor(of: find.text(text), matching: find.byType(Container))
+          .first,
+    );
+
+    /// How much of the band's title shows.
+    double titleShown(WidgetTester tester) => tester
+        .widget<Opacity>(
+          find.ancestor(of: bandTitle(), matching: find.byType(Opacity)).first,
+        )
+        .opacity;
+
     testWidgets(
-      'takes the question asked to the top of the screen and keeps it there '
-      "as a long answer comes, never jumping to the answer's end",
+      'the cover folds into a band with the headline as the page scrolls, '
+      'and comes back',
+      (tester) async {
+        await openChat(
+          tester,
+          server(pieces: [for (var i = 1; i <= 60; i++) 'Line $i.\n\n']),
+        );
+        await tester.tap(find.text('Does this concern me?'));
+        await tester.pumpAndSettle();
+        expect(titleShown(tester), 0);
+
+        final list = find.byType(SingleChildScrollView);
+        await tester.drag(list, const Offset(0, -400));
+        await tester.pumpAndSettle();
+        expect(titleShown(tester), 1);
+        // Only the band is left over the page: the agent's name has gone.
+        expect(
+          tester
+              .widget<Opacity>(
+                find
+                    .ancestor(
+                      of: find.text('AI agent'),
+                      matching: find.byType(Opacity),
+                    )
+                    .first,
+              )
+              .opacity,
+          0,
+        );
+
+        await tester.drag(list, const Offset(0, 1000));
+        await tester.pumpAndSettle();
+        expect(titleShown(tester), 0);
+      },
+    );
+
+    testWidgets(
+      "on a phone: the agent's name and the close button under the status "
+      'bar, the field low over the foot, and the end of a long answer comes '
+      'clear of what stands over the field',
+      (tester) async {
+        tester.view
+          ..physicalSize = const Size(402, 874) * 3
+          ..devicePixelRatio = 3
+          ..padding = const FakeViewPadding(top: 186, bottom: 102)
+          ..viewPadding = const FakeViewPadding(top: 186, bottom: 102);
+        addTearDown(tester.view.reset);
+        await openChat(
+          tester,
+          server(
+            used: 80,
+            pieces: [for (var i = 1; i <= 40; i++) 'Line $i.\n\n'],
+          ),
+        );
+        final agent = tester.getCenter(find.text('AI agent'));
+        expect(agent.dy, moreOrLessEquals(62 + 18));
+        expect(agent.dx, lessThan(200));
+        final close = tester.getCenter(find.byIcon(CupertinoIcons.xmark));
+        expect(close.dy, moreOrLessEquals(62 + 18));
+        expect(close.dx, moreOrLessEquals(402 - 14 - 18));
+        final field = find.byType(CupertinoTextField);
+        expect(tester.getBottomLeft(field).dy, moreOrLessEquals(874 - 26));
+        expect(tester.getTopLeft(field).dx, moreOrLessEquals(12));
+
+        await tester.tap(find.text('Does this concern me?'));
+        await tester.pumpAndSettle();
+        final usage = find.textContaining("of this week's usage used");
+        expect(usage, findsOneWidget);
+        expect(
+          tester.getBottomLeft(usage).dy,
+          lessThan(tester.getTopLeft(field).dy),
+        );
+
+        await tester.drag(
+          find.byType(SingleChildScrollView),
+          const Offset(0, -6000),
+        );
+        await tester.pumpAndSettle();
+        expect(
+          tester.getBottomLeft(find.text('Line 40.')).dy,
+          lessThan(tester.getTopLeft(usage).dy),
+        );
+      },
+    );
+
+    testWidgets('the send button is grey until there is something to send', (
+      tester,
+    ) async {
+      await openChat(tester, server());
+      final send = find.byIcon(CupertinoIcons.arrow_up_circle_fill);
+      Color? colour() => tester.widget<Icon>(send).color;
+      final grey = colour();
+      expect(grey, isNot(const Color(0xFFC41230)));
+
+      await tester.tap(send);
+      await tester.pumpAndSettle();
+      expect(asked, isEmpty);
+
+      await tester.enterText(find.byType(CupertinoTextField), 'And then?');
+      await tester.pumpAndSettle();
+      expect(colour(), const Color(0xFFC41230));
+
+      await tester.tap(send);
+      await tester.pumpAndSettle();
+      expect(asked, hasLength(1));
+      expect(colour(), grey);
+    });
+
+    testWidgets(
+      'the first question stays under the cover; a later one goes under the '
+      'band and stays there as a long answer comes, never jumping to the '
+      "answer's end",
       (tester) async {
         await openChat(
           tester,
@@ -703,33 +870,27 @@ void main() {
           ),
         );
         final list = find.byType(SingleChildScrollView);
+        // The cover's foot is 20 points under its source.
+        final foot = tester.getBottomLeft(find.text('GOV.UK')).dy + 20;
         await tester.tap(find.text('Does this concern me?'));
         await tester.pumpAndSettle();
-        // The first question stands at the top as the header folds.
         expect(
-          tester.getTopLeft(find.text('Does this concern me?')).dy,
-          lessThan(tester.getTopLeft(list).dy + 40),
+          bubbleOf(tester, 'Does this concern me?').top,
+          moreOrLessEquals(foot + 18),
         );
         expect(find.text('Line 1 of the answer.'), findsOneWidget);
+        expect(titleShown(tester), 0);
 
         await tester.enterText(find.byType(CupertinoTextField), 'And then?');
         await tester.testTextInput.receiveAction(TextInputAction.send);
         await tester.pumpAndSettle();
-        final top = tester.getTopLeft(list).dy;
-        final question = tester.getTopLeft(find.text('And then?')).dy;
-        expect(question, greaterThanOrEqualTo(top));
-        expect(question, lessThan(top + 40));
-        // Its bubble stands 8 points under the title, not flush with it, where
+        // Its bubble stands 16 points under the band, not flush with it, where
         // it slipped under the title on the phone (Roman, 30 Oct).
-        final bubble = tester.getRect(
-          find
-              .ancestor(
-                of: find.text('And then?'),
-                matching: find.byType(Container),
-              )
-              .first,
+        expect(
+          bubbleOf(tester, 'And then?').top,
+          moreOrLessEquals(bandEnd(tester) + 16),
         );
-        expect(bubble.top, moreOrLessEquals(top + 8));
+        expect(titleShown(tester), 1);
         // The start of the answer shows under it; its end is further down.
         expect(
           tester.getTopLeft(find.text('Line 1 of the answer.').last).dy,
@@ -764,43 +925,41 @@ void main() {
     });
 
     testWidgets('a kept conversation opens where it left off: from its first '
-        'frame, with no header, unseen until its last question is at the top, '
-        'so nothing folds or jumps (Roman, 30 Oct)', (tester) async {
+        'frame, the cover folded and no notice, unseen until its last question '
+        'is under the band, so nothing folds or jumps (Roman, 30 Oct)', (
+      tester,
+    ) async {
       keepFour();
       // The feed has read it already, for its Conversations button.
       final history = ChatHistory();
       await history.load();
       await openChat(tester, server(), history: history, settle: false);
-      expect(find.text('GOV.UK'), findsNothing);
+      expect(find.textContaining('not legal advice'), findsNothing);
       expect(find.text('Q4'), findsOneWidget);
       expect(shown(tester), 0);
+      expect(titleShown(tester), 1);
 
       await tester.pumpAndSettle();
       expect(shown(tester), 1);
-      final top = tester.getTopLeft(find.byType(SingleChildScrollView)).dy;
-      final bubble = tester.getRect(
-        find
-            .ancestor(of: find.text('Q4'), matching: find.byType(Container))
-            .first,
+      expect(
+        bubbleOf(tester, 'Q4').top,
+        moreOrLessEquals(bandEnd(tester) + 16),
       );
-      expect(bubble.top, moreOrLessEquals(top + 8));
+      expect(titleShown(tester), 1);
     });
 
     testWidgets('read only as the chat opens, a kept conversation still shows '
-        'only once in place, its header gone at once', (tester) async {
+        'only once in place, its notice gone at once', (tester) async {
       keepFour();
       await openChat(tester, server(), history: ChatHistory(), settle: false);
       expect(shown(tester), 0);
       await tester.pumpAndSettle();
       expect(shown(tester), 1);
-      expect(find.text('GOV.UK'), findsNothing);
-      final top = tester.getTopLeft(find.byType(SingleChildScrollView)).dy;
-      final bubble = tester.getRect(
-        find
-            .ancestor(of: find.text('Q4'), matching: find.byType(Container))
-            .first,
+      expect(find.textContaining('not legal advice'), findsNothing);
+      expect(
+        bubbleOf(tester, 'Q4').top,
+        moreOrLessEquals(bandEnd(tester) + 16),
       );
-      expect(bubble.top, moreOrLessEquals(top + 8));
     });
 
     testWidgets('a new chat shows its header at once', (tester) async {
@@ -824,11 +983,13 @@ void main() {
           (false, 'Yes, from November 2027.'),
         ]);
 
-        // Opened again: there at once, the header folded, and it goes on.
+        // Opened again: there at once, its one question still under the
+        // cover, the notice gone, and it goes on.
         await openChat(tester, server(), history: history);
         expect(find.text('What changes and when?'), findsOneWidget);
         expect(find.text('Yes, from November 2027.'), findsOneWidget);
-        expect(find.text('GOV.UK'), findsNothing);
+        expect(find.textContaining('not legal advice'), findsNothing);
+        expect(titleShown(tester), 0);
         await tester.enterText(find.byType(CupertinoTextField), 'And then?');
         await tester.testTextInput.receiveAction(TextInputAction.send);
         await tester.pumpAndSettle();
@@ -892,16 +1053,10 @@ void main() {
       // The return key closes it.
       tester.view.resetViewInsets();
       await tester.pumpAndSettle();
-      final top = tester.getTopLeft(find.byType(SingleChildScrollView)).dy;
-      final bubble = tester.getRect(
-        find
-            .ancestor(
-              of: find.text('And then?'),
-              matching: find.byType(Container),
-            )
-            .first,
+      expect(
+        bubbleOf(tester, 'And then?').top,
+        moreOrLessEquals(bandEnd(tester) + 16),
       );
-      expect(bubble.top, moreOrLessEquals(top + 8));
     });
 
     testWidgets('not paid any more: the paywall again', (tester) async {
