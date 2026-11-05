@@ -12,6 +12,7 @@ class FakeStore implements Store {
   final boughtPacks = <String>[];
   final finished = <PurchaseDetails>[];
   int restores = 0;
+  int manages = 0;
   bool open = true;
 
   @override
@@ -66,6 +67,9 @@ class FakeStore implements Store {
 
   @override
   Future<void> restore() async => restores++;
+
+  @override
+  Future<void> manage() async => manages++;
 
   @override
   Future<void> finish(PurchaseDetails purchase) async => finished.add(purchase);

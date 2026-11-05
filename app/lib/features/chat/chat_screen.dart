@@ -569,15 +569,13 @@ class _ChatScreenState extends State<ChatScreen> {
     final resetsAt = _resetsAt ?? _nextWeek(DateTime.now().toUtc());
     final resetsDay = weekdayName(resetsAt, l10n);
     // Over the field (Roman, 4 Nov): how much of the week's usage is used,
-    // from 75%, or that extra usage is being spent; never a count.
+    // from 75%, as the week runs out; never a count. Nothing while extra
+    // usage is being spent: its line looked like a button that did nothing,
+    // and isn't needed (Roman, 5 Nov).
     final used = _usedPercent;
-    final usage = used == null
+    final usage = used == null || used < 75 || (used >= 100 && _extra)
         ? null
-        : used >= 100 && _extra
-        ? l10n.chatUsingExtra
-        : used >= 75
-        ? l10n.chatUsage(min(used, 100), resetsDay)
-        : null;
+        : l10n.chatUsage(min(used, 100), resetsDay);
     // The app's type (theme.dart), as the paywall: the serif for the
     // decision's headline and the answers, the sans for the reader's
     // questions, buttons, links and labels (Yurii, review of #188).
@@ -848,9 +846,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(
-                        used! >= 100
-                            ? CupertinoIcons.plus_circle
-                            : CupertinoIcons.clock,
+                        CupertinoIcons.clock,
                         size: 14,
                         color: label.withValues(alpha: 0.62),
                       ),

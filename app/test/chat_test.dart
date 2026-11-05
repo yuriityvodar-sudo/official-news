@@ -571,8 +571,10 @@ void main() {
           find.text("You've reached this week's usage limit."),
           findsNothing,
         );
-        // The week's usage still used up: the extra usage is being spent.
-        expect(find.text('Using extra usage'), findsOneWidget);
+        // The week's usage still used up and the extra usage being spent: no
+        // line over the field, which looked like a button (Roman, 5 Nov).
+        expect(find.textContaining("this week's usage used"), findsNothing);
+        expect(find.text('Using extra usage'), findsNothing);
         expect(
           events
               .where((e) => e.$1 == 'topup_result')
