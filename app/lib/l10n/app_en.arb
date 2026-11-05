@@ -1241,9 +1241,9 @@
   "@paywallTitle": {
     "description": "The paywall's title, under the sample answer that fades out."
   },
-  "paywallPoints": "Built on the official text · the source link · conversations only on your phone",
+  "paywallPoints": "What happened · Why it matters · What it means for you",
   "@paywallPoints": {
-    "description": "What the AI agent does, on the paywall."
+    "description": "What the AI agent gives, on the paywall (Roman, 5 Nov): the news and what it means for the reader, in his words of the App Store description, never how it is built."
   },
   "paywallPrice": "{price} a month",
   "@paywallPrice": {
