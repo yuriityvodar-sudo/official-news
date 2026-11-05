@@ -14,6 +14,7 @@ import '../../core/chat_history.dart';
 import '../../core/article.dart';
 import '../../core/glass.dart';
 import '../../core/motion.dart';
+import '../../core/news_widgets.dart';
 import '../../core/sheet.dart';
 import '../../core/subscription.dart';
 import '../../core/theme.dart';
@@ -169,13 +170,20 @@ class _ChatScreenState extends State<ChatScreen> {
   String? _problem;
   bool _sending = false;
 
-  /// The questions left, today's and the bought ones together; null until known.
-  int? _left;
+  /// How much of the week's usage is used, 0 to 100; null until known.
+  /// [chatDemo] starts at 70%, so the line over the field shows after a question.
+  int? _usedPercent = chatDemo ? 70 : null;
+
+  /// Whether extra usage bought is left, spent once the week's is used up.
+  bool _extra = false;
+
+  /// Nothing left, of the week's usage or the extra: the card takes the field's place.
+  bool _limitReached = false;
 
   /// How much of the limit one question about this article takes.
   int _units = 1;
 
-  /// When today's questions come back.
+  /// When the week's usage comes back: Monday 00:00 UTC.
   DateTime? _resetsAt;
 
   ChatSubscription get _subscription => widget.subscription ?? chatSubscription;
@@ -245,7 +253,7 @@ class _ChatScreenState extends State<ChatScreen> {
     return _history.save(widget.article, kept);
   }
 
-  /// What is left, from the server: the card shows at once when nothing is.
+  /// The week's usage, from the server: the card shows at once when nothing is left.
   Future<void> _loadStatus() async {
     final transaction = _subscription.transaction;
     if (transaction == null || chatDemo) return;
@@ -258,7 +266,9 @@ class _ChatScreenState extends State<ChatScreen> {
       );
       if (!mounted) return;
       setState(() {
-        _left = status.total;
+        _usedPercent = status.usedPercent;
+        _extra = status.extraUsage;
+        _limitReached = status.limitReached;
         _units = status.units;
         _resetsAt = status.resetsAt;
       });
@@ -270,8 +280,11 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _topUp() async {
     if (await TopUpSheet.show(context, subscription: widget.subscription) &&
         mounted) {
-      // [chatDemo] asks no server: what is left is the pack it bought.
-      setState(() => _left = chatDemo ? _subscription.boughtQuestions : null);
+      // A pack credited: extra usage is there ([chatDemo] asks no server).
+      setState(() {
+        _extra = true;
+        _limitReached = false;
+      });
       await _loadStatus();
     }
   }
@@ -324,8 +337,11 @@ class _ChatScreenState extends State<ChatScreen> {
               ]),
               transaction: transaction,
             );
-      _left = reply.remaining;
+      _usedPercent = reply.usedPercent ?? _usedPercent;
+      _extra = reply.extraUsage ?? _extra;
       _units = reply.units;
+      // The week's usage used up and nothing extra: the card, as this answer comes in.
+      _limitReached = (_usedPercent ?? 0) >= 100 && !_extra;
       await for (final piece in reply.text) {
         if (!mounted) return;
         setState(() => answer.text += piece);
@@ -339,7 +355,7 @@ class _ChatScreenState extends State<ChatScreen> {
         ..remove(answer)
         ..remove(asked);
       _field.text = text;
-      _left = 0;
+      _limitReached = true;
       _units = limit.units;
       _resetsAt = limit.resetsAt;
     } on ApiException catch (e) {
@@ -365,9 +381,10 @@ class _ChatScreenState extends State<ChatScreen> {
     _fit();
   }
 
-  /// [chatDemo]: the summary, word by word, as an answer would come, with one
-  /// question fewer left each time from 3, so the line over the field, the
-  /// card and the top-up sheet can be seen too.
+  /// [chatDemo]: the summary, word by word, as an answer would come, with 10%
+  /// more of the week's usage used each time, from 70%, so the line over the
+  /// field, the card and the top-up sheet can be seen too; once a pack is
+  /// bought, extra usage is being spent.
   ChatAnswer _demoAnswer() {
     final words = (widget.article.summary ?? widget.article.headline).split(
       ' ',
@@ -377,7 +394,8 @@ class _ChatScreenState extends State<ChatScreen> {
         const Duration(milliseconds: 40),
         (i) => i == 0 ? words[i] : ' ${words[i]}',
       ).take(words.length),
-      remaining: _left == null ? 3 : max(0, _left! - 1),
+      usedPercent: min(100, (_usedPercent ?? 70) + 10),
+      extraUsage: _extra,
     );
   }
 
@@ -477,14 +495,21 @@ class _ChatScreenState extends State<ChatScreen> {
       RegExp(r'^www\.'),
       '',
     );
-    final left = _left;
-    // Today's questions come back at midnight UTC, the server's day, in the
-    // phone's time; without the server's word (the demo), the next one.
-    final now = DateTime.now().toUtc();
-    final at = (_resetsAt ?? DateTime.utc(now.year, now.month, now.day + 1))
-        .toLocal();
-    final resets =
-        '${at.hour.toString().padLeft(2, '0')}:${at.minute.toString().padLeft(2, '0')}';
+    // The week's usage comes back on Monday at 00:00 UTC, the server's week,
+    // shown in the phone's time; without the server's word (the demo), the
+    // next one.
+    final resetsAt = _resetsAt ?? _nextWeek(DateTime.now().toUtc());
+    final resetsDay = weekdayName(resetsAt, l10n);
+    // Over the field (Roman, 4 Nov): how much of the week's usage is used,
+    // from 75%, or that extra usage is being spent; never a count.
+    final used = _usedPercent;
+    final usage = used == null
+        ? null
+        : used >= 100 && _extra
+        ? l10n.chatUsingExtra
+        : used >= 75
+        ? l10n.chatUsage(min(used, 100), resetsDay)
+        : null;
     // The app's type (theme.dart), as the paywall: the serif for the
     // decision's headline and the answers, the sans for the reader's
     // questions, buttons, links and labels (Yurii, review of #188).
@@ -586,7 +611,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    l10n.chatLongDocument(_units),
+                    l10n.chatLongDocument,
                     style: TextStyle(fontSize: 13, color: label),
                   ),
                 ),
@@ -758,35 +783,41 @@ class _ChatScreenState extends State<ChatScreen> {
                       ),
                     ),
                   ),
-                  if (left == 0)
+                  if (_limitReached)
                     // Nothing left: the card takes the field's place.
                     Padding(
                       padding: const EdgeInsets.fromLTRB(12, 6, 12, 10),
                       child: _OutCard(
                         style: style,
-                        resets: resets,
+                        day: resetsDay,
+                        time: clockTime(resetsAt, l10n),
                         onTopUp: _topUp,
                       ),
                     )
                   else ...[
-                    if (left != null && left <= 3)
+                    if (usage != null)
                       Padding(
-                        padding: const EdgeInsets.only(top: 6),
+                        padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Icon(
-                              CupertinoIcons.clock,
+                              used! >= 100
+                                  ? CupertinoIcons.plus_circle
+                                  : CupertinoIcons.clock,
                               size: 15,
                               color: style.ink,
                             ),
                             const SizedBox(width: 6),
-                            Text(
-                              l10n.chatRemaining(left),
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w500,
-                                color: style.ink,
+                            Flexible(
+                              child: Text(
+                                usage,
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500,
+                                  color: style.ink,
+                                ),
                               ),
                             ),
                           ],
@@ -840,16 +871,27 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 }
 
-/// No questions left for today: when new ones come, or buy more.
+/// The next Monday at 00:00 UTC after [now], in UTC: when the week's usage
+/// comes back, as the server counts the week.
+DateTime _nextWeek(DateTime now) {
+  final today = DateTime.utc(now.year, now.month, now.day);
+  return today.add(Duration(days: DateTime.daysPerWeek + 1 - today.weekday));
+}
+
+/// No usage left this week: when the week's comes back, or get more.
 class _OutCard extends StatelessWidget {
   const _OutCard({
     required this.style,
-    required this.resets,
+    required this.day,
+    required this.time,
     required this.onTopUp,
   });
 
   final ChatStyle style;
-  final String resets;
+
+  /// When the week's usage comes back, in the phone's time: its weekday and its time.
+  final String day;
+  final String time;
   final VoidCallback onTopUp;
 
   @override
@@ -892,7 +934,7 @@ class _OutCard extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            l10n.chatOutBody(resets),
+            l10n.chatOutBody(day, time),
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 13, height: 1.35, color: muted),
           ),

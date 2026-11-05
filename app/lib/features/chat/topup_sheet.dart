@@ -12,11 +12,11 @@ import '../../core/theme.dart';
 import '../../l10n/app_localizations.dart';
 import 'chat_style.dart';
 
-/// More questions to the AI agent (#146, variant A of Roman's mockup, like
-/// Claude): opened from the chat's card once the day's questions are used up.
-/// The two packs, a one-time App Store purchase each, spent after the 20 a
-/// day and never expiring. Closes with `true` once the server has credited
-/// the pack.
+/// More usage of the AI agent (#146, variant A of Roman's mockup, like
+/// Claude): opened from the chat's card once the week's usage is used up.
+/// The two packs, +1 and +3 weeks of usage, a one-time App Store purchase
+/// each, spent after the week's usage and never expiring. Closes with `true`
+/// once the server has credited the pack.
 class TopUpSheet extends StatefulWidget {
   const TopUpSheet({super.key, this.subscription, this.scroll});
 
@@ -69,7 +69,7 @@ class _TopUpSheetState extends State<TopUpSheet> {
     super.dispose();
   }
 
-  int get _questions =>
+  int get _weeks =>
       ChatSubscription.packs[_pack?.id] ?? ChatSubscription.packs.values.first;
 
   ProductDetails? get _pack {
@@ -77,11 +77,11 @@ class _TopUpSheetState extends State<TopUpSheet> {
     return packs.isEmpty ? null : packs[_chosen.clamp(0, packs.length - 1)];
   }
 
-  /// Credited on the server: the questions are there, the sheet's work is done.
+  /// Credited on the server: the extra usage is there, the sheet's work is done.
   void _changed() {
     if (_done || _subscription.credited == _credited || !mounted) return;
     _done = true;
-    unawaited(analytics.topUpResult('credited', questions: _questions));
+    unawaited(analytics.topUpResult('credited', weeks: _weeks));
     Navigator.of(context).pop(true);
   }
 
@@ -98,7 +98,7 @@ class _TopUpSheetState extends State<TopUpSheet> {
       _ => null,
     };
     if (result != null) {
-      unawaited(analytics.topUpResult(result, questions: _questions));
+      unawaited(analytics.topUpResult(result, weeks: _weeks));
     }
     _was = state;
     if (mounted) setState(() {});

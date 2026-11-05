@@ -23,8 +23,8 @@ class FakeStore implements Store {
   @override
   Future<ProductDetails?> product(String id) async {
     final price = switch (ChatSubscription.packs[id]) {
-      50 => 0.99,
-      200 => 2.99,
+      1 => 0.99,
+      3 => 2.99,
       _ => 4.99,
     };
     return ProductDetails(
