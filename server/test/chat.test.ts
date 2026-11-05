@@ -1,14 +1,21 @@
 import { env, exports } from "cloudflare:workers";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { BUNDLE_ID, CHAT_PRODUCT_ID, receiveNotification, recordTransaction, verifyTransaction } from "../src/appstore";
-import { CHAT_MODEL, DAILY_QUESTIONS, QUESTION_MICROS, answerChat, chatStatus, creditChatPack, type ChatResult } from "../src/chat";
-import { costMicros, unitsFor } from "../src/chat/usage";
+import { CHAT_MODEL, QUESTION_MICROS, SANDBOX_WEEKLY_QUESTIONS, SANDBOX_WEEK_MICROS, WEEKLY_MICROS, answerChat, chatStatus, creditChatPack, type ChatResult } from "../src/chat";
+import { costMicros, nextWeek, unitsFor, weekOf } from "../src/chat/usage";
 import { runCleanup } from "../src/health/cleanup";
 import { testAppStore, type TestAppStore } from "./apple-pki";
 
 const DAY = 86_400_000;
 const NOW = new Date("2026-10-27T12:00:00Z");
 const PACK_50 = "com.officialnews.app.agent.questions50";
+/** NOW is a Tuesday: its week is the one of Monday 26 Oct, and the week's usage comes back on Monday 2 Nov. */
+const WEEK = "2026-10-26";
+const RESETS_AT = "2026-11-02T00:00:00Z";
+/** The App Store's week in questions of one unit: 140. */
+const WEEK_QUESTIONS = WEEKLY_MICROS / QUESTION_MICROS;
+/** `/v1/chat/status` before any question this week, nothing bought. */
+const FRESH = { questionsLeft: WEEK_QUESTIONS, boughtQuestions: 0, units: 1, resetsAt: RESETS_AT, usedPercent: 0, extraUsage: false, limitReached: false };
 
 /** A month of the chat's subscription, bought yesterday, as the App Store signs it. */
 const transaction = (changes: object = {}) => ({
@@ -22,7 +29,7 @@ const transaction = (changes: object = {}) => ({
   ...changes,
 });
 
-/** A pack of 50 questions, bought today. */
+/** A pack of a week's extra usage (+1 week, the product id of the old pack of 50 questions), bought today. */
 const pack = (changes: object = {}) => ({
   originalTransactionId: "3000000001",
   transactionId: "3000000001",
@@ -108,9 +115,9 @@ const usage = () =>
     spent: number;
   }>();
 const wallet = () => env.DB.prepare("SELECT extra_micros FROM chat_wallet WHERE original_transaction_id = '2000000001'").first<number>("extra_micros");
-const spendToday = (micros: number) =>
-  env.DB.prepare("INSERT INTO chat_usage (original_transaction_id, day, questions, spent_micros) VALUES ('2000000001', '2026-10-27', 20, ?)")
-    .bind(micros)
+const spendThisWeek = (micros: number) =>
+  env.DB.prepare("INSERT INTO chat_usage (original_transaction_id, day, questions, spent_micros) VALUES ('2000000001', ?, 20, ?)")
+    .bind(WEEK, micros)
     .run();
 const buy = async (changes: object = {}) =>
   creditChatPack({ pack: await store.sign(pack(changes)), transaction: await store.sign(transaction()) }, env, trusted());
@@ -125,7 +132,7 @@ describe("POST /v1/chat (#146)", () => {
     ];
     const result = await ask({ messages: conversation }, { ai });
     expect(await answer(result)).toBe("Так, з листопада 2027 року.");
-    expect(result).toMatchObject({ remaining: DAILY_QUESTIONS - 1, units: 1 });
+    expect(result).toMatchObject({ usedPercent: 0, extraUsage: false, remaining: WEEK_QUESTIONS - 1, units: 1 });
     // The estimate, then the real cost in its place.
     expect(await usage()).toEqual({ questions: 1, spent: COST });
 
@@ -157,7 +164,7 @@ describe("POST /v1/chat (#146)", () => {
     await decision(20_000);
     expect(unitsFor(20_000)).toBe(3);
     const result = await ask();
-    expect(result).toMatchObject({ units: 3, remaining: Math.floor((DAILY_QUESTIONS * QUESTION_MICROS) / (3 * QUESTION_MICROS)) - 1 });
+    expect(result).toMatchObject({ units: 3, usedPercent: 2, remaining: Math.floor(WEEKLY_MICROS / (3 * QUESTION_MICROS)) - 1 });
     await answer(result);
     expect(await usage()).toEqual({ questions: 1, spent: COST });
   });
@@ -173,20 +180,25 @@ describe("POST /v1/chat (#146)", () => {
     expect(ai.requests).toHaveLength(0);
   });
 
-  it("with today's budget spent, stops until midnight UTC, unless questions were bought: then it takes them", async () => {
-    await spendToday(DAILY_QUESTIONS * QUESTION_MICROS);
+  it("with the week's usage spent, stops until Monday 00:00 UTC, unless extra usage was bought: then it takes it", async () => {
+    await spendThisWeek(WEEKLY_MICROS);
     const ai = openAi();
-    expect(await ask({}, { ai })).toEqual({ status: 429, body: { error: "No questions left today", resetsAt: "2026-10-28T00:00:00Z", units: 1 } });
+    const usedUp = { status: 429, body: { error: "No usage left this week", resetsAt: RESETS_AT, units: 1 } };
+    expect(await ask({}, { ai })).toEqual(usedUp);
+    // The next day is the same week.
+    expect(await ask({}, { ai, at: new Date(NOW.getTime() + DAY) })).toEqual(usedUp);
     expect(ai.requests).toHaveLength(0);
 
-    expect((await buy()).body).toMatchObject({ credited: true, boughtQuestions: 50 });
+    expect((await buy()).body).toMatchObject({ credited: true, boughtQuestions: WEEK_QUESTIONS, extraUsage: true });
     const result = await ask({}, { ai });
-    expect(result).toMatchObject({ remaining: 49 });
+    expect(result).toMatchObject({ usedPercent: 100, extraUsage: true, remaining: WEEK_QUESTIONS - 1 });
     await answer(result);
-    expect(await wallet()).toBe(50 * QUESTION_MICROS - COST);
-    // A new day: today's questions again, the bought ones kept.
-    expect(await answer(await ask({}, { at: new Date(NOW.getTime() + DAY) }))).toBe("Так, з листопада 2027 року.");
-    expect(await wallet()).toBe(50 * QUESTION_MICROS - COST);
+    expect(await wallet()).toBe(WEEKLY_MICROS - COST);
+    // A new week on Monday: the week's usage again, the extra usage kept.
+    const monday = await ask({}, { at: new Date(RESETS_AT) });
+    expect(monday).toMatchObject({ usedPercent: 0, extraUsage: true });
+    expect(await answer(monday)).toBe("Так, з листопада 2027 року.");
+    expect(await wallet()).toBe(WEEKLY_MICROS - COST);
   });
 
   it("refuses a bad request (400) and an article outside the feed (404)", async () => {
@@ -213,23 +225,23 @@ describe("POST /v1/chat (#146)", () => {
   });
 
   it("takes a question's share before asking OpenAI: two questions sent at once with one left get one answer and one 429 (#219)", async () => {
-    await spendToday((DAILY_QUESTIONS - 1) * QUESTION_MICROS);
+    await spendThisWeek(WEEKLY_MICROS - QUESTION_MICROS);
     const ai = openAi();
     const results = await Promise.all([ask({}, { ai }), ask({}, { ai })]);
     const answered = results.filter((result) => "stream" in result);
     expect(answered).toHaveLength(1);
-    expect(results.filter((result) => !("stream" in result))).toMatchObject([{ status: 429, body: { error: "No questions left today" } }]);
+    expect(results.filter((result) => !("stream" in result))).toMatchObject([{ status: 429, body: { error: "No usage left this week" } }]);
     await answer(answered[0]);
     expect(ai.requests).toHaveLength(1);
-    expect(await usage()).toEqual({ questions: DAILY_QUESTIONS + 1, spent: (DAILY_QUESTIONS - 1) * QUESTION_MICROS + COST });
+    expect(await usage()).toEqual({ questions: 21, spent: WEEKLY_MICROS - QUESTION_MICROS + COST });
   });
 
   it("gives a question's share back when OpenAI does not answer, to the wallet too (#219)", async () => {
     await buy();
-    await spendToday(DAILY_QUESTIONS * QUESTION_MICROS);
+    await spendThisWeek(WEEKLY_MICROS);
     expect(await ask({}, { ai: openAi(500) })).toMatchObject({ status: 503 });
-    expect(await wallet()).toBe(50 * QUESTION_MICROS);
-    expect(await usage()).toEqual({ questions: DAILY_QUESTIONS, spent: DAILY_QUESTIONS * QUESTION_MICROS });
+    expect(await wallet()).toBe(WEEKLY_MICROS);
+    expect(await usage()).toEqual({ questions: 20, spent: WEEKLY_MICROS });
   });
 
   it("waits while another question of the subscription takes its share, and takes over a lock left behind (#219)", async () => {
@@ -262,29 +274,52 @@ describe("POST /v1/chat (#146)", () => {
     expect((await post("/v1/chat/status", JSON.stringify({ articleId: "c1", transaction: await store.sign(transaction()) }))).status).toBe(402);
   });
 
-  it("forgets the daily counts after a week", async () => {
-    await env.DB.prepare("INSERT INTO chat_usage (original_transaction_id, day, questions) VALUES ('2000000001', '2026-10-01', 3), ('2000000001', '2026-10-27', 1)").run();
+  it("forgets a week's usage once its Monday is over a week back, and keeps this week's to its last day", async () => {
+    await env.DB.prepare("INSERT INTO chat_usage (original_transaction_id, day, questions) VALUES ('2000000001', '2026-10-19', 3), ('2000000001', ?, 1)").bind(WEEK).run();
+    const days = async () => (await env.DB.prepare("SELECT day FROM chat_usage").all<{ day: string }>()).results.map((r) => r.day);
     await runCleanup(env, NOW);
-    const { results } = await env.DB.prepare("SELECT day FROM chat_usage").all<{ day: string }>();
-    expect(results.map((r) => r.day)).toEqual(["2026-10-27"]);
+    expect(await days()).toEqual([WEEK]);
+    // Sunday night, six days after its Monday.
+    await runCleanup(env, new Date("2026-11-01T23:59:59Z"));
+    expect(await days()).toEqual([WEEK]);
   });
 });
 
 describe("POST /v1/chat/status (#146)", () => {
   const status = async (sold = transaction()) => chatStatus({ articleId: "c1", transaction: await store.sign(sold) }, env, trusted());
 
-  it("says what is left today, the bought questions, and how much of the limit one question about this article takes", async () => {
-    expect(await status()).toEqual({ status: 200, body: { questionsLeft: 20, boughtQuestions: 0, units: 1, resetsAt: "2026-10-28T00:00:00Z" } });
-    await spendToday(17 * QUESTION_MICROS);
+  it("says how much of the week's usage is used, whether extra usage is left, and how much of the limit one question about this article takes", async () => {
+    expect(await status()).toEqual({ status: 200, body: FRESH });
+    await spendThisWeek(WEEKLY_MICROS - 3 * QUESTION_MICROS);
     await buy();
-    expect((await status()).body).toMatchObject({ questionsLeft: 3, boughtQuestions: 50 });
+    expect((await status()).body).toMatchObject({ questionsLeft: 3, boughtQuestions: WEEK_QUESTIONS, usedPercent: 97, extraUsage: true, limitReached: false });
     await decision(20_000);
-    expect((await status()).body).toMatchObject({ questionsLeft: 1, boughtQuestions: 16, units: 3 });
+    expect((await status()).body).toMatchObject({ questionsLeft: 1, boughtQuestions: Math.floor(WEEKLY_MICROS / (3 * QUESTION_MICROS)), units: 3 });
     // Another subscription, expired: an older transaction of this one would not close it.
     expect(await status(transaction({ originalTransactionId: "2000000099", transactionId: "2000000099", expiresDate: NOW.getTime() - 1000 }))).toMatchObject({
       status: 402,
     });
     expect(await chatStatus({ articleId: "nope", transaction: await store.sign(transaction()) }, env, trusted())).toMatchObject({ status: 404 });
+  });
+
+  it("says when the week's usage and the extra usage are spent: the limit is reached until Monday, or until a pack", async () => {
+    await spendThisWeek(WEEKLY_MICROS);
+    expect((await status()).body).toMatchObject({ questionsLeft: 0, boughtQuestions: 0, usedPercent: 100, extraUsage: false, limitReached: true, resetsAt: RESETS_AT });
+    await buy();
+    expect((await status()).body).toMatchObject({ usedPercent: 100, extraUsage: true, limitReached: false });
+  });
+});
+
+describe("the week (#146, Roman, 4 Nov: weekly usage)", () => {
+  it("is keyed by its Monday, and its usage comes back the next Monday at 00:00 UTC", () => {
+    expect(weekOf(NOW)).toBe(WEEK);
+    expect(weekOf(new Date("2026-10-26T00:00:00Z"))).toBe(WEEK);
+    expect(weekOf(new Date("2026-11-01T23:59:59Z"))).toBe(WEEK);
+    expect(weekOf(new Date("2026-11-02T00:00:00Z"))).toBe("2026-11-02");
+    // Across a year.
+    expect(weekOf(new Date("2027-01-01T12:00:00Z"))).toBe("2026-12-28");
+    expect(nextWeek(NOW).toISOString()).toBe("2026-11-02T00:00:00.000Z");
+    expect(nextWeek(new Date("2026-11-02T00:00:00Z")).toISOString()).toBe("2026-11-09T00:00:00.000Z");
   });
 });
 
@@ -322,7 +357,7 @@ describe("the chat about a tick (#230, the world's stories)", () => {
     const ai = openAi();
     const result = await ask(aboutTick("w1"), { ai });
     expect(await answer(result)).toBe("Так, з листопада 2027 року.");
-    expect(result).toMatchObject({ remaining: DAILY_QUESTIONS - 1, units: 1 });
+    expect(result).toMatchObject({ usedPercent: 0, extraUsage: false, remaining: WEEK_QUESTIONS - 1, units: 1 });
     const system = ai.requests[0].body.messages[0];
     expect(system.role).toBe("system");
     expect(system.content).toContain("A reader talks with you about ONE news event, shown below, which news outlets report: you have their headlines, not their articles.");
@@ -348,7 +383,7 @@ describe("the chat about a tick (#230, the world's stories)", () => {
 
   it("says in /v1/chat/status how much one question about it takes", async () => {
     const status = async (tickId: string) => chatStatus({ tickId, transaction: await store.sign(transaction()) }, env, trusted());
-    expect(await status("w1")).toEqual({ status: 200, body: { questionsLeft: 20, boughtQuestions: 0, units: 1, resetsAt: "2026-10-28T00:00:00Z" } });
+    expect(await status("w1")).toEqual({ status: 200, body: FRESH });
     expect(await status("nope")).toMatchObject({ status: 404 });
     expect(await chatStatus({ articleId: "c1", tickId: "w1", transaction: await store.sign(transaction()) }, env, trusted())).toMatchObject({ status: 400 });
   });
@@ -384,7 +419,7 @@ describe("the chat about a story of a country's outlets (#230; Roman, 3 Nov: a s
     const ai = openAi();
     const result = await ask(aboutStory("s9"), { ai });
     expect(await answer(result)).toBe("Так, з листопада 2027 року.");
-    expect(result).toMatchObject({ remaining: DAILY_QUESTIONS - 1, units: 1 });
+    expect(result).toMatchObject({ usedPercent: 0, extraUsage: false, remaining: WEEK_QUESTIONS - 1, units: 1 });
     const system = ai.requests[0].body.messages[0].content as string;
     expect(system).toContain("Event: Trump announced that the USA will stop providing military aid to Israel");
     expect(system).toContain("As the app shows it in Ukrainian: Трамп оголосив, що США припинять військову допомогу Ізраїлю");
@@ -417,14 +452,14 @@ describe("the chat about a story of a country's outlets (#230; Roman, 3 Nov: a s
 
   it("says in /v1/chat/status how much one question about it takes", async () => {
     const status = async (storyId: string, country = "CZ") => chatStatus({ storyId, country, transaction: await store.sign(transaction()) }, env, trusted());
-    expect(await status("s9")).toEqual({ status: 200, body: { questionsLeft: 20, boughtQuestions: 0, units: 1, resetsAt: "2026-10-28T00:00:00Z" } });
+    expect(await status("s9")).toEqual({ status: 200, body: FRESH });
     expect(await status("nope")).toMatchObject({ status: 404 });
     expect(await status("s9", "SK")).toMatchObject({ status: 404 });
     expect(await chatStatus({ storyId: "s9", transaction: await store.sign(transaction()) }, env, trusted())).toMatchObject({ status: 400 });
   });
 });
 
-describe("packs of questions (#146)", () => {
+describe("packs of extra usage (#146; weeks of it since 4 Nov)", () => {
   const notify = async (type: string, changes: object) =>
     receiveNotification(
       {
@@ -439,22 +474,23 @@ describe("packs of questions (#146)", () => {
     );
 
   it("are credited once to the subscription's wallet, however often the app sends them", async () => {
-    expect(await buy()).toEqual({ status: 200, body: { credited: true, boughtQuestions: 50 } });
-    expect(await buy()).toEqual({ status: 200, body: { credited: false, boughtQuestions: 50 } });
-    expect((await buy({ transactionId: "3000000002", productId: "com.officialnews.app.agent.questions200" })).body).toMatchObject({ boughtQuestions: 250 });
-    expect(await wallet()).toBe(250 * QUESTION_MICROS);
+    expect(await buy()).toEqual({ status: 200, body: { credited: true, boughtQuestions: WEEK_QUESTIONS, extraUsage: true } });
+    expect(await buy()).toEqual({ status: 200, body: { credited: false, boughtQuestions: WEEK_QUESTIONS, extraUsage: true } });
+    // +3 weeks: the product id of the old pack of 200 questions.
+    expect((await buy({ transactionId: "3000000002", productId: "com.officialnews.app.agent.questions200" })).body).toMatchObject({ boughtQuestions: 4 * WEEK_QUESTIONS });
+    expect(await wallet()).toBe(4 * WEEKLY_MICROS);
   });
 
   it("refuses what is not a pack of this app, a pack without a subscription, and a refunded pack", async () => {
     expect(await buy({ productId: CHAT_PRODUCT_ID })).toMatchObject({ status: 400 });
     expect(await buy({ bundleId: "com.example.other" })).toMatchObject({ status: 400 });
     expect(await creditChatPack({ pack: await store.sign(pack()), transaction: "not.a.jws" }, env, trusted())).toMatchObject({ status: 402 });
-    expect((await buy({ revocationDate: NOW.getTime() })).body).toMatchObject({ credited: false, boughtQuestions: 0 });
+    expect((await buy({ revocationDate: NOW.getTime() })).body).toMatchObject({ credited: false, boughtQuestions: 0, extraUsage: false });
   });
 
   it("a refund takes a pack back out of the wallet, below zero when already spent; Apple's reversal puts it back", async () => {
     await buy();
-    await spendToday(DAILY_QUESTIONS * QUESTION_MICROS);
+    await spendThisWeek(WEEKLY_MICROS);
     await answer(await ask());
     expect((await notify("REFUND", { revocationDate: NOW.getTime() })).status).toBe(200);
     expect(await wallet()).toBe(-COST);
@@ -463,21 +499,21 @@ describe("packs of questions (#146)", () => {
     expect(await wallet()).toBe(-COST);
     expect(await ask()).toMatchObject({ status: 429 });
     await notify("REFUND_REVERSED", {});
-    expect(await wallet()).toBe(50 * QUESTION_MICROS - COST);
+    expect(await wallet()).toBe(WEEKLY_MICROS - COST);
     // A pack never credited has nothing to take back.
     await notify("REFUND", { transactionId: "3000000009", revocationDate: NOW.getTime() });
-    expect(await wallet()).toBe(50 * QUESTION_MICROS - COST);
+    expect(await wallet()).toBe(WEEKLY_MICROS - COST);
   });
 
   it("a pack refunded before the app sent it is never credited, until Apple reverses the refund", async () => {
     // Yurii's review of #184: Apple's refund can come first, and the app still holds the pack signed before it.
     await notify("REFUND", { revocationDate: NOW.getTime() });
-    expect(await buy()).toEqual({ status: 200, body: { credited: false, boughtQuestions: 0 } });
+    expect(await buy()).toEqual({ status: 200, body: { credited: false, boughtQuestions: 0, extraUsage: false } });
     // Apple may send it again: still nothing, in no wallet.
     await notify("REFUND", { revocationDate: NOW.getTime() });
     expect(await env.DB.prepare("SELECT COUNT(*) AS wallets FROM chat_wallet").first<number>("wallets")).toBe(0);
     await notify("REFUND_REVERSED", {});
-    expect(await buy()).toEqual({ status: 200, body: { credited: true, boughtQuestions: 50 } });
+    expect(await buy()).toEqual({ status: 200, body: { credited: true, boughtQuestions: WEEK_QUESTIONS, extraUsage: true } });
   });
 
   it("change the pack's row and the wallet together or not at all (#219)", async () => {
@@ -489,15 +525,15 @@ describe("packs of questions (#146)", () => {
     expect(await wallet()).toBeNull();
     await env.DB.prepare("DROP TRIGGER failing").run();
     // The app sends it again: credited once.
-    expect(await buy()).toEqual({ status: 200, body: { credited: true, boughtQuestions: 50 } });
+    expect(await buy()).toEqual({ status: 200, body: { credited: true, boughtQuestions: WEEK_QUESTIONS, extraUsage: true } });
     // The same for a refund.
     await failing("UPDATE");
     await notify("REFUND", { revocationDate: NOW.getTime() }).catch(() => undefined);
-    expect(await wallet()).toBe(50 * QUESTION_MICROS);
+    expect(await wallet()).toBe(WEEKLY_MICROS);
   });
 });
 
-describe("Sandbox purchases, free for the team's builds (#146, Roman, 28 and 29 Oct)", () => {
+describe("Sandbox purchases: the team's builds and App Review's (#146, Roman, 28 and 29 Oct, 4 and 5 Nov)", () => {
   const KEY = "roman-local-key";
   const TESTFLIGHT = "testflight-key";
   const keyed: typeof env = { ...env, OPENAI_API_KEY: "sk-test", CHAT_SANDBOX_KEY: KEY, CHAT_SANDBOX_KEY_TESTFLIGHT: TESTFLIGHT };
@@ -520,51 +556,80 @@ describe("Sandbox purchases, free for the team's builds (#146, Roman, 28 and 29 
       sandboxKey,
     });
 
-  it("get nothing without a key: no answer, no status, no pack, and nothing kept", async () => {
-    const ai = openAi();
-    for (const key of [null, "", "another-key"]) {
-      expect(await question(key, { ai })).toEqual({ status: 403, body: { error: "Not open to test purchases" } });
-      expect(await status(key)).toMatchObject({ status: 403 });
-      expect(await credit(key)).toMatchObject({ status: 403 });
+  it("are answered without a key too, as App Review's from a `store` build, in a small week that soon shows the packs (Roman, 5 Nov)", async () => {
+    for (const key of [null, "another-key"]) {
+      expect(await answer(await question(key))).toBe("Так, з листопада 2027 року.");
     }
-    // Without the Worker's secrets the keys open nothing.
-    for (const key of [KEY, TESTFLIGHT]) {
-      expect(await question(key, { ai, worker: { ...env, OPENAI_API_KEY: "sk-test" } })).toMatchObject({ status: 403 });
-    }
-    // A free pack is never credited to a paid subscription either.
-    expect(await credit(null, { subscription: transaction() })).toMatchObject({ status: 403 });
-    expect(ai.requests).toHaveLength(0);
-    expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM subscriptions").first<number>("n")).toBe(0);
-    expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM chat_credits").first<number>("n")).toBe(0);
-    expect(await usage()).toEqual({ questions: 0, spent: 0 });
+    // Two answers at COST each leave less than a question of SANDBOX_WEEK_MICROS.
+    expect(await question("")).toEqual({ status: 429, body: { error: "No usage left this week", resetsAt: RESETS_AT, units: 1 } });
+    expect(await status(null)).toMatchObject({ status: 200, body: { questionsLeft: 0, usedPercent: 67, extraUsage: false, limitReached: true } });
+    // A key the Worker has no secret for is no key either.
+    expect(await question(KEY, { worker: { ...env, OPENAI_API_KEY: "sk-test" } })).toMatchObject({ status: 429 });
+    // A pack, as App Review buys one once the limit shows: a week's usage as on the App Store.
+    expect(await credit(null)).toEqual({ status: 200, body: { credited: true, boughtQuestions: WEEK_QUESTIONS, extraUsage: true } });
+    expect(await answer(await question(null))).toBe("Так, з листопада 2027 року.");
+    expect(await usage()).toEqual({ questions: 3, spent: SANDBOX_WEEK_MICROS });
   });
 
-  it("are answered for Roman's local builds and the team's TestFlight builds, which send their keys, within the same limit", async () => {
+  it("stop for every purchase without a key once the week's Sandbox questions reach the cap; the team's go on", async () => {
+    const ai = openAi();
+    expect(await answer(await question(null, { ai }))).toBe("Так, з листопада 2027 року.");
+    // Another Sandbox subscription's questions count too: all of them together.
+    const other = transaction({ originalTransactionId: "4000000002", transactionId: "4000000002", environment: "Sandbox" });
+    await recordTransaction(env, await verifyTransaction(await store.sign(other), trusted()), { now: NOW });
+    await env.DB.prepare("INSERT INTO chat_usage (original_transaction_id, day, questions, spent_micros) VALUES ('4000000002', ?, ?, 0)")
+      .bind(WEEK, SANDBOX_WEEKLY_QUESTIONS - 1)
+      .run();
+    // A paid subscription's questions do not.
+    await recordTransaction(env, await verifyTransaction(await store.sign(transaction()), trusted()), { now: NOW });
+    await env.DB.prepare("INSERT INTO chat_usage (original_transaction_id, day, questions, spent_micros) VALUES ('2000000001', ?, 500, 0)").bind(WEEK).run();
+    // Refused by the cap, with room left in the small week.
+    const capped = { status: 429, body: { error: "No usage left this week", resetsAt: RESETS_AT, units: 1 } };
+    for (const key of [null, "another-key"]) {
+      expect(await question(key, { ai })).toEqual(capped);
+    }
+    expect(ai.requests).toHaveLength(1);
+    for (const key of [KEY, TESTFLIGHT]) {
+      expect(await answer(await question(key))).toBe("Так, з листопада 2027 року.");
+    }
+    // The next week, answered again.
+    const next = await answerChat(
+      { articleId: "c1", lang: "uk", messages: [QUESTION], transaction: await store.sign(sandbox()) },
+      keyed,
+      { ...trusted(), fetch: openAi().fetch, now: new Date("2026-11-02T08:00:00Z"), sandboxKey: null },
+    );
+    expect(await answer(next)).toBe("Так, з листопада 2027 року.");
+  });
+
+  it("are answered for Roman's local builds and the team's TestFlight builds, which send their keys, in the App Store's week", async () => {
     expect(await answer(await question(KEY))).toBe("Так, з листопада 2027 року.");
     expect(await answer(await question(TESTFLIGHT))).toBe("Так, з листопада 2027 року.");
     expect(await usage()).toEqual({ questions: 2, spent: 2 * COST });
-    expect(await credit(TESTFLIGHT)).toEqual({ status: 200, body: { credited: true, boughtQuestions: 50 } });
-    const today = Math.floor((DAILY_QUESTIONS * QUESTION_MICROS - 2 * COST) / QUESTION_MICROS);
+    expect(await credit(TESTFLIGHT)).toEqual({ status: 200, body: { credited: true, boughtQuestions: WEEK_QUESTIONS, extraUsage: true } });
+    const week = { questionsLeft: Math.floor((WEEKLY_MICROS - 2 * COST) / QUESTION_MICROS), boughtQuestions: WEEK_QUESTIONS, usedPercent: 1, extraUsage: true, limitReached: false };
     for (const key of [KEY, TESTFLIGHT]) {
-      expect(await status(key)).toMatchObject({ status: 200, body: { questionsLeft: today, boughtQuestions: 50 } });
+      expect(await status(key)).toMatchObject({ status: 200, body: week });
     }
+    // Without a key the same purchase is in the small week, which its two answers mostly used.
+    expect(await status(null)).toMatchObject({ status: 200, body: { questionsLeft: 0, usedPercent: 67, extraUsage: true, limitReached: false } });
   });
-
   it("never put a free pack into a paid subscription's wallet, nor a paid pack into a free one's, key or not", async () => {
     const otherStore = { status: 403, body: { error: "The pack and the subscription come from different stores" } };
-    expect(await credit(KEY, { subscription: transaction() })).toEqual(otherStore);
-    expect(await credit(KEY, { bought: pack() })).toEqual(otherStore);
+    for (const key of [KEY, null]) {
+      expect(await credit(key, { subscription: transaction() })).toEqual(otherStore);
+      expect(await credit(key, { bought: pack() })).toEqual(otherStore);
+    }
     expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM chat_credits").first<number>("n")).toBe(0);
   });
 
   it("credit one free pack a day to a subscription: a second waits for the next day", async () => {
     // Yurii's review of #217: each free pack is real OpenAI cost. Paid packs have no such cap (two in a day above).
-    expect(await credit(KEY)).toEqual({ status: 200, body: { credited: true, boughtQuestions: 50 } });
-    expect(await credit(KEY)).toEqual({ status: 200, body: { credited: false, boughtQuestions: 50 } });
+    expect(await credit(KEY)).toEqual({ status: 200, body: { credited: true, boughtQuestions: WEEK_QUESTIONS, extraUsage: true } });
+    expect(await credit(KEY)).toEqual({ status: 200, body: { credited: false, boughtQuestions: WEEK_QUESTIONS, extraUsage: true } });
     const second = freePack({ transactionId: "3000000002" });
     expect(await credit(TESTFLIGHT, { bought: second })).toEqual({ status: 429, body: { error: "One test pack a day", resetsAt: "2026-10-28T00:00:00Z" } });
     // The app keeps it unfinished, so StoreKit gives it back at the next start.
     const tomorrow = new Date(NOW.getTime() + DAY);
-    expect(await credit(TESTFLIGHT, { bought: second, at: tomorrow })).toEqual({ status: 200, body: { credited: true, boughtQuestions: 100 } });
+    expect(await credit(TESTFLIGHT, { bought: second, at: tomorrow })).toEqual({ status: 200, body: { credited: true, boughtQuestions: 2 * WEEK_QUESTIONS, extraUsage: true } });
   });
 });

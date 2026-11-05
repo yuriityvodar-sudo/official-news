@@ -5,6 +5,7 @@ import 'package:flutter/cupertino.dart';
 import '../../core/chat_history.dart';
 import '../../core/glass.dart';
 import '../../core/news_widgets.dart';
+import '../../core/wide.dart';
 import '../../l10n/app_localizations.dart';
 import 'chat_screen.dart';
 
@@ -37,7 +38,7 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen> {
     final history = _history;
     final l10n = AppLocalizations.of(context);
     final muted = CupertinoColors.secondaryLabel.resolveFrom(context);
-    return CupertinoPageScaffold(
+    final scaffold = CupertinoPageScaffold(
       backgroundColor: CupertinoColors.systemGroupedBackground.resolveFrom(
         context,
       ),
@@ -101,6 +102,11 @@ class _ChatHistoryScreenState extends State<ChatHistoryScreen> {
           );
         },
       ),
+    );
+    // In a wide window, a column in the middle (#137).
+    return ReadablePage(
+      color: CupertinoColors.systemGroupedBackground.resolveFrom(context),
+      child: scaffold,
     );
   }
 

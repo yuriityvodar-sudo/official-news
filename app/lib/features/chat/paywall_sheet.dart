@@ -11,6 +11,7 @@ import '../../core/motion.dart';
 import '../../core/sheet.dart';
 import '../../core/subscription.dart';
 import '../../core/theme.dart';
+import '../../core/wide.dart';
 import '../../l10n/app_localizations.dart';
 import '../settings/info_pages.dart';
 import 'chat_questions.dart';
@@ -330,7 +331,7 @@ class _PaywallSheetState extends State<PaywallSheet> {
             style: TextStyle(fontSize: 13, height: 1.4, color: muted),
           ),
           const SizedBox(height: 10),
-          if (product != null)
+          if (product != null) ...[
             Text(
               l10n.paywallPrice(product.price),
               textAlign: TextAlign.center,
@@ -340,8 +341,18 @@ class _PaywallSheetState extends State<PaywallSheet> {
                 letterSpacing: -0.5,
                 color: label,
               ),
-            )
-          else if (!_loaded)
+            ),
+            // What the price gives (Roman, 4 Nov): usage, never a count.
+            Text(
+              l10n.paywallUsage,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: label,
+              ),
+            ),
+          ] else if (!_loaded)
             const CupertinoActivityIndicator(),
           const SizedBox(height: 4),
           Text(
@@ -413,7 +424,7 @@ class _PaywallSheetState extends State<PaywallSheet> {
       ),
     );
 
-    return CupertinoPageScaffold(
+    final scaffold = CupertinoPageScaffold(
       backgroundColor: CupertinoColors.systemGroupedBackground.resolveFrom(
         context,
       ),
@@ -462,6 +473,12 @@ class _PaywallSheetState extends State<PaywallSheet> {
           ),
         ),
       ),
+    );
+    // In a wide window, a column in the middle (#137).
+    return ReadablePage(
+      color: CupertinoColors.systemGroupedBackground.resolveFrom(context),
+      maxWidth: sheetWidth,
+      child: scaffold,
     );
   }
 }

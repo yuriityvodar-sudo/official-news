@@ -39,7 +39,6 @@ void main() {
       credit: (pack, transaction) async {
         if (!serverUp) throw Exception('offline');
         credits.add((pack, transaction));
-        return 50;
       },
       clock: () => _now,
     );
@@ -124,7 +123,6 @@ void main() {
       expect(credits, [('pack.jws', subscription.transaction!)]);
       expect(store.finished, hasLength(1));
       expect(subscription.credited, 1);
-      expect(subscription.boughtQuestions, 50);
     });
 
     testWidgets('a restore that finds nothing says so', (tester) async {
@@ -159,12 +157,13 @@ void main() {
             return http.Response.bytes(
               utf8.encode('Так, з листопада 2027 року.'),
               200,
-              headers: {'x-chat-remaining': '19'},
+              headers: {'x-chat-used': '42', 'x-chat-extra': 'false'},
             );
           }),
         );
         expect(await answer.text.join(), 'Так, з листопада 2027 року.');
-        expect(answer.remaining, 19);
+        expect(answer.usedPercent, 42);
+        expect(answer.extraUsage, false);
         expect(sent.url.toString(), 'https://api.test/v1/chat');
         expect(jsonDecode(sent.body), {
           'articleId': 'c1',
@@ -178,13 +177,13 @@ void main() {
     );
 
     test(
-      'says when today\'s questions come back (429), and the server\'s status otherwise',
+      'says when the week\'s usage comes back (429), and the server\'s status otherwise',
       () async {
         await expectLater(
           ask(
             api(
               (_) => http.Response(
-                '{"error":"No questions left today","resetsAt":"2026-10-28T00:00:00Z","units":1}',
+                '{"error":"No usage left this week","resetsAt":"2026-11-02T00:00:00Z","units":1}',
                 429,
               ),
             ),
@@ -193,7 +192,7 @@ void main() {
             isA<ChatLimit>().having(
               (e) => e.resetsAt,
               'resetsAt',
-              DateTime.utc(2026, 10, 28),
+              DateTime.utc(2026, 11, 2),
             ),
           ),
         );
@@ -218,7 +217,7 @@ void main() {
             return request.url.path == '/v1/chat'
                 ? http.Response('Yes.', 200)
                 : http.Response(
-                    '{"questionsLeft":20,"boughtQuestions":0,"units":1}',
+                    '{"usedPercent":0,"extraUsage":false,"limitReached":false,"units":1}',
                     200,
                   );
           }),

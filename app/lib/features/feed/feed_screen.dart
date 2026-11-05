@@ -22,6 +22,7 @@ import '../../core/story.dart';
 import '../../core/subscription.dart';
 import '../../core/theme.dart';
 import '../../core/tick.dart';
+import '../../core/wide.dart';
 import '../../l10n/app_localizations.dart';
 import '../chat/chat_history_screen.dart';
 import '../chat/chat_screen.dart';
@@ -298,10 +299,13 @@ class _FeedScreenState extends State<FeedScreen> {
     }
     // The article grows out of its card (#141); with Reduce Motion on, or a
     // card not on screen, it opens as before. The article as the feed has
-    // it, so a translated one opens translated.
+    // it, so a translated one opens translated. In a wide window (#137) it
+    // grows with its own top, in its column in the middle: the card stays
+    // where it stands among the feed's columns.
     final card = Motion.reduced(context) ? null : ZoomSource.rectOf(article.id);
-    final top = card == null ? null : ZoomSource.cardOf(article.id);
-    if (card == null || top == null) {
+    final wide = isWide(MediaQuery.sizeOf(context).width);
+    final top = card == null || wide ? null : ZoomSource.cardOf(article.id);
+    if (card == null || (top == null && !wide)) {
       Navigator.of(context).pushNamed(Routes.detail, arguments: article);
       return;
     }
@@ -318,7 +322,7 @@ class _FeedScreenState extends State<FeedScreen> {
         builder: (_) => DetailScreen(
           article: article,
           top: top,
-          topFrom: card,
+          topFrom: top == null ? null : card,
           background: color,
         ),
       ),

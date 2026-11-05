@@ -169,8 +169,16 @@ Map<String, dynamic> _article(String id) => {
 };
 
 /// The feed with three articles; [pushed] collects the routes it opens.
-Future<void> _pumpFeed(WidgetTester tester, List<Route<dynamic>> pushed) async {
+/// The feed of three decisions on a phone, or in a window of [size] (#137).
+Future<void> _pumpFeed(
+  WidgetTester tester,
+  List<Route<dynamic>> pushed, {
+  Size size = const Size(393, 852),
+}) async {
   SharedPreferences.setMockInitialValues({});
+  tester.view.physicalSize = size * 3;
+  tester.view.devicePixelRatio = 3;
+  addTearDown(tester.view.reset);
   final api = ApiClient(
     baseUrl: 'https://api.test',
     client: MockClient((request) async {
@@ -475,6 +483,30 @@ void main() {
         ),
         findsOneWidget,
       );
+    });
+
+    testWidgets('in a wide window, grows out of its card with its own top, '
+        'in its column in the middle, not where the card stands among the '
+        "feed's columns (#137)", (tester) async {
+      final pushed = <Route<dynamic>>[];
+      await _pumpFeed(tester, pushed, size: const Size(1032, 1376));
+      final card = tester.getRect(
+        find.byWidgetPredicate((w) => w is ZoomSource && w.id == 'a2'),
+      );
+
+      await tester.tap(find.text('Decision a2'));
+      await tester.pumpAndSettle();
+      final route = pushed.last as CardZoomRoute<void>;
+      expect(route.from, card);
+      expect(find.byType(ZoomTop), findsNothing);
+      expect(find.text('Summary a2'), findsOneWidget);
+      // The article's own headline, in the middle column.
+      final headline = find.descendant(
+        of: find.byType(DetailScreen),
+        matching: find.text('Decision a2'),
+      );
+      expect(headline, findsOneWidget);
+      expect(tester.getTopLeft(headline).dx, (1032 - 680) / 2 + 20);
     });
 
     testWidgets('with Reduce Motion on, opens it as before', (tester) async {

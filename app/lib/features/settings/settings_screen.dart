@@ -12,6 +12,7 @@ import '../../core/motion.dart';
 import '../../core/push.dart';
 import '../../core/analytics.dart';
 import '../../core/theme.dart';
+import '../../core/wide.dart';
 import '../../l10n/app_localizations.dart';
 import '../feed/feed_look.dart';
 import 'info_pages.dart';
@@ -79,7 +80,7 @@ class SettingsScreen extends StatelessWidget {
     final country = this.country;
     final phoneCountry = this.phoneCountry;
     final onCountry = this.onCountry;
-    return CupertinoPageScaffold(
+    final scaffold = CupertinoPageScaffold(
       backgroundColor: grouped,
       // Material for the default text style (no yellow underline on plain Text).
       child: Material(
@@ -232,6 +233,8 @@ class SettingsScreen extends StatelessWidget {
         ),
       ),
     );
+    // In a wide window, a column in the middle (#137).
+    return ReadablePage(color: grouped, child: scaffold);
   }
 }
 
@@ -559,7 +562,7 @@ class _LanguagePage extends StatelessWidget {
     final grouped = CupertinoColors.systemGroupedBackground.resolveFrom(
       context,
     );
-    return CupertinoPageScaffold(
+    final scaffold = CupertinoPageScaffold(
       backgroundColor: grouped,
       navigationBar: CupertinoNavigationBar(
         middle: Text(l10n.language),
@@ -607,6 +610,8 @@ class _LanguagePage extends StatelessWidget {
         ),
       ),
     );
+    // In a wide window, a column in the middle (#137).
+    return ReadablePage(color: grouped, child: scaffold);
   }
 }
 
@@ -638,7 +643,7 @@ class _CountryPage extends StatelessWidget {
     final codes = names.keys.toList()
       ..sort((a, b) => names[a]!.compareTo(names[b]!));
     const check = Icon(CupertinoIcons.checkmark_alt, color: AppColors.accent);
-    return CupertinoPageScaffold(
+    final scaffold = CupertinoPageScaffold(
       backgroundColor: grouped,
       navigationBar: CupertinoNavigationBar(
         middle: Text(l10n.myCountry),
@@ -696,6 +701,8 @@ class _CountryPage extends StatelessWidget {
         ),
       ),
     );
+    // In a wide window, a column in the middle (#137).
+    return ReadablePage(color: grouped, child: scaffold);
   }
 }
 

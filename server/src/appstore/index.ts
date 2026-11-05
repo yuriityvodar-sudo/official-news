@@ -2,10 +2,10 @@ import type { Env } from "../env";
 import { toStoredTime } from "../fetcher/text";
 import { JwsError, verifyAppleJws, type VerifyOptions } from "./jws";
 import { checkPack, packNotification, type PackTransaction } from "./packs";
-import { BUNDLE_ID, CHAT_PRODUCT_ID, PACK_QUESTIONS } from "./products";
+import { BUNDLE_ID, CHAT_PRODUCT_ID, PACK_WEEKS } from "./products";
 
 export { JwsError, type VerifyOptions } from "./jws";
-export { BUNDLE_ID, CHAT_PRODUCT_ID, PACK_QUESTIONS } from "./products";
+export { BUNDLE_ID, CHAT_PRODUCT_ID, PACK_WEEKS } from "./products";
 
 /** What the server reads of an App Store signed transaction (JWSTransactionDecodedPayload). */
 export interface AppleTransaction {
@@ -155,8 +155,8 @@ export async function receiveNotification(
   if (signed) {
     try {
       const t = await verifyAppleJws<AppleTransaction & PackTransaction>(signed, options);
-      if (t.productId in PACK_QUESTIONS) {
-        // A pack of questions: a refund takes it back out of its wallet.
+      if (t.productId in PACK_WEEKS) {
+        // A pack of extra usage: a refund takes it back out of its wallet.
         await packNotification(env, checkPack(t), type, options.now);
       } else {
         subscription = await recordTransaction(env, checkSubscription(t), {

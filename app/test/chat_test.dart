@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
+import 'package:intl/intl.dart';
 import 'package:official_news/core/analytics.dart';
 import 'package:official_news/core/api_client.dart';
 import 'package:official_news/core/article.dart';
@@ -52,6 +53,12 @@ String _jws(DateTime expires) =>
 
 final _now = DateTime(2026, 10, 27, 12);
 
+/// The weekday the week's usage comes back on, Monday 00:00 UTC, as the chat
+/// shows it in the phone's time.
+final _resetsDay = DateFormat.EEEE(
+  'en_GB',
+).format(DateTime.utc(2026, 11, 2).toLocal());
+
 void main() {
   late List<(String, Map<String, Object>)> events;
   late FakeStore store;
@@ -76,7 +83,6 @@ void main() {
       credit: (pack, transaction) async {
         if (!serverUp) throw Exception('offline');
         credits.add((pack, transaction));
-        return 50;
       },
       clock: () => _now,
     );
@@ -145,6 +151,7 @@ void main() {
           findsOneWidget,
         );
         expect(find.text(r'$4.99 a month'), findsOneWidget);
+        expect(find.text('Weekly usage included'), findsOneWidget);
         expect(
           find.text(
             'Renews automatically. Cancel any time in your Apple ID settings.',
@@ -259,18 +266,16 @@ void main() {
     /// What `/v1/chat/status` was asked about.
     late List<Map<String, dynamic>> statusAsked;
 
-    test(
-      'stays closed in builds without the demo or a Sandbox key, such as the App Store\'s',
-      () => expect(ChatScreen.opened, isFalse),
-    );
-
-    /// The server: answers in pieces, or with [status]; [left] questions
-    /// left before asking, at [units] a question.
+    /// The server: answers in pieces, or with [status], with [used] of the
+    /// week's usage after the answer and [extra] usage left; [usage] is the
+    /// week's usage before asking, status by status: how much is used and
+    /// whether extra usage is left; [units] a question.
     ApiClient server({
       int status = 200,
-      int remaining = 9,
+      int used = 10,
+      bool extra = false,
       String body = '{}',
-      List<int> left = const [20],
+      List<(int, bool)> usage = const [(0, false)],
       int units = 1,
       List<String> pieces = const ['Yes,', ' from November', ' 2027.'],
       Future<void>? hold,
@@ -282,15 +287,19 @@ void main() {
           final sent = await bodyStream.bytesToString();
           if (request.url.path == '/v1/chat/status') {
             statusAsked.add(jsonDecode(sent) as Map<String, dynamic>);
-            final now = left[math.min(statuses++, left.length - 1)];
+            final (now, extraNow) = usage[math.min(
+              statuses++,
+              usage.length - 1,
+            )];
             return http.StreamedResponse(
               Stream.value(
                 utf8.encode(
                   jsonEncode({
-                    'questionsLeft': now,
-                    'boughtQuestions': 0,
+                    'usedPercent': now,
+                    'extraUsage': extraNow,
+                    'limitReached': now >= 100 && !extraNow,
                     'units': units,
-                    'resetsAt': '2026-10-28T00:00:00Z',
+                    'resetsAt': '2026-11-02T00:00:00Z',
                   }),
                 ),
               ),
@@ -309,7 +318,8 @@ void main() {
             Stream.fromIterable(pieces.map(utf8.encode)),
             200,
             headers: {
-              'x-chat-remaining': '$remaining',
+              'x-chat-used': '$used',
+              'x-chat-extra': '$extra',
               'x-chat-units': '$units',
             },
           );
@@ -367,7 +377,7 @@ void main() {
           null,
         ),
       );
-      await openChat(tester, server(remaining: 2));
+      await openChat(tester, server(used: 80));
       expect(
         paintOrder(tester, find.byType(UiKitView)),
         greaterThan(paintOrder(tester, find.text('Ask about this decision'))),
@@ -379,7 +389,7 @@ void main() {
       (tester) async {
         final opened = <Uri>[];
         asked = [];
-        await openChat(tester, server(remaining: 2), opened: opened);
+        await openChat(tester, server(used: 80), opened: opened);
         await tester.tap(find.text('What changes and when?'));
         await tester.pumpAndSettle();
         expect(find.text('Yes, from November 2027.'), findsOneWidget);
@@ -389,7 +399,10 @@ void main() {
           {'role': 'user', 'text': 'What changes and when?'},
         ]);
         expect(asked.single['transaction'], subscription.transaction);
-        expect(find.text('2 questions left today'), findsOneWidget);
+        expect(
+          find.text("80% of this week's usage used · resets $_resetsDay"),
+          findsOneWidget,
+        );
         await tester.tap(find.text('Read the official decision on gov.uk'));
         expect(opened, [Uri.parse('https://www.gov.uk/euro-7')]);
         expect(sent(), contains('chat_question'));
@@ -421,7 +434,7 @@ void main() {
         final tick = Tick.fromJson(fakeTick()).asArticle(l10nFor());
         await openChat(
           tester,
-          server(remaining: 2),
+          server(used: 80),
           opened: opened,
           article: tick,
         );
@@ -447,7 +460,7 @@ void main() {
       'country, as about a tick (#230)',
       (tester) async {
         final story = Story.fromJson(fakeStory()).asArticle(l10nFor(), 'CZ');
-        await openChat(tester, server(remaining: 2), article: story);
+        await openChat(tester, server(used: 80), article: story);
         expect(find.text('Babiš names his government'), findsOneWidget);
         expect(find.text('ČT24, Seznam Zprávy and 2 more'), findsOneWidget);
         expect(find.text('Does this concern me?'), findsNothing);
@@ -470,21 +483,21 @@ void main() {
     );
 
     testWidgets(
-      'says when today\'s questions are used up, or the agent is not there',
+      'says when the week\'s usage is used up, or the agent is not there',
       (tester) async {
         await openChat(
           tester,
           server(
             status: 429,
             body:
-                '{"error":"No questions left today","resetsAt":"2026-10-28T00:00:00Z","units":1}',
+                '{"error":"No usage left this week","resetsAt":"2026-11-02T00:00:00Z","units":1}',
           ),
         );
         await tester.tap(find.text('Does this concern me?'));
         await tester.pumpAndSettle();
         // The card in the field's place, and the question kept for later.
-        expect(find.text('No questions left for today'), findsOneWidget);
-        expect(find.text('Buy more questions'), findsOneWidget);
+        expect(find.text("You've reached this week's usage limit."), findsOneWidget);
+        expect(find.text('Get more usage'), findsOneWidget);
         expect(find.byType(CupertinoTextField), findsNothing);
         expect(find.text('Does this concern me?'), findsOneWidget);
 
@@ -503,22 +516,21 @@ void main() {
       'nothing left on opening: the card, the packs, and a pack bought '
       'brings the field back',
       (tester) async {
-        await openChat(tester, server(left: [0, 50]));
-        expect(find.text('No questions left for today'), findsOneWidget);
-        expect(find.textContaining('Or buy more'), findsOneWidget);
-        await tester.tap(find.text('Buy more questions'));
+        await openChat(tester, server(usage: [(100, false), (100, true)]));
+        expect(find.text("You've reached this week's usage limit."), findsOneWidget);
+        expect(find.textContaining('It resets on $_resetsDay at '), findsOneWidget);
+        await tester.tap(find.text('Get more usage'));
         await tester.pumpAndSettle();
-        expect(find.text('More questions'), findsOneWidget);
-        expect(find.text('+50 questions'), findsOneWidget);
-        expect(find.text('+200 questions'), findsOneWidget);
+        expect(find.text('+1 week of usage'), findsOneWidget);
+        expect(find.text('+3 weeks of usage'), findsOneWidget);
         expect(find.text('better value'), findsOneWidget);
         expect(find.text(r'Buy for $0.99'), findsOneWidget);
         expect(sent(), contains('topup_view'));
 
-        await tester.tap(find.text('+200 questions'));
+        await tester.tap(find.text('+3 weeks of usage'));
         await tester.pump();
         expect(find.text(r'Buy for $2.99'), findsOneWidget);
-        await tester.tap(find.text('+50 questions'));
+        await tester.tap(find.text('+1 week of usage'));
         await tester.pump();
         await tester.tap(find.text(r'Buy for $0.99'));
         await tester.pump();
@@ -531,9 +543,11 @@ void main() {
         });
         await tester.pumpAndSettle();
         expect(credits, hasLength(1));
-        expect(find.text('More questions'), findsNothing);
+        expect(find.text('+1 week of usage'), findsNothing);
         expect(find.byType(CupertinoTextField), findsOneWidget);
-        expect(find.text('No questions left for today'), findsNothing);
+        expect(find.text("You've reached this week's usage limit."), findsNothing);
+        // The week's usage still used up: the extra usage is being spent.
+        expect(find.text('Using extra usage'), findsOneWidget);
         expect(
           events
               .where((e) => e.$1 == 'topup_result')
@@ -542,20 +556,27 @@ void main() {
         );
         expect(events.lastWhere((e) => e.$1 == 'topup_result').$2, {
           'result': 'credited',
-          'questions': 50,
+          'weeks': 1,
         });
       },
     );
 
     testWidgets(
-      'a long document says how much of the limit a question takes, and when few are left',
+      'a long document says it uses more of the usage, and the week\'s usage shows from 75%',
       (tester) async {
-        await openChat(tester, server(left: [3], units: 3));
+        await openChat(tester, server(usage: [(80, false)], units: 3));
         expect(
-          find.text('Long document: a question about it counts as 3'),
+          find.text('Questions about long documents use more of your usage.'),
           findsOneWidget,
         );
-        expect(find.text('3 questions left today'), findsOneWidget);
+        expect(
+          find.text("80% of this week's usage used · resets $_resetsDay"),
+          findsOneWidget,
+        );
+
+        await openChat(tester, server(usage: [(74, false)]));
+        expect(find.textContaining("this week's usage"), findsNothing);
+        expect(find.textContaining('long documents'), findsNothing);
       },
     );
 

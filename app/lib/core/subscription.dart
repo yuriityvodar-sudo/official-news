@@ -19,7 +19,7 @@ abstract class Store {
   /// Starts a purchase; its result comes through [purchases].
   Future<void> buy(ProductDetails product, {required String accountToken});
 
-  /// Starts the purchase of a pack of questions, a consumable.
+  /// Starts the purchase of a pack of extra usage, a consumable.
   Future<void> buyPack(ProductDetails pack, {required String accountToken});
   Future<void> restore();
   Future<void> finish(PurchaseDetails purchase);
@@ -87,8 +87,8 @@ enum PurchaseState {
 /// whether it is still paid (a refund closes it there at once), and its 402
 /// closes it here too ([lapsed]).
 ///
-/// Packs of questions on top (Roman, 27 Oct): consumables, which StoreKit
-/// does not restore and we have no account to keep, so the server keeps them
+/// Packs of extra usage on top (Roman, 27 Oct; weeks of it since 4 Nov):
+/// consumables, which StoreKit does not restore and we have no account to keep, so the server keeps them
 /// for the subscription. A bought pack is credited there first ([_credit])
 /// and only then finished, so one the phone could not hand over comes back
 /// from StoreKit at the next start and is credited then, once.
@@ -98,10 +98,12 @@ class ChatSubscription extends ChangeNotifier {
 
   static const productId = 'com.officialnews.app.agent.monthly';
 
-  /// The packs, by how many questions each adds: $0.99 and $2.99.
+  /// The packs, by how many weeks' usage each adds: +1 week for $0.99 and
+  /// +3 weeks for $2.99. The ids are those of the packs of 50 and 200
+  /// questions they were before the weekly usage (Roman, 4 Nov).
   static const packs = {
-    'com.officialnews.app.agent.questions50': 50,
-    'com.officialnews.app.agent.questions200': 200,
+    'com.officialnews.app.agent.questions50': 1,
+    'com.officialnews.app.agent.questions200': 3,
   };
   static const _transactionKey = 'chat.transaction';
   static const _tokenKey = 'chat.accountToken';
@@ -110,7 +112,7 @@ class ChatSubscription extends ChangeNotifier {
   static const restoreWait = Duration(seconds: 10);
 
   Store? _store;
-  final Future<int> Function(String pack, String transaction)? _credit;
+  final Future<void> Function(String pack, String transaction)? _credit;
   final DateTime Function() _clock;
   SharedPreferences? _prefs;
   StreamSubscription<List<PurchaseDetails>>? _listening;
@@ -134,10 +136,6 @@ class ChatSubscription extends ChangeNotifier {
   /// Packs credited since the app started: the top-up sheet closes on a new one.
   int get credited => _creditedCount;
   int _creditedCount = 0;
-
-  /// The bought questions the server holds, as it last said after a pack.
-  int? get boughtQuestions => _bought;
-  int? _bought;
 
   /// Paid until later than now, as far as the phone knows.
   bool get active =>
@@ -290,7 +288,7 @@ class ChatSubscription extends ChangeNotifier {
           return;
         }
         try {
-          _bought = await (_credit ?? _serverCredit)(pack, transaction);
+          await (_credit ?? _serverCredit)(pack, transaction);
         } catch (_) {
           // Not credited: left unfinished, StoreKit gives it again at the next start.
           state.value = PurchaseState.failed;
@@ -313,8 +311,9 @@ class ChatSubscription extends ChangeNotifier {
     if (purchase.pendingCompletePurchase) await _store?.finish(purchase);
   }
 
-  static Future<int> _serverCredit(String pack, String transaction) => chatDemo
-      ? Future.value(packs.values.first)
+  static Future<void> _serverCredit(String pack, String transaction) =>
+      chatDemo
+      ? Future.value()
       : ApiClient().creditPack(pack: pack, transaction: transaction);
 
   /// Keeps a transaction and reads its expiry from the payload (the server
@@ -368,8 +367,8 @@ class DemoStore implements Store {
   @override
   Future<ProductDetails?> product(String id) async {
     final price = switch (ChatSubscription.packs[id]) {
-      50 => 0.99,
-      200 => 2.99,
+      1 => 0.99,
+      3 => 2.99,
       _ => 4.99,
     };
     return ProductDetails(
