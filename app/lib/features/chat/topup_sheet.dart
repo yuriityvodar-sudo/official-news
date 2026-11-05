@@ -9,6 +9,7 @@ import '../../core/motion.dart';
 import '../../core/sheet.dart';
 import '../../core/subscription.dart';
 import '../../core/theme.dart';
+import '../../core/wide.dart';
 import '../../l10n/app_localizations.dart';
 import 'chat_style.dart';
 
@@ -124,7 +125,7 @@ class _TopUpSheetState extends State<TopUpSheet> {
       _ => null,
     };
 
-    return CupertinoPageScaffold(
+    final scaffold = CupertinoPageScaffold(
       backgroundColor: CupertinoColors.systemGroupedBackground.resolveFrom(
         context,
       ),
@@ -303,6 +304,12 @@ class _TopUpSheetState extends State<TopUpSheet> {
           ),
         ),
       ),
+    );
+    // In a wide window, a column in the middle (#137).
+    return ReadablePage(
+      color: CupertinoColors.systemGroupedBackground.resolveFrom(context),
+      maxWidth: sheetWidth,
+      child: scaffold,
     );
   }
 }

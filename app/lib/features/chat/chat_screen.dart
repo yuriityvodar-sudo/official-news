@@ -18,6 +18,7 @@ import '../../core/news_widgets.dart';
 import '../../core/sheet.dart';
 import '../../core/subscription.dart';
 import '../../core/theme.dart';
+import '../../core/wide.dart';
 import '../../l10n/app_localizations.dart';
 import '../detail/ai_chat_note.dart';
 import '../detail/detail_screen.dart' show openOfficialPage;
@@ -641,7 +642,7 @@ class _ChatScreenState extends State<ChatScreen> {
       ],
     );
 
-    return CupertinoPageScaffold(
+    final scaffold = CupertinoPageScaffold(
       // Material for the default text style (no yellow underline on plain Text).
       child: Material(
         type: MaterialType.transparency,
@@ -867,6 +868,12 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
         ),
       ),
+    );
+    // In a wide window, a column in the middle (#137).
+    return ReadablePage(
+      color: CupertinoTheme.of(context).scaffoldBackgroundColor,
+      maxWidth: chatWidth,
+      child: scaffold,
     );
   }
 }
