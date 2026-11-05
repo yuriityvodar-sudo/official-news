@@ -3,15 +3,45 @@ import { toStoredTime } from "../fetcher/text";
 
 /**
  * The AI chat's limit (#146, Roman 27 Oct): what the answers really cost at
- * OpenAI, so a subscriber never costs more than a set sum. Its unit, a
- * "question", is $0.002 of that cost: a typical question is one, a question
- * about a long document two or three. Amounts are in micro-dollars.
+ * OpenAI, so a subscriber never costs more than a set sum. The subscription
+ * gives a week's usage, which comes back every Monday at 00:00 UTC (Roman,
+ * 4 Nov: «пользователь покупает weekly usage»), and the app shows how much of
+ * it is used, never a count of questions (`usageOf`). Inside, a "question" is
+ * still the unit of an estimate: $0.002 of that cost, a typical question one,
+ * a question about a long document two or three. Amounts are in micro-dollars.
  */
 export const QUESTION_MICROS = 2000;
 
-/** Questions a day in the subscription: $0.04 a day, so at most $1.20 a month a subscriber. Unused ones do not carry over. */
-export const DAILY_QUESTIONS = 20;
-export const DAILY_MICROS = DAILY_QUESTIONS * QUESTION_MICROS;
+/** A week's usage: what 20 questions a day cost, $0.28 a week, so at most about $1.20 a month a subscriber. Unused usage does not carry over. */
+export const WEEKLY_MICROS = 7 * 20 * QUESTION_MICROS;
+
+/**
+ * The week of a Sandbox purchase without a team key (Roman, 5 Nov): about
+ * three questions. App Review buys in the Sandbox with the `store` build, and
+ * sees the packs only once the week's usage runs out, so it gets there after
+ * a few questions instead of about 140.
+ */
+export const SANDBOX_WEEK_MICROS = 3 * QUESTION_MICROS;
+
+/** The week a question counts in: its key in `chat_usage.day` (`weekOf`) and the usage it holds. */
+export interface Week {
+  key: string;
+  micros: number;
+}
+
+/** The week `now` falls in, by its Monday (UTC), as `chat_usage.day` keeps it: "2026-11-02". */
+export function weekOf(now: Date): string {
+  const monday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  monday.setUTCDate(monday.getUTCDate() - ((monday.getUTCDay() + 6) % 7));
+  return monday.toISOString().slice(0, 10);
+}
+
+/** The next Monday at 00:00 UTC, when the week's usage comes back. */
+export function nextWeek(now: Date): Date {
+  const monday = new Date(`${weekOf(now)}T00:00:00Z`);
+  monday.setUTCDate(monday.getUTCDate() + 7);
+  return monday;
+}
 
 /** GPT-5.4 mini's prices per token, in micro-dollars ($0.75, $0.075 and $4.50 per 1M; developers.openai.com, 27 Oct). */
 export const PRICES = { input: 0.75, cached: 0.075, output: 4.5 };
@@ -41,56 +71,63 @@ export function estimateMicros(chars: number): number {
 /** How many questions of the limit one question about that text takes: at least one. */
 export const unitsFor = (chars: number) => Math.max(1, Math.round(estimateMicros(chars) / QUESTION_MICROS));
 
-/** What a subscription has left: of today's budget (UTC), and in its wallet of bought questions. */
+/** What a subscription has left: of the week's usage, and in its wallet of extra usage bought. */
 export interface Budget {
-  today: number;
+  week: number;
   wallet: number;
 }
 
-export async function readBudget(env: Env, subscription: string, day: string): Promise<Budget> {
+export async function readBudget(env: Env, subscription: string, week: Week): Promise<Budget> {
   const row = await env.DB.prepare(
     `SELECT (SELECT spent_micros FROM chat_usage WHERE original_transaction_id = ?1 AND day = ?2) AS spent,
             (SELECT extra_micros FROM chat_wallet WHERE original_transaction_id = ?1) AS wallet`,
   )
-    .bind(subscription, day)
+    .bind(subscription, week.key)
     .first<{ spent: number | null; wallet: number | null }>();
-  return { today: DAILY_MICROS - (row?.spent ?? 0), wallet: row?.wallet ?? 0 };
+  return { week: week.micros - (row?.spent ?? 0), wallet: row?.wallet ?? 0 };
 }
 
-/** The questions left at `units` a question: today's, and the bought ones, which are spent after them. */
-export function questionsLeft(budget: Budget, units: number): { today: number; bought: number } {
+/** The questions left at `units` a question: of the week's usage, and of the extra usage, which is spent after it. Only for the server's checks and older app builds: the app shows usage. */
+export function questionsLeft(budget: Budget, units: number): { week: number; bought: number } {
   const each = units * QUESTION_MICROS;
-  return { today: Math.max(0, Math.floor(budget.today / each)), bought: Math.max(0, Math.floor(budget.wallet / each)) };
+  return { week: Math.max(0, Math.floor(budget.week / each)), bought: Math.max(0, Math.floor(budget.wallet / each)) };
 }
 
-/** Where a share of the limit came from, in micro-dollars: today's budget and the wallet. */
+/** What the app shows (Roman, 4 Nov): how much of the week's usage is used, 0 to 100, and whether extra usage is left. */
+export function usageOf(budget: Budget, week: Week): { usedPercent: number; extraUsage: boolean } {
+  const used = (week.micros - budget.week) / week.micros;
+  return { usedPercent: Math.min(100, Math.max(0, Math.floor(used * 100))), extraUsage: budget.wallet > 0 };
+}
+
+/** Where a share of the limit came from, in micro-dollars: the week's usage and the wallet. */
 export interface Taken {
-  today: number;
+  week: number;
   wallet: number;
 }
 
 /**
- * Takes `micros` from today's budget first, then from the wallet; what neither
- * has left (an answer longer than its estimate) goes on today's. Returns where
- * it came from, so a later correction can give back to the same place.
+ * Takes `micros` from the week's usage first, then from the wallet; what
+ * neither has left (an answer longer than its estimate) goes on the week's.
+ * Returns where it came from, so a later correction can give back to the
+ * same place.
  */
-export async function charge(env: Env, subscription: string, day: string, micros: number, now: Date, questions = 0): Promise<Taken> {
-  const budget = await readBudget(env, subscription, day);
-  const fromToday = Math.min(micros, Math.max(budget.today, 0));
-  const wallet = Math.min(micros - fromToday, Math.max(budget.wallet, 0));
-  const today = micros - wallet;
-  await spend(env, subscription, day, today, wallet, now, questions);
-  return { today, wallet };
+export async function charge(env: Env, subscription: string, week: Week, micros: number, now: Date, questions = 0): Promise<Taken> {
+  const budget = await readBudget(env, subscription, week);
+  const fromWeek = Math.min(micros, Math.max(budget.week, 0));
+  const wallet = Math.min(micros - fromWeek, Math.max(budget.wallet, 0));
+  const spentOfWeek = micros - wallet;
+  await spend(env, subscription, week.key, spentOfWeek, wallet, now, questions);
+  return { week: spentOfWeek, wallet };
 }
 
-/** Adds to (or with negative amounts, gives back to) today's spending, its questions and the wallet. */
-export async function spend(env: Env, subscription: string, day: string, today: number, wallet: number, now: Date, questions = 0) {
+/** Adds to (or with negative amounts, gives back to) the spending of the week `key` (`Week`), its questions and the wallet. */
+export async function spend(env: Env, subscription: string, key: string, ofWeek: number, wallet: number, now: Date, questions = 0) {
   const at = toStoredTime(now);
   const statements = [
     env.DB.prepare(
       `INSERT INTO chat_usage (original_transaction_id, day, questions, spent_micros) VALUES (?1, ?2, ?3, ?4)
        ON CONFLICT (original_transaction_id, day) DO UPDATE SET questions = questions + ?3, spent_micros = spent_micros + ?4`,
-    ).bind(subscription, day, questions, today),
+    ).bind(subscription, key, questions, ofWeek),
   ];
   if (wallet) {
     statements.push(
@@ -115,15 +152,16 @@ const WAIT_MS = 2_000;
  * subscription at a time takes its share (`chat_locks`), and questions sent
  * together never both pass the check. Returns what was taken and what was left
  * before; "none" with no question left; "busy" when another question held the
- * lock for over WAIT_MS (a lock left behind ends after LOCK_MS).
+ * lock for over WAIT_MS (a lock left behind ends after LOCK_MS). The budget
+ * before is returned too, for the usage the app shows after the question.
  */
 export async function reserve(
   env: Env,
   subscription: string,
-  day: string,
+  week: Week,
   units: number,
   now: Date,
-): Promise<{ taken: Taken; left: { today: number; bought: number } } | "none" | "busy"> {
+): Promise<{ taken: Taken; left: { week: number; bought: number }; budget: Budget } | "none" | "busy"> {
   const token = crypto.randomUUID();
   const started = Date.now();
   for (;;) {
@@ -141,9 +179,10 @@ export async function reserve(
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
   try {
-    const left = questionsLeft(await readBudget(env, subscription, day), units);
-    if (left.today + left.bought < 1) return "none";
-    return { taken: await charge(env, subscription, day, units * QUESTION_MICROS, now, 1), left };
+    const budget = await readBudget(env, subscription, week);
+    const left = questionsLeft(budget, units);
+    if (left.week + left.bought < 1) return "none";
+    return { taken: await charge(env, subscription, week, units * QUESTION_MICROS, now, 1), left, budget };
   } finally {
     await env.DB.prepare("DELETE FROM chat_locks WHERE original_transaction_id = ? AND token = ?").bind(subscription, token).run();
   }

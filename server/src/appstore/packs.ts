@@ -1,11 +1,11 @@
-import { QUESTION_MICROS } from "../chat/usage";
+import { WEEKLY_MICROS } from "../chat/usage";
 import type { Env } from "../env";
 import { toStoredTime } from "../fetcher/text";
 import { JwsError, verifyAppleJws, type VerifyOptions } from "./jws";
-import { BUNDLE_ID, PACK_QUESTIONS } from "./products";
+import { BUNDLE_ID, PACK_WEEKS } from "./products";
 
 /**
- * The packs of questions (#146, Roman 27 Oct): consumables, which StoreKit does
+ * The packs of extra usage (#146, Roman 27 Oct; weeks of it since 4 Nov): consumables, which StoreKit does
  * not restore and we have no account to keep, so the server keeps them, in the
  * wallet of the subscription they were bought for. Each pack is credited once
  * (`chat_credits`, by its transaction), and a refund takes it back out.
@@ -21,7 +21,7 @@ export interface PackTransaction {
 
 /** A pack's transaction, Apple's signature already checked: this app's, one of the packs. Throws a JwsError otherwise. */
 export function checkPack(t: PackTransaction): PackTransaction {
-  if (t.bundleId !== BUNDLE_ID || !(t.productId in PACK_QUESTIONS)) throw new JwsError("not a pack of this app");
+  if (t.bundleId !== BUNDLE_ID || !(t.productId in PACK_WEEKS)) throw new JwsError("not a pack of this app");
   if ((t.environment !== "Production" && t.environment !== "Sandbox") || typeof t.transactionId !== "string") {
     throw new JwsError("not a pack transaction");
   }
@@ -31,7 +31,8 @@ export function checkPack(t: PackTransaction): PackTransaction {
 /** A pack's signed transaction from the app, checked. */
 export const verifyPack = async (jws: string, options: VerifyOptions = {}) => checkPack(await verifyAppleJws<PackTransaction>(jws, options));
 
-const packMicros = (productId: string) => PACK_QUESTIONS[productId] * QUESTION_MICROS;
+/** A pack's usage: its weeks of the App Store's week, also for a Sandbox purchase (only its own week is small). */
+const packMicros = (productId: string) => PACK_WEEKS[productId] * WEEKLY_MICROS;
 
 /** The wallet's balance, in micro-dollars. */
 export async function walletMicros(env: Env, subscription: string): Promise<number> {
@@ -76,8 +77,9 @@ export async function creditPack(env: Env, subscription: string, pack: PackTrans
 
 /**
  * Apple's notification about a pack: a refund or a revocation takes it out of
- * its wallet (which may go below zero: the bought questions were already
- * asked), and `REFUND_REVERSED` puts it back. A pack refunded before the app
+ * its wallet (which may go below zero: the extra usage was already used),
+ * and `REFUND_REVERSED` puts it back. A pack credited before the weekly usage
+ * takes out what it added then (`chat_credits.micros`). A pack refunded before the app
  * sent it leaves a row with no subscription (''), so the transaction the app
  * still holds, signed before the refund, can never be credited (Yurii's
  * review of #184); `REFUND_REVERSED` removes that row. The wallet and the

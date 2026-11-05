@@ -12,7 +12,7 @@ export async function runCleanup(env: Env, now = new Date()): Promise<number> {
     .bind(toStoredTime(now))
     .run();
   const cleared = meta.changes ?? 0;
-  // The chat's daily counts (#146) are needed for today only; a week is kept to look back.
+  // The chat's usage (#146), a row a subscription and week keyed by its Monday, is needed for this week only: a row goes once its Monday is over a week back, never this week's.
   const weekAgo = toStoredTime(new Date(now.getTime() - 7 * 86_400_000)).slice(0, 10);
   const chat = await env.DB.prepare("DELETE FROM chat_usage WHERE day < ?").bind(weekAgo).run();
   // Readers' messages (#220): conversations closed or quiet for 90 days.

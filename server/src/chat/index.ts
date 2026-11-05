@@ -7,14 +7,30 @@ import { countryStory } from "../stories";
 import { type WorldStory, storyEvent, worldStory } from "../stories/world";
 import { SHOWN, isLang } from "../translator";
 import type { Lang } from "../translator/languages";
-import { QUESTION_MICROS, charge, costMicros, questionsLeft, readBudget, reserve, spend, unitsFor, type Usage } from "./usage";
+import {
+  QUESTION_MICROS,
+  SANDBOX_WEEK_MICROS,
+  WEEKLY_MICROS,
+  charge,
+  costMicros,
+  nextWeek,
+  questionsLeft,
+  readBudget,
+  reserve,
+  spend,
+  unitsFor,
+  usageOf,
+  weekOf,
+  type Usage,
+  type Week,
+} from "./usage";
 
-export { DAILY_QUESTIONS, QUESTION_MICROS } from "./usage";
+export { QUESTION_MICROS, SANDBOX_WEEK_MICROS, WEEKLY_MICROS } from "./usage";
 
 /**
  * The AI chat about one decision, one tick (a world story, #230) or one story of a country's outlets, for subscribers only (#146, docs/contract.md):
- * `POST /v1/chat`, with `/v1/chat/status` (what is left) and `/v1/chat/credits`
- * (a pack bought). Paid AI is used only here (CLAUDE.md), one OpenAI call per
+ * `POST /v1/chat`, with `/v1/chat/status` (the week's usage) and `/v1/chat/credits`
+ * (extra usage bought). Paid AI is used only here (CLAUDE.md), one OpenAI call per
  * question, within the limit of `./usage.ts`. Nothing of the conversation is
  * stored or logged.
  */
@@ -54,8 +70,12 @@ interface ChatRequest {
   transaction: string;
 }
 
-/** An answer: the stream, the questions left after it, and how many of the limit it took. */
-export type ChatResult = { stream: ReadableStream<Uint8Array>; remaining: number; units: number } | Refusal;
+/**
+ * An answer: the stream; how much of the week's usage is used after it and
+ * whether extra usage is left, which the app shows; and for older builds, the
+ * questions left after it and how many of the limit it took.
+ */
+export type ChatResult = { stream: ReadableStream<Uint8Array>; usedPercent: number; extraUsage: boolean; remaining: number; units: number } | Refusal;
 
 /** Anything but an answer: JSON with a status. */
 export interface Refusal {
@@ -283,26 +303,29 @@ function answerText(events: ReadableStream<Uint8Array>, counted: (usage: Usage) 
   );
 }
 
-/** Midnight UTC after `now`, when the day's questions come back. */
+/** Midnight UTC after `now`, when a second test pack can be credited (`creditPack`). */
 const nextDay = (now: Date) => toStoredTime(new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1)));
 
+/** The next Monday at 00:00 UTC, when the week's usage comes back, as the API writes times. */
+const resetsAt = (now: Date) => toStoredTime(nextWeek(now));
+
 /**
- * Sandbox questions a day, all subscriptions together, past which a Sandbox
- * purchase without a team key gets no more answers that day. App Review buys
+ * Sandbox questions a week, all subscriptions together, past which a Sandbox
+ * purchase without a team key gets no more answers that week. App Review buys
  * in the Sandbox with the `store` build, which has no key, so a Sandbox
  * purchase without one is answered (Roman, 4 Nov: «открыть sandbox для
- * appreview»). Sandbox purchases cost nothing, and without a key App Review's
- * cannot be told from anyone else's, so this bounds what they cost: about
- * $0.20 a day.
+ * appreview»), in a small week (`SANDBOX_WEEK_MICROS`). Sandbox purchases cost
+ * nothing, and without a key App Review's cannot be told from anyone else's,
+ * so this bounds what they cost: about $1.40 a week.
  */
-export const SANDBOX_DAILY_QUESTIONS = 100;
+export const SANDBOX_WEEKLY_QUESTIONS = 700;
 
 /**
  * Whether a request comes from one of the team's builds: they send a Worker
  * secret as `X-Chat-Sandbox-Key`, Roman's local builds CHAT_SANDBOX_KEY
  * (Roman, 28 Oct) and TestFlight builds CHAT_SANDBOX_KEY_TESTFLIGHT (Roman and
- * Yurii, 29 Oct), compared in constant time. Their Sandbox questions are not
- * held to SANDBOX_DAILY_QUESTIONS.
+ * Yurii, 29 Oct), compared in constant time. Their Sandbox purchases get the
+ * App Store's week and are not held to SANDBOX_WEEKLY_QUESTIONS.
  */
 async function teamKey(env: Env, key: string | null | undefined): Promise<boolean> {
   if (!key) return false;
@@ -332,16 +355,24 @@ async function activeSubscription(jws: string, env: Env, options: ChatOptions, n
   return isActive(subscription, now) ? subscription : error(402, "Subscription required");
 }
 
-const today = (now: Date) => toStoredTime(now).slice(0, 10);
+/**
+ * The week a subscription's questions count in at `now`: a Sandbox purchase
+ * without a team key (`keyless`) gets the small one (`SANDBOX_WEEK_MICROS`),
+ * every other the App Store's (`WEEKLY_MICROS`).
+ */
+async function weekFor(subscription: Subscription, env: Env, options: ChatOptions, now: Date): Promise<{ week: Week; keyless: boolean }> {
+  const keyless = subscription.environment === "Sandbox" && !(await teamKey(env, options.sandboxKey));
+  return { week: { key: weekOf(now), micros: keyless ? SANDBOX_WEEK_MICROS : WEEKLY_MICROS }, keyless };
+}
 
-/** The day's Sandbox questions, all subscriptions together. */
-async function sandboxQuestions(env: Env, day: string): Promise<number> {
+/** The Sandbox questions of the week `key`, all subscriptions together. */
+async function sandboxQuestions(env: Env, key: string): Promise<number> {
   const row = await env.DB.prepare(
     `SELECT COALESCE(SUM(u.questions), 0) AS n FROM chat_usage u
      JOIN subscriptions s ON s.original_transaction_id = u.original_transaction_id
      WHERE u.day = ? AND s.environment = 'Sandbox'`,
   )
-    .bind(day)
+    .bind(key)
     .first<{ n: number }>();
   return row?.n ?? 0;
 }
@@ -349,9 +380,10 @@ async function sandboxQuestions(env: Env, day: string): Promise<number> {
 /**
  * `POST /v1/chat`: the subscription first (402 without an active one), then
  * the article (404 outside the feed) or the tick (404 when the last world
- * build has none of it), what is left of the limit (429; for a Sandbox one
- * without a team key, also once the day's Sandbox questions reach
- * SANDBOX_DAILY_QUESTIONS), the key (503). The question's share of the limit
+ * build has none of it), what is left of the limit (429 once the week's usage
+ * and the extra usage are spent; for a Sandbox one without a team key, whose
+ * week is small, also once the week's Sandbox questions reach
+ * SANDBOX_WEEKLY_QUESTIONS), the key (503). The question's share of the limit
  * (`units`) is taken before OpenAI is asked, one question of a subscription at
  * a time (`reserve`, #219), and given back when OpenAI does not answer: an
  * answer the reader leaves still counts, and one OpenAI never gave does not.
@@ -368,19 +400,16 @@ export async function answerChat(body: unknown, env: Env, options: ChatOptions =
   if (!subject) return error(404, "Not found");
 
   const id = subscription.original_transaction_id;
-  const day = today(now);
+  const { week, keyless } = await weekFor(subscription, env, options, now);
   const units = unitsFor(subject.chars);
-  const capped =
-    subscription.environment === "Sandbox" &&
-    !(await teamKey(env, options.sandboxKey)) &&
-    (await sandboxQuestions(env, day)) >= SANDBOX_DAILY_QUESTIONS;
-  if (capped) return error(429, "No questions left today", { resetsAt: nextDay(now), units });
-  const reserved = await reserve(env, id, day, units, now);
-  if (reserved === "none") return error(429, "No questions left today", { resetsAt: nextDay(now), units });
+  const usedUp = error(429, "No usage left this week", { resetsAt: resetsAt(now), units });
+  if (keyless && (await sandboxQuestions(env, week.key)) >= SANDBOX_WEEKLY_QUESTIONS) return usedUp;
+  const reserved = await reserve(env, id, week, units, now);
+  if (reserved === "none") return usedUp;
   if (reserved === "busy") return error(503, "The AI agent is not available");
-  const { taken, left } = reserved;
+  const { taken, left, budget } = reserved;
   const unanswered = async () => {
-    await spend(env, id, day, -taken.today, -taken.wallet, now, -1);
+    await spend(env, id, week.key, -taken.week, -taken.wallet, now, -1);
     return error(503, "The AI agent is not available");
   };
 
@@ -411,18 +440,20 @@ export async function answerChat(body: unknown, env: Env, options: ChatOptions =
   }
 
   const estimate = units * QUESTION_MICROS;
-  const remaining = Math.max(left.today + left.bought - 1, 0);
-  console.log(JSON.stringify({ message: "chat question", subscription: id, ...subject.log, lang: request.lang, units, remaining }));
+  const remaining = Math.max(left.week + left.bought - 1, 0);
+  // The usage the app shows after this question, its estimate taken.
+  const { usedPercent, extraUsage } = usageOf({ week: budget.week - taken.week, wallet: budget.wallet - taken.wallet }, week);
+  console.log(JSON.stringify({ message: "chat question", subscription: id, ...subject.log, lang: request.lang, units, remaining, usedPercent, extraUsage }));
   // The real cost replaces the estimate: more is taken as before, less is given back where it came from.
   const counted = async (usage: Usage) => {
     const cost = costMicros(usage);
     const at = new Date();
     if (cost > estimate) {
-      await charge(env, id, day, cost - estimate, at);
+      await charge(env, id, week, cost - estimate, at);
     } else if (cost < estimate) {
       const back = estimate - cost;
       const toWallet = Math.min(back, taken.wallet);
-      await spend(env, id, day, -(back - toWallet), -toWallet, at);
+      await spend(env, id, week.key, -(back - toWallet), -toWallet, at);
     }
     console.log(
       JSON.stringify({
@@ -438,14 +469,16 @@ export async function answerChat(body: unknown, env: Env, options: ChatOptions =
       }),
     );
   };
-  return { stream: answerText(response.body, counted), remaining, units };
+  return { stream: answerText(response.body, counted), usedPercent, extraUsage, remaining, units };
 }
 
 /**
- * `POST /v1/chat/status`: what a subscriber has left for questions about one
- * article or tick, before asking: today's, the bought ones, how many of the
- * limit one question about it takes (a long document more than one), and when
- * today's come back.
+ * `POST /v1/chat/status`: where a subscriber stands before asking about one
+ * article, tick or story: how much of the week's usage is used, whether extra
+ * usage is left, whether the limit is reached, when the week's usage comes
+ * back, and how many of the limit one question about it takes (a long
+ * document more than one); for older builds, the questions left of the week's
+ * usage and of the extra usage.
  */
 export async function chatStatus(body: unknown, env: Env, options: ChatOptions = {}): Promise<Refusal> {
   const now = options.now ?? new Date();
@@ -467,12 +500,24 @@ export async function chatStatus(body: unknown, env: Env, options: ChatOptions =
     chars = Math.min(article.chars ?? 0, MAX_TEXT);
   }
   const units = unitsFor(chars);
-  const left = questionsLeft(await readBudget(env, subscription.original_transaction_id, today(now)), units);
-  return { status: 200, body: { questionsLeft: left.today, boughtQuestions: left.bought, units, resetsAt: nextDay(now) } };
+  const { week } = await weekFor(subscription, env, options, now);
+  const budget = await readBudget(env, subscription.original_transaction_id, week);
+  const left = questionsLeft(budget, units);
+  return {
+    status: 200,
+    body: {
+      questionsLeft: left.week,
+      boughtQuestions: left.bought,
+      units,
+      resetsAt: resetsAt(now),
+      ...usageOf(budget, week),
+      limitReached: left.week + left.bought < 1,
+    },
+  };
 }
 
 /**
- * `POST /v1/chat/credits`: a pack of questions bought in the app, with the
+ * `POST /v1/chat/credits`: a pack of extra usage bought in the app, with the
  * subscription it is for: credited to that subscription's wallet once (a
  * second call changes nothing), so the app can send it until this answers
  * and only then finish the purchase. 400 for anything but a pack of this app,
@@ -503,5 +548,5 @@ export async function creditChatPack(body: unknown, env: Env, options: ChatOptio
   if (credited === "capped") return error(429, "One test pack a day", { resetsAt: nextDay(now) });
   const wallet = await walletMicros(env, id);
   console.log(JSON.stringify({ message: "chat pack", subscription: id, product: pack.productId, credited }));
-  return { status: 200, body: { credited, boughtQuestions: Math.max(0, Math.floor(wallet / QUESTION_MICROS)) } };
+  return { status: 200, body: { credited, boughtQuestions: Math.max(0, Math.floor(wallet / QUESTION_MICROS)), extraUsage: wallet > 0 } };
 }

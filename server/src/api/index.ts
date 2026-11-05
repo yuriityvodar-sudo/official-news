@@ -918,7 +918,7 @@ async function route(request: Request, env: Env): Promise<Response> {
     if (request.method !== "POST") return json({ error: "Method not allowed" }, 405, { allow: "POST" });
     const body = await request.json().catch(() => null);
     // Only the team's builds send it, Roman's local ones and TestFlight's: it
-    // opens the chat to their Sandbox purchases.
+    // gives their Sandbox purchases the App Store's week, past the Sandbox cap.
     const options = { sandboxKey: request.headers.get("x-chat-sandbox-key") };
     if (post !== "chat") {
       const { status, body: answer } = await (post === "notifications"
@@ -935,6 +935,10 @@ async function route(request: Request, env: Env): Promise<Response> {
       headers: {
         "content-type": "text/plain; charset=utf-8",
         "cache-control": "no-store",
+        // What the app shows after the answer (Roman, 4 Nov): the week's usage used, 0 to 100, and whether extra usage is left.
+        "x-chat-used": String(result.usedPercent),
+        "x-chat-extra": String(result.extraUsage),
+        // For older builds, which count questions.
         "x-chat-remaining": String(result.remaining),
         "x-chat-units": String(result.units),
       },

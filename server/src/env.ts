@@ -34,10 +34,12 @@ export interface Env {
   /**
    * The team's key for Sandbox purchases in the AI chat (#146, Roman, 28 Oct),
    * which only Roman's local builds have. They cost nothing (TestFlight, a
-   * build run from a Mac), so Sandbox questions without a team key, App
-   * Review's among them, stop at a cap a day (`SANDBOX_DAILY_QUESTIONS` in
+   * build run from a Mac), so Sandbox purchases without a team key, App
+   * Review's among them, get a small week (`SANDBOX_WEEK_MICROS` in
+   * `chat/usage.ts`) and stop at a cap a week (`SANDBOX_WEEKLY_QUESTIONS` in
    * `chat/index.ts`); a request that carries this key or
-   * [CHAT_SANDBOX_KEY_TESTFLIGHT] as `X-Chat-Sandbox-Key` is not held to it.
+   * [CHAT_SANDBOX_KEY_TESTFLIGHT] as `X-Chat-Sandbox-Key` gets the App
+   * Store's week and is not held to the cap.
    * A Worker secret Roman puts in himself (`npx wrangler secret put
    * CHAT_SANDBOX_KEY`; locally in `.dev.vars`).
    */
@@ -46,8 +48,8 @@ export interface Env {
    * The same for the team's TestFlight builds (#146, Roman and Yurii, 29 Oct):
    * the TestFlight workflow builds it into `testflight` builds, never `store`
    * ones, from the GitHub secret of the same name. Yurii puts the one value
-   * into both himself. Without it TestFlight builds' Sandbox questions share
-   * that cap.
+   * into both himself. Without it TestFlight builds' Sandbox purchases get
+   * the small week and share that cap.
    */
   CHAT_SANDBOX_KEY_TESTFLIGHT?: string;
   /**
