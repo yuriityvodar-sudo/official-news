@@ -17,50 +17,63 @@ class ApiException implements Exception {
   String toString() => 'ApiException($statusCode): $message';
 }
 
-/// The AI agent's answer as it is written; the questions left after it,
-/// today's and the bought ones together; and how many of the limit one
-/// question about this article takes (a long document more than one).
+/// The AI agent's answer as it is written; the week's usage after it (#146,
+/// Roman, 4 Nov: usage, never a count of questions); and how many of the
+/// limit one question about this article takes (a long document more than
+/// one).
 class ChatAnswer {
-  const ChatAnswer({required this.text, this.remaining, this.units = 1});
+  const ChatAnswer({
+    required this.text,
+    this.usedPercent,
+    this.extraUsage,
+    this.units = 1,
+  });
 
   final Stream<String> text;
-  final int? remaining;
+
+  /// How much of the week's usage is used after this question, 0 to 100.
+  final int? usedPercent;
+
+  /// Whether extra usage bought is left after it.
+  final bool? extraUsage;
   final int units;
 }
 
-/// No questions left for today (429): today's come back at [resetsAt]; bought
-/// ones would go on at once.
+/// No usage left (429), of the week's or the extra: the week's comes back at
+/// [resetsAt], Monday 00:00 UTC; a pack would go on at once.
 class ChatLimit extends ApiException {
-  ChatLimit(this.resetsAt, {this.units = 1}) : super(429, 'Daily limit');
+  ChatLimit(this.resetsAt, {this.units = 1}) : super(429, 'Weekly limit');
 
   final DateTime? resetsAt;
   final int units;
 }
 
-/// What a subscriber has left for questions about one article (#146):
-/// today's, the bought ones (spent after them, never expiring), how many of
-/// the limit one question about it takes, and when today's come back.
+/// Where a subscriber stands before asking about one article (#146): how
+/// much of the week's usage is used, whether extra usage is left (spent after
+/// it, never expiring), whether nothing is left, how many of the limit one
+/// question about it takes, and when the week's usage comes back.
 class ChatStatus {
   const ChatStatus({
-    required this.questionsLeft,
-    required this.boughtQuestions,
+    required this.usedPercent,
+    required this.extraUsage,
+    required this.limitReached,
     required this.units,
     this.resetsAt,
   });
 
   factory ChatStatus.fromJson(Map<String, dynamic> json) => ChatStatus(
-    questionsLeft: (json['questionsLeft'] as num?)?.toInt() ?? 0,
-    boughtQuestions: (json['boughtQuestions'] as num?)?.toInt() ?? 0,
+    usedPercent: (json['usedPercent'] as num?)?.toInt() ?? 0,
+    extraUsage: json['extraUsage'] == true,
+    limitReached: json['limitReached'] == true,
     units: (json['units'] as num?)?.toInt() ?? 1,
     resetsAt: DateTime.tryParse('${json['resetsAt']}'),
   );
 
-  final int questionsLeft;
-  final int boughtQuestions;
+  final int usedPercent;
+  final bool extraUsage;
+  final bool limitReached;
   final int units;
   final DateTime? resetsAt;
-
-  int get total => questionsLeft + boughtQuestions;
 }
 
 /// Client for the endpoints in docs/contract.md.
@@ -196,8 +209,8 @@ class ApiClient {
   /// question, as `(fromReader, text)`; [transaction] the subscription's
   /// latest signed transaction. The answer comes as it is written. Throws an
   /// [ApiException] with the server's status: 402 not paid, 404 not in the
-  /// feed, 429 today's questions used up ([ChatLimit] with when they come
-  /// back), 503 the agent not available. About a tick (#230) when [tick]:
+  /// feed, 429 the week's usage and the extra usage used up ([ChatLimit] with
+  /// when the week's comes back), 503 the agent not available. About a tick (#230) when [tick]:
   /// [articleId] is then the tick's id, sent as `tickId`; about a story of
   /// [storyCountry]'s outlets when that is given: the story's id, sent as
   /// `storyId` with `country`.
@@ -234,7 +247,12 @@ class ApiClient {
     }
     return ChatAnswer(
       text: response.stream.transform(utf8.decoder),
-      remaining: int.tryParse(response.headers['x-chat-remaining'] ?? ''),
+      usedPercent: int.tryParse(response.headers['x-chat-used'] ?? ''),
+      extraUsage: switch (response.headers['x-chat-extra']) {
+        'true' => true,
+        'false' => false,
+        _ => null,
+      },
       units: int.tryParse(response.headers['x-chat-units'] ?? '') ?? 1,
     );
   }
@@ -250,9 +268,9 @@ class ApiClient {
       ? {'storyId': id, 'country': storyCountry}
       : {tick ? 'tickId' : 'articleId': id};
 
-  /// `POST /v1/chat/status` (#146): what is left for questions about
-  /// [articleId] before asking, or about a tick's when [tick], or a story's
-  /// of [storyCountry]. Throws an [ApiException] (402 not paid).
+  /// `POST /v1/chat/status` (#146): the week's usage before asking about
+  /// [articleId], or about a tick when [tick], or a story of
+  /// [storyCountry]'s outlets. Throws an [ApiException] (402 not paid).
   Future<ChatStatus> chatStatus({
     required String articleId,
     required String transaction,
@@ -265,18 +283,16 @@ class ApiClient {
     }),
   );
 
-  /// `POST /v1/chat/credits` (#146): a pack of questions bought, credited to
-  /// the subscription of [transaction] once, however often it is sent.
-  /// Returns the bought questions there now.
-  Future<int> creditPack({
+  /// `POST /v1/chat/credits` (#146): a pack of extra usage bought, credited
+  /// to the subscription of [transaction] once, however often it is sent.
+  Future<void> creditPack({
     required String pack,
     required String transaction,
   }) async {
-    final json = await _postJson('/v1/chat/credits', {
+    await _postJson('/v1/chat/credits', {
       'pack': pack,
       'transaction': transaction,
     });
-    return (json['boughtQuestions'] as num?)?.toInt() ?? 0;
   }
 
   /// `GET /v1/support/thread` (#220): this phone's conversation with us, or

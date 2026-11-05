@@ -301,6 +301,16 @@ void main() {
       );
       expect(fullDate(day, l10nFor(FeedLanguage.de)), '16. Oktober 2026');
       expect(clockTime(day, l10nFor(FeedLanguage.uk)), '09:00');
+      // The AI chat's week comes back on a Monday, or a Sunday west of UTC;
+      // after «в», Ukrainian and Russian take the accusative.
+      final sunday = DateTime(2026, 11, 1, 19);
+      expect(weekdayName(DateTime(2026, 11, 2, 1), l10nFor()), 'Monday');
+      expect(weekdayName(sunday, l10nFor(FeedLanguage.uk)), 'неділю');
+      expect(weekdayName(sunday, l10nFor(FeedLanguage.ru)), 'воскресенье');
+      expect(weekdayName(day, l10nFor(FeedLanguage.uk)), 'пʼятницю');
+      expect(weekdayName(day, l10nFor(FeedLanguage.ru)), 'пятницу');
+      expect(weekdayName(day, l10nFor(FeedLanguage.es)), 'viernes');
+      expect(weekdayName(day, l10nFor(FeedLanguage.de)), 'Freitag');
       final now = DateTime(2026, 10, 16, 12);
       expect(
         dayLabel(DateTime(2026, 10, 15), l10nFor(FeedLanguage.uk), now: now),

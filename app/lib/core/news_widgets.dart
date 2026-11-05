@@ -123,6 +123,25 @@ String fullDate(DateTime date, AppLocalizations l10n) =>
 String clockTime(DateTime date, AppLocalizations l10n) =>
     DateFormat.Hm(_dates(l10n)).format(date.toLocal());
 
+/// The weekday of [date] ("Monday", "неділя"), as it reads after "on", «в»,
+/// "el" or "am": Ukrainian and Russian take the accusative («в неділю»,
+/// «в среду»). The AI chat's week comes back on it.
+String weekdayName(DateTime date, AppLocalizations l10n) {
+  final name = DateFormat.EEEE(_dates(l10n)).format(date.toLocal());
+  final accusative = switch (l10n.localeName) {
+    'uk' => const {
+      'середа': 'середу',
+      'пʼятниця': 'пʼятницю',
+      "п'ятниця": "п'ятницю",
+      'субота': 'суботу',
+      'неділя': 'неділю',
+    },
+    'ru' => const {'среда': 'среду', 'пятница': 'пятницу', 'суббота': 'субботу'},
+    _ => const <String, String>{},
+  };
+  return accusative[name] ?? name;
+}
+
 /// When, at the end of a list's row, as Messages says it: the time today,
 /// "Yesterday", else the day and month ("12 Oct", "12 окт.").
 String shortWhen(DateTime date, AppLocalizations l10n, {DateTime? now}) {

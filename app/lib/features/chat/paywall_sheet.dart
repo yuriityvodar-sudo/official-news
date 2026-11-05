@@ -330,7 +330,7 @@ class _PaywallSheetState extends State<PaywallSheet> {
             style: TextStyle(fontSize: 13, height: 1.4, color: muted),
           ),
           const SizedBox(height: 10),
-          if (product != null)
+          if (product != null) ...[
             Text(
               l10n.paywallPrice(product.price),
               textAlign: TextAlign.center,
@@ -340,8 +340,18 @@ class _PaywallSheetState extends State<PaywallSheet> {
                 letterSpacing: -0.5,
                 color: label,
               ),
-            )
-          else if (!_loaded)
+            ),
+            // What the price gives (Roman, 4 Nov): usage, never a count.
+            Text(
+              l10n.paywallUsage,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: label,
+              ),
+            ),
+          ] else if (!_loaded)
             const CupertinoActivityIndicator(),
           const SizedBox(height: 4),
           Text(

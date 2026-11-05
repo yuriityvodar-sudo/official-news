@@ -1254,6 +1254,10 @@
       }
     }
   },
+  "paywallUsage": "Weekly usage included",
+  "@paywallUsage": {
+    "description": "Under the price on the paywall (Roman, 4 Nov): what the subscription gives, as usage, never a count of questions (App Store guideline 3.1.2)."
+  },
   "paywallRenewal": "Renews automatically. Cancel any time in your Apple ID settings.",
   "@paywallRenewal": {
     "description": "Under the price on the paywall: auto-renewal and where to cancel."
@@ -1346,7 +1350,7 @@
   "@privacyChatHeading": {
     "description": "A heading of the privacy policy."
   },
-  "privacyChat": "If you subscribe to the AI agent, your question and the article's text are sent to OpenAI to write the answer. Your conversations are kept only on your phone, in Conversations, where you can delete them; we don't keep them on our server or send them to analytics. Apple handles the subscription: we receive a signed record of it from Apple, with an anonymous ID the app creates, never your name or payment details. We count each subscription's questions per day, for the daily limit.",
+  "privacyChat": "If you subscribe to the AI agent, your question and the article's text are sent to OpenAI to write the answer. Your conversations are kept only on your phone, in Conversations, where you can delete them; we don't keep them on our server or send them to analytics. Apple handles the subscription: we receive a signed record of it from Apple, with an anonymous ID the app creates, never your name or payment details. We record how much of its weekly usage each subscription uses, for the weekly limit.",
   "@privacyChat": {
     "description": "The privacy policy's section on the AI chat by subscription (#146)."
   },
@@ -1362,52 +1366,57 @@
   "@termsSubscriptionHeading": {
     "description": "A heading of the terms of use."
   },
-  "termsSubscription": "The AI agent is a monthly subscription through the App Store. It renews automatically until you cancel it in your Apple ID settings, at least 24 hours before the end of the period. Apple handles refunds. The agent answers only from the official text, can make mistakes, and its answers are not legal, financial or medical advice. 20 questions a day; a question about a long document counts as 2 or 3; packs of questions add more.",
+  "termsSubscription": "The AI agent is a monthly subscription through the App Store. It renews automatically until you cancel it in your Apple ID settings, at least 24 hours before the end of the period. Apple handles refunds. The agent answers only from the official text, can make mistakes, and its answers are not legal, financial or medical advice. It includes a week's usage, which resets every Monday at 00:00 UTC and does not carry over; questions about long documents use more of it. Extra usage, bought separately, doesn't expire and is used once the week's usage runs out.",
   "@termsSubscription": {
     "description": "The terms of use's section on the AI agent subscription (#146)."
   },
-  "chatRemaining": "{count, plural, =1{1 question left today} other{{count} questions left today}}",
-  "@chatRemaining": {
-    "description": "In the AI chat once 3 or fewer of the day's questions are left.",
+  "chatUsage": "{percent}% of this week's usage used · resets {day}",
+  "@chatUsage": {
+    "description": "In the AI chat from 75% of the week's usage used (Roman, 4 Nov): never a count of questions. {day} is the weekday the week's usage comes back, in the phone's time.",
     "placeholders": {
-      "count": {
+      "percent": {
         "type": "int"
+      },
+      "day": {
+        "type": "String"
       }
     }
   },
-  "chatLongDocument": "Long document: a question about it counts as {count}",
+  "chatUsingExtra": "Using extra usage",
+  "@chatUsingExtra": {
+    "description": "In the AI chat once the week's usage is used up and the extra usage bought is being spent."
+  },
+  "chatLongDocument": "Questions about long documents use more of your usage.",
   "@chatLongDocument": {
-    "description": "In the AI chat over a long document: one question about it takes {count} of the day's questions (#146).",
-    "placeholders": {
-      "count": {
-        "type": "int"
-      }
-    }
+    "description": "In the AI chat over a long document (#146): a question about it uses more of the week's usage; never a count."
   },
-  "chatOutTitle": "No questions left for today",
+  "chatOutTitle": "You've reached this week's usage limit.",
   "@chatOutTitle": {
-    "description": "The AI chat's card in the field's place once the day's questions are used up."
+    "description": "The AI chat's card in the field's place once the week's usage is used up and no extra usage is left."
   },
-  "chatOutBody": "New ones at {time}. Or buy more: they don't expire.",
+  "chatOutBody": "It resets on {day} at {time}.",
   "@chatOutBody": {
-    "description": "Under the card's title; {time} is when today's questions come back, in the phone's time.",
+    "description": "Under the card's title: when the week's usage comes back, {day} its weekday and {time} its time, in the phone's time.",
     "placeholders": {
+      "day": {
+        "type": "String"
+      },
       "time": {
         "type": "String"
       }
     }
   },
-  "chatTopUp": "Buy more questions",
+  "chatTopUp": "Get more usage",
   "@chatTopUp": {
-    "description": "The card's button: opens the packs of questions."
+    "description": "The card's button: opens the packs of extra usage."
   },
-  "topUpTitle": "More questions",
+  "topUpTitle": "Get more usage",
   "@topUpTitle": {
     "description": "The top-up sheet's title."
   },
-  "topUpSubtitle": "Used after the 20 a day, and they don't expire.",
+  "topUpSubtitle": "Used once this week's usage runs out. It doesn't expire.",
   "@topUpSubtitle": {
-    "description": "Under the top-up sheet's title."
+    "description": "Under the top-up sheet's title: when extra usage is used, and that it never expires."
   },
   "topUpBest": "better value",
   "@topUpBest": {
@@ -1422,15 +1431,15 @@
       }
     }
   },
-  "topUpFine": "A one-time App Store purchase. A question about a long document can count as several.",
+  "topUpFine": "A one-time App Store purchase.",
   "@topUpFine": {
     "description": "Under the top-up sheet's button."
   },
-  "topUpPack": "{count, plural, =1{+1 question} other{+{count} questions}}",
+  "topUpPack": "{weeks, plural, =1{+1 week of usage} other{+{weeks} weeks of usage}}",
   "@topUpPack": {
-    "description": "A pack of questions on the top-up sheet.",
+    "description": "A pack of extra usage on the top-up sheet: how many weeks' usage it adds.",
     "placeholders": {
-      "count": {
+      "weeks": {
         "type": "int"
       }
     }
