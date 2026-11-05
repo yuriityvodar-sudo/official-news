@@ -3,7 +3,7 @@
 import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 import { slugify } from "../src/site/urls";
-import { CONSENT_JS, GA_ID, consentHash } from "../src/site/consent";
+import { CF_BEACON_TOKEN, CONSENT_JS, GA_ID, consentHash } from "../src/site/consent";
 import { SITE_LANGS } from "../src/site/texts";
 import { hideSeed, rowsRead } from "./helpers";
 import { ORIGIN, insertArticle, insertTranslation, site, testId, withoutConsentScript } from "./site-helpers";
@@ -122,6 +122,22 @@ describe("/ opens the visitor's language (no page to choose one)", () => {
     expect((await go("de-DE,de;q=0.9")).location).toBe(`${ORIGIN}/en`);
     expect((await go(null)).location).toBe(`${ORIGIN}/en`);
     expect((await go("*")).location).toBe(`${ORIGIN}/en`);
+  });
+});
+
+describe("Cloudflare Web Analytics, for every visitor", () => {
+  // #60, 5 Nov: the beacon Cloudflare injected reported to the site's own /cdn-cgi/rum, which answered browsers 503.
+  it("every page carries Cloudflare's cookieless beacon, reporting to cloudflareinsights.com, which the CSP allows", async () => {
+    for (const path of ["/en", "/uk", EN, "/es/about"]) {
+      const { body, headers } = await site(path);
+      expect(body, path).toContain(
+        `<script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token":"${CF_BEACON_TOKEN}"}'></script>`,
+      );
+      const policy = headers.get("content-security-policy") ?? "";
+      expect(policy, path).toContain(" https://static.cloudflareinsights.com;");
+      expect(policy, path).toContain(" https://cloudflareinsights.com;");
+    }
+    expect(CF_BEACON_TOKEN).toMatch(/^[0-9a-f]{32}$/);
   });
 });
 

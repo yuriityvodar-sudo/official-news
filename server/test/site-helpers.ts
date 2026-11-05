@@ -7,12 +7,19 @@ import { handleSite } from "../src/site/handler";
 import { CACHE } from "../src/site/respond";
 import type { SiteLang } from "../src/site/texts";
 import { rowsRead } from "./helpers";
-import { CONSENT_JS } from "../src/site/consent";
+import { CF_BEACON_TOKEN, CONSENT_JS } from "../src/site/consent";
 
 export const ORIGIN = "https://site.test";
 
-/** A page without our one inline script, the analytics banner's (consent.ts), which every page carries; what is left must have no script at all. */
-export const withoutConsentScript = (body: string) => body.replace(`<script>${CONSENT_JS}</script>`, "");
+/**
+ * A page without the analytics scripts every page carries (consent.ts): our one
+ * inline script, the banner's, and Cloudflare's cookieless beacon, which loads
+ * from Cloudflare, not from this Worker (#60). What is left must have no script at all.
+ */
+export const withoutConsentScript = (body: string) =>
+  body
+    .replace(`<script>${CONSENT_JS}</script>`, "")
+    .replace(`<script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token":"${CF_BEACON_TOKEN}"}'></script>`, "");
 export const siteEnv = () => ({ DB: env.DB, SITE_ORIGIN: ORIGIN });
 
 export async function site(path: string, init: RequestInit = {}, host = "site.test", e = siteEnv()) {
