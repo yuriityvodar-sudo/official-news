@@ -20,6 +20,20 @@ export const GA_ID = "G-D0H8XW2SWJ";
 const KEY = "outer-news-analytics";
 
 /**
+ * Cloudflare Web Analytics' site token for outernews.app (not a secret: it is
+ * in every page; docs/setup.md). Its cookieless beacon counts every visit,
+ * with no consent needed (#60). The page carries it itself: the beacon
+ * Cloudflare injected by its automatic setup sent its reports to the site's own
+ * `/cdn-cgi/rum`, which answered browsers 503, so nothing was ever counted
+ * (checked in Chrome, 5 Nov); this one reports to cloudflareinsights.com,
+ * which the Content-Security-Policy allows.
+ */
+export const CF_BEACON_TOKEN = "fb37b546b2f04316b704be572af32492";
+
+/** Cloudflare's beacon, for every visitor (no cookies, nothing personal). */
+const BEACON = `<script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='${JSON.stringify({ token: CF_BEACON_TOKEN })}'></script>`;
+
+/**
  * Shows the notice until the visitor accepts (covering the page when it is a
  * wall); loads Google's tag after the yes, now and on later visits. Cookie
  * settings in the footer (`data-consent-reset`) withdraws: it forgets the yes,
@@ -46,10 +60,12 @@ export function consentHash(): Promise<string> {
  * The notice, hidden until the script shows it, then the script. `wall`
  * covers the page until OK (articles and lists); without it, a bar at the
  * bottom (the information pages, so Details can be read). Without JavaScript
- * it never shows and nothing loads.
+ * it never shows and nothing loads. Cloudflare's cookieless beacon follows,
+ * for every visitor.
  */
 export const consent = (lang: SiteLang, wall: boolean): Html => html`<div class="consent" id="consent" role="dialog" aria-modal="${wall ? "true" : "false"}" aria-label="${t(lang, "consentTitle")}"${wall ? raw(" data-wall") : ""} hidden><div class="consent-card">
 <p>${t(lang, "consentText")}</p>
 <div class="consent-buttons"><button type="button" class="yes" data-consent="yes">${t(lang, "consentYes")}</button><a href="${infoPath(lang, "privacy")}">${t(lang, "consentDetails")}</a></div>
 </div></div>
-<script>${raw(CONSENT_JS)}</script>`;
+<script>${raw(CONSENT_JS)}</script>
+${raw(BEACON)}`;
