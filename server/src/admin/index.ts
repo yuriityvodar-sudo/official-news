@@ -4,12 +4,13 @@
 // keeps holding no key at all (docs/decisions.md).
 import { signedInEmail } from "./access";
 import { downloadsTab } from "./appstore";
+import { type CloudflareDay, cloudflareDays } from "./cloudflare";
 import type { AdminEnv } from "./env";
 import { KEY_NAME, type Request as Report, account, batch, forgetToken, single } from "./ga";
 import { messagePost, messagesTab } from "./messages";
 import { dailyReport } from "./report";
 import { makeSelfKey, type SelfKey } from "./selfkey";
-import { PERIODS, type Tab, TABS, eventLabel, page, table, totals } from "./page";
+import { PERIODS, type Tab, TABS, dayTable, eventLabel, page, table, totals } from "./page";
 
 const HEADERS = {
   "content-type": "text/html; charset=utf-8",
@@ -38,19 +39,40 @@ const top = (days: number, filter: object, dimension: string, metrics: string[],
   dimensionFilter: filter,
 });
 
+/** Each day of the period by Google's own new/returning split (Yurii, 5 Nov: "new versus returning, for each day"). */
+const byDay = (days: number, filter: object): Report => ({
+  dateRanges: [ranges(days)[0]],
+  dimensions: [{ name: "date" }, { name: "newVsReturning" }],
+  metrics: [{ name: "totalUsers" }, { name: "sessions" }],
+  orderBys: [{ dimension: { dimensionName: "date" }, desc: true }],
+  limit: 1000,
+  dimensionFilter: filter,
+});
+
+/** The last `days` dates, today first, as "YYYY-MM-DD" (UTC). */
+export function lastDays(days: number, now = new Date()): string[] {
+  return Array.from({ length: days }, (_, i) => new Date(now.getTime() - i * 86_400_000).toISOString().slice(0, 10));
+}
+
 async function website(env: AdminEnv, days: number, fetcher: typeof fetch): Promise<string> {
-  const [t, sources, pages, countries, returning] = await batch(
-    env,
-    [
-      totalsReport(days, WEB),
-      top(days, WEB, "sessionSourceMedium", ["sessions", "totalUsers"]),
-      top(days, WEB, "pagePath", ["screenPageViews", "totalUsers"], 15),
-      top(days, WEB, "country", ["totalUsers"]),
-      top(days, WEB, "newVsReturning", ["totalUsers", "sessions"]),
-    ],
-    fetcher,
-  );
+  const dates = lastDays(days);
+  const [[t, sources, pages, countries, returning], perDay, cf] = await Promise.all([
+    batch(
+      env,
+      [
+        totalsReport(days, WEB),
+        top(days, WEB, "sessionSourceMedium", ["sessions", "totalUsers"]),
+        top(days, WEB, "pagePath", ["screenPageViews", "totalUsers"], 15),
+        top(days, WEB, "country", ["totalUsers"]),
+        top(days, WEB, "newVsReturning", ["totalUsers", "sessions"]),
+      ],
+      fetcher,
+    ),
+    single(env, byDay(days, WEB), fetcher),
+    cloudflareDays(env, dates[dates.length - 1], dates[0], fetcher).catch((): Map<string, CloudflareDay> | null => null),
+  ]);
   return `${totals(t, "Page views", returning)}
+${dayTable(dates, perDay, cf)}
 <div class="grid">
 ${table("Where visitors come from", sources, ["Sessions", "Users"])}
 ${table("Most read pages", pages, ["Views", "Users"])}
