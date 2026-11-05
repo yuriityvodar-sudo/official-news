@@ -903,11 +903,11 @@
   "@privacyLoadingCountry": {
     "description": "Privacy policy, When the app loads news (#170): how For you's country is found, kept on the phone and sent; the API saves it nowhere, but Cloudflare's request logs (Workers observability) keep request URLs for a few days (#206)."
   },
-  "privacyLoadingPictures": "Article pictures are loaded directly from the official website that published them, so that website receives your IP address when a picture loads. Pictures are saved on your phone after the first view.",
+  "privacyLoadingPictures": "Article pictures are loaded directly from the website that published them, so that website receives your IP address when a picture loads. Pictures are saved on your phone after the first view.",
   "@privacyLoadingPictures": {
     "description": "Privacy policy, under privacyLoadingHeading."
   },
-  "privacyLoadingPages": "When you open an official page, it opens in an in-app browser and that website's own privacy policy applies.",
+  "privacyLoadingPages": "When you open a source's page, it opens in an in-app browser and that website's own privacy policy applies.",
   "@privacyLoadingPages": {
     "description": "Privacy policy, under privacyLoadingHeading."
   },
@@ -988,11 +988,11 @@
     "description": "Privacy policy, under privacyChangesHeading."
   },
 
-  "termsIntro1": "Outer News summarizes official decisions for general information. It is not legal, financial or professional advice.",
+  "termsIntro1": "Outer News summarizes official decisions and news for general information. It is not legal, financial or professional advice.",
   "@termsIntro1": {
     "description": "Terms of use, first paragraph. A legal text: translate faithfully, keep the meaning exact."
   },
-  "termsIntro2": "Summaries and translations are made by AI and can be incomplete or wrong. Before you rely on a decision, read the official page linked in every article: that text is the one that counts.",
+  "termsIntro2": "Summaries and translations are made by AI and can be incomplete or wrong. Before you rely on a summary, read the original linked in every article: that text is the one that counts.",
   "@termsIntro2": {
     "description": "Terms of use, second paragraph."
   },
@@ -1000,7 +1000,7 @@
   "@termsContentHeading": {
     "description": "Terms of use, heading."
   },
-  "termsContent": "The official texts belong to their publishers. The app shows a short summary, the publisher and a link to the original.",
+  "termsContent": "Texts and headlines belong to their publishers and authors. The app shows a short summary or a headline, its source and a link to the original.",
   "@termsContent": {
     "description": "Terms of use, under termsContentHeading."
   },
@@ -1294,7 +1294,7 @@
   "@chatConsentTitle": {
     "description": "The AI chat's consent sheet, shown once (App Store guideline 5.1.2)."
   },
-  "chatConsentBody": "Your question and this article's text are sent to OpenAI for the answer. Your conversations are kept only on your phone. If you ask Apple for a refund, we may tell Apple how much you used the chat.",
+  "chatConsentBody": "Your question and the text or headlines of this news are sent to OpenAI for the answer. Your conversations are kept only on your phone. If you ask Apple for a refund, we may tell Apple how much you used the chat.",
   "@chatConsentBody": {
     "description": "What the consent sheet says is sent, to whom, and what may be told to Apple on a refund."
   },
@@ -1334,7 +1334,7 @@
   "@chatSend": {
     "description": "VoiceOver's name for the AI chat's send button."
   },
-  "chatNotAdvice": "Answers build on the official text and real facts, and are not legal advice.",
+  "chatNotAdvice": "Answers build on this news and real facts, and are not legal advice.",
   "@chatNotAdvice": {
     "description": "Once, at the top of the AI chat."
   },
@@ -1350,7 +1350,7 @@
   "@privacyChatHeading": {
     "description": "A heading of the privacy policy."
   },
-  "privacyChat": "If you subscribe to the AI agent, your question and the article's text are sent to OpenAI to write the answer. Your conversations are kept only on your phone, in Conversations, where you can delete them; we don't keep them on our server or send them to analytics. Apple handles the subscription: we receive a signed record of it from Apple, with an anonymous ID the app creates, never your name or payment details. We record how much of its weekly usage each subscription uses, for the weekly limit.",
+  "privacyChat": "If you subscribe to the AI agent, your question and the text or headlines of the news are sent to OpenAI to write the answer. Your conversations are kept only on your phone, in Conversations, where you can delete them; we don't keep them on our server or send them to analytics. Apple handles the subscription: we receive a signed record of it from Apple, with an anonymous ID the app creates, never your name or payment details. We record how much of its weekly usage each subscription uses, for the weekly limit.",
   "@privacyChat": {
     "description": "The privacy policy's section on the AI chat by subscription (#146)."
   },
@@ -1366,7 +1366,7 @@
   "@termsSubscriptionHeading": {
     "description": "A heading of the terms of use."
   },
-  "termsSubscription": "The AI agent is a monthly subscription through the App Store. It renews automatically until you cancel it in your Apple ID settings, at least 24 hours before the end of the period. Apple handles refunds. The agent answers only from the official text, can make mistakes, and its answers are not legal, financial or medical advice. It includes a week's usage, which resets every Monday at 00:00 UTC and does not carry over; questions about long documents use more of it. Extra usage, bought separately, doesn't expire and is used once the week's usage runs out.",
+  "termsSubscription": "The AI agent is a monthly subscription through the App Store. It renews automatically until you cancel it in your Apple ID settings, at least 24 hours before the end of the period. Apple handles refunds. The agent answers from the article's text, or from the headlines for news from the media, and from facts it knows. It can make mistakes, and its answers are not legal, financial or medical advice. It includes a week's usage, which resets every Monday at 00:00 UTC and does not carry over; questions about long documents use more of it. Extra usage, bought separately, doesn't expire and is used once the week's usage runs out.",
   "@termsSubscription": {
     "description": "The terms of use's section on the AI agent subscription (#146)."
   },

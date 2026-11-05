@@ -261,8 +261,8 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "privacyLoadingHeading": "When the app loads news",
     "privacyLoadingServer": "The app loads the news from our server, hosted by Cloudflare. Like any website, it receives your IP address and basic technical details to answer the request; we do not use them to identify you.",
     "privacyLoadingCountry": "For you shows what concerns your country. The app takes the country from your phone's region, or from Settings → My country. If the phone has no region, our server tells the app which country it sees the request come from, and keeps nothing. The country stays on your phone; the server receives it with each request for the feed only to choose the news, and does not save it. Like every request to our server, these can appear in Cloudflare's technical logs, which are deleted automatically within a week.",
-    "privacyLoadingPictures": "Article pictures are loaded directly from the official website that published them, so that website receives your IP address when a picture loads. Pictures are saved on your phone after the first view.",
-    "privacyLoadingPages": "When you open an official page, it opens in an in-app browser and that website's own privacy policy applies.",
+    "privacyLoadingPictures": "Article pictures are loaded directly from the website that published them, so that website receives your IP address when a picture loads. Pictures are saved on your phone after the first view.",
+    "privacyLoadingPages": "When you open a source's page, it opens in an in-app browser and that website's own privacy policy applies.",
     "privacyAnalyticsHeading": "Analytics",
     "privacyAnalytics": "Only if you allow it when the app asks, it sends usage events to Google Analytics for Firebase, to understand how the app is used, for example how many people read which kind of decision: screens opened, articles opened and read, links tapped, the chosen language, feed filters and your country for For you, and technical details such as the app version, device model, country and an app instance ID. You can turn this off at any time in Settings → Usage statistics. It does not use the advertising identifier and does not track you across other apps.",
     "privacyNotificationsHeading": "Notifications",
@@ -274,10 +274,10 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "privacyController": "Data controller: {publisher}.",
     "privacyChangesHeading": "Changes",
     "privacyChanges": "If this policy changes, the new version will be in the app with a new date.",
-    "termsIntro1": "Outer News summarizes official decisions for general information. It is not legal, financial or professional advice.",
-    "termsIntro2": "Summaries and translations are made by AI and can be incomplete or wrong. Before you rely on a decision, read the official page linked in every article: that text is the one that counts.",
+    "termsIntro1": "Outer News summarizes official decisions and news for general information. It is not legal, financial or professional advice.",
+    "termsIntro2": "Summaries and translations are made by AI and can be incomplete or wrong. Before you rely on a summary, read the original linked in every article: that text is the one that counts.",
     "termsContentHeading": "Content",
-    "termsContent": "The official texts belong to their publishers. The app shows a short summary, the publisher and a link to the original.",
+    "termsContent": "Texts and headlines belong to their publishers and authors. The app shows a short summary or a headline, its source and a link to the original.",
     "termsNoGuaranteeHeading": "No affiliation, no guarantee",
     "termsNoGuarantee": "The app is not affiliated with any government. It is provided as it is, without guarantees that it is complete, correct or always available.",
     "termsPublisherHeading": "Publisher",
@@ -286,11 +286,11 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "supportMistakes": "When you report a mistake, the name of the article and the language you read it in help us find it.",
     "languageCs": "Czech",
     "privacyChatHeading": "AI chat",
-    "privacyChat": "If you subscribe to the AI agent, your question and the article's text are sent to OpenAI to write the answer. Your conversations are kept only on your phone, in Conversations, where you can delete them; we don't keep them on our server or send them to analytics. Apple handles the subscription: we receive a signed record of it from Apple, with an anonymous ID the app creates, never your name or payment details. We record how much of its weekly usage each subscription uses, for the weekly limit.",
+    "privacyChat": "If you subscribe to the AI agent, your question and the text or headlines of the news are sent to OpenAI to write the answer. Your conversations are kept only on your phone, in Conversations, where you can delete them; we don't keep them on our server or send them to analytics. Apple handles the subscription: we receive a signed record of it from Apple, with an anonymous ID the app creates, never your name or payment details. We record how much of its weekly usage each subscription uses, for the weekly limit.",
     "privacySupportHeading": "Messages to us",
     "privacySupport": "Messages you send us in the app are kept with an anonymous ID of your phone (not your name), the app's version and language, and your notification token if you allowed notifications, so we can reply. We delete a conversation 90 days after it is closed or goes quiet. To limit messages to 5 a day, we also keep a one-way code of your network address until the end of that day (UTC).",
     "termsSubscriptionHeading": "AI agent subscription",
-    "termsSubscription": "The AI agent is a monthly subscription through the App Store. It renews automatically until you cancel it in your Apple ID settings, at least 24 hours before the end of the period. Apple handles refunds. The agent answers only from the official text, can make mistakes, and its answers are not legal, financial or medical advice. It includes a week's usage, which resets every Monday at 00:00 UTC and does not carry over; questions about long documents use more of it. Extra usage, bought separately, doesn't expire and is used once the week's usage runs out."
+    "termsSubscription": "The AI agent is a monthly subscription through the App Store. It renews automatically until you cancel it in your Apple ID settings, at least 24 hours before the end of the period. Apple handles refunds. The agent answers from the article's text, or from the headlines for news from the media, and from facts it knows. It can make mistakes, and its answers are not legal, financial or medical advice. It includes a week's usage, which resets every Monday at 00:00 UTC and does not carry over; questions about long documents use more of it. Extra usage, bought separately, doesn't expire and is used once the week's usage runs out."
   },
   "uk": {
     "feedEmpty": "Сьогодні рішень ще немає.",
@@ -403,8 +403,8 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "privacyLoadingHeading": "Коли застосунок завантажує новини",
     "privacyLoadingServer": "Застосунок завантажує новини з нашого сервера, розміщеного в Cloudflare. Як і будь-який вебсайт, наш сервер отримує вашу IP-адресу й базові технічні дані, щоб відповісти на запит; ми не використовуємо їх, щоб вас ідентифікувати.",
     "privacyLoadingCountry": "«Для вас» показує те, що стосується вашої країни. Застосунок бере країну з регіону телефона або з Параметрів → «Моя країна». Якщо в телефоні регіон не вказано, наш сервер повідомляє застосунку, з якої країни бачить запит, і нічого не зберігає. Країна зберігається на вашому телефоні; сервер отримує її з кожним запитом стрічки лише для того, щоб дібрати новини, і не зберігає її. Як і будь-які запити до нашого сервера, вони можуть потрапляти в технічні журнали Cloudflare, які автоматично видаляються протягом тижня.",
-    "privacyLoadingPictures": "Зображення до статей завантажуються безпосередньо з офіційного сайту, який їх опублікував, тож цей сайт отримує вашу IP-адресу під час завантаження зображення. Після першого перегляду зображення зберігаються на вашому телефоні.",
-    "privacyLoadingPages": "Офіційна сторінка відкривається у вбудованому браузері, і на ній діє власна політика конфіденційності цього сайту.",
+    "privacyLoadingPictures": "Зображення до статей завантажуються безпосередньо із сайту, який їх опублікував, тож цей сайт отримує вашу IP-адресу під час завантаження зображення. Після першого перегляду зображення зберігаються на вашому телефоні.",
+    "privacyLoadingPages": "Сторінка джерела відкривається у вбудованому браузері, і на ній діє власна політика конфіденційності цього сайту.",
     "privacyAnalyticsHeading": "Аналітика",
     "privacyAnalytics": "Лише якщо ви дозволите це, коли застосунок запитає, він надсилає події використання до Google Analytics for Firebase, щоб розуміти, як ним користуються (наприклад, скільки людей читають рішення того чи іншого типу): відкриті екрани, відкриті й прочитані статті, натиснуті посилання, вибрану мову, фільтри стрічки й вашу країну для «Для вас», а також технічні дані, як-от версію застосунку, модель пристрою, країну та ідентифікатор екземпляра застосунку. Вимкнути це можна будь-коли в Параметрах → «Статистика використання». Застосунок не використовує рекламний ідентифікатор і не відстежує вас в інших застосунках.",
     "privacyNotificationsHeading": "Сповіщення",
@@ -416,10 +416,10 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "privacyController": "Контролер даних: {publisher}.",
     "privacyChangesHeading": "Зміни",
     "privacyChanges": "Якщо ця політика зміниться, нова версія з’явиться в застосунку з новою датою.",
-    "termsIntro1": "Outer News стисло викладає офіційні рішення для загального ознайомлення. Це не юридична, фінансова чи інша професійна консультація.",
-    "termsIntro2": "Стислі виклади й переклади створює ШІ, тож вони можуть бути неповними чи помилковими. Перш ніж покладатися на рішення, прочитайте офіційну сторінку, посилання на яку є в кожній статті: значення має саме її текст.",
+    "termsIntro1": "Outer News стисло викладає офіційні рішення та новини для загального ознайомлення. Це не юридична, фінансова чи інша професійна консультація.",
+    "termsIntro2": "Стислі виклади й переклади створює ШІ, тож вони можуть бути неповними чи помилковими. Перш ніж покладатися на стислий виклад, прочитайте оригінал, посилання на який є в кожній статті: значення має саме його текст.",
     "termsContentHeading": "Вміст",
-    "termsContent": "Офіційні тексти належать їхнім видавцям. Застосунок показує стислий виклад, видавця й посилання на оригінал.",
+    "termsContent": "Тексти й заголовки належать їхнім видавцям і авторам. Застосунок показує стислий виклад або заголовок, джерело й посилання на оригінал.",
     "termsNoGuaranteeHeading": "Без зв’язку з урядами, без гарантій",
     "termsNoGuarantee": "Застосунок не пов’язаний із жодним урядом. Він надається «як є», без гарантій повноти, правильності чи постійної доступності.",
     "termsPublisherHeading": "Видавець",
@@ -428,11 +428,11 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "supportMistakes": "Коли повідомляєте про помилку, назва статті й мова, якою ви її читали, допоможуть нам її знайти.",
     "languageCs": "чеської",
     "privacyChatHeading": "ШІ-чат",
-    "privacyChat": "Якщо ви підписалися на ШІ-агента, ваше запитання і текст статті надсилаються в OpenAI, щоб написати відповідь. Ваше листування зберігається лише на вашому телефоні, у розділі «Розмови», де його можна видалити; ми не зберігаємо його на сервері й не надсилаємо в аналітику. Підпискою займається Apple: ми отримуємо від Apple підписаний запис про неї з анонімним ідентифікатором, який створює застосунок, але ніколи — ваше ім’я чи платіжні дані. Ми рахуємо, скільки тижневого usage використовує кожна підписка, — для тижневого ліміту.",
+    "privacyChat": "Якщо ви підписалися на ШІ-агента, ваше запитання і текст або заголовки новини надсилаються в OpenAI, щоб написати відповідь. Ваше листування зберігається лише на вашому телефоні, у розділі «Розмови», де його можна видалити; ми не зберігаємо його на сервері й не надсилаємо в аналітику. Підпискою займається Apple: ми отримуємо від Apple підписаний запис про неї з анонімним ідентифікатором, який створює застосунок, але ніколи — ваше ім’я чи платіжні дані. Ми рахуємо, скільки тижневого usage використовує кожна підписка, — для тижневого ліміту.",
     "privacySupportHeading": "Повідомлення нам",
     "privacySupport": "Повідомлення, які ви надсилаєте нам у застосунку, ми зберігаємо разом з анонімним ідентифікатором вашого телефона (не вашим іменем), версією та мовою застосунку, а також токеном сповіщень, якщо ви їх дозволили, щоб ми могли відповісти. Ми видаляємо розмову через 90 днів після того, як її закрито або в ній ніхто не пише. Щоб приймати не більше 5 повідомлень на день, ми також зберігаємо незворотний код вашої мережевої адреси до кінця цього дня (за UTC).",
     "termsSubscriptionHeading": "Підписка на ШІ-агента",
-    "termsSubscription": "Підписка на ШІ-агента — щомісячна, через App Store. Вона подовжується автоматично, доки ви не скасуєте її в налаштуваннях Apple ID не пізніше ніж за 24 години до кінця періоду. Поверненнями коштів займається Apple. Агент відповідає лише за офіційним текстом, може помилятися, і його відповіді — не юридична, фінансова чи медична консультація. Підписка включає тижневий usage, який скидається щопонеділка о 00:00 UTC і не переноситься; запитання про довгі документи витрачають його більше. Додатковий usage купується окремо, не згорає і витрачається, коли тижневий закінчиться."
+    "termsSubscription": "Підписка на ШІ-агента — щомісячна, через App Store. Вона подовжується автоматично, доки ви не скасуєте її в налаштуваннях Apple ID не пізніше ніж за 24 години до кінця періоду. Поверненнями коштів займається Apple. Агент відповідає за текстом статті, а про новини зі ЗМІ — за заголовками, і спирається на відомі йому факти. Він може помилятися, і його відповіді — не юридична, фінансова чи медична консультація. Підписка включає тижневий usage, який скидається щопонеділка о 00:00 UTC і не переноситься; запитання про довгі документи витрачають його більше. Додатковий usage купується окремо, не згорає і витрачається, коли тижневий закінчиться."
   },
   "ru": {
     "feedEmpty": "Сегодня решений пока нет.",
@@ -545,8 +545,8 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "privacyLoadingHeading": "Когда приложение загружает новости",
     "privacyLoadingServer": "Приложение загружает новости с нашего сервера на платформе Cloudflare. Как и любой сайт, сервер получает ваш IP-адрес и базовые технические данные, чтобы ответить на запрос; мы не используем их для вашей идентификации.",
     "privacyLoadingCountry": "«Для вас» показывает то, что касается вашей страны. Приложение берёт страну из региона телефона или из Настроек → «Моя страна». Если в телефоне регион не указан, наш сервер сообщает приложению, из какой страны он видит запрос, и ничего не сохраняет. Страна хранится на вашем телефоне; сервер получает её с каждым запросом ленты только для того, чтобы подобрать новости, и не сохраняет её. Как и любые запросы к нашему серверу, они могут попадать в технические журналы Cloudflare, которые автоматически удаляются в течение недели.",
-    "privacyLoadingPictures": "Изображения к статьям загружаются напрямую с официального сайта, который их опубликовал, поэтому этот сайт получает ваш IP-адрес, когда загружается изображение. После первого просмотра изображения сохраняются на вашем телефоне.",
-    "privacyLoadingPages": "Официальные страницы открываются во встроенном браузере, и на них действует собственная политика конфиденциальности соответствующего сайта.",
+    "privacyLoadingPictures": "Изображения к статьям загружаются напрямую с сайта, который их опубликовал, поэтому этот сайт получает ваш IP-адрес, когда загружается изображение. После первого просмотра изображения сохраняются на вашем телефоне.",
+    "privacyLoadingPages": "Страницы источников открываются во встроенном браузере, и на них действует собственная политика конфиденциальности соответствующего сайта.",
     "privacyAnalyticsHeading": "Аналитика",
     "privacyAnalytics": "Только если вы разрешите это, когда приложение спросит, оно отправляет в Google Analytics for Firebase данные об использовании, чтобы понимать, как им пользуются (например, сколько людей читают решения того или иного типа): открытые экраны, открытые и прочитанные статьи, нажатые ссылки, выбранный язык, фильтры ленты и вашу страну для «Для вас», а также технические данные, такие как версия приложения, модель устройства, страна и идентификатор экземпляра приложения. Выключить это можно в любой момент в Настройках → «Статистика использования». Приложение не использует рекламный идентификатор и не отслеживает ваши действия в других приложениях.",
     "privacyNotificationsHeading": "Уведомления",
@@ -558,10 +558,10 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "privacyController": "Контролёр данных: {publisher}.",
     "privacyChangesHeading": "Изменения",
     "privacyChanges": "Если эта политика изменится, новая версия появится в приложении с новой датой.",
-    "termsIntro1": "Outer News кратко излагает официальные решения для общего ознакомления. Это не юридическая, финансовая или иная профессиональная консультация.",
-    "termsIntro2": "Краткие изложения и переводы создаёт ИИ, поэтому они могут быть неполными или ошибочными. Прежде чем полагаться на решение, прочитайте официальную страницу, ссылка на которую есть в каждой статье: значение имеет именно её текст.",
+    "termsIntro1": "Outer News кратко излагает официальные решения и новости для общего ознакомления. Это не юридическая, финансовая или иная профессиональная консультация.",
+    "termsIntro2": "Краткие изложения и переводы создаёт ИИ, поэтому они могут быть неполными или ошибочными. Прежде чем полагаться на краткое изложение, прочитайте оригинал, ссылка на который есть в каждой статье: значение имеет именно его текст.",
     "termsContentHeading": "Материалы",
-    "termsContent": "Официальные тексты принадлежат их издателям. Приложение показывает краткое изложение, издателя и ссылку на оригинал.",
+    "termsContent": "Тексты и заголовки принадлежат их издателям и авторам. Приложение показывает краткое изложение или заголовок, источник и ссылку на оригинал.",
     "termsNoGuaranteeHeading": "Независимость и отказ от гарантий",
     "termsNoGuarantee": "Приложение не связано ни с одним правительством. Оно предоставляется «как есть», без гарантий его полноты, правильности или постоянной доступности.",
     "termsPublisherHeading": "Издатель",
@@ -570,11 +570,11 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "supportMistakes": "Сообщая об ошибке, укажите заголовок статьи и язык, на котором вы её читали: так нам будет проще найти ошибку.",
     "languageCs": "чешского",
     "privacyChatHeading": "ИИ-чат",
-    "privacyChat": "Если вы подписались на ИИ-агента, ваш вопрос и текст статьи отправляются в OpenAI, чтобы написать ответ. Ваша переписка хранится только на вашем телефоне, в разделе «Разговоры», где её можно удалить; мы не храним её на сервере и не отправляем в аналитику. Подпиской занимается Apple: мы получаем от Apple подписанную запись о ней с анонимным идентификатором, который создаёт приложение, но никогда — ваше имя или платёжные данные. Мы считаем, сколько недельного usage использует каждая подписка, — для недельного лимита.",
+    "privacyChat": "Если вы подписались на ИИ-агента, ваш вопрос и текст или заголовки новости отправляются в OpenAI, чтобы написать ответ. Ваша переписка хранится только на вашем телефоне, в разделе «Разговоры», где её можно удалить; мы не храним её на сервере и не отправляем в аналитику. Подпиской занимается Apple: мы получаем от Apple подписанную запись о ней с анонимным идентификатором, который создаёт приложение, но никогда — ваше имя или платёжные данные. Мы считаем, сколько недельного usage использует каждая подписка, — для недельного лимита.",
     "privacySupportHeading": "Сообщения нам",
     "privacySupport": "Сообщения, которые вы отправляете нам в приложении, мы храним вместе с анонимным идентификатором вашего телефона (не вашим именем), версией и языком приложения, а также токеном уведомлений, если вы их разрешили, чтобы мы могли ответить. Мы удаляем переписку через 90 дней после того, как она закрыта или в ней никто не пишет. Чтобы принимать не больше 5 сообщений в день, мы также храним необратимый код вашего сетевого адреса до конца этого дня (по UTC).",
     "termsSubscriptionHeading": "Подписка на ИИ-агента",
-    "termsSubscription": "Подписка на ИИ-агента — ежемесячная, через App Store. Она продлевается автоматически, пока вы не отмените её в настройках Apple ID не позже чем за 24 часа до конца периода. Возвратами занимается Apple. Агент отвечает только по официальному тексту, может ошибаться, и его ответы — не юридическая, финансовая или медицинская консультация. Подписка включает недельный usage, который сбрасывается каждый понедельник в 00:00 UTC и не переносится; вопросы о длинных документах тратят его больше. Дополнительный usage покупается отдельно, не сгорает и тратится, когда недельный закончится."
+    "termsSubscription": "Подписка на ИИ-агента — ежемесячная, через App Store. Она продлевается автоматически, пока вы не отмените её в настройках Apple ID не позже чем за 24 часа до конца периода. Возвратами занимается Apple. Агент отвечает по тексту статьи, а о новостях из СМИ — по заголовкам, и опирается на известные ему факты. Он может ошибаться, и его ответы — не юридическая, финансовая или медицинская консультация. Подписка включает недельный usage, который сбрасывается каждый понедельник в 00:00 UTC и не переносится; вопросы о длинных документах тратят его больше. Дополнительный usage покупается отдельно, не сгорает и тратится, когда недельный закончится."
   },
   "es": {
     "feedEmpty": "Aún no hay decisiones hoy.",
@@ -687,8 +687,8 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "privacyLoadingHeading": "Cuando la app carga noticias",
     "privacyLoadingServer": "La app carga las noticias desde nuestro servidor, alojado en Cloudflare. Como cualquier sitio web, nuestro servidor recibe tu dirección IP y datos técnicos básicos para responder a la solicitud; no los usamos para identificarte.",
     "privacyLoadingCountry": "«Para ti» muestra lo que concierne a tu país. La app toma el país de la región de tu teléfono o de Ajustes → «Mi país». Si el teléfono no tiene región, nuestro servidor le dice a la app desde qué país ve la solicitud, y no guarda nada. El país se queda en tu teléfono; el servidor lo recibe con cada solicitud de noticias solo para elegirlas, y no lo guarda. Como cualquier solicitud a nuestro servidor, pueden aparecer en los registros técnicos de Cloudflare, que se borran automáticamente en una semana.",
-    "privacyLoadingPictures": "Las imágenes de los artículos se cargan directamente desde el sitio web oficial que las publicó, así que ese sitio recibe tu dirección IP cuando se carga una imagen. Después de verlas por primera vez, las imágenes se guardan en tu teléfono.",
-    "privacyLoadingPages": "Cuando abres una página oficial, se abre en un navegador dentro de la app y se aplica la política de privacidad de ese sitio web.",
+    "privacyLoadingPictures": "Las imágenes de los artículos se cargan directamente desde el sitio web que las publicó, así que ese sitio recibe tu dirección IP cuando se carga una imagen. Después de verlas por primera vez, las imágenes se guardan en tu teléfono.",
+    "privacyLoadingPages": "Cuando abres la página de una fuente, se abre en un navegador dentro de la app y se aplica la política de privacidad de ese sitio web.",
     "privacyAnalyticsHeading": "Analítica",
     "privacyAnalytics": "Solo si lo permites cuando la app te lo pregunte, envía eventos de uso a Google Analytics for Firebase para entender cómo se usa (por ejemplo, cuántas personas leen cada tipo de decisión): pantallas abiertas, artículos abiertos y leídos, enlaces tocados, el idioma y los filtros elegidos, tu país para «Para ti», y datos técnicos como la versión de la app, el modelo del dispositivo, el país y un ID de instancia de la app. Puedes desactivarlo cuando quieras en Ajustes → «Estadísticas de uso». No usa el identificador de publicidad ni te rastrea en otras apps.",
     "privacyNotificationsHeading": "Notificaciones",
@@ -700,10 +700,10 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "privacyController": "Responsable del tratamiento: {publisher}.",
     "privacyChangesHeading": "Cambios",
     "privacyChanges": "Si esta política cambia, la nueva versión estará en la app con una nueva fecha.",
-    "termsIntro1": "Outer News resume decisiones oficiales con fines informativos generales. No constituye asesoramiento legal, financiero ni profesional.",
-    "termsIntro2": "Los resúmenes y las traducciones los genera una IA y pueden ser incompletos o incorrectos. Antes de basarte en una decisión, lee la página oficial enlazada en cada artículo: ese es el texto que prevalece.",
+    "termsIntro1": "Outer News resume decisiones oficiales y noticias con fines informativos generales. No constituye asesoramiento legal, financiero ni profesional.",
+    "termsIntro2": "Los resúmenes y las traducciones los genera una IA y pueden ser incompletos o incorrectos. Antes de basarte en un resumen, lee el original enlazado en cada artículo: ese es el texto que prevalece.",
     "termsContentHeading": "Contenido",
-    "termsContent": "Los textos oficiales pertenecen a las instituciones que los publican. La app muestra un breve resumen, el nombre de la institución y un enlace al original.",
+    "termsContent": "Los textos y los titulares pertenecen a quienes los publican y a sus autores. La app muestra un breve resumen o un titular, su fuente y un enlace al original.",
     "termsNoGuaranteeHeading": "Sin vínculos ni garantías",
     "termsNoGuarantee": "La app no está vinculada a ningún gobierno. Se ofrece tal cual, sin garantías de que sea completa, correcta o esté siempre disponible.",
     "termsPublisherHeading": "Editor",
@@ -712,11 +712,11 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "supportMistakes": "Si nos informas de un error, el título del artículo y el idioma en que lo leíste nos ayudan a encontrarlo.",
     "languageCs": "checo",
     "privacyChatHeading": "Chat con IA",
-    "privacyChat": "Si te suscribes al agente de IA, tu pregunta y el texto del artículo se envían a OpenAI para escribir la respuesta. Tus conversaciones se guardan solo en tu teléfono, en Conversaciones, donde puedes eliminarlas; no las guardamos en nuestro servidor ni las enviamos a la analítica. Apple gestiona la suscripción: recibimos de Apple un registro firmado de ella, con un identificador anónimo que crea la app, nunca tu nombre ni tus datos de pago. Contamos cuánto de su uso semanal consume cada suscripción, para el límite semanal.",
+    "privacyChat": "Si te suscribes al agente de IA, tu pregunta y el texto o los titulares de la noticia se envían a OpenAI para escribir la respuesta. Tus conversaciones se guardan solo en tu teléfono, en Conversaciones, donde puedes eliminarlas; no las guardamos en nuestro servidor ni las enviamos a la analítica. Apple gestiona la suscripción: recibimos de Apple un registro firmado de ella, con un identificador anónimo que crea la app, nunca tu nombre ni tus datos de pago. Contamos cuánto de su uso semanal consume cada suscripción, para el límite semanal.",
     "privacySupportHeading": "Mensajes que nos envías",
     "privacySupport": "Los mensajes que nos envías desde la app se guardan con un identificador anónimo de tu teléfono (no tu nombre), la versión y el idioma de la app y, si permitiste las notificaciones, tu token de notificaciones, para poder responderte. Borramos cada conversación 90 días después de que se cierre o quede sin actividad. Para limitar los mensajes a 5 al día, también guardamos un código irreversible de tu dirección de red hasta el final de ese día (UTC).",
     "termsSubscriptionHeading": "Suscripción al agente de IA",
-    "termsSubscription": "La suscripción al agente de IA es mensual, a través de la App Store. Se renueva automáticamente hasta que la canceles en los ajustes de tu Apple ID al menos 24 horas antes del final del periodo. Apple gestiona los reembolsos. El agente responde solo a partir del texto oficial, puede equivocarse y sus respuestas no son asesoramiento legal, financiero ni médico. Incluye un uso semanal que se restablece cada lunes a las 00:00 UTC y no se acumula; las preguntas sobre documentos largos consumen más. El uso adicional se compra aparte, no caduca y se usa cuando se acaba el de la semana."
+    "termsSubscription": "La suscripción al agente de IA es mensual, a través de la App Store. Se renueva automáticamente hasta que la canceles en los ajustes de tu Apple ID al menos 24 horas antes del final del periodo. Apple gestiona los reembolsos. El agente responde a partir del texto del artículo o, en las noticias de los medios, de los titulares, y se apoya en los hechos que conoce. Puede equivocarse y sus respuestas no son asesoramiento legal, financiero ni médico. Incluye un uso semanal que se restablece cada lunes a las 00:00 UTC y no se acumula; las preguntas sobre documentos largos consumen más. El uso adicional se compra aparte, no caduca y se usa cuando se acaba el de la semana."
   },
   "de": {
     "feedEmpty": "Heute noch keine Entscheidungen.",
@@ -829,8 +829,8 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "privacyLoadingHeading": "Wenn die App Nachrichten lädt",
     "privacyLoadingServer": "Die App lädt die Nachrichten von unserem Server, der bei Cloudflare gehostet wird. Wie bei jeder Website erhält er Ihre IP-Adresse und grundlegende technische Angaben, um die Anfrage zu beantworten; wir nutzen sie nicht, um Sie zu identifizieren.",
     "privacyLoadingCountry": "„Für Sie“ zeigt, was Ihr Land betrifft. Die App nimmt das Land aus der Region Ihres Telefons oder aus Einstellungen → „Mein Land“. Hat das Telefon keine Region, teilt unser Server der App mit, aus welchem Land er die Anfrage sieht, und speichert nichts. Das Land bleibt auf Ihrem Telefon; der Server erhält es mit jeder Anfrage nach dem Feed nur, um die Nachrichten auszuwählen, und speichert es nicht. Wie jede Anfrage an unseren Server können sie in den technischen Protokollen von Cloudflare erscheinen, die innerhalb einer Woche automatisch gelöscht werden.",
-    "privacyLoadingPictures": "Bilder zu Artikeln werden direkt von der offiziellen Website geladen, die sie veröffentlicht hat; diese Website erhält daher Ihre IP-Adresse, wenn ein Bild geladen wird. Nach dem ersten Ansehen werden Bilder auf Ihrem Gerät gespeichert.",
-    "privacyLoadingPages": "Wenn Sie eine offizielle Seite öffnen, wird sie in einem In-App-Browser geöffnet, und es gilt die Datenschutzerklärung dieser Website.",
+    "privacyLoadingPictures": "Bilder zu Artikeln werden direkt von der Website geladen, die sie veröffentlicht hat; diese Website erhält daher Ihre IP-Adresse, wenn ein Bild geladen wird. Nach dem ersten Ansehen werden Bilder auf Ihrem Gerät gespeichert.",
+    "privacyLoadingPages": "Wenn Sie die Seite einer Quelle öffnen, wird sie in einem In-App-Browser geöffnet, und es gilt die Datenschutzerklärung dieser Website.",
     "privacyAnalyticsHeading": "Analyse",
     "privacyAnalytics": "Nur wenn Sie es erlauben, wenn die App danach fragt, sendet sie Nutzungsereignisse an Google Analytics for Firebase, um zu verstehen, wie sie genutzt wird, etwa wie viele Menschen welche Art von Entscheidung lesen: aufgerufene Bildschirme, geöffnete und gelesene Artikel, angetippte Links, die gewählte Sprache, die Feed-Filter, Ihr Land für „Für Sie“ sowie technische Angaben wie App-Version, Gerätemodell, Land und eine App-Instanz-ID. Sie können das jederzeit in den Einstellungen unter „Nutzungsstatistik“ ausschalten. Die App verwendet die Werbe-ID nicht und verfolgt Sie nicht über andere Apps hinweg.",
     "privacyNotificationsHeading": "Mitteilungen",
@@ -842,10 +842,10 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "privacyController": "Verantwortlicher: {publisher}.",
     "privacyChangesHeading": "Änderungen",
     "privacyChanges": "Wenn sich diese Erklärung ändert, steht die neue Fassung mit neuem Datum in der App.",
-    "termsIntro1": "Outer News fasst offizielle Entscheidungen zur allgemeinen Information zusammen. Es handelt sich nicht um eine rechtliche, finanzielle oder sonstige fachliche Beratung.",
-    "termsIntro2": "Zusammenfassungen und Übersetzungen werden von einer KI erstellt und können unvollständig oder falsch sein. Bevor Sie sich auf eine Entscheidung verlassen, lesen Sie die in jedem Artikel verlinkte offizielle Seite: Maßgeblich ist deren Text.",
+    "termsIntro1": "Outer News fasst offizielle Entscheidungen und Nachrichten zur allgemeinen Information zusammen. Es handelt sich nicht um eine rechtliche, finanzielle oder sonstige fachliche Beratung.",
+    "termsIntro2": "Zusammenfassungen und Übersetzungen werden von einer KI erstellt und können unvollständig oder falsch sein. Bevor Sie sich auf eine Zusammenfassung verlassen, lesen Sie das in jedem Artikel verlinkte Original: Maßgeblich ist dessen Text.",
     "termsContentHeading": "Inhalte",
-    "termsContent": "Die offiziellen Texte gehören ihren Herausgebern. Die App zeigt eine kurze Zusammenfassung, den Herausgeber und einen Link zum Original.",
+    "termsContent": "Texte und Schlagzeilen gehören ihren Herausgebern und Autoren. Die App zeigt eine kurze Zusammenfassung oder eine Schlagzeile, die Quelle und einen Link zum Original.",
     "termsNoGuaranteeHeading": "Keine Verbindung, keine Gewähr",
     "termsNoGuarantee": "Die App ist mit keiner Regierung verbunden. Sie wird in der vorliegenden Form bereitgestellt, ohne Gewähr für Vollständigkeit, Richtigkeit oder ständige Verfügbarkeit.",
     "termsPublisherHeading": "Herausgeber",
@@ -854,11 +854,11 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "supportMistakes": "Wenn Sie einen Fehler melden, helfen uns der Titel des Artikels und die Sprache, in der Sie ihn gelesen haben, bei der Suche.",
     "languageCs": "Tschechischen",
     "privacyChatHeading": "KI-Chat",
-    "privacyChat": "Wenn Sie den KI-Agenten abonniert haben, werden Ihre Frage und der Text des Artikels an OpenAI gesendet, um die Antwort zu schreiben. Ihre Gespräche werden nur auf Ihrem Telefon gespeichert, unter „Gespräche“, wo Sie sie löschen können; wir speichern sie nicht auf unserem Server und senden sie nicht an die Analyse. Das Abo wickelt Apple ab: Wir erhalten von Apple einen signierten Nachweis darüber, mit einer anonymen Kennung, die die App erzeugt, nie Ihren Namen oder Ihre Zahlungsdaten. Wir erfassen, wie viel seiner wöchentlichen Nutzung jedes Abo verbraucht, für das Wochenlimit.",
+    "privacyChat": "Wenn Sie den KI-Agenten abonniert haben, werden Ihre Frage und der Text oder die Schlagzeilen der Meldung an OpenAI gesendet, um die Antwort zu schreiben. Ihre Gespräche werden nur auf Ihrem Telefon gespeichert, unter „Gespräche“, wo Sie sie löschen können; wir speichern sie nicht auf unserem Server und senden sie nicht an die Analyse. Das Abo wickelt Apple ab: Wir erhalten von Apple einen signierten Nachweis darüber, mit einer anonymen Kennung, die die App erzeugt, nie Ihren Namen oder Ihre Zahlungsdaten. Wir erfassen, wie viel seiner wöchentlichen Nutzung jedes Abo verbraucht, für das Wochenlimit.",
     "privacySupportHeading": "Nachrichten an uns",
     "privacySupport": "Nachrichten, die Sie uns in der App senden, speichern wir mit einer anonymen Kennung Ihres Geräts (nicht Ihrem Namen), der Version und Sprache der App und, wenn Sie Mitteilungen erlaubt haben, Ihrem Mitteilungs-Token, damit wir antworten können. Wir löschen ein Gespräch 90 Tage, nachdem es geschlossen wurde oder niemand mehr geschrieben hat. Um Nachrichten auf 5 pro Tag zu begrenzen, speichern wir außerdem einen nicht umkehrbaren Code Ihrer Netzwerkadresse bis zum Ende dieses Tages (UTC).",
     "termsSubscriptionHeading": "Abo für den KI-Agenten",
-    "termsSubscription": "Das Abo für den KI-Agenten läuft monatlich über den App Store. Es verlängert sich automatisch, bis Sie es spätestens 24 Stunden vor Ende des Zeitraums in den Apple-ID-Einstellungen kündigen. Erstattungen wickelt Apple ab. Der Agent antwortet nur aus dem amtlichen Text, kann sich irren, und seine Antworten sind keine Rechts-, Finanz- oder medizinische Beratung. Es enthält eine wöchentliche Nutzung, die jeden Montag um 00:00 UTC zurückgesetzt und nicht übertragen wird; Fragen zu langen Dokumenten verbrauchen mehr davon. Zusätzliche Nutzung wird separat gekauft, verfällt nicht und wird verwendet, wenn die der Woche aufgebraucht ist."
+    "termsSubscription": "Das Abo für den KI-Agenten läuft monatlich über den App Store. Es verlängert sich automatisch, bis Sie es spätestens 24 Stunden vor Ende des Zeitraums in den Apple-ID-Einstellungen kündigen. Erstattungen wickelt Apple ab. Der Agent antwortet aus dem Text des Artikels oder, bei Meldungen aus den Medien, aus den Schlagzeilen und stützt sich auf Fakten, die er kennt. Er kann sich irren, und seine Antworten sind keine Rechts-, Finanz- oder medizinische Beratung. Es enthält eine wöchentliche Nutzung, die jeden Montag um 00:00 UTC zurückgesetzt und nicht übertragen wird; Fragen zu langen Dokumenten verbrauchen mehr davon. Zusätzliche Nutzung wird separat gekauft, verfällt nicht und wird verwendet, wenn die der Woche aufgebraucht ist."
   }
 };
 
@@ -876,7 +876,7 @@ export const PUBLISHER_DETAILS = {
 export const SUPPORT_EMAIL = "support@outernews.app";
 
 /** When the privacy policy and the terms last changed (`policyUpdated` in info_pages.dart). */
-export const POLICY_UPDATED = "2026-11-04";
+export const POLICY_UPDATED = "2026-11-05";
 
 /** Each language's own name and short label (FeedLanguage in feed_language.dart). */
 export const LANGUAGE_NAMES: Record<SiteLang, { nativeName: string; shortLabel: string }> = {
