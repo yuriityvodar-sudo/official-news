@@ -2,6 +2,7 @@
 // tab: the daily report (#60, 3 Nov), the website, the app, downloads once the
 // app is in the store, and readers' messages (#220).
 // Server-rendered, no script; the numbers come from Google Analytics (ga.ts).
+import type { CloudflareDay } from "./cloudflare";
 import type { Rows } from "./ga";
 
 export type Tab = "daily" | "website" | "app" | "downloads" | "messages";
@@ -56,6 +57,36 @@ export function table(title: string, report: Rows | null, columns: string[], lab
     .map((r) => `<tr><td>${esc(label(r.key) || "(not set)")}</td>${r.values.map((v) => `<td class="n">${num(v)}</td>`).join("")}</tr>`)
     .join("");
   return `<section><h2>${esc(title)}</h2><table><thead><tr><th></th>${head}</tr></thead><tbody>${body}</tbody></table></section>`;
+}
+
+/**
+ * The period day by day, today first (Yurii, 5 Nov): new and returning
+ * visitors and their sessions from Google Analytics (those who accepted
+ * cookies, Google's own new/returning split, in the property's time zone),
+ * and every visit from Cloudflare (no cookies, UTC days). `perDay` has rows
+ * keyed [YYYYMMDD, "new" | "returning" | "(not set)"] with [users, sessions].
+ */
+export function dayTable(dates: string[], perDay: Rows | null, cloudflare: Map<string, CloudflareDay> | null): string {
+  const day = new Map<string, { fresh: number; back: number; sessions: number }>();
+  for (const r of perDay?.rows ?? []) {
+    const d = r.key[0] ?? "";
+    const date = `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}`;
+    const row = day.get(date) ?? { fresh: 0, back: 0, sessions: 0 };
+    if (r.key[1] === "new") row.fresh += r.values[0] ?? 0;
+    if (r.key[1] === "returning") row.back += r.values[0] ?? 0;
+    row.sessions += r.values[1] ?? 0;
+    day.set(date, row);
+  }
+  const label = (date: string) => new Date(`${date}T12:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
+  const cf = (date: string) => (cloudflare ? num(cloudflare.get(date)?.visits ?? 0) : "–");
+  const body = dates
+    .map((date) => {
+      const row = day.get(date) ?? { fresh: 0, back: 0, sessions: 0 };
+      return `<tr><td>${esc(label(date))}</td><td class="n">${num(row.fresh)}</td><td class="n">${num(row.back)}</td><td class="n">${num(row.sessions)}</td><td class="n">${cf(date)}</td></tr>`;
+    })
+    .join("");
+  return `<section><h2>Day by day</h2><table><thead><tr><th></th><th>New visitors</th><th>Returning visitors</th><th>Sessions</th><th>Visits, everyone (Cloudflare)</th></tr></thead><tbody>${body}</tbody></table>
+<p class="note">New, returning and sessions: Google Analytics, visitors who accepted cookies. Visits, everyone: Cloudflare, no cookies, UTC days${cloudflare ? "" : " (not available right now)"}.</p></section>`;
 }
 
 const EVENT_NAMES: Record<string, string> = {

@@ -4,7 +4,8 @@ import { env as workers } from "cloudflare:workers";
 import { describe, expect, it } from "vitest";
 import { handleAdmin } from "../src/admin/index";
 import type { AdminEnv } from "../src/admin/env";
-import { eventLabel } from "../src/admin/page";
+import { dayTable, eventLabel } from "../src/admin/page";
+import { lastDays } from "../src/admin/index";
 import { postSupportMessage } from "../src/support";
 
 const TEAM = "test-team";
@@ -114,6 +115,31 @@ describe("the website tab", () => {
     expect(html).toContain("google / organic");
     expect(html).toContain("/uk");
     expect(html).toContain('aria-current="page">7 days');
+  });
+});
+
+describe("the website tab, day by day", () => {
+  // Yurii, 5 Nov: "new versus returning, for each day".
+  it("lists every day of the period, today first, with new and returning visitors, sessions and Cloudflare's visits", () => {
+    expect(lastDays(3, new Date("2026-11-05T09:00:00Z"))).toEqual(["2026-11-05", "2026-11-04", "2026-11-03"]);
+    const perDay = {
+      rows: [
+        { key: ["20261105", "new"], values: [1, 1] },
+        { key: ["20261104", "new"], values: [2, 2] },
+        { key: ["20261104", "returning"], values: [1, 3] },
+      ],
+    };
+    const cf = new Map([["2026-11-04", { visits: 9, pageViews: 14 }]]);
+    const html = dayTable(["2026-11-05", "2026-11-04", "2026-11-03"], perDay, cf);
+    const rows = html.match(/<tr><td>[^<]+<\/td>(<td class="n">[^<]+<\/td>){4}<\/tr>/g) ?? [];
+    expect(rows).toEqual([
+      '<tr><td>Thu 5 Nov</td><td class="n">1</td><td class="n">0</td><td class="n">1</td><td class="n">0</td></tr>',
+      '<tr><td>Wed 4 Nov</td><td class="n">2</td><td class="n">1</td><td class="n">5</td><td class="n">9</td></tr>',
+      '<tr><td>Tue 3 Nov</td><td class="n">0</td><td class="n">0</td><td class="n">0</td><td class="n">0</td></tr>',
+    ]);
+    // Without Cloudflare's numbers the column says so instead of showing zeros.
+    expect(dayTable(["2026-11-04"], perDay, null)).toContain('<td class="n">–</td></tr>');
+    expect(dayTable(["2026-11-04"], null, cf)).toContain('<td class="n">0</td><td class="n">0</td><td class="n">0</td><td class="n">9</td>');
   });
 });
 
