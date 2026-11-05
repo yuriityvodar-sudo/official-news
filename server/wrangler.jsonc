@@ -6,11 +6,11 @@
   "compatibility_date": "2026-10-01",
   // NewsApp account (see docs/setup.md). Not a secret.
   "account_id": "8dc93578877d397a693094f3e2b01029",
-  // The API at api.outernews.app (S2 of the release audit, 4 Nov), where the
-  // zone's rate limiting rule stands in front of the Worker; workers.dev stays
-  // on until the team's builds use the new address, then goes off before the
-  // release (docs/setup.md).
-  "workers_dev": true,
+  // The API only at api.outernews.app (S2 of the release audit), where the
+  // zone's rate limiting rule stands in front of the Worker: no workers.dev
+  // copy past that rule, since 5 Nov (docs/setup.md).
+  "workers_dev": false,
+  "preview_urls": false,
   "routes": [{ "pattern": "api.outernews.app", "custom_domain": true }],
   // At most API_LIMIT (src/api/index.ts) requests a minute from one address in
   // a Cloudflare location, answered 429 before they read D1.
