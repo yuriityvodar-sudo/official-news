@@ -92,7 +92,9 @@ class GlassView: NSObject, FlutterPlatformView {
       let effect = UIGlassEffect()
       effect.isInteractive = false
       let view = UIVisualEffectView(effect: effect)
-      view.cornerConfiguration = .capsule()
+      // A capsule; taller than 52 points (the AI chat's field, as it grows),
+      // a rounded box, so its words stay inside it.
+      view.cornerConfiguration = .capsule(maximumRadius: 26)
       glass = view
     } else {
       glass = CircleView(frame: .zero)
@@ -147,7 +149,7 @@ class CircleView: UIView {
 
   override func layoutSubviews() {
     super.layoutSubviews()
-    layer.cornerRadius = min(bounds.width, bounds.height) / 2
+    layer.cornerRadius = min(min(bounds.width, bounds.height) / 2, 26)
   }
 }
 
