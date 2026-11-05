@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/cupertino.dart';
@@ -6,17 +7,20 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:official_news/core/analytics.dart';
 import 'package:official_news/core/feed_language.dart';
 import 'package:official_news/core/push.dart';
+import 'package:official_news/core/subscription.dart';
 import 'package:official_news/features/settings/info_pages.dart';
 import 'package:official_news/features/settings/settings_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'fake_messaging.dart';
+import 'fake_store.dart';
 import 'test_app.dart';
 
 Future<ValueNotifier<FeedLanguage>> _pump(
   WidgetTester tester, {
   List<FeedLanguage>? chosen,
   FeedLanguage words = FeedLanguage.en,
+  ChatSubscription? subscription,
 }) async {
   // The test's screen, 100 pt taller: the prototype's rows (Design, Splash,
   // Play, Read, Topics) take the top of the list, the pages' rows under them.
@@ -33,11 +37,16 @@ Future<ValueNotifier<FeedLanguage>> _pump(
           chosen?.add(lang);
           language.value = lang;
         },
+        subscription: subscription,
       ),
     ),
   );
   return language;
 }
+
+/// A signed transaction as the phone keeps it: only the expiry is read.
+String _jws(DateTime expires) =>
+    'h.${base64Url.encode(utf8.encode(jsonEncode({'expiresDate': expires.millisecondsSinceEpoch}))).replaceAll('=', '')}.s';
 
 void main() {
   test('the version in Settings is pubspec.yaml\'s version', () {
@@ -75,6 +84,36 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets(
+    'Manage subscription only while the AI agent is paid; it opens Apple\'s sheet',
+    (tester) async {
+      final now = DateTime(2026, 11, 5, 12);
+      final store = FakeStore();
+      SharedPreferences.setMockInitialValues({});
+      final unpaid = ChatSubscription(store: store, clock: () => now);
+      await unpaid.start();
+      await _pump(tester, subscription: unpaid);
+      expect(find.text('Manage subscription'), findsNothing);
+
+      SharedPreferences.setMockInitialValues({
+        'chat.transaction': _jws(now.add(const Duration(days: 30))),
+      });
+      final paid = ChatSubscription(store: store, clock: () => now);
+      await paid.start();
+      await _pump(tester, subscription: paid);
+      final row = find.text('Manage subscription');
+      await tester.ensureVisible(row);
+      await tester.tap(row);
+      await tester.pump();
+      expect(store.manages, 1);
+
+      // Refunded or expired (the server's 402): the row goes.
+      paid.lapsed();
+      await tester.pump();
+      expect(find.text('Manage subscription'), findsNothing);
+    },
+  );
 
   group('the Notifications row (#62)', () {
     final en = l10nFor();

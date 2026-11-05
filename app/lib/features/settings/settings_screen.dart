@@ -11,6 +11,7 @@ import '../../core/feed_language.dart';
 import '../../core/motion.dart';
 import '../../core/push.dart';
 import '../../core/analytics.dart';
+import '../../core/subscription.dart';
 import '../../core/theme.dart';
 import '../../core/wide.dart';
 import '../../l10n/app_localizations.dart';
@@ -43,6 +44,7 @@ class SettingsScreen extends StatelessWidget {
     this.country,
     this.phoneCountry,
     this.onCountry,
+    this.subscription,
   });
 
   /// Settings → My country (#170): the country chosen here, or null for the
@@ -71,6 +73,11 @@ class SettingsScreen extends StatelessWidget {
   /// Opens the iOS Settings app ([appSettingsPage]); tests pass their own.
   final OpenAppSettings openSettingsApp;
 
+  /// The AI agent's subscription: while it is paid, Manage subscription opens
+  /// Apple's sheet to cancel or change it; the app's own unless a test passes
+  /// its own.
+  final ChatSubscription? subscription;
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -80,6 +87,7 @@ class SettingsScreen extends StatelessWidget {
     final country = this.country;
     final phoneCountry = this.phoneCountry;
     final onCountry = this.onCountry;
+    final subscription = this.subscription ?? chatSubscription;
     final scaffold = CupertinoPageScaffold(
       backgroundColor: grouped,
       // Material for the default text style (no yellow underline on plain Text).
@@ -156,6 +164,24 @@ class SettingsScreen extends StatelessWidget {
                     // Only in a build with analytics (L1, 4 Nov).
                     if (analyticsAvailable.value) const _UsageStatisticsTile(),
                   ],
+                ),
+                // While the AI agent is paid: Apple's sheet to cancel or
+                // change it, the one place a TestFlight subscription can be
+                // cancelled (Roman, 5 Nov: «где отменить подписку?»).
+                ListenableBuilder(
+                  listenable: subscription,
+                  builder: (context, _) => subscription.active
+                      ? CupertinoListSection.insetGrouped(
+                          children: [
+                            CupertinoListTile(
+                              leading: const _Icon(CupertinoIcons.creditcard),
+                              title: Text(l10n.settingsManageSubscription),
+                              trailing: const CupertinoListTileChevron(),
+                              onTap: () => unawaited(subscription.manage()),
+                            ),
+                          ],
+                        )
+                      : const SizedBox.shrink(),
                 ),
                 CupertinoListSection.insetGrouped(
                   header: _Header(l10n.settingsAboutHeader),

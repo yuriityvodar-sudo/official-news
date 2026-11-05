@@ -4,7 +4,9 @@ import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
+import 'package:in_app_purchase_storekit/in_app_purchase_storekit.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'api_client.dart';
 
@@ -23,6 +25,10 @@ abstract class Store {
   Future<void> buyPack(ProductDetails pack, {required String accountToken});
   Future<void> restore();
   Future<void> finish(PurchaseDetails purchase);
+
+  /// Apple's sheet for managing the subscription (cancel it, change it), over
+  /// the app.
+  Future<void> manage();
 }
 
 /// StoreKit 2 through Flutter's `in_app_purchase` (#146).
@@ -68,6 +74,24 @@ class AppStore implements Store {
   @override
   Future<void> finish(PurchaseDetails purchase) =>
       _store.completePurchase(purchase);
+
+  /// StoreKit 2's `showManageSubscriptions(in:)`: the only place a TestFlight
+  /// subscription can be cancelled, and for the App Store's the same page as
+  /// Settings › Apple ID › Subscriptions. Should the sheet not open, that
+  /// page of the App Store instead.
+  @override
+  Future<void> manage() async {
+    try {
+      await _store
+          .getPlatformAddition<InAppPurchaseStoreKitPlatformAddition>()
+          .showManageSubscriptions();
+    } catch (_) {
+      await launchUrl(
+        Uri.parse('https://apps.apple.com/account/subscriptions'),
+        mode: LaunchMode.externalApplication,
+      );
+    }
+  }
 }
 
 /// Where a purchase or a restore stands, for the paywall and the top-up sheet.
@@ -223,6 +247,16 @@ class ChatSubscription extends ChangeNotifier {
     } catch (_) {
       _restoreEnd?.cancel();
       state.value = PurchaseState.failed;
+    }
+  }
+
+  /// Settings › Manage subscription (Roman, 5 Nov): Apple's sheet, to cancel
+  /// or change it.
+  Future<void> manage() async {
+    try {
+      await _store?.manage();
+    } catch (_) {
+      // No App Store: nothing opens.
     }
   }
 
@@ -432,6 +466,9 @@ class DemoStore implements Store {
 
   @override
   Future<void> finish(PurchaseDetails purchase) async {}
+
+  @override
+  Future<void> manage() async {}
 }
 
 /// The app's subscription, started with the app on iOS (`main.dart`).

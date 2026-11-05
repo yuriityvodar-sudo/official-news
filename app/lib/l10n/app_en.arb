@@ -939,6 +939,10 @@
   "@usageStatistics": {
     "description": "The Settings row with a switch for usage statistics."
   },
+  "settingsManageSubscription": "Manage subscription",
+  "@settingsManageSubscription": {
+    "description": "The Settings row shown while the AI agent's subscription is paid: opens Apple's sheet to cancel or change it (the only place a TestFlight subscription can be cancelled)."
+  },
   "privacyNotificationsHeading": "Notifications",
   "@privacyNotificationsHeading": {
     "description": "Privacy policy, heading."
@@ -1381,10 +1385,6 @@
         "type": "String"
       }
     }
-  },
-  "chatUsingExtra": "Using extra usage",
-  "@chatUsingExtra": {
-    "description": "In the AI chat once the week's usage is used up and the extra usage bought is being spent."
   },
   "chatLongDocument": "Questions about long documents use more of your usage.",
   "@chatLongDocument": {
