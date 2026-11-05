@@ -10,6 +10,7 @@ import '../../core/news_widgets.dart';
 import '../../core/push.dart';
 import '../../core/support.dart';
 import '../../core/theme.dart';
+import '../../core/wide.dart';
 import '../../l10n/app_localizations.dart';
 import 'settings_screen.dart' show appVersion;
 
@@ -165,7 +166,7 @@ class _SupportScreenState extends State<SupportScreen>
     final grouped = CupertinoColors.systemGroupedBackground.resolveFrom(
       context,
     );
-    return CupertinoPageScaffold(
+    final scaffold = CupertinoPageScaffold(
       backgroundColor: grouped,
       navigationBar: CupertinoNavigationBar(
         middle: Text(l10n.supportWrite),
@@ -179,6 +180,8 @@ class _SupportScreenState extends State<SupportScreen>
         child: SafeArea(child: _body(context, l10n)),
       ),
     );
+    // In a wide window, a column in the middle (#137).
+    return ReadablePage(color: grouped, child: scaffold);
   }
 
   Widget _body(BuildContext context, AppLocalizations l10n) {

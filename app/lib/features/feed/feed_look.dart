@@ -203,9 +203,15 @@ abstract class FeedLook {
   /// ([mediaCard]); the News looks do (#230).
   bool get showsStories => false;
 
-  /// The card of one of the media's news, for a look that [showsStories].
-  Widget mediaCard(BuildContext context, TopStories block, MediaNews news) =>
-      throw UnimplementedError('$runtimeType shows no stories');
+  /// The card of one of the media's news, for a look that [showsStories];
+  /// [lead]: the first of the block in a wide window, wider and in larger
+  /// type (#137).
+  Widget mediaCard(
+    BuildContext context,
+    TopStories block,
+    MediaNews news, {
+    bool lead = false,
+  }) => throw UnimplementedError('$runtimeType shows no stories');
 
   /// The Top stories title in the masthead's type, with what picked them
   /// under it.
@@ -587,6 +593,25 @@ class TopStories {
   /// Opens the AI chat about `stories[index]`.
   final ValueChanged<int> openStory;
 
+  /// The block's rows in the order [FeedLook.topStories] lays them out
+  /// (#230): two of [media] before each decision, the rest after the last.
+  /// For a look that lays them out its own way, in columns (#137).
+  List<BlockRow> rows(List<MediaNews> media) {
+    final rows = <BlockRow>[];
+    var from = 0;
+    for (var d = 0; d <= list.length; d++) {
+      final to = d == list.length
+          ? media.length
+          : math.min(media.length, from + 2);
+      for (var m = from; m < to; m++) {
+        rows.add((news: media[m], decision: null));
+      }
+      if (d < list.length) rows.add((news: null, decision: d));
+      from = to;
+    }
+    return rows;
+  }
+
   /// The media's news in the block's order ([FeedLook.topStories]): a
   /// world's tick and a story of the reader's country in turn, the world's
   /// first, while either has more.
@@ -606,6 +631,10 @@ class TopStories {
   /// Its decisions and what a row does, as in the list.
   final FeedList list;
 }
+
+/// A row of the Top stories block ([TopStories.rows]): one of the media's
+/// news, or a decision by its index in the block's list.
+typedef BlockRow = ({MediaNews? news, int? decision});
 
 /// One of the media's news in the Top stories block (#230): a world's tick or
 /// a story of the reader's country's outlets, by its place in

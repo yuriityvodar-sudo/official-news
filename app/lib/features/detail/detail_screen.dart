@@ -19,6 +19,7 @@ import '../../core/card_zoom.dart';
 import '../../core/pictures.dart';
 import '../../core/push.dart';
 import '../../core/theme.dart';
+import '../../core/wide.dart';
 import '../../l10n/app_localizations.dart';
 import '../chat/chat_screen.dart';
 import 'ai_chat_note.dart';
@@ -156,6 +157,7 @@ class _DetailScreenState extends State<DetailScreen> {
     final top = widget.top;
     final from = widget.topFrom;
     final page = widget.background ?? scheme.surface;
+    final side = sideMargin(MediaQuery.sizeOf(context).width);
     // Everything but the card at the top: at the page's margins, coming in
     // around the card as it grows into the article (#141).
     Widget rest(Widget child) => ZoomRest(
@@ -173,10 +175,12 @@ class _DetailScreenState extends State<DetailScreen> {
             article: article,
             child: ListView(
               controller: _scroll,
+              // In a wide window, a column in the middle (#137); the bar's
+              // buttons stay at the screen's edges.
               padding: EdgeInsets.fromLTRB(
-                0,
+                side,
                 padding.top + _bar,
-                0,
+                side,
                 48 + padding.bottom,
               ),
               children: [

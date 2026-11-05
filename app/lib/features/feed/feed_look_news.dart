@@ -17,6 +17,7 @@ import '../../core/splash_logo.dart';
 import '../../core/story.dart';
 import '../../core/theme.dart';
 import '../../core/tick.dart';
+import '../../core/wide.dart';
 import '../../l10n/app_localizations.dart';
 import 'feed_look.dart';
 import 'feed_look_now.dart';
@@ -101,12 +102,18 @@ class NewsLook extends FeedLook {
   bool get showsStories => true;
 
   @override
-  Widget mediaCard(BuildContext context, TopStories block, MediaNews news) {
+  Widget mediaCard(
+    BuildContext context,
+    TopStories block,
+    MediaNews news, {
+    bool lead = false,
+  }) {
     final l10n = AppLocalizations.of(context);
     if (news.isTick) {
       final tick = block.ticks[news.index];
       return _MediaCard(
         palette: palette,
+        lead: lead,
         meta: tickMeta(tick, l10n),
         title: tick.title,
         lastSeen: tick.lastSeen,
@@ -120,6 +127,7 @@ class NewsLook extends FeedLook {
     final story = block.stories[news.index];
     return _MediaCard(
       palette: palette,
+      lead: lead,
       meta: storyMeta(story, block.country, l10n),
       title: story.title,
       lastSeen: story.lastSeen,
@@ -217,30 +225,119 @@ class NewsLook extends FeedLook {
     );
   }
 
+  /// One card under another; in a wide window, in rows of 2 or 3 cards as
+  /// tall as each other (#137, as Apple News on the iPad).
   @override
-  Widget articles(BuildContext context, FeedList list) => SliverPadding(
-    padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
-    sliver: SliverList.builder(
-      itemCount: list.length,
-      itemBuilder: (context, i) {
-        final a = list.articles[i];
-        list.shown(i);
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 12),
-          child: list.tile(
-            i,
-            _Card(
-              palette: palette,
-              article: a,
-              mark: list.markOf(a),
-              topics: list.topicsOf(a),
-              onTap: () => list.open(i),
-            ),
-          ),
-        );
-      },
-    ),
+  Widget articles(BuildContext context, FeedList list) => SliverLayoutBuilder(
+    builder: (context, constraints) {
+      final columns = feedColumns(constraints.crossAxisExtent);
+      return SliverPadding(
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+        sliver: columns == 1
+            ? SliverList.builder(
+                itemCount: list.length,
+                itemBuilder: (context, i) => Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: _tile(list, i),
+                ),
+              )
+            : SliverList.builder(
+                itemCount: (list.length + columns - 1) ~/ columns,
+                itemBuilder: (context, row) {
+                  final from = row * columns;
+                  final to = math.min(list.length, from + columns);
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: CardRow(
+                      columns: columns,
+                      spans: List.filled(to - from, 1),
+                      children: [
+                        for (var i = from; i < to; i++) _tile(list, i),
+                      ],
+                    ),
+                  );
+                },
+              ),
+      );
+    },
   );
+
+  /// The card of `list.articles[i]` as the feed shows it ([FeedList.tile]).
+  Widget _tile(FeedList list, int i, {bool lead = false}) {
+    final a = list.articles[i];
+    list.shown(i);
+    return list.tile(
+      i,
+      _Card(
+        palette: palette,
+        article: a,
+        mark: list.markOf(a),
+        topics: list.topicsOf(a),
+        onTap: () => list.open(i),
+        lead: lead,
+      ),
+    );
+  }
+
+  /// As on a phone, but in a wide window in columns (#137): the block's rows
+  /// in the same order, the first wider and in larger type, as Apple News
+  /// leads its Top Stories, alone across two columns or beside one card in
+  /// three.
+  @override
+  Widget topStories(BuildContext context, TopStories block) =>
+      SliverLayoutBuilder(
+        builder: (context, constraints) {
+          final columns = feedColumns(constraints.crossAxisExtent);
+          if (columns == 1) return super.topStories(context, block);
+          final cards = [
+            for (final (place, row) in block.rows(block.media).indexed)
+              if (row.news case final news?)
+                block.list.arrive(
+                  place,
+                  PressScale(
+                    child: mediaCard(context, block, news, lead: place == 0),
+                  ),
+                )
+              else
+                _tile(
+                  block.list.only(row.decision!, place: place),
+                  0,
+                  lead: place == 0,
+                ),
+          ];
+          final rows = <Widget>[];
+          for (var i = 0; i < cards.length;) {
+            final spans = <int>[];
+            for (var used = 0; i < cards.length;) {
+              final span = math.min(i == 0 ? 2 : 1, columns);
+              if (used + span > columns) break;
+              spans.add(span);
+              used += span;
+              i++;
+            }
+            rows.add(
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: CardRow(
+                  columns: columns,
+                  spans: spans,
+                  children: cards.sublist(i - spans.length, i),
+                ),
+              ),
+            );
+          }
+          return SliverMainAxisGroup(
+            slivers: [
+              SliverToBoxAdapter(child: topStoriesHeading(context, block)),
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+                sliver: SliverList.list(children: rows),
+              ),
+              const SliverToBoxAdapter(child: SizedBox(height: 16)),
+            ],
+          );
+        },
+      );
 
   @override
   Widget feedEnd(BuildContext context, FeedEnd end) {
@@ -797,10 +894,14 @@ class _Card extends StatelessWidget {
     required this.mark,
     required this.topics,
     required this.onTap,
+    this.lead = false,
   });
 
   final NewsPalette palette;
   final Article article;
+
+  /// The first of the Top stories in a wide window: its headline larger (#137).
+  final bool lead;
 
   /// Opened or not, and how that shows ([ReadStyle]): fainter in Dim, or the
   /// unread dot between the country and the institution in the dot styles.
@@ -919,7 +1020,12 @@ class _Card extends StatelessWidget {
                           const SizedBox(height: 5),
                           Text(
                             article.headline,
-                            style: dim(style.headline(context), read),
+                            style: dim(
+                              lead
+                                  ? style.leadHeadline(context)
+                                  : style.headline(context),
+                              read,
+                            ),
                           ),
                           const SizedBox(height: 8),
                           timeText,
@@ -990,6 +1096,7 @@ class _ByAi extends StatelessWidget {
 class _MediaCard extends StatelessWidget {
   const _MediaCard({
     required this.palette,
+    this.lead = false,
     required this.meta,
     required this.title,
     required this.lastSeen,
@@ -1000,6 +1107,9 @@ class _MediaCard extends StatelessWidget {
   });
 
   final NewsPalette palette;
+
+  /// The first of the Top stories in a wide window: its headline larger (#137).
+  final bool lead;
 
   /// "Czechia · ČT24, Seznam Zprávy and 2 more", "World · 5 countries".
   final String meta;
@@ -1056,7 +1166,12 @@ class _MediaCard extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 5),
-                Text(title, style: style.headline(context)),
+                Text(
+                  title,
+                  style: lead
+                      ? style.leadHeadline(context)
+                      : style.headline(context),
+                ),
                 const SizedBox(height: 6),
                 Row(
                   children: [
@@ -1265,4 +1380,10 @@ class _NewsStyle {
     fontWeight: NewsText.from(context).headline.fontWeight,
     color: ink,
   );
+
+  /// The first of the Top stories' headline in a wide window (#137): larger,
+  /// as Apple News leads its Top Stories.
+  TextStyle leadHeadline(BuildContext context) => headline(
+    context,
+  ).copyWith(fontSize: 26, height: 1.15, letterSpacing: -0.6);
 }

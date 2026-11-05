@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../../core/api_client.dart';
 import '../../core/news_widgets.dart';
 import '../../core/theme.dart';
+import '../../core/wide.dart';
 import '../../l10n/app_localizations.dart';
 import 'support_screen.dart';
 
@@ -44,7 +45,7 @@ class InfoPage extends StatelessWidget {
     );
     final label = CupertinoColors.label.resolveFrom(context);
     final secondary = CupertinoColors.secondaryLabel.resolveFrom(context);
-    return CupertinoPageScaffold(
+    final scaffold = CupertinoPageScaffold(
       backgroundColor: grouped,
       navigationBar: CupertinoNavigationBar(
         middle: Text(title),
@@ -94,6 +95,8 @@ class InfoPage extends StatelessWidget {
         ),
       ),
     );
+    // In a wide window, a column in the middle (#137).
+    return ReadablePage(color: grouped, child: scaffold);
   }
 }
 
