@@ -364,7 +364,7 @@ void main() {
     await _pump(tester);
     await tester.tap(find.text('Privacy Policy'));
     await tester.pumpAndSettle();
-    expect(find.text('Last updated 4 November 2026'), findsOneWidget);
+    expect(find.text('Last updated 5 November 2026'), findsOneWidget);
     // The parts App Review and #34, #60 ask for.
     for (final heading in [
       'On your phone',
@@ -377,7 +377,7 @@ void main() {
     }
     // Lazily built: each is checked when scrolled to.
     for (final line in [
-      'loaded directly from the official website',
+      'loaded directly from the website',
       'Google Analytics for Firebase',
       // For you's country (#170, Yurii on #170): where it comes from, and
       // that the server keeps nothing.
@@ -455,7 +455,7 @@ void main() {
     await _pump(tester, words: FeedLanguage.uk);
     await tester.tap(find.text('Умови використання'));
     await tester.pumpAndSettle();
-    expect(find.text('Оновлено 4 листопада 2026\u202Fр.'), findsOneWidget);
+    expect(find.text('Оновлено 5 листопада 2026\u202Fр.'), findsOneWidget);
     // A Czech company (#204): its seat, ID and register file as Czech law
     // wants them; the name, the address and the numbers never translated.
     await tester.scrollUntilVisible(
@@ -480,7 +480,7 @@ void main() {
     await _pump(tester, words: FeedLanguage.de);
     await tester.tap(find.text('Datenschutzerklärung'));
     await tester.pumpAndSettle();
-    expect(find.text('Stand: 4. November 2026'), findsOneWidget);
+    expect(find.text('Stand: 5. November 2026'), findsOneWidget);
     await tester.scrollUntilVisible(
       find.text(
         'Verantwortlicher: RS Elite Pro s.r.o., Na Okrouhlíku 2563/31, '

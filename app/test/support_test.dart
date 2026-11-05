@@ -647,9 +647,9 @@ void main() {
       });
     }
 
-    test('the policy is dated 4 November 2026 (usage statistics only if '
-        'allowed, L1)', () {
-      expect(policyUpdated, DateTime(2026, 11, 4));
+    test('the policy is dated 5 November 2026 (the chat and the sources as '
+        'they are now, #137)', () {
+      expect(policyUpdated, DateTime(2026, 11, 5));
     });
   });
 }
