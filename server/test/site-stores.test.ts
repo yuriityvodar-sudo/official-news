@@ -36,11 +36,16 @@ describe("the App Store button", () => {
     expect(storeChannel("notInLanguage", "es")).toBe("web-notinlanguage-es");
   });
 
-  it("says Coming soon and is no link until the app is in the store", async () => {
-    expect(APP_STORE_LIVE).toBe(false);
+  it("says Coming soon and is no link while the app is not in the store", () => {
+    const button = getApp("en", "list", false).toString();
+    expect(button).toContain('<span class="store" aria-disabled="true"><span class="name">App Store</span><span>Coming soon</span></span>');
+    expect(button).not.toContain("/go/appstore");
+  });
+
+  it("is live since the release (16 Nov 2026): the pages link to the App Store", async () => {
+    expect(APP_STORE_LIVE).toBe(true);
     const { body } = await site("/en");
-    expect(body).toContain('<span class="store" aria-disabled="true"><span class="name">App Store</span><span>Coming soon</span></span>');
-    expect(body).not.toContain("/go/appstore");
+    expect(body).toContain('href="/go/appstore/');
   });
 
   it("once live, links to the redirect with its channel, nofollow, marked for the click event", () => {

@@ -506,8 +506,9 @@ describe("one URL per view: every link is a cache key of its own", () => {
       const later = nextLink(first.body);
       for (const body of [first.body, later ? (await site(later)).body : ""]) {
         const main = body.split("<footer")[0];
-        // Every link but the home-screen icon's (icon.ts), which is no page.
-        for (const m of main.matchAll(/href="(\/[^"]*)"/g)) if (m[1] !== "/apple-touch-icon.png") seen.add(m[1].replaceAll("&amp;", "&"));
+        // Every link but the home-screen icon's (icon.ts) and the App Store
+        // button's redirect (stores.ts: nofollow, kept from crawlers), which are no pages.
+        for (const m of main.matchAll(/href="(\/[^"]*)"/g)) if (m[1] !== "/apple-touch-icon.png" && !m[1].startsWith("/go/")) seen.add(m[1].replaceAll("&amp;", "&"));
       }
     }
     expect(seen.size).toBeGreaterThan(60);
