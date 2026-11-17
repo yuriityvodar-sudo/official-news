@@ -14,10 +14,10 @@ import type { SiteLang } from "./texts";
 export const APP_STORE_ID = "6822820350";
 
 /**
- * Whether the app is in the App Store: until then the buttons say "Coming
- * soon" and are not links (Yurii, 28 Oct). Switched on at the release.
+ * Whether the app is in the App Store: until then the buttons said "Coming
+ * soon" and were not links (Yurii, 28 Oct). On since the release, 16 Nov 2026.
  */
-export const APP_STORE_LIVE = false;
+export const APP_STORE_LIVE = true;
 
 /**
  * Our provider token in App Store Connect (App Analytics › Campaigns › a
