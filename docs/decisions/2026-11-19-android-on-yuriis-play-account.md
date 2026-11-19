@@ -6,7 +6,7 @@
 
 **What follows.**
 - Personal accounts must run a closed test with at least 12 testers for 14 days before production, so the first build goes to closed testing.
-- The first Android build has the AI chat off (it is iPhone-only until the Google Play subscription is built, #146), no Firebase (analytics and notifications off on Android for now) and no advertising ID.
+- The first Android build has the AI chat off (it is iPhone-only until the Google Play subscription is built, #146) and no advertising ID. Analytics and notifications work as on iPhone, with the same consent (Yurii, 19 Nov: "we need to track user behaviour so please keep things consistent; the moment we change some tracking u will update it in all places"): any change to tracking updates the privacy policy, Play's Data safety and App Store Connect's App Privacy together.
 - The privacy policy and the website's publisher line name RS Elite Pro s.r.o.; Google asks that the policy name the developer shown on the Play listing, so they need a line for the Android app before it is sent for review (to agree with Roman).
 
 **Status.** Done for the account and the app (docs/setup.md); the closed test is next.
