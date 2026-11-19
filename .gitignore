@@ -40,3 +40,6 @@ dist/
 
 # Generated documents
 docs/*.pdf
+
+# App Store header and search pictures made by store/assets/make_assets.py
+store/assets/out/
