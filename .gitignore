@@ -40,3 +40,6 @@ dist/
 
 # Generated documents
 docs/*.pdf
+
+# Google Play pictures, made by store/play/make_play_assets.py (#343)
+store/play/out/
