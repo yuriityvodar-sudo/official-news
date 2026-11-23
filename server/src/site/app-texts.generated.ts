@@ -124,6 +124,7 @@ export type AppKey =
   | "privacyRightsHeading"
   | "privacyRights"
   | "privacyController"
+  | "privacyGooglePlay"
   | "privacyChangesHeading"
   | "privacyChanges"
   | "termsIntro1"
@@ -272,6 +273,7 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "privacyRightsHeading": "Your rights",
     "privacyRights": "You can ask us what data we hold about you, and ask us to delete it, by writing to us (see {contactSupport}). Under the GDPR you also have the right to complain to a data protection authority.",
     "privacyController": "Data controller: {publisher}.",
+    "privacyGooglePlay": "On Google Play, the app is distributed and sold by Yurii Tyvodar.",
     "privacyChangesHeading": "Changes",
     "privacyChanges": "If this policy changes, the new version will be in the app with a new date.",
     "termsIntro1": "Outer News summarizes official decisions and news for general information. It is not legal, financial or professional advice.",
@@ -414,6 +416,7 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "privacyRightsHeading": "Ваші права",
     "privacyRights": "Ви можете запитати, які дані про вас ми зберігаємо, і попросити їх видалити, написавши нам (див. «{contactSupport}»). Відповідно до GDPR ви також маєте право подати скаргу до органу із захисту даних.",
     "privacyController": "Контролер даних: {publisher}.",
+    "privacyGooglePlay": "У Google Play застосунок поширює і продає Юрій Тиводар.",
     "privacyChangesHeading": "Зміни",
     "privacyChanges": "Якщо ця політика зміниться, нова версія з’явиться в застосунку з новою датою.",
     "termsIntro1": "Outer News стисло викладає офіційні рішення та новини для загального ознайомлення. Це не юридична, фінансова чи інша професійна консультація.",
@@ -556,6 +559,7 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "privacyRightsHeading": "Ваши права",
     "privacyRights": "Вы можете спросить, какие данные о вас мы храним, и попросить их удалить, написав нам (см. «{contactSupport}»). Согласно GDPR вы также вправе подать жалобу в надзорный орган по защите персональных данных.",
     "privacyController": "Контролёр данных: {publisher}.",
+    "privacyGooglePlay": "В Google Play приложение распространяет и продаёт Юрий Тиводар.",
     "privacyChangesHeading": "Изменения",
     "privacyChanges": "Если эта политика изменится, новая версия появится в приложении с новой датой.",
     "termsIntro1": "Outer News кратко излагает официальные решения и новости для общего ознакомления. Это не юридическая, финансовая или иная профессиональная консультация.",
@@ -698,6 +702,7 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "privacyRightsHeading": "Tus derechos",
     "privacyRights": "Puedes preguntarnos qué datos tenemos sobre ti y pedirnos que los eliminemos escribiéndonos (consulta «{contactSupport}»). Según el RGPD, también tienes derecho a presentar una reclamación ante una autoridad de protección de datos.",
     "privacyController": "Responsable del tratamiento: {publisher}.",
+    "privacyGooglePlay": "En Google Play, la app la distribuye y vende Yurii Tyvodar.",
     "privacyChangesHeading": "Cambios",
     "privacyChanges": "Si esta política cambia, la nueva versión estará en la app con una nueva fecha.",
     "termsIntro1": "Outer News resume decisiones oficiales y noticias con fines informativos generales. No constituye asesoramiento legal, financiero ni profesional.",
@@ -840,6 +845,7 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "privacyRightsHeading": "Ihre Rechte",
     "privacyRights": "Sie können uns fragen, welche Daten wir über Sie gespeichert haben, und deren Löschung verlangen, indem Sie uns schreiben (siehe „{contactSupport}“). Nach der DSGVO haben Sie außerdem das Recht, sich bei einer Datenschutzaufsichtsbehörde zu beschweren.",
     "privacyController": "Verantwortlicher: {publisher}.",
+    "privacyGooglePlay": "Bei Google Play wird die App von Yurii Tyvodar vertrieben und verkauft.",
     "privacyChangesHeading": "Änderungen",
     "privacyChanges": "Wenn sich diese Erklärung ändert, steht die neue Fassung mit neuem Datum in der App.",
     "termsIntro1": "Outer News fasst offizielle Entscheidungen und Nachrichten zur allgemeinen Information zusammen. Es handelt sich nicht um eine rechtliche, finanzielle oder sonstige fachliche Beratung.",
@@ -876,7 +882,7 @@ export const PUBLISHER_DETAILS = {
 export const SUPPORT_EMAIL = "support@outernews.app";
 
 /** When the privacy policy and the terms last changed (`policyUpdated` in info_pages.dart). */
-export const POLICY_UPDATED = "2026-11-05";
+export const POLICY_UPDATED = "2026-11-23";
 
 /** Each language's own name and short label (FeedLanguage in feed_language.dart). */
 export const LANGUAGE_NAMES: Record<SiteLang, { nativeName: string; shortLabel: string }> = {

@@ -210,6 +210,7 @@
   "privacyRightsHeading": "Tus derechos",
   "privacyRights": "Puedes preguntarnos qué datos tenemos sobre ti y pedirnos que los eliminemos escribiéndonos (consulta «{contactSupport}»). Según el RGPD, también tienes derecho a presentar una reclamación ante una autoridad de protección de datos.",
   "privacyController": "Responsable del tratamiento: {publisher}.",
+  "privacyGooglePlay": "En Google Play, la app la distribuye y vende Yurii Tyvodar.",
   "privacyChangesHeading": "Cambios",
   "privacyChanges": "Si esta política cambia, la nueva versión estará en la app con una nueva fecha.",
 
