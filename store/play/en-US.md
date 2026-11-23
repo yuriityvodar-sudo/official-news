@@ -20,7 +20,6 @@ Every story comes with its value for you: what happened, why it matters, and wha
 • Top stories for you: the headlines of your country first, then the whole world.
 • What it means for you: every summary ends with the impact on your daily life.
 • In your language: English, Ukrainian, Russian, German and Spanish.
-• Every story shows where it comes from: official websites, Wikipedia's current events and open-licensed news.
 
 Free to read. No account, no sign-in.
 
