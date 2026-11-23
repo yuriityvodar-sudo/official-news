@@ -43,3 +43,5 @@ docs/*.pdf
 
 # Google Play pictures, made by store/play/make_play_assets.py (#343)
 store/play/out/
+# App Store header and search pictures made by store/assets/make_assets.py
+store/assets/out/

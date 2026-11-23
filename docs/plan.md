@@ -127,6 +127,7 @@ The MVP is a Kickoff plus 8 items, 4 each. This is our suggested split: Yurii ow
 | #60 | Analytics (Google Analytics through Firebase) | Yurii | Events arrive in GA from TestFlight; release checklist done |
 | #62 | Push notifications, breaking decisions (importance 4+, each as it comes, #157) | Yurii | A breaking decision reaches a phone in its language |
 | #88 | Website: a page per article in each language it is shown in, the latest list per language with the app's filters (Where: all countries, a group of countries or one country; Topics), the app's information pages; noindex until the domain (#65) | Yurii | Every API article is served in each language it is shown in, with the AI label, credit line and official link, and every filtered list is the API's, in one request per page view |
+| #338 | App Store search and product page (16 Nov, after the release): name, subtitle and keywords for the searches we can win, six more language pages, header and search pictures, then captioned screenshots, a preview video, a rating prompt and an Apple Ads test (`docs/research/2026-11-16 App Store search (ASO).md`, texts in `store/listing/`) | Yurii | Roman agrees in the pull request; each step goes to Apple with Yurii's yes |
 
 **Order:** Kickoff first, then item 1 (it gives everyone real data from Cloudflare). Items 2, 5 and 7 start at the same time; 3 and 4 follow the design; 6 follows 5; 8 comes last.
 
