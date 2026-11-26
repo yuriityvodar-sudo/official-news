@@ -14,6 +14,7 @@ Two people build this app, Yurii and Roman, each with their own Claude Code. The
 ## How we work (GitHub flow)
 
 - `main` always works. No direct pushes; every change goes through a pull request approved by the other person.
+- Website changes are the exception (Yurii, as the repo owner, 26 Nov 2026; before: every pull request needed the other person's approval, and the website's fixes for Google's crawl drop, #350, waited days): a pull request that changes only the website (`server/src/site/`, the sitemap and indexing code in `server/src/api/`, their tests and docs) merges without the other person's approval once CI is green. Roman is kept informed through a message issue and can comment at any time. GitHub cannot require approvals per folder, so the required approvals on `main` are 0; for everything else the approval above still holds, by this rule.
 - One branch per issue: `feature/<issue#>-short-name` or `fix/<issue#>-short-name`.
 - Small pull requests, each ending with a visible result: under about 500 changed lines of code (tests and docs aside); bigger work is split by screen or by step. Reviewed within a day; reviewing is planned work, not an interruption.
 - At most three open pull requests per person. Past that, the next piece waits (research, docs, a prototype) until one merges.
