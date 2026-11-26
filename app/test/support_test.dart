@@ -647,9 +647,9 @@ void main() {
       });
     }
 
-    test('the policy is dated 5 November 2026 (the chat and the sources as '
-        'they are now, #137)', () {
-      expect(policyUpdated, DateTime(2026, 11, 5));
+    test('the policy is dated 23 November 2026 (the Google Play seller '
+        'line, #343)', () {
+      expect(policyUpdated, DateTime(2026, 11, 23));
     });
   });
 }

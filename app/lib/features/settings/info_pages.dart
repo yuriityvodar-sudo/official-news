@@ -129,7 +129,7 @@ String publisherDetails(AppLocalizations l10n) => l10n.publisherDetails(
 const supportEmail = 'support@outernews.app';
 
 /// When the privacy policy and the terms last changed.
-final policyUpdated = DateTime(2026, 11, 5);
+final policyUpdated = DateTime(2026, 11, 23);
 
 /// The "Last updated 16 October 2026" line of the policy pages.
 String policyUpdatedLine(AppLocalizations l10n) =>
@@ -166,6 +166,7 @@ List<InfoSection> privacySections(AppLocalizations l10n) => [
   InfoSection([
     l10n.privacyRights(l10n.contactSupport),
     l10n.privacyController(publisherDetails(l10n)),
+    l10n.privacyGooglePlay,
   ], heading: l10n.privacyRightsHeading),
   InfoSection([l10n.privacyChanges], heading: l10n.privacyChangesHeading),
 ];

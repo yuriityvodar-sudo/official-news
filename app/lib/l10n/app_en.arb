@@ -983,6 +983,10 @@
       }
     }
   },
+  "privacyGooglePlay": "On Google Play, the app is distributed and sold by Yurii Tyvodar.",
+  "@privacyGooglePlay": {
+    "description": "Privacy policy, after privacyController: who sells the app on Google Play (#343; Roman agreed on #345, 22 Nov 2026). RS Elite Pro stays the data controller (privacyController). Write Yurii's name in the language's own script where that is usual."
+  },
   "privacyChangesHeading": "Changes",
   "@privacyChangesHeading": {
     "description": "Privacy policy, heading."

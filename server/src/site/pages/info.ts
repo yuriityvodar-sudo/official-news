@@ -47,6 +47,7 @@ function sections(lang: SiteLang, page: InfoPage): Section[] {
           paragraphs: [
             t(lang, "privacyRights", { contactSupport: html`<a href="${infoPath(lang, "support")}">${text(lang, "contactSupport")}</a>` }),
             t(lang, "privacyController", { publisher: publisherDetails(lang) }),
+            p(lang, "privacyGooglePlay"),
           ],
         },
         { heading: "privacyChangesHeading", paragraphs: [p(lang, "privacyChanges")] },
