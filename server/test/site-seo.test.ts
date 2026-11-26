@@ -38,6 +38,26 @@ describe("the sitemap", () => {
     expect(enEntry).toMatch(/<lastmod>\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ<\/lastmod>/);
   });
 
+  it("names each country's page with something in the 7 days, and says when each file and list last changed (#350)", async () => {
+    const { body } = await site("/sitemap-latest.xml");
+    const locs = [...body.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]);
+    // The fixtures' source is Germany's: its page in English and Ukrainian, each naming the other, with the newest article's time.
+    expect(locs).toContain(`${ORIGIN}/en/de`);
+    expect(locs).toContain(`${ORIGIN}/uk/de`);
+    expect(locs).not.toContain(`${ORIGIN}/en/fr`);
+    const entry = body.split("<url>").find((u) => u.includes(`<loc>${ORIGIN}/en/de</loc>`))!;
+    expect(entry).toContain(`<xhtml:link rel="alternate" hreflang="uk" href="${ORIGIN}/uk/de"/>`);
+    expect(entry).toMatch(/<lastmod>\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ<\/lastmod>/);
+    expect((await site("/en/de")).headers.get("x-robots-tag")).toBe("index, follow");
+    expect(body.split("<url>").find((u) => u.includes(`<loc>${ORIGIN}/en</loc>`))!).toContain("<lastmod>");
+    // The index: every file with its date; a past month's is the month's end.
+    const index = (await site("/sitemap.xml")).body;
+    expect(index.match(/<lastmod>/g)!.length).toBe(index.match(/<sitemap>/g)!.length);
+    expect(index).toContain(`<loc>${ORIGIN}/sitemap-2026-10.xml</loc><lastmod>2026-11-01T00:00:00Z</lastmod>`);
+    // An official decision's page links to its country's page.
+    expect((await site(EN)).body).toContain('<a href="/en/de">Germany</a>');
+  });
+
   it("lists only the best pages: a decision of importance 3 and up, in English and in its source's own language (#350)", async () => {
     const [OWN, MINOR, EVENT] = [testId(31), testId(32), testId(33)];
     await insertArticle({ id: OWN, headline: "Ukraine decision on schools", originalLanguage: "uk" });
