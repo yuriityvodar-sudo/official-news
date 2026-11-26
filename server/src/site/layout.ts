@@ -68,7 +68,7 @@ h1{margin:0 0 10px;font-size:31px;line-height:1.15;font-weight:700}
 .official b{display:block;font-size:14px;font-weight:600}
 .official svg{width:24px;height:24px;flex:none;color:var(--accent)}
 .small{margin:0 0 6px;font-size:13px;color:var(--secondary)}
-.small a{color:inherit}
+.small a,.publisher .meta a{color:inherit}
 .page-title{margin:0 0 4px;font-size:34px;font-weight:800;line-height:1.1}
 .section{margin:26px 0 0;font-size:22px;font-weight:800;color:var(--accent)}
 .filters{position:relative;display:flex;flex-wrap:wrap;gap:0 8px;margin:8px 0 0}

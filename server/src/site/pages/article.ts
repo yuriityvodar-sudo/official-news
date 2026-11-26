@@ -14,7 +14,7 @@ import { fullDate, isoTime, parseTime, publishedDate } from "../dates";
 import { type Html, html, safeHttps, siteName } from "../html";
 import { ARROW, type Alternate, type Page, SEAL, SITE_NAME, SPARKLE } from "../layout";
 import { LANGUAGE_NAMES, SITE_LANGS, type SiteLang, aiLabel, aiNotice, countryName, decisionLabel, isEvent, isStory, placeCode, t, text } from "../texts";
-import { articlePath } from "../urls";
+import { articlePath, isCountryPage, listPath } from "../urls";
 import { articleJsonLd } from "../seo";
 
 /** A language tag for `lang=""`: "de", "pt"; anything else is left out. */
@@ -93,7 +93,7 @@ export function articlePage(lang: SiteLang, origin: string, shown: Partial<Recor
 
   const body = html`<article>
 <div class="publisher"><span class="cc" aria-hidden="true">${place}</span><div><b>${article.source.name}</b>
-<span class="meta">${countryName(lang, place)} · ${event ? t(lang, "decisionTypeEvent") : html`${SEAL} ${t(lang, "officialSource")}`}</span></div></div>
+<span class="meta">${!event && isCountryPage(place) ? html`<a href="${listPath(lang, { place: { country: place }, topic: null })}">${countryName(lang, place)}</a>` : countryName(lang, place)} · ${event ? t(lang, "decisionTypeEvent") : html`${SEAL} ${t(lang, "officialSource")}`}</span></div></div>
 ${type ? html`<p class="kind">${type}</p>` : ""}
 <h1>${headline}</h1>
 ${aiText ? html`<p class="ai meta">${SPARKLE}<span>${label}</span></p>` : ""}

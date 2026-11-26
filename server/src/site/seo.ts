@@ -8,7 +8,7 @@ import { isoTime, parseTime } from "./dates";
 import { type Html, raw, safeHttps } from "./html";
 import { SITE_NAME } from "./layout";
 import { SITE_LANGS, type SiteLang, text } from "./texts";
-import { articlePath, listPath } from "./urls";
+import { articlePath, isCountryPage, listPath } from "./urls";
 
 /** JSON for inside a <script> block: no `<`, so nothing in it can end the block or open a tag. */
 const blockJson = (value: unknown) => JSON.stringify(value).replace(/</g, "\\u003c");
@@ -49,6 +49,15 @@ const xml = (value: string) => value.replace(/&/g, "&amp;").replace(/</g, "&lt;"
 /** What a sitemap entry needs of an article: its address (articlePath) and when it came. */
 type SitemapEntry = Pick<ListArticle, "id" | "country" | "headline" | "originalTitle" | "addedAt" | "publishedAt">;
 
+/** When the newest of `articles` came: a list's own last change. */
+const newest = (articles: { addedAt: string | null; publishedAt: string }[]): Date | null =>
+  articles.reduce<Date | null>((latest, a) => {
+    const at = parseTime(a.addedAt) ?? parseTime(a.publishedAt);
+    return at && (!latest || at > latest) ? at : latest;
+  }, null);
+
+const lastmod = (at: Date | null) => (at ? `<lastmod>${isoTime(at)}</lastmod>` : "");
+
 const URLSET = '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">';
 
 /** Each article in each language it is shown in, with its other languages as hreflang alternates, as the pages' own <link rel="alternate">. */
@@ -83,8 +92,25 @@ export function sitemapXml(origin: string, shown: Partial<Record<SiteLang, ListA
   const withLists = SITE_LANGS.filter((lang) => (shown[lang] ?? []).length > 0);
   const urls: string[] = withLists.map((lang) => {
     const links = withLists.map((l) => `<xhtml:link rel="alternate" hreflang="${l}" href="${xml(origin + listPath(l))}"/>`).join("");
-    return `<url><loc>${xml(origin + listPath(lang))}</loc><changefreq>hourly</changefreq>${links}</url>`;
+    return `<url><loc>${xml(origin + listPath(lang))}</loc>${lastmod(newest(shown[lang]!))}<changefreq>hourly</changefreq>${links}</url>`;
   });
+  // Each country's page (#350): a list of its own, indexable (pages/list.ts), which no sitemap named
+  // until 26 Nov. Listed in a language while the 7 days have something of that country there.
+  const countries = new Map<string, Partial<Record<SiteLang, ListArticle[]>>>();
+  for (const lang of withLists) {
+    for (const article of shown[lang]!) {
+      if (!isCountryPage(article.country)) continue;
+      const entry = countries.get(article.country) ?? {};
+      (entry[lang] ??= []).push(article);
+      countries.set(article.country, entry);
+    }
+  }
+  for (const [country, entry] of [...countries].sort(([a], [b]) => a.localeCompare(b))) {
+    const langs = SITE_LANGS.filter((l) => entry[l]);
+    const path = (l: SiteLang) => origin + listPath(l, { place: { country }, topic: null });
+    const links = langs.map((l) => `<xhtml:link rel="alternate" hreflang="${l}" href="${xml(path(l))}"/>`).join("");
+    for (const lang of langs) urls.push(`<url><loc>${xml(path(lang))}</loc>${lastmod(newest(entry[lang]!))}<changefreq>daily</changefreq>${links}</url>`);
+  }
   const indexable = Object.fromEntries(SITE_LANGS.map((lang) => [lang, (shown[lang] ?? []).filter((a) => mayIndex(a, lang))]));
   urls.push(...articleUrls(origin, indexable));
   return `${URLSET}\n${urls.join("\n")}\n</urlset>\n`;
@@ -116,6 +142,18 @@ export function sitemapMonths(now: Date): string[] {
  * 5,000 today (1,300 articles × the languages they are shown in).
  */
 export function sitemapIndexXml(origin: string, now: Date): string {
-  const files = [`${origin}/sitemap-latest.xml`, ...sitemapMonths(now).map((m) => `${origin}/sitemap-${m}.xml`)];
-  return `<?xml version="1.0" encoding="UTF-8"?>\n<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${files.map((f) => `<sitemap><loc>${xml(f)}</loc></sitemap>`).join("\n")}\n</sitemapindex>\n`;
+  // When each file last changed, so a crawler reads only what is new (#350; none until 26 Nov): the
+  // latest file and the current month's now, to the hour (both are cached an hour); a past month's
+  // at its end. No D1 read, as before.
+  const hour = new Date(Math.floor(now.getTime() / 3_600_000) * 3_600_000);
+  const months = sitemapMonths(now);
+  const monthEnd = (m: string) => {
+    const [y, mo] = m.split("-").map(Number);
+    return new Date(Date.UTC(y, mo, 1));
+  };
+  const files: [string, Date][] = [
+    [`${origin}/sitemap-latest.xml`, hour],
+    ...months.map((m, i): [string, Date] => [`${origin}/sitemap-${m}.xml`, i === months.length - 1 ? hour : monthEnd(m)]),
+  ];
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${files.map(([f, at]) => `<sitemap><loc>${xml(f)}</loc>${lastmod(at)}</sitemap>`).join("\n")}\n</sitemapindex>\n`;
 }
