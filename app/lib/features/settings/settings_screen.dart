@@ -22,7 +22,7 @@ import 'info_pages.dart';
 /// 19 (`--dart-define=BUILD_NUMBER=` from the TestFlight workflow), "1.0.0" in
 /// local runs, so the reader and we know exactly which build is on the phone.
 /// The same as pubspec.yaml's version (settings_test.dart checks it).
-const appVersionName = '1.0.0';
+const appVersionName = '1.0.1';
 const appVersion = String.fromEnvironment('BUILD_NUMBER') == ''
     ? appVersionName
     : '$appVersionName (${String.fromEnvironment('BUILD_NUMBER')})';
