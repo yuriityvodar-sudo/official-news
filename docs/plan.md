@@ -72,14 +72,14 @@ In the item details, each item lists what it must do and, separately, what is su
 
 ## Decide first: accounts and access
 
-These are settled before any code, so neither of us ever waits for access. Agreed on our call, except Google Play, which is still open.
+These are settled before any code, so neither of us ever waits for access. Agreed on our call; Google Play followed on 19 Nov 2026: Yurii's account (decisions/2026-11-19-android-on-yuriis-play-account.md).
 
 | Account | Created by | Invites | Role for the other person |
 | --- | --- | --- | --- |
 | Public GitHub repo `yuriityvodar-sudo/official-news`, no licence for now | Yurii | Roman | Admin |
 | Cloudflare account (Worker + D1) | Yurii | Roman | Administrator |
 | App Store Connect: the app and its TestFlight | Roman (his Apple Developer account) | Yurii | Admin, internal tester: Yurii can sign and upload builds and manage TestFlight on his own |
-| Google Play Console: the app and internal testing | To decide: Yurii or Roman | The other person | Admin, internal tester |
+| Google Play Console: the app and internal testing | Yurii (19 Nov 2026, #343) | The other person | Admin, internal tester |
 
 **TestFlight from day one**
 
@@ -378,7 +378,7 @@ The app is Flutter; everything behind it runs on one Cloudflare account, with Wo
 - A Cloudflare API token limited to this account, stored as a GitHub secret, so deploys run from GitHub on merge
 - `account_id` pinned in the repo's wrangler config
 - A Claude API key with a monthly spending limit, only if item 7 picks Claude
-- Roman's Apple Developer account hosts the app and TestFlight, with Yurii added as Admin; the Google Play account is still to decide
+- Roman's Apple Developer account hosts the app and TestFlight, with Yurii added as Admin; the Google Play app is on Yurii's personal account (19 Nov 2026, #343)
 
 **Alternatives considered:** Supabase (Postgres, Edge Functions, cron) and Firebase (Firestore, Cloud Functions). Cloudflare was chosen for one place for everything, a free tier that covers the MVP, and existing experience. Workers AI is compared against Claude in item 7.
 
@@ -675,7 +675,7 @@ We read the latest official news (4–11 Oct) from all Phase 2 sources and the P
 
 ## Open decisions
 
-- [ ] Google Play: Yurii's account or Roman's (GitHub and Cloudflare by Yurii, App Store Connect and TestFlight by Roman: agreed on our call)
+- [x] Google Play: Yurii's account (19 Nov 2026, #343) (GitHub and Cloudflare by Yurii, App Store Connect and TestFlight by Roman: agreed on our call)
 - [ ] Confirm the split in the Work plan
 - [ ] Secrets: confirm the five rules. Nothing secret in the repo (secret scanning and push protection on); each secret has one home (CI keys in GitHub Secrets, runtime keys as Cloudflare Worker secrets, local keys in .dev.vars or .env); Cloudflare, GitHub and Apple are each person's own login, and Workers AI and D1 need no key; the two shared keys (Claude API if chosen, App Store Connect upload) go through a shared password-manager vault, never chat; every key has a spending limit and a leaked key is rotated at once
 - [x] AI model: Workers AI, `@cf/google/gemma-4-26b-a4b-it` (item 7, 14 Oct; Gemma 4 since #63, 16 Oct; see `docs/decisions.md`)
