@@ -112,6 +112,8 @@ export interface ListRow {
   decision_type: string | null;
   topics: string | null;
   importance: number | null;
+  /** The source's language: with importance, whether the page may be indexed (indexing.ts). */
+  original_language: string | null;
   feed_seq: number;
   added_at: string | null;
   countries: string | null;
@@ -126,7 +128,7 @@ export interface ListRow {
  */
 const listColumns = (lang: Lang | null) => `
   a.id, s.country, ${sourceName(lang)} AS source_name, a.original_title, a.published_at, a.date_only,
-  ${lang ? "t.headline, t.short_summary" : "a.headline, a.short_summary"}, a.decision_type, a.topics, a.importance,
+  ${lang ? "t.headline, t.short_summary" : "a.headline, a.short_summary"}, a.decision_type, a.topics, a.importance, a.original_language,
   a.feed_seq, a.added_at, ${COUNTRIES_COLUMN}`;
 
 /**
