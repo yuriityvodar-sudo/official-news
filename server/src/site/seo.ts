@@ -116,6 +116,29 @@ export function sitemapXml(origin: string, shown: Partial<Record<SiteLang, ListA
   return `${URLSET}\n${urls.join("\n")}\n</urlset>\n`;
 }
 
+/** How far back the news sitemap goes: Google reads only articles of the last 2 days from one. */
+export const NEWS_SITEMAP_MS = 48 * 3_600_000;
+
+/**
+ * The news sitemap (/sitemap-news.xml, #350): the indexable articles (api/indexing.ts)
+ * that came in the last 2 days, in each language their page may be indexed in, with what a
+ * news crawler reads first: the publication, the language, when it came and its headline.
+ */
+export function newsSitemapXml(origin: string, shown: Partial<Record<SiteLang, ListArticle[]>>, now: Date): string {
+  const urls: string[] = [];
+  for (const lang of SITE_LANGS) {
+    for (const article of shown[lang] ?? []) {
+      const added = parseTime(article.addedAt) ?? parseTime(article.publishedAt);
+      if (!added || now.getTime() - added.getTime() > NEWS_SITEMAP_MS || !mayIndex(article, lang)) continue;
+      urls.push(
+        `<url><loc>${xml(origin + articlePath(lang, article))}</loc><news:news><news:publication><news:name>${xml(SITE_NAME)}</news:name><news:language>${lang}</news:language></news:publication>` +
+          `<news:publication_date>${isoTime(added)}</news:publication_date><news:title>${xml(article.headline ?? article.originalTitle)}</news:title></news:news></url>`,
+      );
+    }
+  }
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:news="http://www.google.com/schemas/sitemap-news/0.9">\n${urls.join("\n")}\n</urlset>\n`;
+}
+
 /** A month's sitemap (/sitemap-YYYY-MM.xml): every indexable article released that month (api/sitemap.ts filters them), in each language. Article pages never expire. */
 export function monthSitemapXml(origin: string, shown: Partial<Record<SiteLang, SitemapEntry[]>>): string {
   return `${URLSET}\n${articleUrls(origin, shown).join("\n")}\n</urlset>\n`;
@@ -153,6 +176,7 @@ export function sitemapIndexXml(origin: string, now: Date): string {
   };
   const files: [string, Date][] = [
     [`${origin}/sitemap-latest.xml`, hour],
+    [`${origin}/sitemap-news.xml`, hour],
     ...months.map((m, i): [string, Date] => [`${origin}/sitemap-${m}.xml`, i === months.length - 1 ? hour : monthEnd(m)]),
   ];
   return `<?xml version="1.0" encoding="UTF-8"?>\n<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${files.map(([f, at]) => `<sitemap><loc>${xml(f)}</loc>${lastmod(at)}</sitemap>`).join("\n")}\n</sitemapindex>\n`;
