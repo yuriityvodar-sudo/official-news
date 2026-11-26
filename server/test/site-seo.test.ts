@@ -1,12 +1,13 @@
 // What search engines read (#88, SEO): the sitemap, robots.txt's pointer to
 // it and an article's structured data.
+import { newsSitemapXml } from "../src/site/seo";
 import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 import { slugify } from "../src/site/urls";
 import { CF_BEACON_TOKEN, CONSENT_JS, GA_ID, consentHash } from "../src/site/consent";
 import { SITE_LANGS } from "../src/site/texts";
 import { hideSeed, rowsRead } from "./helpers";
-import { ORIGIN, insertArticle, insertTranslation, reach, site, testId, withoutConsentScript } from "./site-helpers";
+import { ORIGIN, insertArticle, insertTranslation, reach, refreshSite, site, testId, withoutConsentScript } from "./site-helpers";
 
 const ID = testId(1);
 const OTHER = testId(2);
@@ -58,6 +59,26 @@ describe("the sitemap", () => {
     expect((await site(EN)).body).toContain('<a href="/en/de">Germany</a>');
   });
 
+  it("has a news sitemap of the last 2 days' indexable articles, named in the index (#350)", async () => {
+    const { status, headers, body } = await site("/sitemap-news.xml");
+    expect(status).toBe(200);
+    expect(headers.get("content-type")).toBe("application/xml; charset=utf-8");
+    expect(body).toContain('xmlns:news="http://www.google.com/schemas/sitemap-news/0.9"');
+    const entry = body.split("<url>").find((u) => u.includes(`<loc>${ORIGIN}${EN}</loc>`))!;
+    expect(entry).toContain("<news:name>Outer News</news:name><news:language>en</news:language>");
+    expect(entry).toContain("<news:title>Cabinet decision 0001 on the budget</news:title>");
+    expect(entry).toMatch(/<news:publication_date>\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ<\/news:publication_date>/);
+    // Not the Ukrainian page of a German source (not indexable).
+    expect(body).not.toContain(ORIGIN + UK);
+    // Nor what came more than 2 days ago: the rule itself, on two articles 1 hour and 3 days old.
+    const at = (hours: number) => new Date(Date.now() - hours * 3_600_000).toISOString().replace(/\.\d+Z$/, "Z");
+    const one = (id: string, hours: number) => ({ id, country: "DE", countries: [], source: { name: "S" }, headline: `Decision ${id}`, originalTitle: "T", shortSummary: null, decisionType: "law", importance: 4, originalLanguage: "de", topics: [], publishedAt: at(hours), dateOnly: false, feedSeq: 1, addedAt: at(hours) });
+    const xmlOf = newsSitemapXml(ORIGIN, { en: [one(testId(51), 1), one(testId(52), 72)] }, new Date());
+    expect(xmlOf).toContain(testId(51));
+    expect(xmlOf).not.toContain(testId(52));
+    expect((await site("/sitemap.xml")).body).toContain(`<loc>${ORIGIN}/sitemap-news.xml</loc><lastmod>`);
+  });
+
   it("lists only the best pages: a decision of importance 3 and up, in English and in its source's own language (#350)", async () => {
     const [OWN, MINOR, EVENT] = [testId(31), testId(32), testId(33)];
     await insertArticle({ id: OWN, headline: "Ukraine decision on schools", originalLanguage: "uk" });
@@ -95,7 +116,8 @@ describe("the sitemap", () => {
     const locs = [...body.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]);
     expect(body).toContain('<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">');
     expect(locs[0]).toBe(`${ORIGIN}/sitemap-latest.xml`);
-    expect(locs[1]).toBe(`${ORIGIN}/sitemap-2026-10.xml`);
+    expect(locs[1]).toBe(`${ORIGIN}/sitemap-news.xml`);
+    expect(locs[2]).toBe(`${ORIGIN}/sitemap-2026-10.xml`);
     const now = new Date();
     expect(locs.at(-1)).toBe(`${ORIGIN}/sitemap-${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}.xml`);
   });

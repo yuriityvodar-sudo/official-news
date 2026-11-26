@@ -9,13 +9,14 @@
 //   /{lang}/{cc}/{id}-{slug}       an article (looked up by its id; another country or slug is a 301 to its own)
 //   /{lang}/about|privacy|terms|support
 //   /robots.txt                    Disallow: /*?, and where the sitemap is
+//   /sitemap-news.xml              the indexable articles of the last 2 days, as a news sitemap (seo.ts, #350)
 //   /sitemap.xml                   an index: /sitemap-latest.xml (the lists, the 7 days) and /sitemap-YYYY-MM.xml (seo.ts)
 import type { Topic } from "../summarizer/schema";
 import { type ApiArticle, type ListView, allLatest, articleInLanguages, listData, monthSitemap } from "./data";
 import type { SiteEnv } from "./env";
 import { APPLE_TOUCH_ICON, OG_IMAGE } from "./icon";
 import { type Page, cssHash, layout } from "./layout";
-import { monthSitemapXml, sitemapIndexXml, sitemapMonths, sitemapXml } from "./seo";
+import { monthSitemapXml, newsSitemapXml, sitemapIndexXml, sitemapMonths, sitemapXml } from "./seo";
 import { consentHash } from "./consent";
 import { visitorLang } from "./lang";
 import { articlePage, notInLanguagePage } from "./pages/article";
@@ -161,6 +162,13 @@ async function route(request: Request, env: SiteEnv): Promise<Reply> {
     const lists = await Promise.all(SITE_LANGS.map((lang) => allLatest(env, lang)));
     const shown = Object.fromEntries(SITE_LANGS.map((lang, i) => [lang, lists[i]]));
     return { kind: "sitemap", status: 200, body: sitemapXml(origin, shown), contentType: XML };
+  }
+  // The news sitemap: the last 2 days of the same snapshots (seo.ts).
+  if (path === "/sitemap-news.xml") {
+    if (url.search) return { kind: "redirect", status: 301, body: null, location: `${origin}/sitemap-news.xml` };
+    const lists = await Promise.all(SITE_LANGS.map((lang) => allLatest(env, lang)));
+    const shown = Object.fromEntries(SITE_LANGS.map((lang, i) => [lang, lists[i]]));
+    return { kind: "sitemap", status: 200, body: newsSitemapXml(origin, shown, new Date()), contentType: XML };
   }
   const month = /^\/sitemap-(\d{4}-\d{2})\.xml$/.exec(path)?.[1];
   if (month) {
