@@ -464,7 +464,7 @@ void main() {
       ]) {
         expect(find.text(word), findsOneWidget, reason: word);
       }
-      expect(find.textContaining('Версія 1.0.0'), findsOneWidget);
+      expect(find.textContaining('Версія 1.0.1'), findsOneWidget);
 
       await tester.pageBack();
       await tester.pumpAndSettle();
