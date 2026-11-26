@@ -7,6 +7,7 @@
 // articles, and their shown translations (TRANSLATED_CONDITIONS, as
 // GET /articles/:id?lang= answers them), both through the (added_at) range.
 import { TRANSLATED_CONDITIONS } from ".";
+import { mayIndex } from "./indexing";
 import type { Env } from "../env";
 
 /** What a sitemap entry needs of an article in one language: its address (articlePath) and when it came. */
@@ -27,8 +28,8 @@ export function monthRange(month: string): [string, string] {
 }
 
 /**
- * Every article released in `month` (by added_at), in English and in each
- * language with a shown translation: `{ en: [...], uk: [...], ... }`, oldest
+ * Every indexable article (indexing.ts) released in `month` (by added_at), in
+ * English and in each language with a shown translation that may be indexed: `{ en: [...], uk: [...], ... }`, oldest
  * first. About 1,300 articles and 4,000 translations a month today.
  */
 export async function monthArticles(env: Env, month: string): Promise<Record<string, SitemapArticle[]>> {
@@ -40,16 +41,19 @@ export async function monthArticles(env: Env, month: string): Promise<Record<str
     original_title: string;
     added_at: string | null;
     published_at: string;
+    decision_type: string | null;
+    importance: number | null;
+    original_language: string | null;
     lang?: string;
   }>([
     env.DB.prepare(
-      `SELECT a.id, s.country, a.headline, a.original_title, a.added_at, a.published_at
+      `SELECT a.id, s.country, a.headline, a.original_title, a.added_at, a.published_at, a.decision_type, a.importance, a.original_language
        FROM articles a JOIN sources s ON s.id = a.source_id
        WHERE a.added_at >= ?1 AND a.added_at < ?2 AND a.is_news = 1 AND a.feed_seq IS NOT NULL
        ORDER BY a.added_at`,
     ).bind(from, to),
     env.DB.prepare(
-      `SELECT a.id, s.country, t.headline, a.original_title, a.added_at, a.published_at, t.lang
+      `SELECT a.id, s.country, t.headline, a.original_title, a.added_at, a.published_at, a.decision_type, a.importance, a.original_language, t.lang
        FROM articles a JOIN sources s ON s.id = a.source_id JOIN article_translations t ON t.article_id = a.id
        WHERE a.added_at >= ?1 AND a.added_at < ?2 AND a.is_news = 1 AND a.feed_seq IS NOT NULL
          AND ${TRANSLATED_CONDITIONS.join(" AND ")}
@@ -65,7 +69,9 @@ export async function monthArticles(env: Env, month: string): Promise<Record<str
     addedAt: r.added_at,
     publishedAt: r.published_at,
   });
-  for (const r of articles.results) out.en.push(shape(r));
-  for (const r of translations.results) (out[r.lang!] ??= []).push(shape(r));
+  const indexable = (r: (typeof articles.results)[number], lang: string) =>
+    mayIndex({ decisionType: r.decision_type, importance: r.importance, originalLanguage: r.original_language }, lang);
+  for (const r of articles.results) if (indexable(r, "en")) out.en.push(shape(r));
+  for (const r of translations.results) if (indexable(r, r.lang!)) (out[r.lang!] ??= []).push(shape(r));
   return out;
 }

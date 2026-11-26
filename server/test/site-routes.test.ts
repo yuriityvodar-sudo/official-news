@@ -26,9 +26,10 @@ beforeEach(async () => {
 /**
  * The pages Google may index here: the lists' first pages with no topic and
  * something on them, the articles and the information pages. Everything else
- * says noindex (Yurii, 29 Oct: every article indexed).
+ * says noindex. Of the articles, only the best pages (#350, api/indexing.ts):
+ * UK is a German source's page in Ukrainian, a third language, so noindex.
  */
-const INDEXED = new Set(["/en", EN, UK, "/ru/about", "/es/privacy", "/de/terms", "/en/support", "/en/de", "/en/g7"]);
+const INDEXED = new Set(["/en", EN, "/ru/about", "/es/privacy", "/de/terms", "/en/support", "/en/de", "/en/g7"]);
 
 /** [path, status, cache kind, content-language] for every kind of response. */
 const ROUTES: [string, number, keyof typeof CACHE, string | null][] = [

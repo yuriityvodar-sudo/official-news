@@ -6,7 +6,7 @@ import { slugify } from "../src/site/urls";
 import { CF_BEACON_TOKEN, CONSENT_JS, GA_ID, consentHash } from "../src/site/consent";
 import { SITE_LANGS } from "../src/site/texts";
 import { hideSeed, rowsRead } from "./helpers";
-import { ORIGIN, insertArticle, insertTranslation, site, testId, withoutConsentScript } from "./site-helpers";
+import { ORIGIN, insertArticle, insertTranslation, reach, site, testId, withoutConsentScript } from "./site-helpers";
 
 const ID = testId(1);
 const OTHER = testId(2);
@@ -21,7 +21,7 @@ beforeEach(async () => {
 });
 
 describe("the sitemap", () => {
-  it("lists each language's latest list while it has articles, and each article in each language it is shown in, with the others as alternates", async () => {
+  it("lists each language's latest list while it has articles, and each indexable article in English and in its source's language, with the other as alternate", async () => {
     const { status, headers, body } = await site("/sitemap-latest.xml");
     expect(status).toBe(200);
     expect(headers.get("content-type")).toBe("application/xml; charset=utf-8");
@@ -30,12 +30,41 @@ describe("the sitemap", () => {
     // Only English and Ukrainian have articles here; an empty list is noindex, so not listed.
     for (const lang of SITE_LANGS) expect(locs.includes(`${ORIGIN}/${lang}`), lang).toBe(lang === "en" || lang === "uk");
     expect(locs).toContain(ORIGIN + EN);
-    expect(locs).toContain(ORIGIN + UK);
-    // OTHER is not translated: English only, so no Ukrainian address for it.
+    // ID is a German source's decision: its Ukrainian page is a third language, so not listed (#350).
+    expect(locs).not.toContain(ORIGIN + UK);
     expect(locs.filter((l) => l.includes(OTHER))).toHaveLength(1);
     const enEntry = body.split("<url>").find((u) => u.includes(`<loc>${ORIGIN}${EN}</loc>`))!;
-    expect(enEntry).toContain(`<xhtml:link rel="alternate" hreflang="uk" href="${ORIGIN}${UK}"/>`);
+    expect(enEntry).not.toContain('hreflang="uk"');
     expect(enEntry).toMatch(/<lastmod>\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ<\/lastmod>/);
+  });
+
+  it("lists only the best pages: a decision of importance 3 and up, in English and in its source's own language (#350)", async () => {
+    const [OWN, MINOR, EVENT] = [testId(31), testId(32), testId(33)];
+    await insertArticle({ id: OWN, headline: "Ukraine decision on schools", originalLanguage: "uk" });
+    await insertTranslation(OWN, "uk");
+    await insertArticle({ id: MINOR, headline: "Minor notice", importance: 2 });
+    await insertArticle({ id: EVENT, headline: "Something happened", decisionType: "event", importance: 5 });
+    const { body } = await site("/sitemap-latest.xml");
+    const locs = [...body.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]);
+    // The source's own language and English, each naming the other.
+    expect(locs.filter((l) => l.includes(OWN)).map((l) => l.slice(ORIGIN.length, ORIGIN.length + 3)).sort()).toEqual(["/en", "/uk"]);
+    const own = body.split("<url>").find((u) => u.includes(OWN) && u.includes(`<loc>${ORIGIN}/en/`))!;
+    expect(own).toContain('hreflang="uk"');
+    expect(locs.some((l) => l.includes(MINOR))).toBe(false);
+    expect(locs.some((l) => l.includes(EVENT))).toBe(false);
+    // Their pages stay on the site, with noindex and no alternates; the best page says index.
+    const page = async (id: string, lang = "en") => reach(`/${lang}/de/${id}`);
+    for (const id of [MINOR, EVENT]) {
+      const { status, headers, body: html } = await page(id);
+      expect(status, id).toBe(200);
+      expect(headers.get("x-robots-tag"), id).toBe("noindex");
+      expect(html, id).not.toContain('rel="alternate"');
+    }
+    for (const lang of ["en", "uk"]) {
+      const { headers, body: html } = await page(OWN, lang);
+      expect(headers.get("x-robots-tag"), lang).toBe("index, follow");
+      expect([...html.matchAll(/<link rel="alternate" hreflang="([^"]+)"/g)].map((m) => m[1])).toEqual(["en", "uk", "x-default"]);
+    }
   });
 
   // 30 Oct: article pages never expire, but the sitemap listed only the 7 days (about 970 of 3,250 pages).
@@ -51,10 +80,13 @@ describe("the sitemap", () => {
     expect(locs.at(-1)).toBe(`${ORIGIN}/sitemap-${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}.xml`);
   });
 
-  it("lists in a month's file every article released that month, older than the 7 days too, in each language it is shown in", async () => {
+  it("lists in a month's file every indexable article released that month, older than the 7 days too, in English and its source's language", async () => {
     const OLD = testId(9);
-    await insertArticle({ id: OLD, headline: "Old decision on water" });
+    await insertArticle({ id: OLD, headline: "Old decision on water", originalLanguage: "uk" });
     await insertTranslation(OLD, "uk");
+    const OLD_MINOR = testId(10);
+    await insertArticle({ id: OLD_MINOR, headline: "Old minor notice", importance: 1 });
+    await env.DB.prepare("UPDATE articles SET added_at = '2026-10-15T10:00:00Z' WHERE id = ?").bind(OLD_MINOR).run();
     await env.DB.prepare("UPDATE articles SET added_at = '2026-10-15T09:00:00Z', published_at = '2026-10-15T08:00:00Z' WHERE id = ?").bind(OLD).run();
     const month = await site("/sitemap-2026-10.xml");
     expect(month.status).toBe(200);
@@ -62,6 +94,7 @@ describe("the sitemap", () => {
     const enOld = `${ORIGIN}/en/de/${OLD}-${slugify("Old decision on water", "en")}`;
     expect(locs).toContain(enOld);
     expect(locs.filter((l) => l.includes(OLD))).toHaveLength(2);
+    expect(locs.some((l) => l.includes(OLD_MINOR))).toBe(false);
     expect(month.body).toContain("<lastmod>2026-10-15T09:00:00Z</lastmod>");
     // The latest file keeps to the 7 days.
     expect((await site("/sitemap-latest.xml")).body).not.toContain(OLD);

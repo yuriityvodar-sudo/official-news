@@ -4,6 +4,7 @@
 // Latest without its Top stories, as the app). Written
 // as loops over the API, so a change to its rules (#84 source names, #86
 // filters) is covered without touching these tests.
+import { mayIndex } from "../src/api/indexing";
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { ApiArticle, ApiList } from "../src/site/data";
@@ -71,7 +72,9 @@ describe("article pages", () => {
           const label = decisionLabel(lang, a.decisionType);
           if (label) expect(page.body).toContain(`<p class="kind">${escaped(label)}</p>`);
           else expect(page.body).not.toContain('class="kind"');
-          expect(hreflangs(page.body)).toEqual(shownIn);
+          // hreflang is between indexed pages (api/indexing.ts): the page's own language must be one of them.
+          const indexable = shownIn.filter((l) => mayIndex(answers[SITE_LANGS.indexOf(l)].body as ApiArticle, l));
+          expect(hreflangs(page.body)).toEqual(indexable.includes(lang) ? indexable : []);
         } else if (shownIn.length) {
           // Not (yet) in this language: a 404 that leads to the languages it is in.
           expect(page.status).toBe(404);

@@ -44,6 +44,9 @@ export interface SnapshotArticle {
   originalTitle: string;
   shortSummary: string | null;
   decisionType: string | null;
+  /** For the sitemap's rule (indexing.ts); missing in a snapshot built before 26 Nov, which then lists no article. */
+  importance?: number | null;
+  originalLanguage?: string | null;
   topics: string[];
   publishedAt: string;
   dateOnly: boolean;
@@ -85,6 +88,8 @@ const toSnapshotArticle = (row: ListRow): SnapshotArticle => ({
   originalTitle: row.original_title,
   shortSummary: row.short_summary,
   decisionType: row.decision_type,
+  importance: row.importance,
+  originalLanguage: row.original_language,
   topics: parseStringArray(row.topics),
   publishedAt: row.published_at,
   dateOnly: row.date_only === 1,

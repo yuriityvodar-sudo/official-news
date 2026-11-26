@@ -2,6 +2,7 @@
 // article's structured data (schema.org NewsArticle, in a JSON-LD block that
 // browsers never run, so the CSP's no-scripts rule still holds) and the
 // sitemap. Nothing is indexed until robots.txt and robotsFor() allow it.
+import { mayIndex } from "../api/indexing";
 import type { ApiArticle, ListArticle } from "./data";
 import { isoTime, parseTime } from "./dates";
 import { type Html, raw, safeHttps } from "./html";
@@ -75,8 +76,8 @@ function articleUrls(origin: string, shown: Partial<Record<SiteLang, SitemapEntr
 
 /**
  * The latest sitemap (/sitemap-latest.xml): each language's latest list while
- * it has articles (an empty one is noindex), and every article of the API's 7
- * days in each language it is shown in.
+ * it has articles (an empty one is noindex), and every indexable article
+ * (api/indexing.ts) of the API's 7 days, in each language its page may be indexed in.
  */
 export function sitemapXml(origin: string, shown: Partial<Record<SiteLang, ListArticle[]>>): string {
   const withLists = SITE_LANGS.filter((lang) => (shown[lang] ?? []).length > 0);
@@ -84,11 +85,12 @@ export function sitemapXml(origin: string, shown: Partial<Record<SiteLang, ListA
     const links = withLists.map((l) => `<xhtml:link rel="alternate" hreflang="${l}" href="${xml(origin + listPath(l))}"/>`).join("");
     return `<url><loc>${xml(origin + listPath(lang))}</loc><changefreq>hourly</changefreq>${links}</url>`;
   });
-  urls.push(...articleUrls(origin, shown));
+  const indexable = Object.fromEntries(SITE_LANGS.map((lang) => [lang, (shown[lang] ?? []).filter((a) => mayIndex(a, lang))]));
+  urls.push(...articleUrls(origin, indexable));
   return `${URLSET}\n${urls.join("\n")}\n</urlset>\n`;
 }
 
-/** A month's sitemap (/sitemap-YYYY-MM.xml): every article released that month, in each language it is shown in. Article pages never expire. */
+/** A month's sitemap (/sitemap-YYYY-MM.xml): every indexable article released that month (api/sitemap.ts filters them), in each language. Article pages never expire. */
 export function monthSitemapXml(origin: string, shown: Partial<Record<SiteLang, SitemapEntry[]>>): string {
   return `${URLSET}\n${articleUrls(origin, shown).join("\n")}\n</urlset>\n`;
 }

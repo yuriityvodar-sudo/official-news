@@ -8,6 +8,7 @@
 // a news story (#230: Global Voices) its outlet's, and its author in
 // the credit line.
 // Never the source's picture (imageUrl): a site makes public, permanent copies.
+import { mayIndex } from "../../api/indexing";
 import type { ApiArticle } from "../data";
 import { fullDate, isoTime, parseTime, publishedDate } from "../dates";
 import { type Html, html, safeHttps, siteName } from "../html";
@@ -29,10 +30,11 @@ export const paragraphs = (summary: string) =>
 /** The languages an article is shown in, in the site's order. */
 export const shownLanguages = (shown: Partial<Record<SiteLang, ApiArticle>>) => SITE_LANGS.filter((lang) => shown[lang]);
 
-/** hreflang alternates: exactly the languages the API shows the article in, and x-default the English one. */
+/** hreflang alternates: the languages the article's page may be indexed in (api/indexing.ts), and x-default the English one; none for an article no search engine indexes. */
 export function alternates(origin: string, shown: Partial<Record<SiteLang, ApiArticle>>): Alternate[] {
-  const out: Alternate[] = shownLanguages(shown).map((lang) => ({ hreflang: lang, href: origin + articlePath(lang, shown[lang]!) }));
-  if (shown.en) out.push({ hreflang: "x-default", href: origin + articlePath("en", shown.en) });
+  const langs = shownLanguages(shown).filter((lang) => mayIndex(shown[lang]!, lang));
+  const out: Alternate[] = langs.map((lang) => ({ hreflang: lang, href: origin + articlePath(lang, shown[lang]!) }));
+  if (langs.includes("en")) out.push({ hreflang: "x-default", href: origin + articlePath("en", shown.en!) });
   return out;
 }
 
@@ -125,14 +127,15 @@ ${articleJsonLd(lang, origin, article)}`;
   return {
     lang,
     kind: "article",
-    // Every article is indexed (Yurii, 29 Oct).
-    index: true,
+    // Only the best pages are indexed (#350, Yurii 26 Nov; before: every article, 29 Oct).
+    index: mayIndex(article, lang),
     title: `${headline} · ${SITE_NAME}`,
     // iMessage and the iOS share sheet show only the title and the host, no description (LPLinkMetadata).
     ogTitle: aiText ? `${headline} · ${text(lang, "summaryByAi")}` : undefined,
     description: aiText ? description : headline,
     canonical: origin + articlePath(lang, article),
-    alternates: alternates(origin, shown),
+    // A page search engines do not index names no alternates: hreflang is between indexed pages.
+    alternates: mayIndex(article, lang) ? alternates(origin, shown) : [],
     switcher: languages.map((l) => ({ lang: l, path: articlePath(l, shown[l]!) })),
     ogType: "article",
     body,
