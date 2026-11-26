@@ -23,7 +23,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 from texts import TEXTS  # noqa: E402
 
-SHOTS = [os.path.join(HERE, "..", "shots-1.0", f) for f in ("1-feed.jpg", "2-chat.jpg", "3-article.jpg")]
+SHOTS = [os.path.join(HERE, "..", "shots-1.0", "fixed", f) for f in ("1-feed.jpg", "2-chat.jpg", "3-article.jpg")]
 FONTS = "/System/Library/Fonts/Supplemental"
 TITLE_FONT = os.path.join(FONTS, "Georgia Bold.ttf")
 TAG_FONT = os.path.join(FONTS, "Georgia.ttf")
