@@ -356,7 +356,9 @@ class _PaywallSheetState extends State<PaywallSheet> {
             const CupertinoActivityIndicator(),
           const SizedBox(height: 4),
           Text(
-            l10n.paywallRenewal,
+            ChatSubscription.googlePlay
+                ? l10n.paywallRenewalGooglePlay
+                : l10n.paywallRenewal,
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 12, height: 1.35, color: muted),
           ),
