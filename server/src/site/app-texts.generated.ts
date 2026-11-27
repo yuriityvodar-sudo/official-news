@@ -140,10 +140,12 @@ export type AppKey =
   | "languageCs"
   | "privacyChatHeading"
   | "privacyChat"
+  | "privacyChatGooglePlay"
   | "privacySupportHeading"
   | "privacySupport"
   | "termsSubscriptionHeading"
-  | "termsSubscription";
+  | "termsSubscription"
+  | "termsSubscriptionGooglePlay";
 
 export type SiteLang = "en" | "uk" | "ru" | "es" | "de";
 
@@ -289,10 +291,12 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "languageCs": "Czech",
     "privacyChatHeading": "AI chat",
     "privacyChat": "If you subscribe to the AI agent, your question and the text or headlines of the news are sent to OpenAI to write the answer. Your conversations are kept only on your phone, in Conversations, where you can delete them; we don't keep them on our server or send them to analytics. Apple handles the subscription: we receive a signed record of it from Apple, with an anonymous ID the app creates, never your name or payment details. We record how much of its weekly usage each subscription uses, for the weekly limit.",
+    "privacyChatGooglePlay": "On Android, Google Play handles the subscription and extra usage: the app sends our server the purchase token Google Play gives it, and the server asks Google to confirm the purchase. We never receive your name, Google account or payment details.",
     "privacySupportHeading": "Messages to us",
     "privacySupport": "Messages you send us in the app are kept with an anonymous ID of your phone (not your name), the app's version and language, and your notification token if you allowed notifications, so we can reply. We delete a conversation 90 days after it is closed or goes quiet. To limit messages to 5 a day, we also keep a one-way code of your network address until the end of that day (UTC).",
     "termsSubscriptionHeading": "AI agent subscription",
-    "termsSubscription": "The AI agent is a monthly subscription through the App Store. It renews automatically until you cancel it in your Apple ID settings, at least 24 hours before the end of the period. Apple handles refunds. The agent answers from the article's text, or from the headlines for news from the media, and from facts it knows. It can make mistakes, and its answers are not legal, financial or medical advice. It includes a week's usage, which resets every Monday at 00:00 UTC and does not carry over; questions about long documents use more of it. Extra usage, bought separately, doesn't expire and is used once the week's usage runs out."
+    "termsSubscription": "The AI agent is a monthly subscription through the App Store. It renews automatically until you cancel it in your Apple ID settings, at least 24 hours before the end of the period. Apple handles refunds. The agent answers from the article's text, or from the headlines for news from the media, and from facts it knows. It can make mistakes, and its answers are not legal, financial or medical advice. It includes a week's usage, which resets every Monday at 00:00 UTC and does not carry over; questions about long documents use more of it. Extra usage, bought separately, doesn't expire and is used once the week's usage runs out.",
+    "termsSubscriptionGooglePlay": "On Android, the subscription and extra usage are bought through Google Play instead. The subscription renews automatically until you cancel it in Google Play, and Google handles payment and refunds."
   },
   "uk": {
     "feedEmpty": "Сьогодні рішень ще немає.",
@@ -432,10 +436,12 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "languageCs": "чеської",
     "privacyChatHeading": "ШІ-чат",
     "privacyChat": "Якщо ви підписалися на ШІ-агента, ваше запитання і текст або заголовки новини надсилаються в OpenAI, щоб написати відповідь. Ваше листування зберігається лише на вашому телефоні, у розділі «Розмови», де його можна видалити; ми не зберігаємо його на сервері й не надсилаємо в аналітику. Підпискою займається Apple: ми отримуємо від Apple підписаний запис про неї з анонімним ідентифікатором, який створює застосунок, але ніколи — ваше ім’я чи платіжні дані. Ми рахуємо, скільки тижневого usage використовує кожна підписка, — для тижневого ліміту.",
+    "privacyChatGooglePlay": "На Android підпискою і додатковим usage займається Google Play: застосунок надсилає на наш сервер токен покупки від Google Play, а сервер просить Google підтвердити покупку. Ми ніколи не отримуємо ваше ім’я, обліковий запис Google чи платіжні дані.",
     "privacySupportHeading": "Повідомлення нам",
     "privacySupport": "Повідомлення, які ви надсилаєте нам у застосунку, ми зберігаємо разом з анонімним ідентифікатором вашого телефона (не вашим іменем), версією та мовою застосунку, а також токеном сповіщень, якщо ви їх дозволили, щоб ми могли відповісти. Ми видаляємо розмову через 90 днів після того, як її закрито або в ній ніхто не пише. Щоб приймати не більше 5 повідомлень на день, ми також зберігаємо незворотний код вашої мережевої адреси до кінця цього дня (за UTC).",
     "termsSubscriptionHeading": "Підписка на ШІ-агента",
-    "termsSubscription": "Підписка на ШІ-агента — щомісячна, через App Store. Вона подовжується автоматично, доки ви не скасуєте її в налаштуваннях Apple ID не пізніше ніж за 24 години до кінця періоду. Поверненнями коштів займається Apple. Агент відповідає за текстом статті, а про новини зі ЗМІ — за заголовками, і спирається на відомі йому факти. Він може помилятися, і його відповіді — не юридична, фінансова чи медична консультація. Підписка включає тижневий usage, який скидається щопонеділка о 00:00 UTC і не переноситься; запитання про довгі документи витрачають його більше. Додатковий usage купується окремо, не згорає і витрачається, коли тижневий закінчиться."
+    "termsSubscription": "Підписка на ШІ-агента — щомісячна, через App Store. Вона подовжується автоматично, доки ви не скасуєте її в налаштуваннях Apple ID не пізніше ніж за 24 години до кінця періоду. Поверненнями коштів займається Apple. Агент відповідає за текстом статті, а про новини зі ЗМІ — за заголовками, і спирається на відомі йому факти. Він може помилятися, і його відповіді — не юридична, фінансова чи медична консультація. Підписка включає тижневий usage, який скидається щопонеділка о 00:00 UTC і не переноситься; запитання про довгі документи витрачають його більше. Додатковий usage купується окремо, не згорає і витрачається, коли тижневий закінчиться.",
+    "termsSubscriptionGooglePlay": "На Android підписку і додатковий usage купують натомість через Google Play. Підписка подовжується автоматично, доки ви не скасуєте її в Google Play, а оплатою і поверненням коштів займається Google."
   },
   "ru": {
     "feedEmpty": "Сегодня решений пока нет.",
@@ -575,10 +581,12 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "languageCs": "чешского",
     "privacyChatHeading": "ИИ-чат",
     "privacyChat": "Если вы подписались на ИИ-агента, ваш вопрос и текст или заголовки новости отправляются в OpenAI, чтобы написать ответ. Ваша переписка хранится только на вашем телефоне, в разделе «Разговоры», где её можно удалить; мы не храним её на сервере и не отправляем в аналитику. Подпиской занимается Apple: мы получаем от Apple подписанную запись о ней с анонимным идентификатором, который создаёт приложение, но никогда — ваше имя или платёжные данные. Мы считаем, сколько недельного usage использует каждая подписка, — для недельного лимита.",
+    "privacyChatGooglePlay": "На Android подпиской и дополнительным usage занимается Google Play: приложение отправляет на наш сервер токен покупки от Google Play, а сервер просит Google подтвердить покупку. Мы никогда не получаем ваше имя, аккаунт Google или платёжные данные.",
     "privacySupportHeading": "Сообщения нам",
     "privacySupport": "Сообщения, которые вы отправляете нам в приложении, мы храним вместе с анонимным идентификатором вашего телефона (не вашим именем), версией и языком приложения, а также токеном уведомлений, если вы их разрешили, чтобы мы могли ответить. Мы удаляем переписку через 90 дней после того, как она закрыта или в ней никто не пишет. Чтобы принимать не больше 5 сообщений в день, мы также храним необратимый код вашего сетевого адреса до конца этого дня (по UTC).",
     "termsSubscriptionHeading": "Подписка на ИИ-агента",
-    "termsSubscription": "Подписка на ИИ-агента — ежемесячная, через App Store. Она продлевается автоматически, пока вы не отмените её в настройках Apple ID не позже чем за 24 часа до конца периода. Возвратами занимается Apple. Агент отвечает по тексту статьи, а о новостях из СМИ — по заголовкам, и опирается на известные ему факты. Он может ошибаться, и его ответы — не юридическая, финансовая или медицинская консультация. Подписка включает недельный usage, который сбрасывается каждый понедельник в 00:00 UTC и не переносится; вопросы о длинных документах тратят его больше. Дополнительный usage покупается отдельно, не сгорает и тратится, когда недельный закончится."
+    "termsSubscription": "Подписка на ИИ-агента — ежемесячная, через App Store. Она продлевается автоматически, пока вы не отмените её в настройках Apple ID не позже чем за 24 часа до конца периода. Возвратами занимается Apple. Агент отвечает по тексту статьи, а о новостях из СМИ — по заголовкам, и опирается на известные ему факты. Он может ошибаться, и его ответы — не юридическая, финансовая или медицинская консультация. Подписка включает недельный usage, который сбрасывается каждый понедельник в 00:00 UTC и не переносится; вопросы о длинных документах тратят его больше. Дополнительный usage покупается отдельно, не сгорает и тратится, когда недельный закончится.",
+    "termsSubscriptionGooglePlay": "На Android подписку и дополнительный usage покупают вместо этого через Google Play. Подписка продлевается автоматически, пока вы не отмените её в Google Play, а оплатой и возвратом денег занимается Google."
   },
   "es": {
     "feedEmpty": "Aún no hay decisiones hoy.",
@@ -718,10 +726,12 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "languageCs": "checo",
     "privacyChatHeading": "Chat con IA",
     "privacyChat": "Si te suscribes al agente de IA, tu pregunta y el texto o los titulares de la noticia se envían a OpenAI para escribir la respuesta. Tus conversaciones se guardan solo en tu teléfono, en Conversaciones, donde puedes eliminarlas; no las guardamos en nuestro servidor ni las enviamos a la analítica. Apple gestiona la suscripción: recibimos de Apple un registro firmado de ella, con un identificador anónimo que crea la app, nunca tu nombre ni tus datos de pago. Contamos cuánto de su uso semanal consume cada suscripción, para el límite semanal.",
+    "privacyChatGooglePlay": "En Android, Google Play gestiona la suscripción y el uso adicional: la app envía a nuestro servidor el token de compra que le da Google Play, y el servidor pide a Google que confirme la compra. Nunca recibimos tu nombre, tu cuenta de Google ni tus datos de pago.",
     "privacySupportHeading": "Mensajes que nos envías",
     "privacySupport": "Los mensajes que nos envías desde la app se guardan con un identificador anónimo de tu teléfono (no tu nombre), la versión y el idioma de la app y, si permitiste las notificaciones, tu token de notificaciones, para poder responderte. Borramos cada conversación 90 días después de que se cierre o quede sin actividad. Para limitar los mensajes a 5 al día, también guardamos un código irreversible de tu dirección de red hasta el final de ese día (UTC).",
     "termsSubscriptionHeading": "Suscripción al agente de IA",
-    "termsSubscription": "La suscripción al agente de IA es mensual, a través de la App Store. Se renueva automáticamente hasta que la canceles en los ajustes de tu Apple ID al menos 24 horas antes del final del periodo. Apple gestiona los reembolsos. El agente responde a partir del texto del artículo o, en las noticias de los medios, de los titulares, y se apoya en los hechos que conoce. Puede equivocarse y sus respuestas no son asesoramiento legal, financiero ni médico. Incluye un uso semanal que se restablece cada lunes a las 00:00 UTC y no se acumula; las preguntas sobre documentos largos consumen más. El uso adicional se compra aparte, no caduca y se usa cuando se acaba el de la semana."
+    "termsSubscription": "La suscripción al agente de IA es mensual, a través de la App Store. Se renueva automáticamente hasta que la canceles en los ajustes de tu Apple ID al menos 24 horas antes del final del periodo. Apple gestiona los reembolsos. El agente responde a partir del texto del artículo o, en las noticias de los medios, de los titulares, y se apoya en los hechos que conoce. Puede equivocarse y sus respuestas no son asesoramiento legal, financiero ni médico. Incluye un uso semanal que se restablece cada lunes a las 00:00 UTC y no se acumula; las preguntas sobre documentos largos consumen más. El uso adicional se compra aparte, no caduca y se usa cuando se acaba el de la semana.",
+    "termsSubscriptionGooglePlay": "En Android, la suscripción y el uso adicional se compran en Google Play. La suscripción se renueva automáticamente hasta que la canceles en Google Play, y Google gestiona el pago y los reembolsos."
   },
   "de": {
     "feedEmpty": "Heute noch keine Entscheidungen.",
@@ -861,10 +871,12 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "languageCs": "Tschechischen",
     "privacyChatHeading": "KI-Chat",
     "privacyChat": "Wenn Sie den KI-Agenten abonniert haben, werden Ihre Frage und der Text oder die Schlagzeilen der Meldung an OpenAI gesendet, um die Antwort zu schreiben. Ihre Gespräche werden nur auf Ihrem Telefon gespeichert, unter „Gespräche“, wo Sie sie löschen können; wir speichern sie nicht auf unserem Server und senden sie nicht an die Analyse. Das Abo wickelt Apple ab: Wir erhalten von Apple einen signierten Nachweis darüber, mit einer anonymen Kennung, die die App erzeugt, nie Ihren Namen oder Ihre Zahlungsdaten. Wir erfassen, wie viel seiner wöchentlichen Nutzung jedes Abo verbraucht, für das Wochenlimit.",
+    "privacyChatGooglePlay": "Unter Android wickelt Google Play das Abo und die zusätzliche Nutzung ab: Die App sendet unserem Server das Kauf-Token von Google Play, und der Server lässt den Kauf von Google bestätigen. Ihren Namen, Ihr Google-Konto oder Ihre Zahlungsdaten erhalten wir nie.",
     "privacySupportHeading": "Nachrichten an uns",
     "privacySupport": "Nachrichten, die Sie uns in der App senden, speichern wir mit einer anonymen Kennung Ihres Geräts (nicht Ihrem Namen), der Version und Sprache der App und, wenn Sie Mitteilungen erlaubt haben, Ihrem Mitteilungs-Token, damit wir antworten können. Wir löschen ein Gespräch 90 Tage, nachdem es geschlossen wurde oder niemand mehr geschrieben hat. Um Nachrichten auf 5 pro Tag zu begrenzen, speichern wir außerdem einen nicht umkehrbaren Code Ihrer Netzwerkadresse bis zum Ende dieses Tages (UTC).",
     "termsSubscriptionHeading": "Abo für den KI-Agenten",
-    "termsSubscription": "Das Abo für den KI-Agenten läuft monatlich über den App Store. Es verlängert sich automatisch, bis Sie es spätestens 24 Stunden vor Ende des Zeitraums in den Apple-ID-Einstellungen kündigen. Erstattungen wickelt Apple ab. Der Agent antwortet aus dem Text des Artikels oder, bei Meldungen aus den Medien, aus den Schlagzeilen und stützt sich auf Fakten, die er kennt. Er kann sich irren, und seine Antworten sind keine Rechts-, Finanz- oder medizinische Beratung. Es enthält eine wöchentliche Nutzung, die jeden Montag um 00:00 UTC zurückgesetzt und nicht übertragen wird; Fragen zu langen Dokumenten verbrauchen mehr davon. Zusätzliche Nutzung wird separat gekauft, verfällt nicht und wird verwendet, wenn die der Woche aufgebraucht ist."
+    "termsSubscription": "Das Abo für den KI-Agenten läuft monatlich über den App Store. Es verlängert sich automatisch, bis Sie es spätestens 24 Stunden vor Ende des Zeitraums in den Apple-ID-Einstellungen kündigen. Erstattungen wickelt Apple ab. Der Agent antwortet aus dem Text des Artikels oder, bei Meldungen aus den Medien, aus den Schlagzeilen und stützt sich auf Fakten, die er kennt. Er kann sich irren, und seine Antworten sind keine Rechts-, Finanz- oder medizinische Beratung. Es enthält eine wöchentliche Nutzung, die jeden Montag um 00:00 UTC zurückgesetzt und nicht übertragen wird; Fragen zu langen Dokumenten verbrauchen mehr davon. Zusätzliche Nutzung wird separat gekauft, verfällt nicht und wird verwendet, wenn die der Woche aufgebraucht ist.",
+    "termsSubscriptionGooglePlay": "Unter Android werden das Abo und die zusätzliche Nutzung stattdessen über Google Play gekauft. Das Abo verlängert sich automatisch, bis Sie es in Google Play kündigen; Zahlung und Erstattungen wickelt Google ab."
   }
 };
 
@@ -882,7 +894,7 @@ export const PUBLISHER_DETAILS = {
 export const SUPPORT_EMAIL = "support@outernews.app";
 
 /** When the privacy policy and the terms last changed (`policyUpdated` in info_pages.dart). */
-export const POLICY_UPDATED = "2026-11-23";
+export const POLICY_UPDATED = "2026-11-27";
 
 /** Each language's own name and short label (FeedLanguage in feed_language.dart). */
 export const LANGUAGE_NAMES: Record<SiteLang, { nativeName: string; shortLabel: string }> = {

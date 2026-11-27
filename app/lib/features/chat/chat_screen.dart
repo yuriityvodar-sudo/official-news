@@ -132,8 +132,10 @@ class ChatScreen extends StatefulWidget {
 
   /// Where the chat is: the iOS app (StoreKit), every build of it, the
   /// `store` one App Review gets too (Roman, 4 Nov: «открыть sandbox для
-  /// appreview»), not Android or tests, unless a test sets [debugAvailable].
-  static bool get available => debugAvailable ?? (!kIsWeb && Platform.isIOS);
+  /// appreview»), and the Android app (Google Play, #349); not tests, unless
+  /// a test sets [debugAvailable].
+  static bool get available =>
+      debugAvailable ?? (!kIsWeb && (Platform.isIOS || Platform.isAndroid));
 
   @visibleForTesting
   static bool? debugAvailable;

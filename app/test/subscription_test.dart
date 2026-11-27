@@ -125,6 +125,60 @@ void main() {
       expect(subscription.credited, 1);
     });
 
+    test(
+      'on Google Play (#349): asks for what is owned at start, sends '
+      'gp: tokens, and leaves a credited pack to the server to consume',
+      () async {
+        ChatSubscription.debugGooglePlay = true;
+        addTearDown(() => ChatSubscription.debugGooglePlay = null);
+        final play = FakeStore();
+        final android = ChatSubscription(
+          store: play,
+          credit: (pack, transaction) async => credits.add((pack, transaction)),
+          clock: () => _now,
+        );
+        await android.start();
+        expect(play.restores, 1);
+
+        // Google gives back a pack and the subscription together, the pack first.
+        play.controller.add([
+          PurchaseDetails(
+            purchaseID: 'GPA.2',
+            productID: 'com.officialnews.app.agent.questions50',
+            verificationData: PurchaseVerificationData(
+              localVerificationData: '',
+              serverVerificationData: 'pack-token',
+              source: 'google_play',
+            ),
+            transactionDate: '1793000000000',
+            status: PurchaseStatus.restored,
+          )..pendingCompletePurchase = true,
+          PurchaseDetails(
+            purchaseID: 'GPA.1',
+            productID: ChatSubscription.productId,
+            verificationData: PurchaseVerificationData(
+              localVerificationData: '',
+              serverVerificationData: 'sub-token',
+              source: 'google_play',
+            ),
+            transactionDate: '1793000000000',
+            status: PurchaseStatus.purchased,
+          )..pendingCompletePurchase = true,
+        ]);
+        await pumpEventQueue();
+        expect(android.transaction, 'gp:sub-token');
+        expect(android.active, isTrue);
+        expect(credits, [
+          (
+            'gp:com.officialnews.app.agent.questions50:pack-token',
+            'gp:sub-token',
+          ),
+        ]);
+        // The subscription is acknowledged here; the pack is consumed by the server.
+        expect(play.finished.map((p) => p.purchaseID), ['GPA.1']);
+      },
+    );
+
     testWidgets('a restore that finds nothing says so', (tester) async {
       await subscription.restore();
       expect(store.restores, 1);

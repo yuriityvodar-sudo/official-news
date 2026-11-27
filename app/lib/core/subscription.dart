@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io' show Platform;
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
@@ -31,7 +32,8 @@ abstract class Store {
   Future<void> manage();
 }
 
-/// StoreKit 2 through Flutter's `in_app_purchase` (#146).
+/// StoreKit 2 through Flutter's `in_app_purchase` (#146); on Android, Google
+/// Play Billing through the same plugin (#349).
 class AppStore implements Store {
   final _store = InAppPurchase.instance;
 
@@ -81,6 +83,17 @@ class AppStore implements Store {
   /// page of the App Store instead.
   @override
   Future<void> manage() async {
+    if (ChatSubscription.googlePlay) {
+      // Google Play's page of this subscription, where it is cancelled or changed.
+      await launchUrl(
+        Uri.parse(
+          'https://play.google.com/store/account/subscriptions'
+          '?sku=${ChatSubscription.productId}&package=com.officialnews.app',
+        ),
+        mode: LaunchMode.externalApplication,
+      );
+      return;
+    }
     try {
       await _store
           .getPlatformAddition<InAppPurchaseStoreKitPlatformAddition>()
@@ -121,6 +134,25 @@ class ChatSubscription extends ChangeNotifier {
     : _clock = clock ?? DateTime.now;
 
   static const productId = 'com.officialnews.app.agent.monthly';
+
+  /// Bought on Google Play (Android, #349) rather than the App Store: the
+  /// server gets Google's purchase tokens, marked `gp:` (docs/contract.md),
+  /// and consumes the packs itself.
+  static bool get googlePlay =>
+      debugGooglePlay ?? (!kIsWeb && Platform.isAndroid);
+  @visibleForTesting
+  static bool? debugGooglePlay;
+
+  /// What the server gets for a purchase: Apple's signed transaction as it
+  /// is, Google's purchase token as `gp:<token>`, a pack's as
+  /// `gp:<productId>:<token>`.
+  static String serverValue(PurchaseDetails purchase) {
+    final data = purchase.verificationData.serverVerificationData;
+    if (!googlePlay || data.isEmpty) return data;
+    return packs.containsKey(purchase.productID)
+        ? 'gp:${purchase.productID}:$data'
+        : 'gp:$data';
+  }
 
   /// The packs, by how many weeks' usage each adds: +1 week for $0.99 and
   /// +3 weeks for $2.99. The ids are those of the packs of 50 and 200
@@ -172,6 +204,16 @@ class ChatSubscription extends ChangeNotifier {
     final store = _store ??= chatDemo ? DemoStore() : AppStore();
     _listening = store.purchases.listen(_purchased, onError: (_) {});
     notifyListeners();
+    // Google Play gives back what is owned only when asked: the subscription
+    // (a new phone, a cleared app) and a pack not yet credited, which the
+    // server then credits once and consumes.
+    if (googlePlay) {
+      try {
+        await store.restore();
+      } catch (_) {
+        // No Google Play (offline): the next start asks again.
+      }
+    }
   }
 
   /// The product's price, asked once the paywall shows.
@@ -286,7 +328,12 @@ class ChatSubscription extends ChangeNotifier {
   }
 
   Future<void> _purchased(List<PurchaseDetails> purchases) async {
-    for (final purchase in purchases) {
+    // The subscription first: a pack given back with it is credited to it.
+    final ordered = [
+      ...purchases.where((p) => !packs.containsKey(p.productID)),
+      ...purchases.where((p) => packs.containsKey(p.productID)),
+    ];
+    for (final purchase in ordered) {
       if (packs.containsKey(purchase.productID)) {
         await _packPurchased(purchase);
         continue;
@@ -294,7 +341,7 @@ class ChatSubscription extends ChangeNotifier {
       if (purchase.productID != productId) continue;
       switch (purchase.status) {
         case PurchaseStatus.purchased || PurchaseStatus.restored:
-          final jws = purchase.verificationData.serverVerificationData;
+          final jws = serverValue(purchase);
           if (jws.isNotEmpty) {
             _keep(jws);
             await _prefs?.setString(_transactionKey, jws);
@@ -308,14 +355,22 @@ class ChatSubscription extends ChangeNotifier {
         case PurchaseStatus.canceled:
           state.value = PurchaseState.idle;
       }
-      if (purchase.pendingCompletePurchase) await _store?.finish(purchase);
+      if (purchase.pendingCompletePurchase) await _finish(purchase);
     }
+  }
+
+  /// Finishes a purchase; on Google Play an error (already acknowledged by
+  /// the server) changes nothing.
+  Future<void> _finish(PurchaseDetails purchase) async {
+    try {
+      await _store?.finish(purchase);
+    } catch (_) {}
   }
 
   Future<void> _packPurchased(PurchaseDetails purchase) async {
     switch (purchase.status) {
       case PurchaseStatus.purchased || PurchaseStatus.restored:
-        final pack = purchase.verificationData.serverVerificationData;
+        final pack = serverValue(purchase);
         final transaction = _transaction;
         if (pack.isEmpty || transaction == null) {
           state.value = PurchaseState.failed;
@@ -332,7 +387,8 @@ class ChatSubscription extends ChangeNotifier {
         _creditedCount++;
         notifyListeners();
         state.value = PurchaseState.idle;
-        await _store?.finish(purchase);
+        // On Google Play the server consumed it once credited: nothing to finish.
+        if (!googlePlay) await _finish(purchase);
         return;
       case PurchaseStatus.pending:
         state.value = PurchaseState.pending;
@@ -342,11 +398,12 @@ class ChatSubscription extends ChangeNotifier {
       case PurchaseStatus.canceled:
         state.value = PurchaseState.idle;
     }
-    if (purchase.pendingCompletePurchase) await _store?.finish(purchase);
+    if (purchase.pendingCompletePurchase && !googlePlay) {
+      await _finish(purchase);
+    }
   }
 
-  static Future<void> _serverCredit(String pack, String transaction) =>
-      chatDemo
+  static Future<void> _serverCredit(String pack, String transaction) => chatDemo
       ? Future.value()
       : ApiClient().creditPack(pack: pack, transaction: transaction);
 
@@ -471,5 +528,5 @@ class DemoStore implements Store {
   Future<void> manage() async {}
 }
 
-/// The app's subscription, started with the app on iOS (`main.dart`).
+/// The app's subscription, started with the app on iOS and Android (`main.dart`).
 final chatSubscription = ChatSubscription();

@@ -1270,6 +1270,10 @@
   "@paywallRenewal": {
     "description": "Under the price on the paywall: auto-renewal and where to cancel."
   },
+  "paywallRenewalGooglePlay": "Renews automatically. Cancel any time in Google Play.",
+  "@paywallRenewalGooglePlay": {
+    "description": "paywallRenewal on Android (#349): the subscription is bought through Google Play."
+  },
   "paywallSubscribe": "Subscribe",
   "@paywallSubscribe": {
     "description": "The paywall's button."
@@ -1305,6 +1309,10 @@
   "chatConsentBody": "Your question and the text or headlines of this news are sent to OpenAI for the answer. Your conversations are kept only on your phone. If you ask Apple for a refund, we may tell Apple how much you used the chat.",
   "@chatConsentBody": {
     "description": "What the consent sheet says is sent, to whom, and what may be told to Apple on a refund."
+  },
+  "chatConsentBodyGooglePlay": "Your question and the text or headlines of this news are sent to OpenAI for the answer. Your conversations are kept only on your phone.",
+  "@chatConsentBodyGooglePlay": {
+    "description": "chatConsentBody on Android (#349): the same without the sentence about Apple's refunds (Google asks us nothing on a refund)."
   },
   "chatConsentAllow": "Allow",
   "@chatConsentAllow": {
@@ -1362,6 +1370,10 @@
   "@privacyChat": {
     "description": "The privacy policy's section on the AI chat by subscription (#146)."
   },
+  "privacyChatGooglePlay": "On Android, Google Play handles the subscription and extra usage: the app sends our server the purchase token Google Play gives it, and the server asks Google to confirm the purchase. We never receive your name, Google account or payment details.",
+  "@privacyChatGooglePlay": {
+    "description": "Privacy policy, after privacyChat (#349): how purchases on Android are checked. Google Play is a name: never translated."
+  },
   "privacySupportHeading": "Messages to us",
   "@privacySupportHeading": {
     "description": "A heading of the privacy policy."
@@ -1377,6 +1389,10 @@
   "termsSubscription": "The AI agent is a monthly subscription through the App Store. It renews automatically until you cancel it in your Apple ID settings, at least 24 hours before the end of the period. Apple handles refunds. The agent answers from the article's text, or from the headlines for news from the media, and from facts it knows. It can make mistakes, and its answers are not legal, financial or medical advice. It includes a week's usage, which resets every Monday at 00:00 UTC and does not carry over; questions about long documents use more of it. Extra usage, bought separately, doesn't expire and is used once the week's usage runs out.",
   "@termsSubscription": {
     "description": "The terms of use's section on the AI agent subscription (#146)."
+  },
+  "termsSubscriptionGooglePlay": "On Android, the subscription and extra usage are bought through Google Play instead. The subscription renews automatically until you cancel it in Google Play, and Google handles payment and refunds.",
+  "@termsSubscriptionGooglePlay": {
+    "description": "Terms of use, after termsSubscription (#349): buying on Android."
   },
   "chatUsage": "{percent}% of this week's usage used · resets {day}",
   "@chatUsage": {
@@ -1438,6 +1454,10 @@
   "topUpFine": "A one-time App Store purchase.",
   "@topUpFine": {
     "description": "Under the top-up sheet's button."
+  },
+  "topUpFineGooglePlay": "A one-time Google Play purchase.",
+  "@topUpFineGooglePlay": {
+    "description": "topUpFine on Android (#349)."
   },
   "topUpPack": "{weeks, plural, =1{+1 week of usage} other{+{weeks} weeks of usage}}",
   "@topUpPack": {

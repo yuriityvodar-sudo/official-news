@@ -296,7 +296,9 @@ class _TopUpSheetState extends State<TopUpSheet> {
               ],
               const SizedBox(height: 10),
               Text(
-                l10n.topUpFine,
+                ChatSubscription.googlePlay
+                    ? l10n.topUpFineGooglePlay
+                    : l10n.topUpFine,
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 12, height: 1.4, color: muted),
               ),

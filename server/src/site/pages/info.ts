@@ -35,7 +35,7 @@ function sections(lang: SiteLang, page: InfoPage): Section[] {
         { heading: "privacyAnalyticsHeading", paragraphs: [p(lang, "privacyAnalytics")] },
         { heading: "privacyNotificationsHeading", paragraphs: [p(lang, "privacyNotifications")] },
         { heading: "privacyAiHeading", paragraphs: [p(lang, "privacyAi")] },
-        { heading: "privacyChatHeading", paragraphs: [p(lang, "privacyChat")] },
+        { heading: "privacyChatHeading", paragraphs: [p(lang, "privacyChat"), p(lang, "privacyChatGooglePlay")] },
         { heading: "privacySupportHeading", paragraphs: [p(lang, "privacySupport")] },
         // The website's own part: the ARB texts describe the app.
         {
@@ -57,7 +57,7 @@ function sections(lang: SiteLang, page: InfoPage): Section[] {
         { paragraphs: [p(lang, "termsIntro1"), p(lang, "termsIntro2")] },
         { heading: "termsContentHeading", paragraphs: [p(lang, "termsContent")] },
         { heading: "termsNoGuaranteeHeading", paragraphs: [p(lang, "termsNoGuarantee")] },
-        { heading: "termsSubscriptionHeading", paragraphs: [p(lang, "termsSubscription")] },
+        { heading: "termsSubscriptionHeading", paragraphs: [p(lang, "termsSubscription"), p(lang, "termsSubscriptionGooglePlay")] },
         { heading: "termsPublisherHeading", paragraphs: [t(lang, "termsPublisher", { publisher: publisherDetails(lang) })] },
       ];
     case "support":

@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../core/subscription.dart';
 import '../../l10n/app_localizations.dart';
 
 /// Before the first question to the AI agent, once (#146; App Store guideline
@@ -25,7 +26,11 @@ abstract final class ChatConsent {
       context: context,
       builder: (context) => CupertinoAlertDialog(
         title: Text(l10n.chatConsentTitle),
-        content: Text(l10n.chatConsentBody),
+        content: Text(
+          ChatSubscription.googlePlay
+              ? l10n.chatConsentBodyGooglePlay
+              : l10n.chatConsentBody,
+        ),
         actions: [
           CupertinoDialogAction(
             onPressed: () => Navigator.of(context).pop(false),
