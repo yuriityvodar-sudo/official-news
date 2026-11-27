@@ -1,3 +1,4 @@
+import { consumePlayPack, isPlay, PlayError, PlayUnavailable, verifyPlayPack, verifyPlaySubscription } from "../googleplay";
 import { JwsError, isActive, recordTransaction, verifyTransaction, type AppleTransaction, type Subscription, type VerifyOptions } from "../appstore";
 import { creditPack, verifyPack, walletMicros } from "../appstore/packs";
 import { countryName } from "../api/filters";
@@ -88,6 +89,8 @@ export interface ChatOptions extends VerifyOptions {
   now?: Date;
   /** The request's `X-Chat-Sandbox-Key`, which Roman's local builds and the team's TestFlight builds send (`teamKey`). */
   sandboxKey?: string | null;
+  /** The Play Developer API's fetch (googleplay/index.ts), for tests; the global one otherwise. */
+  playFetch?: typeof fetch;
 }
 
 const error = (status: number, message: string, extra: Record<string, string | number> = {}): Refusal => ({
@@ -337,19 +340,27 @@ async function teamKey(env: Env, key: string | null | undefined): Promise<boolea
   return false;
 }
 
-/** The chat's subscription in a signed transaction, checked, or why not: 402 if it is not one. */
-async function checkedTransaction(jws: string, options: ChatOptions): Promise<AppleTransaction | Refusal> {
+/**
+ * The chat's subscription in a signed transaction (Apple) or a Google Play token (`gp:`, #349),
+ * checked, or why not: 402 if it is not one, 503 when Google cannot be asked just then.
+ */
+async function checkedTransaction(jws: string, env: Env, options: ChatOptions): Promise<AppleTransaction | Refusal> {
   try {
+    if (isPlay(jws)) return await verifyPlaySubscription(jws, env, options.now ?? new Date(), options.playFetch);
     return await verifyTransaction(jws, options);
   } catch (e) {
-    if (!(e instanceof JwsError)) throw e;
+    if (e instanceof PlayUnavailable) {
+      console.error(JSON.stringify({ message: "play unavailable", error: e.message }));
+      return error(503, "The store cannot be checked just now");
+    }
+    if (!(e instanceof JwsError) && !(e instanceof PlayError)) throw e;
     return error(402, "Subscription required");
   }
 }
 
 /** The subscription a signed transaction belongs to, kept up to date, or the refusal: 402 unless it is paid now. */
 async function activeSubscription(jws: string, env: Env, options: ChatOptions, now: Date): Promise<Subscription | Refusal> {
-  const t = await checkedTransaction(jws, options);
+  const t = await checkedTransaction(jws, env, options);
   if ("status" in t) return t;
   const subscription = await recordTransaction(env, t, { now });
   return isActive(subscription, now) ? subscription : error(402, "Subscription required");
@@ -531,14 +542,17 @@ export async function creditChatPack(body: unknown, env: Env, options: ChatOptio
   const now = options.now ?? new Date();
   const b = body as { pack?: unknown; transaction?: unknown } | null;
   if (!b || typeof b.pack !== "string" || typeof b.transaction !== "string") return error(400, "Expected { pack, transaction }");
-  let pack;
+  // A pack and its subscription come from the same store (#349).
+  if (isPlay(b.pack) !== isPlay(b.transaction)) return error(403, "The pack and the subscription come from different stores");
+  let pack: Awaited<ReturnType<typeof verifyPack>> & { token?: string };
   try {
-    pack = await verifyPack(b.pack, options);
+    pack = isPlay(b.pack) ? await verifyPlayPack(b.pack, env, now, options.playFetch) : await verifyPack(b.pack, options);
   } catch (e) {
-    if (!(e instanceof JwsError)) throw e;
+    if (e instanceof PlayUnavailable) return error(503, "The store cannot be checked just now");
+    if (!(e instanceof JwsError) && !(e instanceof PlayError)) throw e;
     return error(400, "Not a pack of this app");
   }
-  const t = await checkedTransaction(b.transaction, options);
+  const t = await checkedTransaction(b.transaction, env, options);
   if ("status" in t) return t;
   // Never a free pack into a paid subscription's wallet, nor the other way.
   if (pack.environment !== t.environment) return error(403, "The pack and the subscription come from different stores");
@@ -546,6 +560,8 @@ export async function creditChatPack(body: unknown, env: Env, options: ChatOptio
   const id = subscription.original_transaction_id;
   const credited = await creditPack(env, id, pack, now);
   if (credited === "capped") return error(429, "One test pack a day", { resetsAt: nextDay(now) });
+  // On Google Play a pack is bought again only once consumed: after it is in the wallet (new or known).
+  if (pack.token) await consumePlayPack({ productId: pack.productId, token: pack.token }, env, now, options.playFetch);
   const wallet = await walletMicros(env, id);
   console.log(JSON.stringify({ message: "chat pack", subscription: id, product: pack.productId, credited }));
   return { status: 200, body: { credited, boughtQuestions: Math.max(0, Math.floor(wallet / QUESTION_MICROS)), extraUsage: wallet > 0 } };
