@@ -205,6 +205,7 @@
   "settingsManageSubscription": "Gestionar suscripción",
   "privacyNotificationsHeading": "Notificaciones",
   "privacyNotifications": "Si activas las notificaciones, tu teléfono recibe un token de notificaciones de Apple y Google Firebase para que podamos enviarte alertas de noticias. Puedes desactivar las notificaciones en cualquier momento en los ajustes de tu teléfono.",
+  "privacyNotificationsCount": "Cuando llega una notificación, tu teléfono solo avisa a nuestro servidor de que ha llegado, en qué idioma y si es iPhone o Android, para que podamos contar a cuántos teléfonos llegan nuestras notificaciones. Nada de eso te identifica a ti ni a tu teléfono.",
   "privacyAiHeading": "IA",
   "privacyAi": "Los resúmenes y las traducciones los escriben servicios de IA (Cloudflare Workers AI y Groq) a partir de los textos de sus fuentes. No se les envía ningún dato sobre ti.",
   "privacyRightsHeading": "Tus derechos",

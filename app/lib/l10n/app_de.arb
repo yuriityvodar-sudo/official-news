@@ -205,6 +205,7 @@
   "settingsManageSubscription": "Abo verwalten",
   "privacyNotificationsHeading": "Mitteilungen",
   "privacyNotifications": "Wenn Sie Mitteilungen aktivieren, erhält Ihr Gerät ein Mitteilungs-Token von Apple und Google Firebase, damit wir Ihnen Hinweise auf Nachrichten senden können. Sie können Mitteilungen jederzeit in den Einstellungen Ihres Geräts deaktivieren.",
+  "privacyNotificationsCount": "Wenn eine Mitteilung ankommt, meldet Ihr Telefon unserem Server nur, dass eine angekommen ist, in welcher Sprache und ob auf iPhone oder Android, damit wir zählen können, wie viele Telefone unsere Mitteilungen erreichen. Nichts davon identifiziert Sie oder Ihr Telefon.",
   "privacyAiHeading": "KI",
   "privacyAi": "Zusammenfassungen und Übersetzungen werden von KI-Diensten (Cloudflare Workers AI und Groq) auf Grundlage der Texte ihrer Quellen erstellt. An diese Dienste werden keine Daten über Sie übermittelt.",
   "privacyRightsHeading": "Ihre Rechte",

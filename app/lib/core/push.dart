@@ -224,6 +224,7 @@ class Push with WidgetsBindingObserver {
   static const _readsKey = 'push.readIds';
   static const _offeredKey = 'push.offered';
   static const _topicKey = 'push.topic';
+
   /// The topic of the AI chat note's earlier switch (#141), dropped (#160).
   static const _aiChatTopicKey = 'push.aiChatTopic';
 
@@ -569,6 +570,13 @@ Future<void> startPush({
   required ValueListenable<FeedLanguage> language,
 }) async {
   try {
+    // Notifications received, counted with no id (Yurii, 27 Nov 2026): on
+    // Android the app's own handlers see each one, in the background too; on
+    // iPhone its notification service extension does (ios/).
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      FirebaseMessaging.onBackgroundMessage(pushReceivedInBackground);
+      FirebaseMessaging.onMessage.listen((m) => reportDelivered(m.data));
+    }
     final prefs = await SharedPreferences.getInstance();
     await push.start(FirebaseMessagingLayer(), prefs, language: language.value);
   } catch (error) {
@@ -628,3 +636,24 @@ class _PushOfferDialog extends StatelessWidget {
     );
   }
 }
+
+/// Tells the server one notification arrived on this Android phone, with its
+/// language only (privacy policy, privacyNotificationsCount); a failure is
+/// let go: the count may miss one, never counts one twice.
+Future<void> reportDelivered(
+  Map<String, dynamic> data, {
+  ApiClient? api,
+}) async {
+  final lang = data['lang'];
+  if (lang is! String || lang.isEmpty) return;
+  try {
+    await (api ?? ApiClient(timeout: const Duration(seconds: 10)))
+        .pushDelivered(lang: lang, platform: 'android');
+  } catch (_) {}
+}
+
+/// Firebase's handler for a notification that arrives while the app is in the
+/// background or closed (Android), run in an isolate of its own.
+@pragma('vm:entry-point')
+Future<void> pushReceivedInBackground(RemoteMessage message) =>
+    reportDelivered(message.data);

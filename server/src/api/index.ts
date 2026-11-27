@@ -1,3 +1,4 @@
+import { pushDelivered } from "../push/delivered";
 import { receiveNotification } from "../appstore";
 import { answerChat, chatStatus, creditChatPack } from "../chat";
 import type { Env } from "../env";
@@ -953,6 +954,12 @@ async function route(request: Request, env: Env): Promise<Response> {
     const body = await request.json().catch(() => null);
     const answer = await postSupportMessage(body, request.headers.get("cf-connecting-ip"), env);
     return json(answer.body, answer.status);
+  }
+  // A notification received on a phone, counted with no id (push/delivered.ts).
+  if (url.pathname === "/v1/push/delivered") {
+    if (request.method !== "POST") return json({ error: "Method not allowed" }, 405, { allow: "POST" });
+    const answer = await pushDelivered(await request.json().catch(() => null), env);
+    return answer.status === 204 ? new Response(null, { status: 204 }) : json(answer.body, answer.status);
   }
   if (url.pathname === "/v1/support/thread") {
     if (request.method !== "GET") return json({ error: "Method not allowed" }, 405, { allow: "GET" });
