@@ -951,6 +951,10 @@
   "@privacyNotifications": {
     "description": "Privacy policy, under privacyNotificationsHeading. Apple and Google Firebase are names: never translated."
   },
+  "privacyNotificationsCount": "When a notification arrives, your phone tells our server only that one arrived, in which language and on iPhone or Android, so we can count how many phones our notifications reach. Nothing in it identifies you or your phone.",
+  "@privacyNotificationsCount": {
+    "description": "Privacy policy, after privacyNotifications (Yurii, 27 Nov 2026): the anonymous count of notifications received (POST /v1/push/delivered). iPhone and Android are names: never translated."
+  },
   "privacyAiHeading": "AI",
   "@privacyAiHeading": {
     "description": "Privacy policy, heading."

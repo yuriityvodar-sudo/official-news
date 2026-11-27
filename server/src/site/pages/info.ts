@@ -33,7 +33,7 @@ function sections(lang: SiteLang, page: InfoPage): Section[] {
           paragraphs: [p(lang, "privacyLoadingServer"), p(lang, "privacyLoadingCountry"), p(lang, "privacyLoadingPictures"), p(lang, "privacyLoadingPages")],
         },
         { heading: "privacyAnalyticsHeading", paragraphs: [p(lang, "privacyAnalytics")] },
-        { heading: "privacyNotificationsHeading", paragraphs: [p(lang, "privacyNotifications")] },
+        { heading: "privacyNotificationsHeading", paragraphs: [p(lang, "privacyNotifications"), p(lang, "privacyNotificationsCount")] },
         { heading: "privacyAiHeading", paragraphs: [p(lang, "privacyAi")] },
         { heading: "privacyChatHeading", paragraphs: [p(lang, "privacyChat")] },
         { heading: "privacySupportHeading", paragraphs: [p(lang, "privacySupport")] },

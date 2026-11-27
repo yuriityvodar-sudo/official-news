@@ -119,6 +119,7 @@ export type AppKey =
   | "privacyAnalytics"
   | "privacyNotificationsHeading"
   | "privacyNotifications"
+  | "privacyNotificationsCount"
   | "privacyAiHeading"
   | "privacyAi"
   | "privacyRightsHeading"
@@ -268,6 +269,7 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "privacyAnalytics": "Only if you allow it when the app asks, it sends usage events to Google Analytics for Firebase, to understand how the app is used, for example how many people read which kind of decision: screens opened, articles opened and read, links tapped, the chosen language, feed filters and your country for For you, and technical details such as the app version, device model, country and an app instance ID. You can turn this off at any time in Settings → Usage statistics. It does not use the advertising identifier and does not track you across other apps.",
     "privacyNotificationsHeading": "Notifications",
     "privacyNotifications": "If you turn on notifications, your phone gets a notification token from Apple and Google Firebase so we can send news alerts. You can turn notifications off at any time in your phone settings.",
+    "privacyNotificationsCount": "When a notification arrives, your phone tells our server only that one arrived, in which language and on iPhone or Android, so we can count how many phones our notifications reach. Nothing in it identifies you or your phone.",
     "privacyAiHeading": "AI",
     "privacyAi": "Summaries and translations are written by AI services (Cloudflare Workers AI and Groq) from the texts of their sources. No data about you is sent to them.",
     "privacyRightsHeading": "Your rights",
@@ -411,6 +413,7 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "privacyAnalytics": "Лише якщо ви дозволите це, коли застосунок запитає, він надсилає події використання до Google Analytics for Firebase, щоб розуміти, як ним користуються (наприклад, скільки людей читають рішення того чи іншого типу): відкриті екрани, відкриті й прочитані статті, натиснуті посилання, вибрану мову, фільтри стрічки й вашу країну для «Для вас», а також технічні дані, як-от версію застосунку, модель пристрою, країну та ідентифікатор екземпляра застосунку. Вимкнути це можна будь-коли в Параметрах → «Статистика використання». Застосунок не використовує рекламний ідентифікатор і не відстежує вас в інших застосунках.",
     "privacyNotificationsHeading": "Сповіщення",
     "privacyNotifications": "Якщо ви ввімкнете сповіщення, ваш телефон отримає токен сповіщень від Apple і Google Firebase, щоб ми могли надсилати сповіщення про новини. Сповіщення можна будь-коли вимкнути в параметрах телефону.",
+    "privacyNotificationsCount": "Коли надходить сповіщення, ваш телефон повідомляє наш сервер лише про те, що воно надійшло, якою мовою і на iPhone чи Android, щоб ми могли порахувати, на скільки телефонів доходять наші сповіщення. Ніщо в цьому не ідентифікує ні вас, ні ваш телефон.",
     "privacyAiHeading": "ШІ",
     "privacyAi": "Стислі виклади й переклади пишуть ШІ-сервіси (Cloudflare Workers AI і Groq) на основі текстів їхніх джерел. Жодні дані про вас їм не передаються.",
     "privacyRightsHeading": "Ваші права",
@@ -554,6 +557,7 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "privacyAnalytics": "Только если вы разрешите это, когда приложение спросит, оно отправляет в Google Analytics for Firebase данные об использовании, чтобы понимать, как им пользуются (например, сколько людей читают решения того или иного типа): открытые экраны, открытые и прочитанные статьи, нажатые ссылки, выбранный язык, фильтры ленты и вашу страну для «Для вас», а также технические данные, такие как версия приложения, модель устройства, страна и идентификатор экземпляра приложения. Выключить это можно в любой момент в Настройках → «Статистика использования». Приложение не использует рекламный идентификатор и не отслеживает ваши действия в других приложениях.",
     "privacyNotificationsHeading": "Уведомления",
     "privacyNotifications": "Если вы включите уведомления, ваш телефон получит токен уведомлений от Apple и Google Firebase, чтобы мы могли присылать уведомления о новостях. Уведомления можно в любой момент отключить в настройках телефона.",
+    "privacyNotificationsCount": "Когда приходит уведомление, ваш телефон сообщает нашему серверу только то, что оно пришло, на каком языке и на iPhone или Android, чтобы мы могли посчитать, на сколько телефонов доходят наши уведомления. Ничто в этом не идентифицирует ни вас, ни ваш телефон.",
     "privacyAiHeading": "ИИ",
     "privacyAi": "Краткие изложения и переводы создают ИИ-сервисы (Cloudflare Workers AI и Groq) на основе текстов их источников. Никакие данные о вас им не передаются.",
     "privacyRightsHeading": "Ваши права",
@@ -697,6 +701,7 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "privacyAnalytics": "Solo si lo permites cuando la app te lo pregunte, envía eventos de uso a Google Analytics for Firebase para entender cómo se usa (por ejemplo, cuántas personas leen cada tipo de decisión): pantallas abiertas, artículos abiertos y leídos, enlaces tocados, el idioma y los filtros elegidos, tu país para «Para ti», y datos técnicos como la versión de la app, el modelo del dispositivo, el país y un ID de instancia de la app. Puedes desactivarlo cuando quieras en Ajustes → «Estadísticas de uso». No usa el identificador de publicidad ni te rastrea en otras apps.",
     "privacyNotificationsHeading": "Notificaciones",
     "privacyNotifications": "Si activas las notificaciones, tu teléfono recibe un token de notificaciones de Apple y Google Firebase para que podamos enviarte alertas de noticias. Puedes desactivar las notificaciones en cualquier momento en los ajustes de tu teléfono.",
+    "privacyNotificationsCount": "Cuando llega una notificación, tu teléfono solo avisa a nuestro servidor de que ha llegado, en qué idioma y si es iPhone o Android, para que podamos contar a cuántos teléfonos llegan nuestras notificaciones. Nada de eso te identifica a ti ni a tu teléfono.",
     "privacyAiHeading": "IA",
     "privacyAi": "Los resúmenes y las traducciones los escriben servicios de IA (Cloudflare Workers AI y Groq) a partir de los textos de sus fuentes. No se les envía ningún dato sobre ti.",
     "privacyRightsHeading": "Tus derechos",
@@ -840,6 +845,7 @@ export const APP_TEXTS: Record<SiteLang, Record<AppKey, string>> = {
     "privacyAnalytics": "Nur wenn Sie es erlauben, wenn die App danach fragt, sendet sie Nutzungsereignisse an Google Analytics for Firebase, um zu verstehen, wie sie genutzt wird, etwa wie viele Menschen welche Art von Entscheidung lesen: aufgerufene Bildschirme, geöffnete und gelesene Artikel, angetippte Links, die gewählte Sprache, die Feed-Filter, Ihr Land für „Für Sie“ sowie technische Angaben wie App-Version, Gerätemodell, Land und eine App-Instanz-ID. Sie können das jederzeit in den Einstellungen unter „Nutzungsstatistik“ ausschalten. Die App verwendet die Werbe-ID nicht und verfolgt Sie nicht über andere Apps hinweg.",
     "privacyNotificationsHeading": "Mitteilungen",
     "privacyNotifications": "Wenn Sie Mitteilungen aktivieren, erhält Ihr Gerät ein Mitteilungs-Token von Apple und Google Firebase, damit wir Ihnen Hinweise auf Nachrichten senden können. Sie können Mitteilungen jederzeit in den Einstellungen Ihres Geräts deaktivieren.",
+    "privacyNotificationsCount": "Wenn eine Mitteilung ankommt, meldet Ihr Telefon unserem Server nur, dass eine angekommen ist, in welcher Sprache und ob auf iPhone oder Android, damit wir zählen können, wie viele Telefone unsere Mitteilungen erreichen. Nichts davon identifiziert Sie oder Ihr Telefon.",
     "privacyAiHeading": "KI",
     "privacyAi": "Zusammenfassungen und Übersetzungen werden von KI-Diensten (Cloudflare Workers AI und Groq) auf Grundlage der Texte ihrer Quellen erstellt. An diese Dienste werden keine Daten über Sie übermittelt.",
     "privacyRightsHeading": "Ihre Rechte",
@@ -882,7 +888,7 @@ export const PUBLISHER_DETAILS = {
 export const SUPPORT_EMAIL = "support@outernews.app";
 
 /** When the privacy policy and the terms last changed (`policyUpdated` in info_pages.dart). */
-export const POLICY_UPDATED = "2026-11-23";
+export const POLICY_UPDATED = "2026-11-27";
 
 /** Each language's own name and short label (FeedLanguage in feed_language.dart). */
 export const LANGUAGE_NAMES: Record<SiteLang, { nativeName: string; shortLabel: string }> = {

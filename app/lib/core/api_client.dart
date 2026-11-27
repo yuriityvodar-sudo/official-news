@@ -93,6 +93,25 @@ class ApiClient {
   final String _baseUrl;
   final String _sandboxKey;
 
+  /// A notification received on this phone (`POST /v1/push/delivered`):
+  /// its language and the platform only, no id, so the server counts how
+  /// many phones a notification reached without knowing which.
+  Future<void> pushDelivered({
+    required String lang,
+    required String platform,
+  }) async {
+    final response = await _client
+        .post(
+          Uri.parse('$_baseUrl/v1/push/delivered'),
+          headers: {'content-type': 'application/json'},
+          body: jsonEncode({'lang': lang, 'platform': platform}),
+        )
+        .timeout(timeout);
+    if (response.statusCode != 204) {
+      throw ApiException(response.statusCode, 'push delivered');
+    }
+  }
+
   /// The chat's requests are JSON, with a Sandbox key on the team's builds,
   /// Roman's own and TestFlight's ([chatSandboxKey]).
   Map<String, String> get _chatHeaders => {

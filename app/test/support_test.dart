@@ -647,9 +647,9 @@ void main() {
       });
     }
 
-    test('the policy is dated 23 November 2026 (the Google Play seller '
-        'line, #343)', () {
-      expect(policyUpdated, DateTime(2026, 11, 23));
+    test('the policy is dated 27 November 2026 (notifications counted, '
+        'Yurii)', () {
+      expect(policyUpdated, DateTime(2026, 11, 27));
     });
   });
 }
