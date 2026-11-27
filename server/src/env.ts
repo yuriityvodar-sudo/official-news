@@ -25,6 +25,14 @@ export interface Env {
    */
   FCM_SERVICE_ACCOUNT?: string;
   /**
+   * The Google service account that checks the AI chat's Google Play purchases (#349): the
+   * whole JSON key file of `play-purchases` (Google Cloud project official-news-48e16), invited
+   * in Play Console to Outer News only, to view financial data and manage orders. A Worker
+   * secret, never in the repo (`npx wrangler secret put PLAY_SERVICE_ACCOUNT`). Without it
+   * an Android purchase is answered 503 and the app tries again.
+   */
+  PLAY_SERVICE_ACCOUNT?: string;
+  /**
    * OpenAI API key, for the AI chat by subscription (#146), the one paid AI.
    * A Worker secret Roman puts in himself, with a monthly spending limit in
    * the OpenAI account (`npx wrangler secret put OPENAI_API_KEY`; locally in
